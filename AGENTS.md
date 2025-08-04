@@ -30,6 +30,11 @@ tenderhub/
 
 - Always use the database schema defined in `database_structure.json`.
 
+## Environment Configuration
+
+- Подключение к базе данных Supabase хранится в корневом файле `.env`.
+- Используются переменные `NEXT_PUBLIC_SUPABASE_URL` и `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
 ## Build, Test, and Development Commands
 
 ### Development
