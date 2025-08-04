@@ -22,8 +22,13 @@ tenderhub/
 ├── package.json          # Project dependencies and scripts
 ├── tsconfig.json         # TypeScript configuration
 ├── vite.config.ts        # Vite build configuration
-└── README.md             # Project documentation
+├── README.md             # Project documentation
+└── database_structure.json # Database schema definition
 ```
+
+## Database Structure
+
+- Always use the database schema defined in `database_structure.json`.
 
 ## Build, Test, and Development Commands
 
