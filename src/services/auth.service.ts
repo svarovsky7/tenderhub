@@ -183,7 +183,17 @@ export const authService = {
 
       if (error) {
         console.error('Profile fetch error:', error);
-        return null;
+        const metadata = user.user_metadata || {};
+        return {
+          id: user.id,
+          email: user.email || '',
+          firstName: metadata.first_name || '',
+          lastName: metadata.last_name || '',
+          middleName: metadata.middle_name,
+          role: metadata.role || 'viewer',
+          createdAt: user.created_at,
+          updatedAt: user.updated_at || user.created_at,
+        };
       }
 
       // Парсим full_name обратно в компоненты для совместимости
