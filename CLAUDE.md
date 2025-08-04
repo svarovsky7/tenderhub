@@ -34,22 +34,56 @@ npm run lint         # Run ESLint with TypeScript checking
 - **Edge Functions** (Deno) for custom logic
 
 ### Database Schema
-Key tables with hierarchical relationships:
-- `profiles` - User management with roles (admin/engineer/viewer)
-- `tenders` - Main tender entities
-- `tender_rows` - BOQ items with parent-child hierarchy
-- `lib_works/lib_materials` - Reusable component libraries
-- `tender_files` - File attachments with versioning
-- `history_log` - Complete audit trail
+
+**Core Tables:**
+- `profiles` - User profiles extending Supabase auth (only `id`, `full_name`, `role`, timestamps)
+- `tenders` - Main tender/project entities with status workflow (draft → active → closed)
+- `tender_users` - Junction table linking users to tenders with role assignments
+- `tender_rows` - BOQ items with hierarchical structure (parent_id self-reference)
+- `tender_costs` - Commercial cost scenarios (base/best/worst case)
+- `tender_files` - File attachments with versioning system
+
+**Library Tables:**
+- `lib_works` - Master library of standardized work items (code, name, unit, price)
+- `lib_materials` - Master library of standardized materials (code, name, unit, price)
+
+**Audit:**
+- `history_log` - Complete audit trail with JSONB old/new data snapshots
+
+**Key Enums:**
+- `user_role`: 'admin', 'engineer', 'viewer'
+- `tender_status`: 'draft', 'active', 'closed'  
+- `item_type`: 'work', 'material', 'sub_work', 'sub_material'
+- `cost_scenario`: 'base', 'best', 'worst'
+
+**Important Notes:**
+- All tables use UUID primary keys with `gen_random_uuid()`
+- `tender_rows.total` is a computed column: `quantity * coef * price_unit`
+- Row Level Security (RLS) controls access through tender assignments
+- BOQ supports hierarchical work/material breakdown structure
+- Version control for BOQ items and file attachments
 
 ### Project Structure
 ```
 src/
 ├── components/     # React components
+│   ├── AuthContainer.tsx    # Auth form switcher
+│   ├── LoginForm.tsx        # Login form
+│   ├── RegistrationForm.tsx # Registration form
+│   ├── Dashboard.tsx        # Main dashboard page
+│   ├── AppLayout.tsx        # App layout manager
+│   └── *.css               # Component styles
+├── contexts/       # React contexts
+│   └── AuthContext.tsx     # Authentication context
+├── hooks/          # Custom React hooks
+│   └── useAuth.ts          # Authentication hook
+├── lib/            # Configuration
+│   └── supabase.ts         # Supabase client
 ├── services/       # API and business logic
-├── hooks/          # Custom React hooks  
+│   └── auth.service.ts     # Authentication service
 ├── types/          # TypeScript definitions
-├── utils/          # Helper functions
+│   ├── auth.types.ts       # Auth-related types
+│   └── tender.types.ts     # Tender-related types
 └── App.tsx         # Main application entry
 ```
 

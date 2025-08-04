@@ -1,10 +1,13 @@
 import './App.css'
-import AuthContainer from './components/AuthContainer'
+import { AuthProvider } from './contexts/AuthContext'
+import AppLayout from './components/AppLayout'
 
 function App() {
   return (
     <div className="App">
-      <AuthContainer />
+      <AuthProvider>
+        <AppLayout />
+      </AuthProvider>
     </div>
   )
 }
