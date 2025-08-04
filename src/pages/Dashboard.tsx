@@ -33,59 +33,30 @@ import type { TenderStatus } from '../lib/supabase/types';
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-// Mock data for demonstration
-const mockTenders = [
-  {
-    id: '1',
-    title: 'Строительство многоквартирного дома',
-    client_name: 'ООО "СтройИнвест"',
-    tender_number: 'T-2024-001',
-    status: 'active' as TenderStatus,
-    estimated_value: 15000000,
-    submission_deadline: '2024-02-15',
-    created_at: '2024-01-15',
-    boq_total_value: 14500000,
-    total_items: 145,
-  },
-  {
-    id: '2',
-    title: 'Реконструкция офисного здания',
-    client_name: 'АО "БизнесЦентр"',
-    tender_number: 'T-2024-002',
-    status: 'draft' as TenderStatus,
-    estimated_value: 8500000,
-    submission_deadline: '2024-02-20',
-    created_at: '2024-01-18',
-    boq_total_value: null,
-    total_items: 0,
-  },
-  {
-    id: '3',
-    title: 'Строительство торгового центра',
-    client_name: 'ГК "Торговые площади"',
-    tender_number: 'T-2024-003',
-    status: 'submitted' as TenderStatus,
-    estimated_value: 25000000,
-    submission_deadline: '2024-01-30',
-    created_at: '2024-01-05',
-    boq_total_value: 24800000,
-    total_items: 298,
-  },
-];
+// Import API functions
+import { tendersApi } from '../lib/supabase/api';
+import type { TenderWithSummary } from '../lib/supabase/types';
 
-const mockStats = {
-  totalTenders: 25,
-  activeTenders: 8,
-  submittedTenders: 12,
-  wonTenders: 5,
-  totalValue: 125000000,
-  winRate: 41.7,
-};
+interface DashboardStats {
+  totalTenders: number;
+  activeTenders: number;
+  submittedTenders: number;
+  wonTenders: number;
+  totalValue: number;
+  winRate: number;
+}
 
 const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
-  const [tenders] = useState(mockTenders);
-  const [stats] = useState(mockStats);
+  const [tenders, setTenders] = useState<TenderWithSummary[]>([]);
+  const [stats, setStats] = useState<DashboardStats>({
+    totalTenders: 0,
+    activeTenders: 0,
+    submittedTenders: 0,
+    wonTenders: 0,
+    totalValue: 0,
+    winRate: 0,
+  });
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<TenderStatus | 'all'>('all');
   
@@ -94,12 +65,46 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Simulate loading data
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 1000);
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        
+        // Load recent tenders
+        const tendersResponse = await tendersApi.getAll({
+          limit: 10,
+          sortBy: 'created_at',
+          sortOrder: 'desc'
+        });
 
-    return () => clearTimeout(timer);
+        if (tendersResponse.data) {
+          setTenders(tendersResponse.data);
+        }
+
+        // For now, calculate basic stats from loaded tenders
+        // TODO: Implement getTenderStats API function
+        const totalTenders = tendersResponse.data?.length || 0;
+        const activeTenders = tendersResponse.data?.filter(t => t.status === 'active').length || 0;
+        const submittedTenders = tendersResponse.data?.filter(t => t.status === 'submitted').length || 0;
+        const wonTenders = tendersResponse.data?.filter(t => t.status === 'awarded').length || 0;
+        const totalValue = tendersResponse.data?.reduce((sum, t) => sum + (t.estimated_value || 0), 0) || 0;
+        const winRate = totalTenders > 0 ? (wonTenders / totalTenders) * 100 : 0;
+
+        setStats({
+          totalTenders,
+          activeTenders,
+          submittedTenders,
+          wonTenders,
+          totalValue,
+          winRate,
+        });
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboardData();
   }, []);
 
   const getStatusColor = (status: TenderStatus): string => {

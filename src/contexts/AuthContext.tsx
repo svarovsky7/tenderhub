@@ -137,15 +137,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         console.log('Session check:', { session: !!session, error: sessionError });
         
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          if (mounted) {
+            dispatch({ 
+              type: 'SET_USER', 
+              payload: { user: null, session: null }
+            });
+          }
+          initializationComplete = true;
+          return;
+        }
+        
         if (session && session.user) {
           console.log('Found existing session, transforming user...');
           // We have a valid session, get user profile
           const response = await getCurrentUser();
-          if (mounted && response.data) {
+          if (mounted) {
             console.log('User restored from session:', response.data);
             dispatch({ 
               type: 'SET_USER', 
-              payload: { user: response.data, session }
+              payload: { user: response.data || null, session }
             });
             initializationComplete = true;
             return;
@@ -181,6 +193,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         console.log('Auth event:', event, 'Session:', !!session);
 
+        // Skip INITIAL_SESSION if we already initialized
+        if (event === 'INITIAL_SESSION' && initializationComplete) {
+          return;
+        }
+
         if (event === 'SIGNED_IN' && session?.user) {
           // Only get user profile if we don't already have it or if it's different
           if (!state.user || state.user.auth_id !== session.user.id) {
@@ -209,20 +226,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             payload: { user: state.user, session }
           });
         } else if (event === 'INITIAL_SESSION' && !initializationComplete) {
-          // Handle initial session event
-          if (session?.user) {
-            const response = await getCurrentUser();
-            dispatch({ 
-              type: 'SET_USER', 
-              payload: { user: response.data || null, session }
-            });
-          } else {
-            dispatch({ 
-              type: 'SET_USER', 
-              payload: { user: null, session: null }
-            });
-          }
-          initializationComplete = true;
+          // Skip - we handle initialization manually
+          console.log('Skipping INITIAL_SESSION, using manual initialization');
         }
       }
     );
@@ -230,9 +235,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Initialize auth immediately
     initializeAuth();
 
+    // Fallback timer to ensure loading doesn't hang indefinitely
+    const fallbackTimer = setTimeout(() => {
+      if (mounted && !initializationComplete) {
+        console.log('Auth initialization timeout, setting loading to false');
+        dispatch({ 
+          type: 'SET_USER', 
+          payload: { user: null, session: null }
+        });
+        initializationComplete = true;
+      }
+    }, 3000); // 3 second timeout
+
     // Cleanup
     return () => {
       mounted = false;
+      clearTimeout(fallbackTimer);
       subscription.unsubscribe();
     };
   }, []);

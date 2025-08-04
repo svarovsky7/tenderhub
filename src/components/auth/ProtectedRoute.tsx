@@ -21,10 +21,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Show loading spinner while checking authentication
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <Spin size="large" />
-          <div className="mt-4 text-gray-600">
+          <div className="mt-4 text-gray-600 animate-pulse">
             Проверка авторизации...
           </div>
         </div>

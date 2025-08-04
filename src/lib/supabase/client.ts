@@ -26,9 +26,8 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     storageKey: 'sb-auth-token', // Explicit storage key for better persistence
     storage: window.localStorage, // Explicit localStorage usage
     debug: import.meta.env.DEV, // Enable debug logs in development
-    // Optimize session handling
-    refreshThreshold: 90, // Refresh token 90 seconds before expiry (default is 60)
-    retryAttempts: 3, // Number of retry attempts for token refresh
+    // Note: refreshThreshold and retryAttempts are not available in current Supabase version
+    // but session persistence is improved through other settings above
   },
   global: {
     headers: {

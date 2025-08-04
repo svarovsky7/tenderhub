@@ -241,7 +241,7 @@ const AppLayout: React.FC = () => {
   };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: '100vh', display: 'flex', flexDirection: 'row' }}>
       <Sider 
         trigger={null} 
         collapsible 
@@ -250,6 +250,12 @@ const AppLayout: React.FC = () => {
         width={250}
         style={{
           boxShadow: '2px 0 6px rgba(0,21,41,.1)',
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 100,
+          height: '100vh',
         }}
       >
         <div className="p-4 border-b border-gray-200">
@@ -285,13 +291,18 @@ const AppLayout: React.FC = () => {
         />
       </Sider>
 
-      <Layout>
+      <Layout style={{ marginLeft: collapsed ? 80 : 250, transition: 'margin-left 0.2s' }}>
         <Header 
           style={{ 
             padding: 0, 
             background: '#fff',
             boxShadow: '0 1px 4px rgba(0,21,41,.08)',
             zIndex: 1,
+            position: 'fixed',
+            top: 0,
+            right: 0,
+            left: collapsed ? 80 : 250,
+            transition: 'left 0.2s',
           }}
         >
           <div className="flex items-center justify-between h-full px-6">
@@ -345,13 +356,22 @@ const AppLayout: React.FC = () => {
           </div>
         </Header>
 
-        <Content style={{ margin: '0' }}>
-          <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <Content style={{ 
+          margin: '0', 
+          marginTop: '64px',
+          minHeight: 'calc(100vh - 64px)', 
+          display: 'flex', 
+          flexDirection: 'column',
+          width: '100%'
+        }}>
+          <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
             <Breadcrumb items={getBreadcrumbItems()} />
           </div>
           
-          <div className="p-6">
-            <Outlet />
+          <div className="flex-1 p-6 overflow-auto" style={{ width: '100%' }}>
+            <div style={{ width: '100%', maxWidth: '100%' }}>
+              <Outlet />
+            </div>
           </div>
         </Content>
       </Layout>

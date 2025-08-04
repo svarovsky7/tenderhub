@@ -226,6 +226,9 @@ export const logoutUser = async (): Promise<ApiResponse<null>> => {
   try {
     const { error } = await supabase.auth.signOut();
 
+    // Clear user cache on logout
+    userCache = null;
+
     if (error) {
       return {
         error: error.message,
@@ -246,16 +249,30 @@ export const logoutUser = async (): Promise<ApiResponse<null>> => {
   }
 };
 
-// Get current user with improved session persistence and no timeout
+// Get current user with improved session persistence and caching
+let userCache: { user: AuthUser | null; timestamp: number } | null = null;
+const CACHE_DURATION = 30000; // 30 seconds cache
+
 export const getCurrentUser = async (): Promise<ApiResponse<AuthUser>> => {
   try {
     console.log('Getting current user from Supabase...');
+    
+    // Check cache first
+    const now = Date.now();
+    if (userCache && (now - userCache.timestamp) < CACHE_DURATION && userCache.user) {
+      console.log('Returning cached user');
+      return {
+        data: userCache.user,
+        message: 'User loaded from cache',
+      };
+    }
     
     // Try to get session first to avoid unnecessary API calls
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError) {
       console.error('Session error:', sessionError);
+      userCache = { user: null, timestamp: now };
       return {
         data: undefined,
         message: 'Session error',
@@ -264,13 +281,14 @@ export const getCurrentUser = async (): Promise<ApiResponse<AuthUser>> => {
     
     if (!session || !session.user) {
       console.log('No active session found');
+      userCache = { user: null, timestamp: now };
       return {
         data: undefined,
         message: 'No active session',
       };
     }
     
-    // We have a valid session, now get user details without timeout
+    // We have a valid session, now get user details
     const { data: { user }, error } = await supabase.auth.getUser();
     console.log('Supabase auth.getUser result:', { user: !!user, error });
 
@@ -303,6 +321,7 @@ export const getCurrentUser = async (): Promise<ApiResponse<AuthUser>> => {
 
     if (!authUser) {
       console.log('Transform user failed');
+      userCache = { user: null, timestamp: now };
       return {
         data: undefined,
         message: 'No user profile found',
@@ -310,6 +329,8 @@ export const getCurrentUser = async (): Promise<ApiResponse<AuthUser>> => {
     }
 
     console.log('User transformed successfully:', authUser);
+    // Cache the successful result
+    userCache = { user: authUser, timestamp: now };
     return {
       data: authUser,
       message: 'User loaded successfully',
