@@ -8,7 +8,8 @@
       "Bash(npm i)",
       "Bash(mv:*)",
       "Bash(npm install:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(pkill:*)"
     ],
     "deny": []
   }

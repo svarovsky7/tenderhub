@@ -10,6 +10,8 @@ export interface AuthResponse {
 export const authService = {
   async signUp(formData: RegistrationFormData): Promise<AuthResponse> {
     try {
+      console.log('Attempting sign up with:', { email: formData.email });
+      
       // Регистрация пользователя в Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
@@ -24,7 +26,10 @@ export const authService = {
         }
       });
 
+      console.log('Sign up response:', { data: authData, error: authError });
+
       if (authError) {
+        console.error('Sign up error:', authError);
         return { success: false, error: authError.message };
       }
 
@@ -34,22 +39,29 @@ export const authService = {
       }
 
       // Создание профиля пользователя в таблице profiles
-      if (authData.user && authData.user.email_confirmed_at) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: authData.user.id,
-              email: formData.email,
-              first_name: formData.firstName,
-              last_name: formData.lastName,
-              middle_name: formData.middleName || null,
-              role: formData.role,
-            }
-          ]);
+      // Профиль создается сразу, если email подтвержден, или будет создан позже через триггер/webhook
+      if (authData.user) {
+        const fullName = [formData.firstName, formData.middleName, formData.lastName]
+          .filter(name => name && name.trim())
+          .join(' ');
+          
+        // Попытаемся создать профиль, но не будем считать это критической ошибкой
+        try {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert([
+              {
+                id: authData.user.id,
+                full_name: fullName,
+                role: formData.role,
+              }
+            ]);
 
-        if (profileError) {
-          console.error('Profile creation error:', profileError);
+          if (profileError) {
+            console.warn('Profile creation warning (will be created later):', profileError);
+          }
+        } catch (profileError) {
+          console.warn('Profile creation attempt failed (will be created later):', profileError);
         }
       }
 
@@ -74,12 +86,17 @@ export const authService = {
 
   async signIn(formData: LoginFormData): Promise<AuthResponse> {
     try {
+      console.log('Attempting sign in with:', { email: formData.email });
+      
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       });
 
+      console.log('Sign in response:', { data: authData, error: authError });
+
       if (authError) {
+        console.error('Auth error:', authError);
         return { success: false, error: authError.message };
       }
 
@@ -98,6 +115,7 @@ export const authService = {
         console.error('Profile fetch error:', profileError);
         // Если профиль не найден, используем данные из auth metadata
         const userMetadata = authData.user.user_metadata;
+          
         return {
           success: true,
           user: {
@@ -113,14 +131,20 @@ export const authService = {
         };
       }
 
+      // Парсим full_name обратно в компоненты для совместимости
+      const nameParts = profile.full_name ? profile.full_name.split(' ') : [];
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts[nameParts.length - 1] || '';
+      const middleName = nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : '';
+
       return {
         success: true,
         user: {
           id: profile.id,
-          email: profile.email,
-          firstName: profile.first_name,
-          lastName: profile.last_name,
-          middleName: profile.middle_name,
+          email: authData.user.email || formData.email,
+          firstName,
+          lastName,
+          middleName: middleName || undefined,
           role: profile.role,
           createdAt: profile.created_at,
           updatedAt: profile.updated_at,
@@ -162,12 +186,18 @@ export const authService = {
         return null;
       }
 
+      // Парсим full_name обратно в компоненты для совместимости
+      const nameParts = profile.full_name ? profile.full_name.split(' ') : [];
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts[nameParts.length - 1] || '';
+      const middleName = nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : '';
+
       return {
         id: profile.id,
-        email: profile.email,
-        firstName: profile.first_name,
-        lastName: profile.last_name,
-        middleName: profile.middle_name,
+        email: user.email || '',
+        firstName,
+        lastName,
+        middleName: middleName || undefined,
         role: profile.role,
         createdAt: profile.created_at,
         updatedAt: profile.updated_at,
