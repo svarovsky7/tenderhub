@@ -92,6 +92,13 @@ src/
 - Support 50 concurrent users
 - Real-time updates <100ms latency
 
+## Supabase Integration
+- Supabase client configured in `src/lib/supabase.ts`
+- Authentication service in `src/services/auth.service.ts`
+- Environment variables: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+- User registration creates both auth user and profile record
+- Supports email confirmation workflow
+
 ## Security Considerations
 - Environment variables for Supabase configuration
 - Row Level Security (RLS) for all tables

@@ -1,4 +1,5 @@
-import { useState, FormEvent } from 'react';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import type { RegistrationFormData, UserRole } from '../types/auth.types.ts';
 import './AuthForms.css';
 
@@ -67,12 +68,27 @@ const RegistrationForm = ({ onSwitchToLogin }: RegistrationFormProps) => {
     setIsLoading(true);
     
     try {
-      // TODO: Интеграция с Supabase Auth
-      console.log('Registration data:', formData);
-      alert('Регистрация успешна! (TODO: подключить Supabase)');
+      const { authService } = await import('../services/auth.service');
+      const result = await authService.signUp(formData);
+      
+      if (result.success) {
+        alert('Регистрация успешна! Проверьте вашу электронную почту для подтверждения аккаунта.');
+        // Очистка формы
+        setFormData({
+          email: '',
+          password: '',
+          confirmPassword: '',
+          firstName: '',
+          lastName: '',
+          middleName: '',
+          role: 'viewer',
+        });
+      } else {
+        alert(`Ошибка регистрации: ${result.error}`);
+      }
     } catch (error) {
       console.error('Registration error:', error);
-      alert('Ошибка регистрации');
+      alert('Произошла ошибка при регистрации');
     } finally {
       setIsLoading(false);
     }
