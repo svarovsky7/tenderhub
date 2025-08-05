@@ -390,7 +390,7 @@ const ClientPositionCard: React.FC<ClientPositionCardProps> = ({
             open={editModalVisible}
             onCancel={() => setEditModalVisible(false)}
             footer={null}
-            destroyOnClose
+            destroyOnHidden
           >
             <Form
               form={form}

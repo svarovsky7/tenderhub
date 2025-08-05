@@ -225,25 +225,77 @@ export const tendersApi = {
 
   // Delete tender
   async delete(id: string): Promise<ApiResponse<null>> {
+    console.log('🔥 tendersApi.delete called with ID:', id);
+    
     try {
+      // First check if tender exists
+      console.log('🔍 Checking if tender exists...');
+      const { data: existingTender, error: checkError } = await supabase
+        .from('tenders')
+        .select('id, title, status')
+        .eq('id', id)
+        .single();
+      
+      console.log('📋 Existing tender check result:', { existingTender, checkError });
+      
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('❌ Error checking tender existence:', checkError);
+        return {
+          error: handleSupabaseError(checkError, 'Check tender existence'),
+        };
+      }
+      
+      if (!existingTender) {
+        console.warn('⚠️ Tender not found for deletion:', id);
+        return {
+          error: 'Тендер не найден',
+        };
+      }
+      
+      console.log('✅ Tender found, proceeding with deletion:', existingTender);
+
+      // Check for related records
+      console.log('🔗 Checking for related client positions...');
+      const { data: positions, error: positionsError } = await supabase
+        .from('client_positions')
+        .select('id')
+        .eq('tender_id', id);
+      
+      console.log('📍 Related positions:', { positions, positionsError });
+      
+      console.log('🔗 Checking for related BOQ items...');
+      const { data: boqItems, error: boqError } = await supabase
+        .from('boq_items')
+        .select('id')
+        .eq('tender_id', id);
+      
+      console.log('📋 Related BOQ items:', { boqItems, boqError });
+
+      // Perform the deletion
+      console.log('🗑️ Performing tender deletion...');
       const { error } = await supabase
         .from('tenders')
         .delete()
         .eq('id', id);
 
+      console.log('📤 Delete operation result:', { error });
+
       if (error) {
+        console.error('❌ Supabase delete error:', error);
         return {
           error: handleSupabaseError(error, 'Delete tender'),
         };
       }
 
+      console.log('✅ Tender deleted successfully:', id);
       return {
         data: null,
         message: 'Tender deleted successfully',
       };
     } catch (error) {
+      console.error('💥 Exception in tender delete:', error);
       return {
-        error: handleSupabaseError(error, 'Delete tender'),
+        error: handleSupabaseError(error, 'Delete tender'),  
       };
     }
   },
@@ -438,24 +490,76 @@ export const boqApi = {
    * If client_position_id is provided, sub_number is automatically assigned
    */
   async create(item: BOQItemInsert): Promise<ApiResponse<BOQItem>> {
+    console.log('🚀 boqItemsApi.create called with:', item);
+    
     try {
+      // Get client position to determine item_number format
+      if (!item.client_position_id) {
+        console.error('❌ Missing client_position_id for BOQ item');
+        return { error: 'Client position ID is required' };
+      }
+
+      console.log('🔍 Fetching client position info...');
+      const { data: position, error: positionError } = await supabase
+        .from('client_positions')
+        .select('position_number')
+        .eq('id', item.client_position_id)
+        .single();
+
+      if (positionError || !position) {
+        console.error('❌ Failed to fetch client position:', positionError);
+        return { error: 'Failed to fetch client position information' };
+      }
+
+      console.log('📋 Position found:', position);
+
+      // Get the count of existing BOQ items in this position
+      console.log('🔍 Counting existing BOQ items in position...');
+      const { count, error: countError } = await supabase
+        .from('boq_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_position_id', item.client_position_id);
+
+      if (countError) {
+        console.error('❌ Failed to count existing BOQ items:', countError);
+        return { error: 'Failed to count existing BOQ items' };
+      }
+
+      // Generate item_number in format "X.Y" where X is position number, Y is sub-number
+      const subNumber = (count || 0) + 1;
+      const itemNumber = `${position.position_number}.${subNumber}`;
+      
+      console.log(`🔢 Generated item_number: ${itemNumber} (position: ${position.position_number}, sub: ${subNumber})`);
+
+      // Create the item with generated item_number and sub_number
+      const itemToInsert = {
+        ...item,
+        item_number: itemNumber,
+        sub_number: subNumber,
+        sort_order: item.sort_order || (count || 0)
+      };
+
+      console.log('💾 Inserting BOQ item:', itemToInsert);
       const { data, error } = await supabase
         .from('boq_items')
-        .insert(item)
+        .insert(itemToInsert)
         .select()
         .single();
 
       if (error) {
+        console.error('❌ Failed to insert BOQ item:', error);
         return {
           error: handleSupabaseError(error, 'Create BOQ item'),
         };
       }
 
+      console.log('✅ BOQ item created successfully:', data.id);
       return {
         data,
         message: 'BOQ item created successfully',
       };
     } catch (error) {
+      console.error('💥 Exception in create BOQ item:', error);
       return {
         error: handleSupabaseError(error, 'Create BOQ item'),
       };
@@ -1950,24 +2054,76 @@ export const boqItemsApi = {
   },
 
   async create(itemData: BOQItemInsert): Promise<ApiResponse<BOQItem>> {
+    console.log('🚀 boqItemsApi.create called with:', itemData);
+    
     try {
+      // Get client position to determine item_number format
+      if (!itemData.client_position_id) {
+        console.error('❌ Missing client_position_id for BOQ item');
+        return { error: 'Client position ID is required' };
+      }
+
+      console.log('🔍 Fetching client position info...');
+      const { data: position, error: positionError } = await supabase
+        .from('client_positions')
+        .select('position_number')
+        .eq('id', itemData.client_position_id)
+        .single();
+
+      if (positionError || !position) {
+        console.error('❌ Failed to fetch client position:', positionError);
+        return { error: 'Failed to fetch client position information' };
+      }
+
+      console.log('📋 Position found:', position);
+
+      // Get the count of existing BOQ items in this position
+      console.log('🔍 Counting existing BOQ items in position...');
+      const { count, error: countError } = await supabase
+        .from('boq_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_position_id', itemData.client_position_id);
+
+      if (countError) {
+        console.error('❌ Failed to count existing BOQ items:', countError);
+        return { error: 'Failed to count existing BOQ items' };
+      }
+
+      // Generate item_number in format "X.Y" where X is position number, Y is sub-number
+      const subNumber = (count || 0) + 1;
+      const itemNumber = `${position.position_number}.${subNumber}`;
+      
+      console.log(`🔢 Generated item_number: ${itemNumber} (position: ${position.position_number}, sub: ${subNumber})`);
+
+      // Create the item with generated item_number and sub_number
+      const itemToInsert = {
+        ...itemData,
+        item_number: itemNumber,
+        sub_number: subNumber,
+        sort_order: itemData.sort_order || (count || 0)
+      };
+
+      console.log('💾 Inserting BOQ item:', itemToInsert);
       const { data, error } = await supabase
         .from('boq_items')
-        .insert(itemData)
+        .insert(itemToInsert)
         .select()
         .single();
 
       if (error) {
+        console.error('❌ Failed to insert BOQ item:', error);
         return {
           error: handleSupabaseError(error, 'Create BOQ item'),
         };
       }
 
+      console.log('✅ BOQ item created successfully:', data.id);
       return {
         data,
         message: 'BOQ item created successfully',
       };
     } catch (error) {
+      console.error('💥 Exception in create BOQ item:', error);
       return {
         error: `Failed to create BOQ item: ${error}`,
       };
@@ -2026,36 +2182,163 @@ export const boqItemsApi = {
 };
 
 export const clientWorksApi = {
-  async uploadFromXlsx(tenderId: string, file: File): Promise<ApiResponse<boolean>> {
+  async uploadFromXlsx(tenderId: string, file: File): Promise<ApiResponse<{itemsCount: number, positionsCount: number}>> {
+    console.log('🚀 clientWorksApi.uploadFromXlsx called with:', { tenderId, fileName: file.name });
+    
     try {
+      console.log('📖 Reading Excel file...');
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      
+      console.log('📋 Available sheets:', workbook.SheetNames);
+      
+      // Read all data from Excel with proper headers
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-        header: ['item_no', 'work_name', 'unit', 'client_volume', 'client_notes'],
-        range: 1,
+        header: ['position_number', 'work_name', 'unit', 'volume'], // Map columns to meaningful names
+        range: 1, // Skip header row
+        raw: false,
+        defval: ''
       });
 
-      const records: ClientWorkInsert[] = rows.map((r) => ({
-        tender_id: tenderId,
-        item_no: Number(r['item_no']) || 0,
-        work_name: String(r['work_name'] || ''),
-        unit: String(r['unit'] || ''),
-        client_volume: Number(r['client_volume']) || 0,
-        client_notes: r['client_notes'] ? String(r['client_notes']) : null,
-      }));
+      console.log('📊 Raw Excel data:', rows.slice(0, 3)); // Log first 3 rows for debugging
+      console.log('📈 Total rows found:', rows.length);
 
-      const { error } = await supabase
-        .from('tender_client_works')
-        .insert(records);
+      // Filter and validate data
+      const validRows = rows.filter((row: any) => {
+        const hasPositionNumber = row.position_number && String(row.position_number).trim();
+        const hasWorkName = row.work_name && String(row.work_name).trim();
+        const hasVolume = row.volume && Number(row.volume) > 0;
+        
+        return hasPositionNumber && hasWorkName && hasVolume;
+      });
 
-      if (error) {
-        return { error: handleSupabaseError(error, 'Upload client works') };
+      console.log('✅ Valid rows after filtering:', validRows.length);
+
+      if (validRows.length === 0) {
+        console.warn('⚠️ No valid data found in Excel file');
+        return { 
+          error: 'В Excel файле не найдено валидных данных. Проверьте формат: № п/п | Наименование работ | Ед. изм. | Объем работ' 
+        };
       }
 
-      return { data: true, message: 'Client works uploaded successfully' };
+      // Group rows by position number for creating client positions
+      const positionsMap = new Map<string, any[]>();
+      
+      validRows.forEach((row: any) => {
+        const positionNum = String(row.position_number).trim();
+        
+        if (!positionsMap.has(positionNum)) {
+          positionsMap.set(positionNum, []);
+        }
+        
+        positionsMap.get(positionNum)!.push({
+          work_name: String(row.work_name).trim(),
+          unit: String(row.unit || 'шт').trim(),
+          volume: Number(row.volume) || 1
+        });
+      });
+
+      console.log('🗂️ Grouped into positions:', positionsMap.size);
+
+      // Get existing positions for this tender to avoid duplicates
+      console.log('🔍 Checking existing positions for tender:', tenderId);
+      const { data: existingPositions, error: existingError } = await supabase
+        .from('client_positions')
+        .select('position_number')
+        .eq('tender_id', tenderId);
+      
+      if (existingError) {
+        console.error('❌ Error fetching existing positions:', existingError);
+        return { error: 'Ошибка при проверке существующих позиций' };
+      }
+
+      const existingNumbers = new Set(existingPositions?.map(p => p.position_number) || []);
+      console.log('📋 Existing position numbers:', Array.from(existingNumbers));
+
+      // Get next available position number
+      let nextPositionNumber = 1;
+      while (existingNumbers.has(nextPositionNumber)) {
+        nextPositionNumber++;
+      }
+      console.log('🎯 Starting position number:', nextPositionNumber);
+
+      let totalItemsCreated = 0;
+      let positionsCreated = 0;
+
+      // Create client positions and BOQ items
+      for (const [positionKey, items] of positionsMap) {
+        console.log(`📝 Creating position ${positionKey} with ${items.length} items`);
+        
+        // Use next available position number to avoid duplicates
+        const actualPositionNumber = nextPositionNumber;
+        console.log(`🔢 Using position number: ${actualPositionNumber} (original: ${positionKey})`);
+        
+        // Create client position
+        const { data: position, error: posError } = await supabase
+          .from('client_positions')
+          .insert({
+            tender_id: tenderId,
+            position_number: actualPositionNumber,
+            title: `Позиция ${positionKey}`,
+            description: `Импортировано из Excel файла: ${file.name}`,
+            status: 'active'
+          })
+          .select()
+          .single();
+
+        if (posError) {
+          console.error('❌ Error creating position:', posError);
+          continue;
+        }
+
+        console.log('✅ Position created:', position.id);
+        positionsCreated++;
+        nextPositionNumber++; // Increment for next position
+
+        // Create BOQ items for this position
+        if (position && items.length > 0) {
+          const boqItems = items.map((item, index) => ({
+            tender_id: tenderId,
+            client_position_id: position.id,
+            item_number: `${actualPositionNumber}.${index + 1}`,
+            sub_number: index + 1,
+            sort_order: index,
+            item_type: 'work' as const, // All items from Excel are works
+            description: item.work_name,
+            unit: item.unit,
+            quantity: item.volume,
+            unit_rate: 0, // Will be filled later by user
+            coefficient: 1.0,
+            notes: `Импортировано из Excel: ${file.name}`,
+            source_file: file.name,
+            imported_at: new Date().toISOString()
+          }));
+
+          console.log(`💾 Creating ${boqItems.length} BOQ items for position ${positionKey}`);
+
+          const { error: boqError } = await supabase
+            .from('boq_items')
+            .insert(boqItems);
+
+          if (boqError) {
+            console.error('❌ Error creating BOQ items:', boqError);
+          } else {
+            console.log('✅ BOQ items created successfully');
+            totalItemsCreated += boqItems.length;
+          }
+        }
+      }
+
+      console.log('🎉 Import completed:', { positionsCreated, totalItemsCreated });
+
+      return { 
+        data: { itemsCount: totalItemsCreated, positionsCount: positionsCreated },
+        message: `Успешно импортировано: ${positionsCreated} позиций, ${totalItemsCreated} работ из файла ${file.name}` 
+      };
     } catch (error) {
-      return { error: handleSupabaseError(error, 'Upload client works') };
+      console.error('💥 Excel import error:', error);
+      return { error: handleSupabaseError(error, 'Upload Excel file') };
     }
   },
 };

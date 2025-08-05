@@ -14,7 +14,10 @@
       "Bash(true)",
       "Bash(npx tsc:*)",
       "Bash(npm run lint:*)",
-      "Bash(timeout 10s npm run dev)"
+      "Bash(timeout 10s npm run dev)",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

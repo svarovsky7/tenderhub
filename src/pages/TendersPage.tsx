@@ -110,19 +110,40 @@ const TendersPage: React.FC = () => {
     editingTender: null
   });
 
+  // Add delete modal state
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [tenderToDelete, setTenderToDelete] = useState<TenderWithSummary | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   // Load tenders
   const loadTenders = useCallback(async () => {
+    console.log('🔄 loadTenders called');
+    console.log('📋 Current filters:', state.filters);
+    console.log('📄 Current pagination:', {
+      current: state.pagination.current,
+      pageSize: state.pagination.pageSize
+    });
+    
     setState(prev => ({ ...prev, loading: true }));
     
     try {
+      console.log('📡 Calling tendersApi.getAll...');
       const result = await tendersApi.getAll(state.filters, {
         page: state.pagination.current,
         limit: state.pagination.pageSize
       });
 
+      console.log('📦 tendersApi.getAll result:', result);
+
       if (result.error) {
+        console.error('❌ API returned error:', result.error);
         throw new Error(result.error);
       }
+
+      console.log('✅ Setting new tenders data:', {
+        tendersCount: result.data?.length || 0,
+        totalFromPagination: result.pagination?.total || 0
+      });
 
       setState(prev => ({
         ...prev,
@@ -132,11 +153,14 @@ const TendersPage: React.FC = () => {
           total: result.pagination?.total || 0
         }
       }));
+
+      console.log('✅ Tenders state updated successfully');
     } catch (error) {
+      console.error('💥 Load tenders error:', error);
       message.error('Ошибка загрузки тендеров');
-      console.error('Load tenders error:', error);
     } finally {
       setState(prev => ({ ...prev, loading: false }));
+      console.log('🏁 loadTenders finished');
     }
   }, [state.filters, state.pagination.current, state.pagination.pageSize]);
 
@@ -252,29 +276,82 @@ const TendersPage: React.FC = () => {
     }
   }, [state.editingTender, form, loadTenders]);
 
-  const handleDeleteTender = useCallback(async (tenderId: string) => {
-    Modal.confirm({
-      title: 'Удалить тендер?',
-      content: 'Это действие нельзя отменить. Все данные тендера будут удалены.',
-      okText: 'Удалить',
-      cancelText: 'Отмена',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          const result = await tendersApi.delete(tenderId);
-          if (result.error) {
-            throw new Error(result.error);
-          }
+  const handleDeleteTender = useCallback((tenderId: string) => {
+    console.log('🗑️ handleDeleteTender called with tenderId:', tenderId);
+    console.log('📊 Current tenders count:', state.tenders.length);
+    
+    if (!tenderId) {
+      console.error('❌ No tenderId provided to handleDeleteTender');
+      message.error('Ошибка: ID тендера не найден');
+      return;
+    }
 
-          message.success('Тендер удален');
-          loadTenders();
-        } catch (error) {
-          message.error('Ошибка удаления тендера');
-          console.error('Delete tender error:', error);
-        }
+    const tender = state.tenders.find(t => t.id === tenderId);
+    console.log('🎯 Tender to delete:', tender);
+
+    if (!tender) {
+      console.error('❌ Tender not found in state:', tenderId);
+      message.error('Тендер не найден');
+      return;
+    }
+
+    console.log('📋 Setting delete modal state...');
+    setTenderToDelete(tender);
+    setDeleteModalVisible(true);
+    console.log('✅ Delete modal should be visible now');
+  }, [state.tenders]);
+
+  const confirmDeleteTender = useCallback(async () => {
+    if (!tenderToDelete) {
+      console.error('❌ No tender to delete');
+      return;
+    }
+
+    console.log('✅ User confirmed deletion for tender:', tenderToDelete.id);
+    setDeleteLoading(true);
+    
+    try {
+      console.log('📡 Calling tendersApi.delete...');
+      const result = await tendersApi.delete(tenderToDelete.id!);
+      
+      console.log('📦 Delete API result:', result);
+      
+      if (result.error) {
+        console.error('❌ API returned error:', result.error);
+        throw new Error(result.error);
       }
-    });
-  }, [loadTenders]);
+
+      console.log('✅ Delete successful, showing success message');
+      message.success(`Тендер "${tenderToDelete.title}" удален`);
+      
+      console.log('🔄 Reloading tenders...');
+      await loadTenders();
+      console.log('✅ Tenders reloaded successfully');
+      
+      // Close modal
+      setDeleteModalVisible(false);
+      setTenderToDelete(null);
+      
+    } catch (error) {
+      console.error('💥 Delete tender error:', error);
+      console.error('💥 Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        tenderId: tenderToDelete.id,
+        tenderTitle: tenderToDelete.title
+      });
+      
+      message.error(`Ошибка удаления тендера: ${error instanceof Error ? error.message : 'Неожиданная ошибка'}`);
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [tenderToDelete, loadTenders]);
+
+  const cancelDeleteTender = useCallback(() => {
+    console.log('❌ User cancelled deletion for tender:', tenderToDelete?.id);
+    setDeleteModalVisible(false);
+    setTenderToDelete(null);
+  }, [tenderToDelete]);
 
   const handleViewTender = useCallback((tender: TenderWithSummary) => {
     navigate(`/tender/${tender.id}/boq`);
@@ -447,23 +524,78 @@ const TendersPage: React.FC = () => {
             icon: <DeleteOutlined />,
             label: 'Удалить',
             danger: true,
-            onClick: () => handleDeleteTender(record.id!)
+            onClick: () => {
+              console.log('🖱️ Delete menu item clicked for record:', record);
+              console.log('🔑 Record ID:', record.id);
+              console.log('📝 Record title:', record.title);
+              handleDeleteTender(record.id!);
+            }
           }
         ];
 
         const uploadProps: UploadProps = {
           showUploadList: false,
-          accept: '.xlsx',
+          accept: '.xlsx,.xls',
           customRequest: async (options: RcUploadRequestOption) => {
             const { file, onSuccess, onError } = options;
-            const result = await clientWorksApi.uploadFromXlsx(record.id!, file as File);
-            if (result.error) {
-              message.error(result.error);
-              onError?.(new Error(result.error));
-            } else {
-              message.success('Файл загружен');
-              onSuccess?.(result, new XMLHttpRequest());
-              navigate(`/tender/${record.id}/boq`);
+            
+            console.log('📤 Excel upload started for tender:', record.id);
+            console.log('📁 File info:', { 
+              name: (file as File).name, 
+              size: (file as File).size,
+              type: (file as File).type 
+            });
+            
+            try {
+              console.log('📡 Calling clientWorksApi.uploadFromXlsx...');
+              const result = await clientWorksApi.uploadFromXlsx(record.id!, file as File);
+              
+              console.log('📦 Upload result:', result);
+              
+              if (result.error) {
+                console.error('❌ Upload failed:', result.error);
+                message.error(`Ошибка загрузки: ${result.error}`);
+                onError?.(new Error(result.error));
+              } else {
+                console.log('✅ Upload successful:', result.data);
+                
+                // Show detailed success message
+                const { itemsCount, positionsCount } = result.data || { itemsCount: 0, positionsCount: 0 };
+                
+                onSuccess?.(result, new XMLHttpRequest());
+                
+                // Show success modal
+                Modal.success({
+                  title: '✅ Файл успешно загружен!',
+                  content: (
+                    <div>
+                      <p><strong>Файл:</strong> {(file as File).name}</p>
+                      <p><strong>Импортировано:</strong></p>
+                      <ul style={{ marginLeft: '20px', marginTop: '8px' }}>
+                        <li>{positionsCount} позиций</li>
+                        <li>{itemsCount} работ</li>
+                      </ul>
+                      <p style={{ marginTop: '12px', color: '#666' }}>
+                        Сейчас вы будете перенаправлены на страницу ВОР для просмотра импортированных данных.
+                      </p>
+                    </div>
+                  ),
+                  okText: 'Перейти к ВОР',
+                  onOk: () => {
+                    console.log('🔄 User clicked OK, navigating to BOQ page...');
+                    navigate(`/tender/${record.id}/boq`);
+                  },
+                  centered: true,
+                  width: 400
+                });
+                
+                // Also show brief message
+                message.success(`Импортировано: ${positionsCount} позиций, ${itemsCount} работ`);
+              }
+            } catch (error) {
+              console.error('💥 Upload exception:', error);
+              message.error('Произошла ошибка при загрузке файла');
+              onError?.(error as Error);
             }
           }
         };
@@ -880,6 +1012,42 @@ const TendersPage: React.FC = () => {
             </Button>
           </div>
         </Form>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        title="Удалить тендер?"
+        open={deleteModalVisible}
+        onCancel={cancelDeleteTender}
+        centered
+        maskClosable={false}
+        footer={[
+          <Button key="cancel" onClick={cancelDeleteTender}>
+            Отмена
+          </Button>,
+          <Button 
+            key="delete" 
+            type="primary" 
+            danger 
+            onClick={confirmDeleteTender}
+            loading={deleteLoading}
+          >
+            Удалить
+          </Button>
+        ]}
+      >
+        <p>
+          Это действие нельзя отменить. Все данные тендера{' '}
+          <strong>"{tenderToDelete?.title || 'без названия'}"</strong>{' '}
+          будут удалены.
+        </p>
+        {tenderToDelete && (
+          <div className="mt-4 p-3 bg-gray-50 rounded">
+            <p><strong>Клиент:</strong> {tenderToDelete.client_name}</p>
+            <p><strong>Номер:</strong> {tenderToDelete.tender_number}</p>
+            <p><strong>Статус:</strong> {statusLabels[tenderToDelete.status]}</p>
+          </div>
+        )}
       </Modal>
       </div>
     </div>

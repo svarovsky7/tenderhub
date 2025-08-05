@@ -32,7 +32,6 @@ import ClientPositionForm from './ClientPositionForm';
 import BOQItemForm from './BOQItemForm';
 
 const { Title, Text } = Typography;
-const { Panel } = Collapse;
 
 interface TenderBOQManagerProps {
   tenderId: string;
@@ -366,12 +365,10 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
         ) : (
           <Collapse 
             className="w-full"
-            expandIconPosition="right"
-          >
-            {positions.map((position) => (
-              <Panel
-                key={position.id}
-                header={
+            expandIconPosition="end"
+            items={positions.map((position) => ({
+              key: position.id,
+              label: (
                   <div className="flex justify-between items-center w-full mr-4">
                     <div className="flex items-center gap-3">
                       <Text strong className="text-lg">
@@ -400,8 +397,8 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
                       />
                     </div>
                   </div>
-                }
-                extra={
+                ),
+              extra: (
                   <Space size="small" onClick={(e) => e.stopPropagation()}>
                     <Button
                       type="primary"
@@ -433,8 +430,8 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
                       />
                     </Popconfirm>
                   </Space>
-                }
-              >
+                ),
+              children: (
                 <div className="pl-4">
                   {position.description && (
                     <Text type="secondary" className="block mb-4">
@@ -495,9 +492,9 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
                     }}
                   />
                 </div>
-              </Panel>
-            ))}
-          </Collapse>
+              )
+            }))}
+          />
         )}
       </Card>
 
