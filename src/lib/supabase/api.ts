@@ -1,4 +1,5 @@
 import { supabase } from './client';
+import * as XLSX from 'xlsx';
 import type {
   Tender,
   TenderInsert,
@@ -36,6 +37,7 @@ import type {
   // BulkBOQInsert,
   PositionReorderOperation,
   HierarchyLoadOptions,
+  ClientWorkInsert,
 } from './types';
 
 // Generic error handler
@@ -2019,6 +2021,41 @@ export const boqItemsApi = {
       return {
         error: `Failed to delete BOQ item: ${error}`,
       };
+    }
+  },
+};
+
+export const clientWorksApi = {
+  async uploadFromXlsx(tenderId: string, file: File): Promise<ApiResponse<boolean>> {
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+        header: ['item_no', 'work_name', 'unit', 'client_volume', 'client_notes'],
+        range: 1,
+      });
+
+      const records: ClientWorkInsert[] = rows.map((r) => ({
+        tender_id: tenderId,
+        item_no: Number(r['item_no']) || 0,
+        work_name: String(r['work_name'] || ''),
+        unit: String(r['unit'] || ''),
+        client_volume: Number(r['client_volume']) || 0,
+        client_notes: r['client_notes'] ? String(r['client_notes']) : null,
+      }));
+
+      const { error } = await supabase
+        .from('tender_client_works')
+        .insert(records);
+
+      if (error) {
+        return { error: handleSupabaseError(error, 'Upload client works') };
+      }
+
+      return { data: true, message: 'Client works uploaded successfully' };
+    } catch (error) {
+      return { error: handleSupabaseError(error, 'Upload client works') };
     }
   },
 };
