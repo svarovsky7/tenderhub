@@ -37,7 +37,6 @@ import type {
   // BulkBOQInsert,
   PositionReorderOperation,
   HierarchyLoadOptions,
-  ClientWorkInsert,
 } from './types';
 
 // Generic error handler
@@ -2035,27 +2034,28 @@ export const clientWorksApi = {
         header: ['item_no', 'work_name', 'unit', 'client_volume', 'client_notes'],
         range: 1,
       });
-
-      const records: ClientWorkInsert[] = rows.map((r) => ({
+      const records: BOQItemInsert[] = rows.map((r, index) => ({
         tender_id: tenderId,
-        item_no: Number(r['item_no']) || 0,
-        work_name: String(r['work_name'] || ''),
+        item_number: String(r['item_no'] ?? index + 1),
+        sub_number: 1,
+        item_type: 'work',
+        description: String(r['work_name'] || ''),
         unit: String(r['unit'] || ''),
-        client_volume: Number(r['client_volume']) || 0,
-        client_notes: r['client_notes'] ? String(r['client_notes']) : null,
+        quantity: Number(r['client_volume']) || 0,
+        unit_rate: 0,
+        notes: r['client_notes'] ? String(r['client_notes']) : null,
+        sort_order: index,
       }));
 
-      const { error } = await supabase
-        .from('tender_client_works')
-        .insert(records);
+      const { error } = await supabase.from('boq_items').insert(records);
 
       if (error) {
-        return { error: handleSupabaseError(error, 'Upload client works') };
+        return { error: handleSupabaseError(error, 'Upload BOQ items') };
       }
 
-      return { data: true, message: 'Client works uploaded successfully' };
+      return { data: true, message: 'BOQ items uploaded successfully' };
     } catch (error) {
-      return { error: handleSupabaseError(error, 'Upload client works') };
+      return { error: handleSupabaseError(error, 'Upload BOQ items') };
     }
   },
 };
