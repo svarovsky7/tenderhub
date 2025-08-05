@@ -1869,3 +1869,156 @@ export const subscriptions = {
       .subscribe();
   },
 };
+
+// Add export for new APIs
+export const boqItemsApi = {
+  async getByPosition(positionId: string): Promise<ApiResponse<BOQItem[]>> {
+    try {
+      const { data, error } = await supabase
+        .from('boq_items')
+        .select('*')
+        .eq('client_position_id', positionId)
+        .order('item_number');
+
+      if (error) {
+        return {
+          error: handleSupabaseError(error, 'Get BOQ items by position'),
+        };
+      }
+
+      return {
+        data: data || [],
+        message: 'BOQ items loaded successfully',
+      };
+    } catch (error) {
+      return {
+        error: `Failed to get BOQ items: ${error}`,
+      };
+    }
+  },
+
+  async getByTender(tenderId: string): Promise<ApiResponse<BOQItem[]>> {
+    try {
+      const { data, error } = await supabase
+        .from('boq_items')
+        .select('*')
+        .eq('tender_id', tenderId)
+        .order('item_number');
+
+      if (error) {
+        return {
+          error: handleSupabaseError(error, 'Get BOQ items by tender'),
+        };
+      }
+
+      return {
+        data: data || [],
+        message: 'BOQ items loaded successfully',
+      };
+    } catch (error) {
+      return {
+        error: `Failed to get BOQ items: ${error}`,
+      };
+    }
+  },
+
+  async getById(itemId: string): Promise<ApiResponse<BOQItem>> {
+    try {
+      const { data, error } = await supabase
+        .from('boq_items')
+        .select('*')
+        .eq('id', itemId)
+        .single();
+
+      if (error) {
+        return {
+          error: handleSupabaseError(error, 'Get BOQ item'),
+        };
+      }
+
+      return {
+        data,
+        message: 'BOQ item loaded successfully',
+      };
+    } catch (error) {
+      return {
+        error: `Failed to get BOQ item: ${error}`,
+      };
+    }
+  },
+
+  async create(itemData: BOQItemInsert): Promise<ApiResponse<BOQItem>> {
+    try {
+      const { data, error } = await supabase
+        .from('boq_items')
+        .insert(itemData)
+        .select()
+        .single();
+
+      if (error) {
+        return {
+          error: handleSupabaseError(error, 'Create BOQ item'),
+        };
+      }
+
+      return {
+        data,
+        message: 'BOQ item created successfully',
+      };
+    } catch (error) {
+      return {
+        error: `Failed to create BOQ item: ${error}`,
+      };
+    }
+  },
+
+  async update(itemId: string, updates: BOQItemUpdate): Promise<ApiResponse<BOQItem>> {
+    try {
+      const { data, error } = await supabase
+        .from('boq_items')
+        .update(updates)
+        .eq('id', itemId)
+        .select()
+        .single();
+
+      if (error) {
+        return {
+          error: handleSupabaseError(error, 'Update BOQ item'),
+        };
+      }
+
+      return {
+        data,
+        message: 'BOQ item updated successfully',
+      };
+    } catch (error) {
+      return {
+        error: `Failed to update BOQ item: ${error}`,
+      };
+    }
+  },
+
+  async delete(itemId: string): Promise<ApiResponse<boolean>> {
+    try {
+      const { error } = await supabase
+        .from('boq_items')
+        .delete()
+        .eq('id', itemId);
+
+      if (error) {
+        return {
+          error: handleSupabaseError(error, 'Delete BOQ item'),
+        };
+      }
+
+      return {
+        data: true,
+        message: 'BOQ item deleted successfully',
+      };
+    } catch (error) {
+      return {
+        error: `Failed to delete BOQ item: ${error}`,
+      };
+    }
+  },
+};
