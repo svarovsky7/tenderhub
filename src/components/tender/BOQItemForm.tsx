@@ -10,9 +10,7 @@ import {
   Col,
   InputNumber,
   Radio,
-  Divider,
-  AutoComplete,
-  Spin
+  Divider
 } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { boqItemsApi, materialsApi, worksApi } from '../../lib/supabase/api';
@@ -59,7 +57,6 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
     works: WorkItem[];
   }>({ materials: [], works: [] });
   const [searchLoading, setSearchLoading] = useState(false);
-  const [selectedLibraryItem, setSelectedLibraryItem] = useState<Material | WorkItem | null>(null);
 
   const isEditing = !!editingItem;
   const itemType = Form.useWatch('item_type', form);
@@ -110,9 +107,8 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
     }
   };
 
-  const handleLibraryItemSelect = (value: string, option: any) => {
+  const handleLibraryItemSelect = (_value: string, option: any) => {
     const selectedItem = option.item;
-    setSelectedLibraryItem(selectedItem);
     
     // Auto-fill form fields
     form.setFieldsValue({
@@ -161,7 +157,6 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
       }
       
       form.resetFields();
-      setSelectedLibraryItem(null);
     } catch (error) {
       message.error(`Ошибка: ${error}`);
       console.error('BOQ item form error:', error);
@@ -172,7 +167,6 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
 
   const handleCancel = () => {
     form.resetFields();
-    setSelectedLibraryItem(null);
     onCancel();
   };
 

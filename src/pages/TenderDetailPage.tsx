@@ -1,27 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Card,
   Typography,
   Button,
   Space,
   Tag,
-  Row,
-  Col,
-  Statistic,
   Spin,
-  message,
   Breadcrumb,
   Alert,
   Empty
 } from 'antd';
 import {
-  ArrowLeftOutlined,
   EditOutlined,
-  DollarOutlined,
   CalendarOutlined,
   UserOutlined,
   FileTextOutlined,
-  AppstoreOutlined,
   ReloadOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';

@@ -609,7 +609,6 @@ export interface BOQSummary {
 }
 
 export interface ClientPositionSummary extends ClientPosition {
-  total_position_cost?: number;
   items_count?: number;
   materials_count?: number;
   works_count?: number;
@@ -629,7 +628,7 @@ export interface TenderHierarchy {
   position_number?: number;
   sub_number?: number;
   title: string;
-  description?: string;
+  description?: string | null;
   total_amount?: number;
 }
 

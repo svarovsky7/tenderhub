@@ -45,7 +45,6 @@ interface PositionWithItems extends ClientPosition {
 
 const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
   const [positions, setPositions] = useState<PositionWithItems[]>([]);
-  const [loading, setLoading] = useState(false);
   const [positionFormVisible, setPositionFormVisible] = useState(false);
   const [boqFormVisible, setBOQFormVisible] = useState(false);
   const [editingPosition, setEditingPosition] = useState<ClientPosition | null>(null);
@@ -54,7 +53,6 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
 
   // Load positions and their BOQ items
   const loadPositions = useCallback(async () => {
-    setLoading(true);
     try {
       const result = await clientPositionsApi.getByTenderId(tenderId);
       if (result.error) {
@@ -63,7 +61,7 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
 
       const positionsWithItems: PositionWithItems[] = [];
       
-      for (const position of result.data?.data || []) {
+      for (const position of result.data || []) {
         const boqResult = await boqItemsApi.getByPosition(position.id);
         positionsWithItems.push({
           ...position,
@@ -76,8 +74,6 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
     } catch (error) {
       message.error(`Ошибка загрузки позиций: ${error}`);
       console.error('Load positions error:', error);
-    } finally {
-      setLoading(false);
     }
   }, [tenderId]);
 
@@ -157,7 +153,7 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
       dataIndex: 'sub_number',
       key: 'sub_number',
       width: 60,
-      render: (value, record) => (
+      render: (_value, record) => (
         <Text strong>{record.item_number}</Text>
       )
     },
@@ -453,7 +449,6 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
                         value={position.total_materials_cost || 0}
                         precision={2}
                         suffix="₽"
-                        size="small"
                       />
                     </Col>
                     <Col span={8}>
@@ -462,7 +457,6 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
                         value={position.total_works_cost || 0}
                         precision={2}
                         suffix="₽"
-                        size="small"
                       />
                     </Col>
                     <Col span={8}>
@@ -471,7 +465,6 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
                         value={(position.total_materials_cost || 0) + (position.total_works_cost || 0)}
                         precision={2}
                         suffix="₽"
-                        size="small"
                         valueStyle={{ color: '#52c41a' }}
                       />
                     </Col>

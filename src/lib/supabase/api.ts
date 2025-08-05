@@ -985,8 +985,8 @@ export const hierarchyApi = {
       const { 
         // include_items = true, 
         limit, 
-        offset = 0, 
-        positions_only = false 
+        offset = 0
+        // positions_only = false 
       } = options;
 
       // Get tender hierarchy by joining client_positions and boq_items
@@ -1042,7 +1042,7 @@ export const hierarchyApi = {
       }
 
       // Get positions count
-      const { count: positionsCount, error: positionsError } = await supabase
+      const { count: positionsCount } = await supabase
         .from('client_positions')
         .select('*', { count: 'exact', head: true })
         .eq('tender_id', tenderId);

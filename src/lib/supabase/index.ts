@@ -23,7 +23,6 @@ export type {
   WorkItemUpdate,
   HistoryLog,
   BOQSummary,
-  TenderAnalytics,
   TenderWithSummary,
   BOQItemWithLibrary,
   ApiResponse,
