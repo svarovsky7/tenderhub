@@ -277,7 +277,7 @@ const TendersPage: React.FC = () => {
   }, [loadTenders]);
 
   const handleViewTender = useCallback((tender: TenderWithSummary) => {
-    navigate(`/tenders/${tender.id}`);
+    navigate(`/tender/${tender.id}/boq`);
   }, [navigate]);
 
   const handleEditClick = useCallback((tender: TenderWithSummary) => {
@@ -463,6 +463,7 @@ const TendersPage: React.FC = () => {
             } else {
               message.success('Файл загружен');
               onSuccess?.(result, new XMLHttpRequest());
+              navigate(`/tender/${record.id}/boq`);
             }
           }
         };
