@@ -22,8 +22,18 @@ tenderhub/
 ├── package.json          # Project dependencies and scripts
 ├── tsconfig.json         # TypeScript configuration
 ├── vite.config.ts        # Vite build configuration
-└── README.md             # Project documentation
+├── README.md             # Project documentation
+└── database_structure.json # Database schema definition
 ```
+
+## Database Structure
+
+- Always use the database schema defined in `database_structure.json`.
+
+## Environment Configuration
+
+- Подключение к базе данных Supabase хранится в корневом файле `.env`.
+- Используются переменные `NEXT_PUBLIC_SUPABASE_URL` и `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 ## Build, Test, and Development Commands
 
