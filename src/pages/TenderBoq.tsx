@@ -29,7 +29,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useParams } from 'react-router-dom';
 import { boqApi, materialsApi, worksApi } from '../lib/supabase/api';
 import type { BOQItem, Material, Work } from '../lib/supabase/types';
-import { useAuth } from '../contexts/AuthContext';
+// Removed auth imports - no authentication needed
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -49,8 +49,9 @@ const TenderBoq: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<ExtendedBOQItem | null>(null);
   const [form] = Form.useForm();
-  const { user } = useAuth();
-  const canEdit = user?.role === 'Administrator' || user?.role === 'Engineer';
+  // No authentication needed
+  // All features available without authentication
+  const canEdit = true;
 
   // Загрузка данных
   useEffect(() => {
@@ -119,7 +120,7 @@ const TenderBoq: React.FC = () => {
         library_material_id: values.item_type === 'material' ? values.library_material_id : null,
         library_work_id: values.item_type === 'work' ? values.library_work_id : null,
         category: values.category,
-        created_by: user?.id || ''
+        created_by: 'system' // No user authentication
       };
 
       if (editingItem) {

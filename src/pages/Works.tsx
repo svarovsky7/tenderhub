@@ -27,7 +27,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { worksApi } from '../lib/supabase/api';
 import type { Work } from '../lib/supabase/types';
-import { useAuth } from '../contexts/AuthContext';
+// Removed auth imports - no authentication needed
 
 const Works: React.FC = () => {
   const [works, setWorks] = useState<Work[]>([]);
@@ -36,9 +36,9 @@ const Works: React.FC = () => {
   const [editingWork, setEditingWork] = useState<Work | null>(null);
   const [searchText, setSearchText] = useState('');
   const [form] = Form.useForm();
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'Administrator';
-  const canEdit = isAdmin || user?.role === 'Engineer';
+  // No authentication needed
+  // All features available without authentication
+  const canEdit = true;
 
   // Загрузка работ
   const loadWorks = async () => {
@@ -183,13 +183,13 @@ const Works: React.FC = () => {
             onConfirm={() => handleDelete(record.id)}
             okText="Да"
             cancelText="Нет"
-            disabled={!isAdmin}
+            // All features enabled
           >
             <Button 
               icon={<DeleteOutlined />} 
               size="small" 
               danger
-              disabled={!isAdmin}
+              // All features enabled
             />
           </Popconfirm>
         </Space>

@@ -24,39 +24,32 @@ export type {
   HistoryLog,
   BOQSummary,
   TenderAnalytics,
-  AuthUser,
   TenderWithSummary,
   BOQItemWithLibrary,
-  CreateUserProfile,
-  LoginCredentials,
-  RegisterCredentials,
   ApiResponse,
   PaginatedResponse,
   TenderFilters,
   BOQFilters,
   MaterialFilters,
   WorkItemFilters,
+  ClientPosition,
+  ClientPositionInsert,
+  ClientPositionUpdate,
+  ClientPositionWithItems,
+  TenderWithFullHierarchy,
+  // Utility types
+  AuthState,
+  BaseComponentProps,
+  LoadingState,
+  PaginationState,
+  SelectOption,
+  ApiResult,
+  ModalProps,
+  ConfirmationModalProps,
+  ExportOptions,
+  ImportResult,
+  NotificationConfig,
 } from './types';
-
-// Auth exports
-export {
-  registerUser,
-  loginUser,
-  logoutUser,
-  getCurrentUser,
-  updateUserProfile,
-  resetPassword,
-  updatePassword,
-  hasPermission,
-  canManageUsers,
-  canManageTenders,
-  canViewTenders,
-  canManageBOQ,
-  canManageLibraries,
-  setupAuthStateListener,
-  getSession,
-  refreshSession,
-} from './auth';
 
 // API exports
 export {
@@ -65,13 +58,13 @@ export {
   materialsApi,
   worksApi,
   usersApi,
+  hierarchyApi,
+  clientPositionsApi,
   subscriptions,
 } from './api';
 
 // Hooks exports
 export {
-  useAuth,
-  usePermissions,
   useRealtime,
   useLoading,
   useApiResponse,
@@ -135,37 +128,6 @@ export const getErrorMessage = (error: any): string => {
   return 'Unknown error occurred';
 };
 
-// Validation helpers
-export const validateEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-};
-
-export const validatePassword = (password: string): { isValid: boolean; errors: string[] } => {
-  const errors: string[] = [];
-  
-  if (password.length < 8) {
-    errors.push('Password must be at least 8 characters long');
-  }
-  
-  if (!/[A-Z]/.test(password)) {
-    errors.push('Password must contain at least one uppercase letter');
-  }
-  
-  if (!/[a-z]/.test(password)) {
-    errors.push('Password must contain at least one lowercase letter');
-  }
-  
-  if (!/\d/.test(password)) {
-    errors.push('Password must contain at least one number');
-  }
-  
-  return {
-    isValid: errors.length === 0,
-    errors,
-  };
-};
-
 // Format helpers
 export const formatCurrency = (amount: number, currency = 'USD'): string => {
   return new Intl.NumberFormat('en-US', {
@@ -204,11 +166,11 @@ export const generateTenderNumber = (): string => {
   return `TND-${year}-${timestamp}`;
 };
 
-export const calculateBOQTotal = (items: BOQItem[]): number => {
+export const calculateBOQTotal = (items: any[]): number => {
   return items.reduce((total, item) => total + (item.total_amount || 0), 0);
 };
 
-export const groupBOQByCategory = (items: BOQItem[]): Record<string, BOQItem[]> => {
+export const groupBOQByCategory = (items: any[]): Record<string, any[]> => {
   return items.reduce((groups, item) => {
     const category = item.category || 'Uncategorized';
     if (!groups[category]) {
@@ -216,10 +178,10 @@ export const groupBOQByCategory = (items: BOQItem[]): Record<string, BOQItem[]> 
     }
     groups[category].push(item);
     return groups;
-  }, {} as Record<string, BOQItem[]>);
+  }, {} as Record<string, any[]>);
 };
 
-export const sortBOQItems = (items: BOQItem[], sortBy: 'item_number' | 'total_amount' | 'description' = 'item_number'): BOQItem[] => {
+export const sortBOQItems = (items: any[], sortBy: 'item_number' | 'total_amount' | 'description' = 'item_number'): any[] => {
   return [...items].sort((a, b) => {
     switch (sortBy) {
       case 'item_number':

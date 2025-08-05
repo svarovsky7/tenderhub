@@ -27,7 +27,7 @@ import {
   EditOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { useAuth, useHasPermission } from '../contexts/AuthContext';
+// Removed auth imports - no authentication needed
 import type { TenderStatus } from '../lib/supabase/types';
 
 const { Title, Text } = Typography;
@@ -60,8 +60,7 @@ const Dashboard: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<TenderStatus | 'all'>('all');
   
-  const { user } = useAuth();
-  const permissions = useHasPermission();
+  // No authentication needed - all features are available
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -70,10 +69,8 @@ const Dashboard: React.FC = () => {
         setLoading(true);
         
         // Load recent tenders
-        const tendersResponse = await tendersApi.getAll({
-          limit: 10,
-          sortBy: 'created_at',
-          sortOrder: 'desc'
+        const tendersResponse = await tendersApi.getAll({}, {
+          limit: 10
         });
 
         if (tendersResponse.data) {
@@ -227,7 +224,7 @@ const Dashboard: React.FC = () => {
             onClick={() => navigate(`/tenders/${record.id}`)}
             title="Просмотр"
           />
-          {permissions.canManageTenders && (
+          {(
             <Button
               type="text"
               icon={<EditOutlined />}
@@ -250,19 +247,23 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-h-full bg-gray-50">
       {/* Welcome Section */}
-      <div>
+      <div className="bg-white px-6 py-6 border-b border-gray-200">
+        <div className="max-w-none">
         <Title level={2} className="mb-2">
-          Добро пожаловать, {user?.full_name}!
+          Добро пожаловать в TenderHub!
         </Title>
         <Text type="secondary">
           Обзор ваших тендеров и основных показателей
         </Text>
+        </div>
       </div>
 
-      {/* Statistics Cards */}
-      <Row gutter={[16, 16]}>
+      {/* Main Content */}
+      <div className="p-6">
+        {/* Statistics Cards */}
+        <Row gutter={[16, 16]} className="mb-6">
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
@@ -319,7 +320,7 @@ const Dashboard: React.FC = () => {
         title="Последние тендеры"
         extra={
           <Space>
-            {permissions.canManageTenders && (
+            {(
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -382,6 +383,7 @@ const Dashboard: React.FC = () => {
           }}
         />
       </Card>
+      </div>
     </div>
   );
 };

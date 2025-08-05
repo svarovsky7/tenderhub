@@ -27,7 +27,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { materialsApi } from '../lib/supabase/api';
 import type { Material } from '../lib/supabase/types';
-import { useAuth } from '../contexts/AuthContext';
+// Removed auth imports - no authentication needed
 
 const Materials: React.FC = () => {
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -36,9 +36,9 @@ const Materials: React.FC = () => {
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [searchText, setSearchText] = useState('');
   const [form] = Form.useForm();
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'Administrator';
-  const canEdit = isAdmin || user?.role === 'Engineer';
+  // No authentication needed
+  // All features available without authentication
+  const canEdit = true;
 
   // Загрузка материалов
   const loadMaterials = async () => {
@@ -165,13 +165,13 @@ const Materials: React.FC = () => {
             onConfirm={() => handleDelete(record.id)}
             okText="Да"
             cancelText="Нет"
-            disabled={!isAdmin}
+            // All features enabled
           >
             <Button 
               icon={<DeleteOutlined />} 
               size="small" 
               danger
-              disabled={!isAdmin}
+              // All features enabled
             />
           </Popconfirm>
         </Space>

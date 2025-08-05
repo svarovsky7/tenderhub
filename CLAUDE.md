@@ -54,33 +54,37 @@ npm run lint         # Run ESLint for code quality checks
 ```
 src/
 ├── components/           # React components (organized by feature)
-│   ├── auth/            # Authentication components
-│   │   ├── LoginForm.tsx
-│   │   ├── ProtectedRoute.tsx
-│   │   └── RegisterForm.tsx
-│   └── layout/          # Layout components
-│       └── AppLayout.tsx
-├── contexts/            # React Context providers
-│   └── AuthContext.tsx  # Authentication state management
+│   ├── layout/          # Layout components
+│   │   └── AppLayout.tsx
+│   └── tender/          # Tender-specific components
+│       ├── AddPositionModal.tsx
+│       ├── BOQItemList.tsx
+│       ├── ClientPositionCard.tsx
+│       ├── LibrarySelector.tsx
+│       └── index.ts
 ├── lib/                 # External library configurations
 │   └── supabase/        # Supabase client and utilities
 │       ├── api.ts       # API service functions
-│       ├── auth.ts      # Authentication services
 │       ├── client.ts    # Supabase client configuration
 │       ├── hooks.ts     # Custom Supabase hooks
 │       ├── index.ts     # Public exports
-│       └── types.ts     # TypeScript type definitions
+│       ├── types.ts     # TypeScript type definitions
+│       ├── HIERARCHY_API_EXAMPLES.md
+│       ├── HIERARCHY_API_SUMMARY.md
+│       └── README.md
 ├── pages/               # Page components (route handlers)
 │   ├── admin/           # Admin-only pages
 │   │   ├── SettingsPage.tsx
 │   │   └── UsersPage.tsx
-│   ├── AuthPage.tsx
 │   ├── BOQPage.tsx
 │   ├── Dashboard.tsx
+│   ├── Materials.tsx
 │   ├── MaterialsPage.tsx
 │   ├── ProfilePage.tsx
 │   ├── TenderBoq.tsx
+│   ├── TenderDetailPage.tsx
 │   ├── TendersPage.tsx
+│   ├── Works.tsx
 │   └── WorksPage.tsx
 ├── App.tsx              # Main application component
 ├── main.tsx             # Application entry point
@@ -164,24 +168,25 @@ src/
 
 ## Development Guidelines
 
-### Architecture Patterns (Implemented)
-1. **Authentication Flow**
-   - Context-based auth state management (`AuthContext`)
-   - Custom hooks for permissions (`useHasPermission`)
-   - Protected routes with role-based access
-   - PKCE flow with automatic token refresh
+### Architecture Patterns (Current Implementation)
+1. **No Authentication System**
+   - **IMPORTANT**: Currently runs without authentication
+   - All features accessible without login
+   - Role-based access control removed for simplified development
+   - Future authentication can be added via Supabase Auth
 
 2. **Supabase Integration**
    - Centralized client configuration (`lib/supabase/client.ts`)
    - Service layer for API operations (`lib/supabase/api.ts`)
    - Custom hooks for common operations (`lib/supabase/hooks.ts`)
    - Comprehensive TypeScript types (`lib/supabase/types.ts`)
+   - Hierarchical data handling with specialized API examples
 
 3. **Component Organization**
-   - Feature-based component structure
-   - Separation of auth, layout, and page components
+   - Feature-based component structure (tender components)
+   - Separation of layout, tender, and page components
    - Admin-specific components in dedicated directory
-   - Reusable UI components
+   - Tender-specific reusable components (BOQItemList, LibrarySelector)
 
 ### Development Workflow
 1. **Environment Setup**
@@ -196,18 +201,19 @@ src/
    - Props interfaces for all components
 
 3. **State Management Patterns**
-   - TanStack Query for server state
-   - React Context for global state (auth)
-   - Local state with useState/useReducer
-   - Custom hooks for reusable logic
+   - TanStack Query for server state management
+   - Local state with useState/useReducer for component state
+   - Custom hooks for reusable logic and Supabase operations
+   - No global authentication state (authentication disabled)
 
 ## Important Implementation Details
 
 ### ⚠️ CRITICAL: Row Level Security (RLS) Policy
-**RLS is COMPLETELY DISABLED in this project.** Do not implement any RLS policies or enable RLS on any tables. The database schema includes RLS setup code but it should NOT be used. All data access is controlled through:
-- Application-level permissions (role-based access control in React)
-- Authentication checks in components and API calls
-- Custom permission hooks (`useHasPermission`)
+**RLS is COMPLETELY DISABLED in this project.** Do not implement any RLS policies or enable RLS on any tables. The database schema is designed without authentication or authorization. All data access is unrestricted since:
+- No authentication system is currently implemented
+- All features are accessible without login restrictions
+- Data access is controlled entirely at the application UI level
+- Future access control can be added when authentication is implemented
 
 When working on database queries or Supabase operations:
 - Never enable RLS on tables
@@ -221,11 +227,12 @@ When working on database queries or Supabase operations:
 - Custom headers for client identification
 - Automatic token refresh and session persistence
 
-### Authentication System
-- Role-based access control: Administrator, Engineer, View-only
-- Organization-based multi-tenancy
-- Custom permission hooks for UI conditionals
-- Automatic auth state synchronization
+### Authentication System Status
+- **CURRENTLY DISABLED**: No authentication system implemented
+- Database schema supports future role-based access control (Administrator, Engineer, View-only)
+- No user management or session handling
+- All tender operations accessible without restrictions
+- Authentication can be added later using Supabase Auth when needed
 
 ### Database Performance
 - **RLS is DISABLED** - No Row Level Security policies active
@@ -237,9 +244,10 @@ When working on database queries or Supabase operations:
 
 ### File Structure Conventions
 - Pages in `/pages/` directory map to routes
-- Components organized by feature in `/components/`
-- Supabase utilities centralized in `/lib/supabase/`
+- Components organized by feature in `/components/` (layout, tender)
+- Supabase utilities centralized in `/lib/supabase/` with comprehensive API documentation
 - Admin components separated in `/pages/admin/`
+- Tender-specific components in `/components/tender/` with re-exportable index
 
 ## Deployment
 

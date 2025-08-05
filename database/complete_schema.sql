@@ -1,6 +1,6 @@
 -- TenderHub PostgreSQL Schema - NO AUTHENTICATION VERSION
 -- Essential tables for TenderHub functionality without authentication
--- Created: 2025-08-04
+-- Created: 2025-08-05
 --
 -- ⚠️  IMPORTANT: NO AUTHENTICATION SYSTEM
 -- This schema does NOT include user authentication or authorization.
@@ -100,6 +100,55 @@ CREATE INDEX idx_works_library_code ON public.works_library(code);
 CREATE INDEX idx_works_library_name ON public.works_library(name);
 CREATE INDEX idx_works_library_category ON public.works_library(category);
 CREATE INDEX idx_works_library_active ON public.works_library(is_active) WHERE is_active = true;
+
+-- ============================================================================
+-- CLIENT POSITIONS TABLE
+-- ============================================================================
+-- Позиции заказчика - верхний уровень иерархии в тендере
+-- Каждая позиция может содержать множество материалов и работ
+DROP TABLE IF EXISTS public.client_positions CASCADE;
+CREATE TABLE public.client_positions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tender_id UUID NOT NULL REFERENCES public.tenders(id) ON DELETE CASCADE,
+    
+    -- Нумерация и идентификация
+    position_number INTEGER NOT NULL, -- Порядковый номер позиции (1, 2, 3...)
+    title TEXT NOT NULL, -- Название позиции от заказчика
+    description TEXT, -- Подробное описание позиции
+    
+    -- Организационные поля
+    category TEXT, -- Категория позиции (строительство, материалы, оборудование)
+    priority INTEGER DEFAULT 0, -- Приоритет позиции (для сортировки)
+    status client_position_status NOT NULL DEFAULT 'active',
+    
+    -- Вычисляемые поля (будут обновляться триггерами)
+    total_materials_cost DECIMAL(15,2) DEFAULT 0, -- Общая стоимость материалов
+    total_works_cost DECIMAL(15,2) DEFAULT 0, -- Общая стоимость работ
+    total_position_cost DECIMAL(15,2) GENERATED ALWAYS AS 
+        (COALESCE(total_materials_cost, 0) + COALESCE(total_works_cost, 0)) STORED,
+    
+    -- Метаданные
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    
+    -- Ограничения
+    CONSTRAINT chk_position_number_positive CHECK (position_number > 0),
+    CONSTRAINT chk_priority_valid CHECK (priority >= 0),
+    CONSTRAINT uq_client_positions_tender_number UNIQUE (tender_id, position_number),
+    CONSTRAINT uq_client_positions_tender_title UNIQUE (tender_id, title)
+);
+
+-- Оптимизированные индексы для client_positions
+CREATE INDEX idx_client_positions_tender_id ON public.client_positions(tender_id);
+CREATE INDEX idx_client_positions_number ON public.client_positions(tender_id, position_number);
+CREATE INDEX idx_client_positions_status ON public.client_positions(status);
+CREATE INDEX idx_client_positions_category ON public.client_positions(category);
+CREATE INDEX idx_client_positions_total_cost ON public.client_positions(total_position_cost DESC);
+-- Составной индекс для быстрых агрегаций
+CREATE INDEX idx_client_positions_tender_status_cost ON public.client_positions(tender_id, status, total_position_cost);
+-- Покрывающий индекс для dashboard запросов
+CREATE INDEX idx_client_positions_dashboard ON public.client_positions(tender_id, status) 
+    INCLUDE (position_number, title, total_position_cost, updated_at);
 
 -- ============================================================================
 -- BOQ ITEMS TABLE (Bill of Quantities) - Enhanced with Hierarchy Support
@@ -358,71 +407,6 @@ CREATE TRIGGER recalculate_totals_on_boq_change
     FOR EACH ROW
     WHEN (COALESCE(NEW.client_position_id, OLD.client_position_id) IS NOT NULL)
     EXECUTE FUNCTION public.recalculate_client_position_totals();
-
--- ============================================================================
--- TABLE COMMENTS
--- ============================================================================
-
-COMMENT ON TABLE public.tenders IS 'Main tender projects with client details';
-COMMENT ON TABLE public.materials_library IS 'Master catalog of materials with pricing';
-COMMENT ON TABLE public.works_library IS 'Master catalog of work items with labor components';
--- ============================================================================
--- CLIENT POSITIONS TABLE
--- ============================================================================
--- Позиции заказчика - верхний уровень иерархии в тендере
--- Каждая позиция может содержать множество материалов и работ
-DROP TABLE IF EXISTS public.client_positions CASCADE;
-CREATE TABLE public.client_positions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    tender_id UUID NOT NULL REFERENCES public.tenders(id) ON DELETE CASCADE,
-    
-    -- Нумерация и идентификация
-    position_number INTEGER NOT NULL, -- Порядковый номер позиции (1, 2, 3...)
-    title TEXT NOT NULL, -- Название позиции от заказчика
-    description TEXT, -- Подробное описание позиции
-    
-    -- Организационные поля
-    category TEXT, -- Категория позиции (строительство, материалы, оборудование)
-    priority INTEGER DEFAULT 0, -- Приоритет позиции (для сортировки)
-    status client_position_status NOT NULL DEFAULT 'active',
-    
-    -- Вычисляемые поля (будут обновляться триггерами)
-    total_materials_cost DECIMAL(15,2) DEFAULT 0, -- Общая стоимость материалов
-    total_works_cost DECIMAL(15,2) DEFAULT 0, -- Общая стоимость работ
-    total_position_cost DECIMAL(15,2) GENERATED ALWAYS AS 
-        (COALESCE(total_materials_cost, 0) + COALESCE(total_works_cost, 0)) STORED,
-    
-    -- Метаданные
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    
-    -- Ограничения
-    CONSTRAINT chk_position_number_positive CHECK (position_number > 0),
-    CONSTRAINT chk_priority_valid CHECK (priority >= 0),
-    CONSTRAINT uq_client_positions_tender_number UNIQUE (tender_id, position_number),
-    CONSTRAINT uq_client_positions_tender_title UNIQUE (tender_id, title)
-);
-
--- Оптимизированные индексы для client_positions
-CREATE INDEX idx_client_positions_tender_id ON public.client_positions(tender_id);
-CREATE INDEX idx_client_positions_number ON public.client_positions(tender_id, position_number);
-CREATE INDEX idx_client_positions_status ON public.client_positions(status);
-CREATE INDEX idx_client_positions_category ON public.client_positions(category);
-CREATE INDEX idx_client_positions_total_cost ON public.client_positions(total_position_cost DESC);
--- Составной индекс для быстрых агрегаций
-CREATE INDEX idx_client_positions_tender_status_cost ON public.client_positions(tender_id, status, total_position_cost);
--- Покрывающий индекс для dashboard запросов
-CREATE INDEX idx_client_positions_dashboard ON public.client_positions(tender_id, status) 
-    INCLUDE (position_number, title, total_position_cost, updated_at);
-
-COMMENT ON TABLE public.client_positions IS 'Позиции заказчика - верхний уровень группировки в BOQ';
-COMMENT ON COLUMN public.client_positions.position_number IS 'Порядковый номер позиции в тендере (1, 2, 3...)';
-COMMENT ON COLUMN public.client_positions.total_position_cost IS 'Автоматически вычисляемая общая стоимость позиции';
-
-COMMENT ON TABLE public.tenders IS 'Main tender projects with client details';
-COMMENT ON TABLE public.materials_library IS 'Master catalog of materials with pricing';
-COMMENT ON TABLE public.works_library IS 'Master catalog of work items with labor components';
-COMMENT ON TABLE public.boq_items IS 'Bill of Quantities line items for each tender';
 
 -- ============================================================================
 -- HIERARCHICAL VIEWS FOR CONVENIENT DATA ACCESS
@@ -814,6 +798,18 @@ USING GIN (to_tsvector('russian', COALESCE(description, '') || ' ' || COALESCE(n
 -- Create GIN indexes for full-text search on client positions
 CREATE INDEX IF NOT EXISTS idx_client_positions_search ON public.client_positions 
 USING GIN (to_tsvector('russian', COALESCE(title, '') || ' ' || COALESCE(description, '')));
+
+-- ============================================================================
+-- TABLE COMMENTS
+-- ============================================================================
+
+COMMENT ON TABLE public.tenders IS 'Main tender projects with client details';
+COMMENT ON TABLE public.materials_library IS 'Master catalog of materials with pricing';
+COMMENT ON TABLE public.works_library IS 'Master catalog of work items with labor components';
+COMMENT ON TABLE public.boq_items IS 'Bill of Quantities line items for each tender';
+COMMENT ON TABLE public.client_positions IS 'Позиции заказчика - верхний уровень группировки в BOQ';
+COMMENT ON COLUMN public.client_positions.position_number IS 'Порядковый номер позиции в тендере (1, 2, 3...)';
+COMMENT ON COLUMN public.client_positions.total_position_cost IS 'Автоматически вычисляемая общая стоимость позиции';
 
 -- ============================================================================
 -- FUNCTION COMMENTS AND DOCUMENTATION

@@ -9,7 +9,12 @@
       "Bash(rm:*)",
       "Bash(npm uninstall:*)",
       "Bash(grep:*)",
-      "Bash(npm run lint)"
+      "Bash(npm run lint)",
+      "Bash(pkill:*)",
+      "Bash(true)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run lint:*)",
+      "Bash(timeout 10s npm run dev)"
     ],
     "deny": []
   }

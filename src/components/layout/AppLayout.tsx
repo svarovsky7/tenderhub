@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Avatar, Dropdown, Button, Typography, Breadcrumb, message } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Button, Typography, Breadcrumb } from 'antd';
+import '../../layout/Layout.css';
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -9,12 +10,10 @@ import {
   BookOutlined,
   SettingOutlined,
   UserOutlined,
-  LogoutOutlined,
   BellOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth, useHasPermission } from '../../contexts/AuthContext';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -24,16 +23,12 @@ interface MenuItem {
   icon: React.ReactNode;
   label: React.ReactNode;
   path: string;
-  permission?: keyof ReturnType<typeof useHasPermission>;
   children?: MenuItem[];
 }
 
 const AppLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const { user, logout } = useAuth();
-  const permissions = useHasPermission();
   const location = useLocation();
-  const navigate = useNavigate();
 
   // Menu items configuration
   const menuItems: MenuItem[] = [
@@ -48,35 +43,30 @@ const AppLayout: React.FC = () => {
       icon: <FileTextOutlined />,
       label: <Link to="/tenders">Тендеры</Link>,
       path: '/tenders',
-      permission: 'canViewTenders',
     },
     {
       key: 'boq',
       icon: <TableOutlined />,
       label: <Link to="/boq">BOQ Управление</Link>,
       path: '/boq',
-      permission: 'canManageBOQ',
     },
     {
       key: 'libraries',
       icon: <BookOutlined />,
       label: 'Библиотеки',
       path: '/libraries',
-      permission: 'canManageLibraries',
       children: [
         {
           key: 'materials',
           icon: null,
           label: <Link to="/libraries/materials">Материалы</Link>,
           path: '/libraries/materials',
-          permission: 'canManageLibraries',
         },
         {
           key: 'works',
           icon: null,
           label: <Link to="/libraries/works">Работы</Link>,
           path: '/libraries/works',
-          permission: 'canManageLibraries',
         },
       ],
     },
@@ -85,41 +75,22 @@ const AppLayout: React.FC = () => {
       icon: <SettingOutlined />,
       label: 'Администрирование',
       path: '/admin',
-      permission: 'canManageUsers',
       children: [
         {
           key: 'users',
           icon: null,
           label: <Link to="/admin/users">Пользователи</Link>,
           path: '/admin/users',
-          permission: 'canManageUsers',
         },
         {
           key: 'settings',
           icon: null,
           label: <Link to="/admin/settings">Настройки</Link>,
           path: '/admin/settings',
-          permission: 'canManageUsers',
         },
       ],
     },
   ];
-
-  // Filter menu items based on permissions
-  const filterMenuItems = (items: MenuItem[]): MenuItem[] => {
-    return items.filter((item) => {
-      if (item.permission && !permissions[item.permission]) {
-        return false;
-      }
-      if (item.children) {
-        item.children = filterMenuItems(item.children);
-        return item.children.length > 0;
-      }
-      return true;
-    });
-  };
-
-  const filteredMenuItems = filterMenuItems(menuItems);
 
   // Get current selected menu key based on location
   const getCurrentMenuKey = (): string[] => {
@@ -139,7 +110,7 @@ const AppLayout: React.FC = () => {
       return null;
     };
 
-    const selectedKey = findMenuKey(filteredMenuItems);
+    const selectedKey = findMenuKey(menuItems);
     return selectedKey ? [selectedKey] : ['dashboard'];
   };
 
@@ -187,75 +158,33 @@ const AppLayout: React.FC = () => {
     return breadcrumbItems;
   };
 
-  // Handle logout
-  const handleLogout = async () => {
-    try {
-      const response = await logout();
-      if (response.error) {
-        message.error('Ошибка при выходе из системы');
-      } else {
-        message.success('Вы успешно вышли из системы');
-        navigate('/auth/login');
-      }
-    } catch (error) {
-      message.error('Произошла ошибка при выходе');
-    }
-  };
-
   // User dropdown menu
   const userMenuItems = [
     {
       key: 'profile',
       icon: <UserOutlined />,
       label: 'Профиль',
-      onClick: () => navigate('/profile'),
+      onClick: () => window.location.href = '/profile',
     },
     {
       key: 'settings',
       icon: <SettingOutlined />,
       label: 'Настройки',
-      onClick: () => navigate('/settings'),
-    },
-    {
-      type: 'divider' as const,
-    },
-    {
-      key: 'logout',
-      icon: <LogoutOutlined />,
-      label: 'Выйти',
-      onClick: handleLogout,
+      onClick: () => window.location.href = '/settings',
     },
   ];
 
-  const getRoleDisplayName = (role: string): string => {
-    switch (role) {
-      case 'Administrator':
-        return 'Администратор';
-      case 'Engineer':
-        return 'Инженер';
-      case 'View-only':
-        return 'Просмотр';
-      default:
-        return role;
-    }
-  };
-
   return (
-    <Layout style={{ minHeight: '100vh', display: 'flex', flexDirection: 'row' }}>
+    <Layout className="layout">
       <Sider 
         trigger={null} 
         collapsible 
         collapsed={collapsed}
         theme="light"
         width={250}
+        className={`sidebar ${collapsed ? 'collapsed' : ''}`}
         style={{
           boxShadow: '2px 0 6px rgba(0,21,41,.1)',
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          bottom: 0,
-          zIndex: 100,
-          height: '100vh',
         }}
       >
         <div className="p-4 border-b border-gray-200">
@@ -278,7 +207,7 @@ const AppLayout: React.FC = () => {
           selectedKeys={getCurrentMenuKey()}
           defaultOpenKeys={['libraries', 'admin']}
           style={{ borderRight: 0, marginTop: 8 }}
-          items={filteredMenuItems.map(item => ({
+          items={menuItems.map(item => ({
             key: item.key,
             icon: item.icon,
             label: item.label,
@@ -291,18 +220,12 @@ const AppLayout: React.FC = () => {
         />
       </Sider>
 
-      <Layout style={{ marginLeft: collapsed ? 80 : 250, transition: 'margin-left 0.2s' }}>
+      <Layout className={`page ${collapsed ? 'collapsed' : ''}`}>
         <Header 
+          className={`page__header ${collapsed ? 'collapsed' : ''}`}
           style={{ 
             padding: 0, 
             background: '#fff',
-            boxShadow: '0 1px 4px rgba(0,21,41,.08)',
-            zIndex: 1,
-            position: 'fixed',
-            top: 0,
-            right: 0,
-            left: collapsed ? 80 : 250,
-            transition: 'left 0.2s',
           }}
         >
           <div className="flex items-center justify-between h-full px-6">
@@ -340,10 +263,10 @@ const AppLayout: React.FC = () => {
                 <div className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors">
                   <div className="text-right">
                     <div className="text-sm font-medium text-gray-900">
-                      {user?.full_name}
+                      Пользователь
                     </div>
                     <div className="text-xs text-gray-500">
-                      {user?.role && getRoleDisplayName(user.role)}
+                      Администратор
                     </div>
                   </div>
                   <Avatar 
@@ -356,20 +279,13 @@ const AppLayout: React.FC = () => {
           </div>
         </Header>
 
-        <Content style={{ 
-          margin: '0', 
-          marginTop: '64px',
-          minHeight: 'calc(100vh - 64px)', 
-          display: 'flex', 
-          flexDirection: 'column',
-          width: '100%'
-        }}>
-          <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
-            <Breadcrumb items={getBreadcrumbItems()} />
-          </div>
-          
-          <div className="flex-1 p-6 overflow-auto" style={{ width: '100%' }}>
-            <div style={{ width: '100%', maxWidth: '100%' }}>
+        <Content className="page__content">
+          <div className="page__inner">
+            <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
+              <Breadcrumb items={getBreadcrumbItems()} />
+            </div>
+            
+            <div className="page__content-inner">
               <Outlet />
             </div>
           </div>

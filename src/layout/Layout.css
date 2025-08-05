@@ -1,0 +1,110 @@
+/* Layout Styles for Full-Width Design */
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  height: 100vh;
+}
+
+.sidebar.collapsed {
+  width: 80px;
+}
+
+.page {
+  display: flex;
+  flex: 1 1 auto;
+  overflow: hidden;
+  margin-left: 250px;
+  transition: margin-left 0.2s;
+}
+
+.page.collapsed {
+  margin-left: 80px;
+}
+
+.page__inner {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header styles */
+.page__header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 250px;
+  z-index: 1;
+  transition: left 0.2s;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,21,41,.08);
+}
+
+.page__header.collapsed {
+  left: 80px;
+}
+
+/* Content area */
+.page__content {
+  margin-top: 64px;
+  min-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.page__content-inner {
+  flex: 1;
+  overflow: auto;
+  width: 100%;
+}
+
+/* Table container to ensure horizontal scroll works */
+.ant-table-container {
+  width: 100%;
+  overflow: auto;
+}
+
+.ant-table-body {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* Ensure full width for main content areas */
+.main-content {
+  width: 100%;
+  max-width: none;
+  padding: 24px;
+}
+
+.main-content.no-padding {
+  padding: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 80px;
+  }
+  
+  .page {
+    margin-left: 80px;
+  }
+  
+  .page__header {
+    left: 80px;
+  }
+}

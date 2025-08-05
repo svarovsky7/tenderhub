@@ -5,10 +5,21 @@ const { Title } = Typography;
 
 const MaterialsPage: React.FC = () => {
   return (
-    <Card>
-      <Title level={2}>Библиотека материалов</Title>
-      <p>Страница управления библиотекой материалов будет реализована в следующих версиях.</p>
-    </Card>
+    <div className="w-full min-h-full bg-gray-50">
+      {/* Header */}
+      <div className="bg-white px-6 py-6 border-b border-gray-200">
+        <div className="max-w-none">
+          <Title level={2}>Библиотека материалов</Title>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="p-6 max-w-none">
+        <Card>
+          <p>Страница управления библиотекой материалов будет реализована в следующих версиях.</p>
+        </Card>
+      </div>
+    </div>
   );
 };
 
