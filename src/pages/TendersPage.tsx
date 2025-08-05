@@ -19,7 +19,8 @@ import {
   message,
   Empty,
   Badge,
-  Progress
+  Progress,
+  Upload
 } from 'antd';
 import {
   PlusOutlined,
@@ -33,12 +34,15 @@ import {
   DollarOutlined,
   MoreOutlined,
   TrophyOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  UploadOutlined
 } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
+import type { UploadProps } from 'antd';
+import type { UploadRequestOption as RcUploadRequestOption } from 'rc-upload/lib/interface';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { tendersApi } from '../lib/supabase/api';
+import { tendersApi, clientWorksApi } from '../lib/supabase/api';
 import type { 
   TenderWithSummary, 
   TenderInsert, 
@@ -168,11 +172,11 @@ const TendersPage: React.FC = () => {
     }));
   }, []);
 
-  const handleDateFilter = useCallback((dates: any) => {
-    setState(prev => ({
-      ...prev,
-      filters: {
-        ...prev.filters,
+    const handleDateFilter = useCallback((dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
+      setState(prev => ({
+        ...prev,
+        filters: {
+          ...prev.filters,
         date_from: dates?.[0]?.format('YYYY-MM-DD') || '',
         date_to: dates?.[1]?.format('YYYY-MM-DD') || ''
       },
@@ -447,6 +451,22 @@ const TendersPage: React.FC = () => {
           }
         ];
 
+        const uploadProps: UploadProps = {
+          showUploadList: false,
+          accept: '.xlsx',
+          customRequest: async (options: RcUploadRequestOption) => {
+            const { file, onSuccess, onError } = options;
+            const result = await clientWorksApi.uploadFromXlsx(record.id!, file as File);
+            if (result.error) {
+              message.error(result.error);
+              onError?.(new Error(result.error));
+            } else {
+              message.success('Файл загружен');
+              onSuccess?.(result, new XMLHttpRequest());
+            }
+          }
+        };
+
         return (
           <Space>
             <Button
@@ -457,6 +477,9 @@ const TendersPage: React.FC = () => {
             >
               Открыть
             </Button>
+            <Upload {...uploadProps}>
+              <Button size="small" icon={<UploadOutlined />}>Загрузить</Button>
+            </Upload>
             <Dropdown
               menu={{ items: menuItems }}
               trigger={['click']}
