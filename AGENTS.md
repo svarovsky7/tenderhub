@@ -100,6 +100,13 @@ npm run test:coverage  # Run tests with coverage
 - Protected routes for authenticated areas
 - Lazy loading for code splitting
 
+## Database Structure
+
+- The database schema is maintained in `database_structure.json`.
+- Key tables include `boq_items`, `client_positions`, `materials_library`, `tenders`, and `works_library`.
+- Align services and TypeScript types with this structure.
+- Update `database_structure.json` and relevant code when the schema changes.
+
 ## Testing Guidelines
 
 ### Unit Testing
