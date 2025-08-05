@@ -63,7 +63,7 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
 
       const positionsWithItems: PositionWithItems[] = [];
       
-      for (const position of result.data || []) {
+      for (const position of result.data?.data || []) {
         const boqResult = await boqItemsApi.getByPosition(position.id);
         positionsWithItems.push({
           ...position,
