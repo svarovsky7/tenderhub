@@ -305,6 +305,50 @@ export type Database = {
           }
         ];
       };
+      tender_client_works: {
+        Row: {
+          id: string;
+          tender_id: string;
+          item_no: number;
+          work_name: string;
+          unit: string;
+          client_volume: number;
+          client_notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tender_id: string;
+          item_no: number;
+          work_name: string;
+          unit: string;
+          client_volume: number;
+          client_notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          tender_id?: string;
+          item_no?: number;
+          work_name?: string;
+          unit?: string;
+          client_volume?: number;
+          client_notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'tender_client_works_tender_id_fkey';
+            columns: ['tender_id'];
+            isOneToOne: false;
+            referencedRelation: 'tenders';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       users: {
         Row: {
           id: string;
@@ -596,6 +640,10 @@ export type MaterialUpdate = Database['public']['Tables']['materials_library']['
 export type WorkItem = Database['public']['Tables']['works_library']['Row'];
 export type WorkItemInsert = Database['public']['Tables']['works_library']['Insert'];
 export type WorkItemUpdate = Database['public']['Tables']['works_library']['Update'];
+
+export type ClientWork = Database['public']['Tables']['tender_client_works']['Row'];
+export type ClientWorkInsert = Database['public']['Tables']['tender_client_works']['Insert'];
+export type ClientWorkUpdate = Database['public']['Tables']['tender_client_works']['Update'];
 
 export type HistoryLog = Database['public']['Tables']['history_log']['Row'];
 

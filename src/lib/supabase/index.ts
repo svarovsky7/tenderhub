@@ -21,6 +21,8 @@ export type {
   WorkItem,
   WorkItemInsert,
   WorkItemUpdate,
+  ClientWork,
+  ClientWorkInsert,
   HistoryLog,
   BOQSummary,
   TenderWithSummary,
@@ -59,6 +61,7 @@ export {
   usersApi,
   hierarchyApi,
   clientPositionsApi,
+  clientWorksApi,
   subscriptions,
 } from './api';
 
