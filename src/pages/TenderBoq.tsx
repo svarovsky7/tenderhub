@@ -27,8 +27,8 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useParams } from 'react-router-dom';
-import { boqApi, materialsApi, worksApi, clientPositionsApi, boqItemsApi } from '../lib/supabase/api';
-import type { BOQItem, Material, Work, ClientPosition } from '../lib/supabase/types';
+import { boqApi, materialsApi, worksApi } from '../lib/supabase/api';
+import type { BOQItem, Material, Work } from '../lib/supabase/types';
 import TenderBOQManager from '../components/tender/TenderBOQManager';
 // Removed auth imports - no authentication needed
 

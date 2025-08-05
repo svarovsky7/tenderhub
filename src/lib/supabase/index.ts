@@ -56,6 +56,7 @@ export type {
 export {
   tendersApi,
   boqApi,
+  boqItemsApi,
   materialsApi,
   worksApi,
   usersApi,
