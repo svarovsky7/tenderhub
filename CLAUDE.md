@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**⚠️ IMPORTANT: This file must always be kept synchronized with `AGENTS.md`. Any changes to CLAUDE.md should be immediately replicated to AGENTS.md to ensure consistency.**
+
 ## Project Overview
 
 TenderHub is a comprehensive tender management portal for construction industry workflows built with React 19.1.0, TypeScript 5.8, and Vite 7. The application is currently fully functional without authentication for simplified development.

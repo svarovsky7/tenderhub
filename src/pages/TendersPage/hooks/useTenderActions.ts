@@ -219,8 +219,8 @@ export const useTenderActions = (
   }, [tenderToDelete, hideDeleteModal, onDataChange]);
 
   const handleViewTender = useCallback((tender: TenderWithSummary) => {
-    console.log('👁️ Navigating to tender BOQ page:', tender.id);
-    navigate(`/tender/${tender.id}/boq`);
+    console.log('👁️ Navigating to BOQ management page for tender:', tender.id);
+    navigate(`/boq?tender=${tender.id}`);
   }, [navigate]);
 
   const handleExcelUpload = useCallback(async (tenderId: string, file: File) => {

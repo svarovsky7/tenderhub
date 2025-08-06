@@ -15,7 +15,7 @@ import {
   ReloadOutlined,
   FolderOpenOutlined
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import TenderBOQManager from '../components/tender/TenderBOQManager';
 import { tendersApi } from '../lib/supabase/api';
 import type { Tender } from '../lib/supabase/types';
@@ -27,6 +27,7 @@ const BOQPage: React.FC = () => {
   console.log('🚀 BOQPage component rendered');
   
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,8 +50,12 @@ const BOQPage: React.FC = () => {
       console.log('✅ Tenders loaded:', result.data?.length);
       setTenders(result.data || []);
       
-      // Auto-select first tender if available
-      if (result.data && result.data.length > 0 && !selectedTenderId) {
+      // Check for tender parameter in URL
+      const tenderParam = searchParams.get('tender');
+      if (tenderParam && result.data?.find(t => t.id === tenderParam)) {
+        console.log('🎯 Auto-selecting tender from URL parameter:', tenderParam);
+        setSelectedTenderId(tenderParam);
+      } else if (result.data && result.data.length > 0 && !selectedTenderId) {
         console.log('🎯 Auto-selecting first tender:', result.data[0].id);
         setSelectedTenderId(result.data[0].id);
       }
@@ -60,11 +65,11 @@ const BOQPage: React.FC = () => {
     } finally {
       setTendersLoading(false);
     }
-  }, [selectedTenderId]);
+  }, [selectedTenderId, searchParams]);
 
   useEffect(() => {
     loadTenders();
-  }, []);
+  }, [loadTenders]);
 
   const handleTenderChange = useCallback((tenderId: string) => {
     console.log('🔄 Tender selection changed:', tenderId);
