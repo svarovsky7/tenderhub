@@ -29,7 +29,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { clientPositionsApi, boqItemsApi } from '../../lib/supabase/api';
 import type { ClientPosition, BOQItem } from '../../lib/supabase/types';
 import ClientPositionForm from './ClientPositionForm';
-import BOQItemForm from './BOQItemForm';
+import InlineBoqItemForm from './InlineBoqItemForm';
 
 const { Title, Text } = Typography;
 
@@ -45,10 +45,8 @@ interface PositionWithItems extends ClientPosition {
 const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
   const [positions, setPositions] = useState<PositionWithItems[]>([]);
   const [positionFormVisible, setPositionFormVisible] = useState(false);
-  const [boqFormVisible, setBOQFormVisible] = useState(false);
   const [editingPosition, setEditingPosition] = useState<ClientPosition | null>(null);
-  const [editingBOQItem, setEditingBOQItem] = useState<BOQItem | null>(null);
-  const [selectedPositionId, setSelectedPositionId] = useState<string>('');
+  const [inlineFormPositionId, setInlineFormPositionId] = useState<string | null>(null);
 
   // Load positions and their BOQ items
   const loadPositions = useCallback(async () => {
@@ -113,16 +111,13 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
   };
 
   // BOQ Item handlers
-  const handleCreateBOQItem = (positionId: string) => {
-    setSelectedPositionId(positionId);
-    setEditingBOQItem(null);
-    setBOQFormVisible(true);
-  };
-
-  const handleEditBOQItem = (item: BOQItem) => {
-    setSelectedPositionId(item.client_position_id || '');
-    setEditingBOQItem(item);
-    setBOQFormVisible(true);
+  const handleAddItemClick = (positionId: string) => {
+    console.log('🖱️ Add item button clicked for position:', positionId);
+    console.log('🔄 inlineFormPositionId change:', {
+      from: inlineFormPositionId,
+      to: positionId
+    });
+    setInlineFormPositionId(positionId);
   };
 
   const handleDeleteBOQItem = async (itemId: string) => {
@@ -138,11 +133,16 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
     }
   };
 
-  const handleBOQSuccess = () => {
-    setBOQFormVisible(false);
-    setEditingBOQItem(null);
-    setSelectedPositionId('');
+  const handleInlineFormSuccess = () => {
+    console.log('✅ Inline form submission successful');
+    setInlineFormPositionId(null);
+    console.log('🔄 Reloading positions after inline form success');
     loadPositions();
+  };
+
+  const handleInlineFormCancel = () => {
+    console.log('🛑 Inline form cancelled');
+    setInlineFormPositionId(null);
   };
 
   // BOQ Items table columns
@@ -239,14 +239,6 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
       width: 120,
       render: (_, record) => (
         <Space size="small">
-          <Tooltip title="Редактировать">
-            <Button
-              type="text"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEditBOQItem(record)}
-            />
-          </Tooltip>
           <Popconfirm
             title="Удалить элемент BOQ?"
             description="Это действие нельзя отменить."
@@ -400,14 +392,16 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
                 ),
               extra: (
                   <Space size="small" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      type="primary"
-                      size="small"
-                      icon={<PlusOutlined />}
-                      onClick={() => handleCreateBOQItem(position.id)}
-                    >
-                      Добавить элемент
-                    </Button>
+                    {inlineFormPositionId !== position.id && (
+                      <Button
+                        type="primary"
+                        size="small"
+                        icon={<PlusOutlined />}
+                        onClick={() => handleAddItemClick(position.id)}
+                      >
+                        Добавить элемент
+                      </Button>
+                    )}
                     <Button
                       type="text"
                       size="small"
@@ -467,6 +461,15 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
                     </Col>
                   </Row>
 
+                  {inlineFormPositionId === position.id && (
+                    <InlineBoqItemForm
+                      tenderId={tenderId}
+                      positionId={position.id}
+                      onSuccess={handleInlineFormSuccess}
+                      onCancel={handleInlineFormCancel}
+                    />
+                  )}
+
                   <Table
                     columns={boqColumns}
                     dataSource={position.boq_items || []}
@@ -483,7 +486,7 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
                             type="primary"
                             size="small"
                             icon={<PlusOutlined />}
-                            onClick={() => handleCreateBOQItem(position.id)}
+                            onClick={() => handleAddItemClick(position.id)}
                           >
                             Добавить элемент BOQ
                           </Button>
@@ -505,15 +508,6 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
         onCancel={() => setPositionFormVisible(false)}
         onSuccess={handlePositionSuccess}
         editingPosition={editingPosition}
-      />
-
-      <BOQItemForm
-        tenderId={tenderId}
-        positionId={selectedPositionId}
-        visible={boqFormVisible}
-        onCancel={() => setBOQFormVisible(false)}
-        onSuccess={handleBOQSuccess}
-        editingItem={editingBOQItem}
       />
     </div>
   );
