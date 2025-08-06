@@ -117,7 +117,7 @@ const TenderBoq: React.FC = () => {
         unit: libraryItem?.unit || values.unit,
         quantity: values.quantity,
         unit_rate: libraryItem ? 
-          (values.item_type === 'material' ? libraryItem.base_price : (libraryItem as Work).base_rate) : 
+          (values.item_type === 'material' ? libraryItem.base_price : (libraryItem as Work).base_price) : 
           values.unit_rate,
         library_material_id: values.item_type === 'material' ? values.library_material_id : null,
         library_work_id: values.item_type === 'work' ? values.library_work_id : null,
@@ -183,7 +183,7 @@ const TenderBoq: React.FC = () => {
       selectedItem = works.find(w => w.id === itemId);
       form.setFieldsValue({
         unit: selectedItem?.unit,
-        unit_rate: (selectedItem as Work)?.base_rate,
+        unit_rate: (selectedItem as Work)?.base_price,
         library_material_id: null
       });
     }
@@ -487,7 +487,7 @@ const TenderBoq: React.FC = () => {
                     >
                       {works.map(work => (
                         <Option key={work.id} value={work.id}>
-                          {work.name} ({work.unit}) - {work.base_rate.toFixed(2)} ₽
+                          {work.name} ({work.unit}) - {work.base_price.toFixed(2)} ₽
                         </Option>
                       ))}
                     </Select>

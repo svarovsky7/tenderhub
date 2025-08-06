@@ -1,1 +1,259 @@
-import React, { useState, useCallback, useMemo } from 'react';\nimport {\n  Input,\n  Modal,\n  message\n} from 'antd';\nimport { boqApi } from '../../../lib/supabase/api';\nimport type { \n  BOQItemWithLibrary, \n  BOQItemUpdate\n} from '../../../lib/supabase/types';\nimport type { BOQItemListProps, EditingItem } from './types';\nimport DraggableList from './DraggableList';\nimport VirtualList from './VirtualList';\n\nconst BOQItemList: React.FC<BOQItemListProps> = ({\n  items,\n  clientPositionId,\n  onUpdate,\n  maxHeight = 600,\n  searchable = true,\n  editable = true\n}) => {\n  console.log('🚀 BOQItemList called with:', {\n    itemsCount: items.length,\n    clientPositionId,\n    maxHeight,\n    searchable,\n    editable\n  });\n\n  const [searchTerm, setSearchTerm] = useState('');\n  const [editingItem, setEditingItem] = useState<EditingItem | null>(null);\n  const [isLoading, setIsLoading] = useState(false);\n  const [localItems, setLocalItems] = useState(items);\n\n  // Update local items when props change\n  React.useEffect(() => {\n    console.log('🔄 Items prop changed, updating local items');\n    setLocalItems(items);\n  }, [items]);\n\n  // Filter items based on search term\n  const filteredItems = useMemo(() => {\n    if (!searchTerm.trim()) {\n      return localItems;\n    }\n    \n    const filtered = localItems.filter(item => \n      item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||\n      item.item_number.toLowerCase().includes(searchTerm.toLowerCase()) ||\n      (item.notes && item.notes.toLowerCase().includes(searchTerm.toLowerCase()))\n    );\n    \n    console.log('🔍 Filtered items:', { searchTerm, originalCount: localItems.length, filteredCount: filtered.length });\n    return filtered;\n  }, [localItems, searchTerm]);\n\n  const handleSearchChange = useCallback((value: string) => {\n    console.log('🔍 Search term changed:', value);\n    setSearchTerm(value);\n  }, []);\n\n  const handleReorder = useCallback((newOrder: BOQItemWithLibrary[]) => {\n    console.log('🔄 Reordering items locally');\n    setLocalItems(newOrder);\n  }, []);\n\n  const handleStartEdit = useCallback((itemId: string, field: 'description' | 'quantity' | 'unit_rate', currentValue: string | number) => {\n    console.log('✏️ Starting edit:', { itemId, field, currentValue });\n    setEditingItem({ id: itemId, field, value: currentValue });\n  }, []);\n\n  const handleSaveEdit = useCallback(async () => {\n    if (!editingItem) {\n      console.warn('⚠️ No editing item to save');\n      return;\n    }\n\n    console.log('💾 Saving edit:', editingItem);\n    setIsLoading(true);\n\n    try {\n      const updates: BOQItemUpdate = {\n        [editingItem.field]: editingItem.value\n      };\n\n      console.log('📡 Calling BOQ update API:', { id: editingItem.id, updates });\n      const result = await boqApi.update(editingItem.id, updates);\n      console.log('📦 Update API response:', result);\n\n      if (result.error) {\n        console.error('❌ Update failed:', result.error);\n        message.error('Ошибка обновления элемента');\n        return;\n      }\n\n      console.log('✅ Update successful');\n      message.success('Элемент обновлен');\n      setEditingItem(null);\n      onUpdate();\n    } catch (error) {\n      console.error('💥 Exception during update:', error);\n      message.error('Ошибка обновления элемента');\n    } finally {\n      setIsLoading(false);\n    }\n  }, [editingItem, onUpdate]);\n\n  const handleCancelEdit = useCallback(() => {\n    console.log('❌ Canceling edit:', editingItem?.id);\n    setEditingItem(null);\n  }, [editingItem]);\n\n  const handleDelete = useCallback(async (itemId: string) => {\n    console.log('🗑️ Delete requested for item:', itemId);\n    \n    const item = localItems.find(i => i.id === itemId);\n    if (!item) {\n      console.error('❌ Item not found for deletion:', itemId);\n      return;\n    }\n\n    Modal.confirm({\n      title: 'Подтверждение удаления',\n      content: `Вы уверены, что хотите удалить элемент \"${item.description}\"?`,\n      okText: 'Удалить',\n      cancelText: 'Отмена',\n      okButtonProps: { danger: true },\n      onOk: async () => {\n        console.log('✅ Delete confirmed for item:', itemId);\n        setIsLoading(true);\n\n        try {\n          console.log('📡 Calling BOQ delete API:', itemId);\n          const result = await boqApi.delete(itemId);\n          console.log('📦 Delete API response:', result);\n\n          if (result.error) {\n            console.error('❌ Delete failed:', result.error);\n            message.error('Ошибка удаления элемента');\n            return;\n          }\n\n          console.log('✅ Delete successful');\n          message.success('Элемент удален');\n          onUpdate();\n        } catch (error) {\n          console.error('💥 Exception during delete:', error);\n          message.error('Ошибка удаления элемента');\n        } finally {\n          setIsLoading(false);\n        }\n      }\n    });\n  }, [localItems, onUpdate]);\n\n  const handleDuplicate = useCallback(async (item: BOQItemWithLibrary) => {\n    console.log('📋 Duplicate requested for item:', item.id);\n    setIsLoading(true);\n\n    try {\n      const duplicateData = {\n        tender_id: item.tender_id,\n        client_position_id: item.client_position_id,\n        item_type: item.item_type,\n        description: `${item.description} (копия)`,\n        unit: item.unit,\n        quantity: item.quantity,\n        unit_rate: item.unit_rate,\n        material_id: item.material_id,\n        work_id: item.work_id,\n        library_material_id: item.library_material_id,\n        library_work_id: item.library_work_id,\n        category: item.category,\n        subcategory: item.subcategory,\n        notes: item.notes,\n        markup_percentage: item.markup_percentage\n      };\n\n      console.log('📡 Calling BOQ create API for duplicate:', duplicateData);\n      const result = await boqApi.create(duplicateData);\n      console.log('📦 Duplicate API response:', result);\n\n      if (result.error) {\n        console.error('❌ Duplicate failed:', result.error);\n        message.error('Ошибка дублирования элемента');\n        return;\n      }\n\n      console.log('✅ Duplicate successful');\n      message.success('Элемент продублирован');\n      onUpdate();\n    } catch (error) {\n      console.error('💥 Exception during duplicate:', error);\n      message.error('Ошибка дублирования элемента');\n    } finally {\n      setIsLoading(false);\n    }\n  }, [onUpdate]);\n\n  // Determine whether to use virtual list or draggable list\n  const useVirtualList = filteredItems.length > 100;\n  const listHeight = Math.min(maxHeight, filteredItems.length * 180);\n\n  console.log('📊 List rendering decision:', {\n    itemsCount: filteredItems.length,\n    useVirtualList,\n    listHeight,\n    maxHeight\n  });\n\n  return (\n    <div className=\"space-y-4\">\n      {searchable && (\n        <Input.Search\n          placeholder=\"Поиск элементов BOQ...\"\n          value={searchTerm}\n          onChange={(e) => handleSearchChange(e.target.value)}\n          allowClear\n        />\n      )}\n\n      {useVirtualList ? (\n        <VirtualList\n          items={filteredItems}\n          height={listHeight}\n          editingItem={editingItem}\n          isLoading={isLoading}\n          editable={editable}\n          onStartEdit={handleStartEdit}\n          onSaveEdit={handleSaveEdit}\n          onCancelEdit={handleCancelEdit}\n          onDelete={handleDelete}\n          onDuplicate={handleDuplicate}\n          setEditingItem={setEditingItem}\n        />\n      ) : (\n        <DraggableList\n          items={filteredItems}\n          clientPositionId={clientPositionId}\n          onReorder={handleReorder}\n          height={listHeight}\n          editingItem={editingItem}\n          isLoading={isLoading}\n          editable={editable}\n          onStartEdit={handleStartEdit}\n          onSaveEdit={handleSaveEdit}\n          onCancelEdit={handleCancelEdit}\n          onDelete={handleDelete}\n          onDuplicate={handleDuplicate}\n          setEditingItem={setEditingItem}\n        />\n      )}\n    </div>\n  );\n};\n\nexport default BOQItemList;
+import React, { useState, useCallback, useMemo } from 'react';
+import {
+  Input,
+  Modal,
+  message
+} from 'antd';
+import { boqApi } from '../../../lib/supabase/api';
+import type { 
+  BOQItemWithLibrary, 
+  BOQItemUpdate
+} from '../../../lib/supabase/types';
+import type { BOQItemListProps, EditingItem } from './types';
+import DraggableList from './DraggableList';
+import VirtualList from './VirtualList';
+
+const BOQItemList: React.FC<BOQItemListProps> = ({
+  items,
+  clientPositionId,
+  onUpdate,
+  maxHeight = 600,
+  searchable = true,
+  editable = true
+}) => {
+  console.log('🚀 BOQItemList called with:', {
+    itemsCount: items.length,
+    clientPositionId,
+    maxHeight,
+    searchable,
+    editable
+  });
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingItem, setEditingItem] = useState<EditingItem | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [localItems, setLocalItems] = useState(items);
+
+  // Update local items when props change
+  React.useEffect(() => {
+    console.log('🔄 Items prop changed, updating local items');
+    setLocalItems(items);
+  }, [items]);
+
+  // Filter items based on search term
+  const filteredItems = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return localItems;
+    }
+    
+    const filtered = localItems.filter(item => 
+      item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.item_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.notes && item.notes.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+    
+    console.log('🔍 Filtered items:', { searchTerm, originalCount: localItems.length, filteredCount: filtered.length });
+    return filtered;
+  }, [localItems, searchTerm]);
+
+  const handleSearchChange = useCallback((value: string) => {
+    console.log('🔍 Search term changed:', value);
+    setSearchTerm(value);
+  }, []);
+
+  const handleReorder = useCallback((newOrder: BOQItemWithLibrary[]) => {
+    console.log('🔄 Reordering items locally');
+    setLocalItems(newOrder);
+  }, []);
+
+  const handleStartEdit = useCallback((itemId: string, field: 'description' | 'quantity' | 'unit_rate', currentValue: string | number) => {
+    console.log('✏️ Starting edit:', { itemId, field, currentValue });
+    setEditingItem({ id: itemId, field, value: currentValue });
+  }, []);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editingItem) {
+      console.warn('⚠️ No editing item to save');
+      return;
+    }
+
+    console.log('💾 Saving edit:', editingItem);
+    setIsLoading(true);
+
+    try {
+      const updates: BOQItemUpdate = {
+        [editingItem.field]: editingItem.value
+      };
+
+      console.log('📡 Calling BOQ update API:', { id: editingItem.id, updates });
+      const result = await boqApi.update(editingItem.id, updates);
+      console.log('📦 Update API response:', result);
+
+      if (result.error) {
+        console.error('❌ Update failed:', result.error);
+        message.error('Ошибка обновления элемента');
+        return;
+      }
+
+      console.log('✅ Update successful');
+      message.success('Элемент обновлен');
+      setEditingItem(null);
+      onUpdate();
+    } catch (error) {
+      console.error('💥 Exception during update:', error);
+      message.error('Ошибка обновления элемента');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [editingItem, onUpdate]);
+
+  const handleCancelEdit = useCallback(() => {
+    console.log('❌ Canceling edit:', editingItem?.id);
+    setEditingItem(null);
+  }, [editingItem]);
+
+  const handleDelete = useCallback(async (itemId: string) => {
+    console.log('🗑️ Delete requested for item:', itemId);
+    
+    const item = localItems.find(i => i.id === itemId);
+    if (!item) {
+      console.error('❌ Item not found for deletion:', itemId);
+      return;
+    }
+
+    Modal.confirm({
+      title: 'Подтверждение удаления',
+      content: `Вы уверены, что хотите удалить элемент "${item.description}"?`,
+      okText: 'Удалить',
+      cancelText: 'Отмена',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        console.log('✅ Delete confirmed for item:', itemId);
+        setIsLoading(true);
+
+        try {
+          console.log('📡 Calling BOQ delete API:', itemId);
+          const result = await boqApi.delete(itemId);
+          console.log('📦 Delete API response:', result);
+
+          if (result.error) {
+            console.error('❌ Delete failed:', result.error);
+            message.error('Ошибка удаления элемента');
+            return;
+          }
+
+          console.log('✅ Delete successful');
+          message.success('Элемент удален');
+          onUpdate();
+        } catch (error) {
+          console.error('💥 Exception during delete:', error);
+          message.error('Ошибка удаления элемента');
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    });
+  }, [localItems, onUpdate]);
+
+  const handleDuplicate = useCallback(async (item: BOQItemWithLibrary) => {
+    console.log('📋 Duplicate requested for item:', item.id);
+    setIsLoading(true);
+
+    try {
+      const duplicateData = {
+        tender_id: item.tender_id,
+        client_position_id: item.client_position_id,
+        item_type: item.item_type,
+        description: `${item.description} (копия)`,
+        unit: item.unit,
+        quantity: item.quantity,
+        unit_rate: item.unit_rate,
+        material_id: item.material_id,
+        work_id: item.work_id,
+        library_material_id: item.library_material_id,
+        library_work_id: item.library_work_id,
+        category: item.category,
+        subcategory: item.subcategory,
+        notes: item.notes,
+        markup_percentage: item.markup_percentage
+      };
+
+      console.log('📡 Calling BOQ create API for duplicate:', duplicateData);
+      const result = await boqApi.create(duplicateData);
+      console.log('📦 Duplicate API response:', result);
+
+      if (result.error) {
+        console.error('❌ Duplicate failed:', result.error);
+        message.error('Ошибка дублирования элемента');
+        return;
+      }
+
+      console.log('✅ Duplicate successful');
+      message.success('Элемент продублирован');
+      onUpdate();
+    } catch (error) {
+      console.error('💥 Exception during duplicate:', error);
+      message.error('Ошибка дублирования элемента');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [onUpdate]);
+
+  // Determine whether to use virtual list or draggable list
+  const useVirtualList = filteredItems.length > 100;
+  const listHeight = Math.min(maxHeight, filteredItems.length * 180);
+
+  console.log('📊 List rendering decision:', {
+    itemsCount: filteredItems.length,
+    useVirtualList,
+    listHeight,
+    maxHeight
+  });
+
+  return (
+    <div className="space-y-4">
+      {searchable && (
+        <Input.Search
+          placeholder="Поиск элементов BOQ..."
+          value={searchTerm}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          allowClear
+        />
+      )}
+
+      {useVirtualList ? (
+        <VirtualList
+          items={filteredItems}
+          height={listHeight}
+          editingItem={editingItem}
+          isLoading={isLoading}
+          editable={editable}
+          onStartEdit={handleStartEdit}
+          onSaveEdit={handleSaveEdit}
+          onCancelEdit={handleCancelEdit}
+          onDelete={handleDelete}
+          onDuplicate={handleDuplicate}
+          setEditingItem={setEditingItem}
+        />
+      ) : (
+        <DraggableList
+          items={filteredItems}
+          clientPositionId={clientPositionId}
+          onReorder={handleReorder}
+          height={listHeight}
+          editingItem={editingItem}
+          isLoading={isLoading}
+          editable={editable}
+          onStartEdit={handleStartEdit}
+          onSaveEdit={handleSaveEdit}
+          onCancelEdit={handleCancelEdit}
+          onDelete={handleDelete}
+          onDuplicate={handleDuplicate}
+          setEditingItem={setEditingItem}
+        />
+      )}
+    </div>
+  );
+};
+
+export default BOQItemList;

@@ -1,4 +1,158 @@
 import React, { useCallback } from 'react';
 import { Empty } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
-import {\n  DndContext,\n  closestCenter,\n  KeyboardSensor,\n  PointerSensor,\n  useSensor,\n  useSensors,\n  type DragEndEvent\n} from '@dnd-kit/core';\nimport {\n  arrayMove,\n  SortableContext,\n  sortableKeyboardCoordinates,\n  verticalListSortingStrategy\n} from '@dnd-kit/sortable';\nimport { message } from 'antd';\nimport { boqApi } from '../../../lib/supabase/api';\nimport SortableItem from './SortableItem';\nimport type { DraggableListProps } from './types';\n\nconst DraggableList: React.FC<DraggableListProps> = ({\n  items,\n  clientPositionId,\n  onReorder,\n  height,\n  editingItem,\n  isLoading,\n  editable,\n  onStartEdit,\n  onSaveEdit,\n  onCancelEdit,\n  onDelete,\n  onDuplicate,\n  setEditingItem\n}) => {\n  console.log('🚀 DraggableList rendered with:', { \n    itemsCount: items.length, \n    clientPositionId, \n    height \n  });\n\n  const sensors = useSensors(\n    useSensor(PointerSensor, {\n      activationConstraint: {\n        distance: 8,\n      },\n    }),\n    useSensor(KeyboardSensor, {\n      coordinateGetter: sortableKeyboardCoordinates,\n    })\n  );\n\n  const handleDragEnd = useCallback(async (event: DragEndEvent) => {\n    const { active, over } = event;\n    console.log('🎯 Drag end event:', { activeId: active.id, overId: over?.id });\n\n    if (!over) {\n      console.log('⚠️ No drop target found');\n      return;\n    }\n\n    if (active.id !== over.id) {\n      console.log('🔄 Reordering items...');\n      const oldIndex = items.findIndex(item => item.id === active.id);\n      const newIndex = items.findIndex(item => item.id === over.id);\n      \n      console.log('📊 Reorder details:', { oldIndex, newIndex, activeId: active.id, overId: over.id });\n      \n      if (oldIndex === -1 || newIndex === -1) {\n        console.error('❌ Invalid item indices:', { oldIndex, newIndex });\n        return;\n      }\n\n      const newOrder = arrayMove(items, oldIndex, newIndex);\n      console.log('📋 New order calculated:', newOrder.map(item => ({ id: item.id, item_number: item.item_number })));\n      \n      // Optimistically update UI\n      onReorder(newOrder);\n\n      try {\n        // Update sort order in database\n        const itemIds = newOrder.map(item => item.id);\n        console.log('📡 Updating sort order in database:', itemIds);\n        \n        const result = await boqApi.reorderInPosition(clientPositionId, itemIds);\n        console.log('📦 Reorder API response:', result);\n        \n        if (result.error) {\n          console.error('❌ Failed to reorder items:', result.error);\n          message.error('Ошибка изменения порядка элементов');\n          // Revert optimistic update on error\n          onReorder(items);\n        } else {\n          console.log('✅ Items reordered successfully');\n          message.success('Порядок элементов изменен');\n        }\n      } catch (error) {\n        console.error('💥 Exception during reorder:', error);\n        message.error('Ошибка изменения порядка элементов');\n        // Revert optimistic update on error\n        onReorder(items);\n      }\n    }\n  }, [items, clientPositionId, onReorder]);\n\n  if (items.length === 0) {\n    return (\n      <div \n        style={{ height }} \n        className=\"flex items-center justify-center border border-gray-200 rounded-lg bg-gray-50\"\n      >\n        <Empty\n          image={<FileTextOutlined style={{ fontSize: 48, color: '#ccc' }} />}\n          description=\"Нет элементов BOQ\"\n        />\n      </div>\n    );\n  }\n\n  return (\n    <DndContext\n      sensors={sensors}\n      collisionDetection={closestCenter}\n      onDragEnd={handleDragEnd}\n    >\n      <SortableContext items={items.map(item => item.id)} strategy={verticalListSortingStrategy}>\n        <div \n          className=\"space-y-2 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50\"\n          style={{ height }}\n        >\n          {items.map((item) => {\n            console.log('🎯 Rendering draggable item:', item.id);\n            return (\n              <SortableItem\n                key={item.id}\n                item={item}\n                isLoading={isLoading}\n                editingItem={editingItem}\n                editable={editable}\n                onStartEdit={onStartEdit}\n                onSaveEdit={onSaveEdit}\n                onCancelEdit={onCancelEdit}\n                onDelete={onDelete}\n                onDuplicate={onDuplicate}\n                setEditingItem={setEditingItem}\n              />\n            );\n          })}\n        </div>\n      </SortableContext>\n    </DndContext>\n  );\n};\n\nexport default DraggableList;
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable';
+import { message } from 'antd';
+import { boqApi } from '../../../lib/supabase/api';
+import SortableItem from './SortableItem';
+import type { DraggableListProps } from './types';
+
+const DraggableList: React.FC<DraggableListProps> = ({
+  items,
+  clientPositionId,
+  onReorder,
+  height,
+  editingItem,
+  isLoading,
+  editable,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onDelete,
+  onDuplicate,
+  setEditingItem
+}) => {
+  console.log('🚀 DraggableList rendered with:', { 
+    itemsCount: items.length, 
+    clientPositionId, 
+    height 
+  });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    console.log('🎯 Drag end event:', { activeId: active.id, overId: over?.id });
+
+    if (!over) {
+      console.log('⚠️ No drop target found');
+      return;
+    }
+
+    if (active.id !== over.id) {
+      console.log('🔄 Reordering items...');
+      const oldIndex = items.findIndex(item => item.id === active.id);
+      const newIndex = items.findIndex(item => item.id === over.id);
+      
+      console.log('📊 Reorder details:', { oldIndex, newIndex, activeId: active.id, overId: over.id });
+      
+      if (oldIndex === -1 || newIndex === -1) {
+        console.error('❌ Invalid item indices:', { oldIndex, newIndex });
+        return;
+      }
+
+      const newOrder = arrayMove(items, oldIndex, newIndex);
+      console.log('📋 New order calculated:', newOrder.map(item => ({ id: item.id, item_number: item.item_number })));
+      
+      // Optimistically update UI
+      onReorder(newOrder);
+
+      try {
+        // Update sort order in database
+        const itemIds = newOrder.map(item => item.id);
+        console.log('📡 Updating sort order in database:', itemIds);
+        
+        const result = await boqApi.reorderInPosition(clientPositionId, itemIds);
+        console.log('📦 Reorder API response:', result);
+        
+        if (result.error) {
+          console.error('❌ Failed to reorder items:', result.error);
+          message.error('Ошибка изменения порядка элементов');
+          // Revert optimistic update on error
+          onReorder(items);
+        } else {
+          console.log('✅ Items reordered successfully');
+          message.success('Порядок элементов изменен');
+        }
+      } catch (error) {
+        console.error('💥 Exception during reorder:', error);
+        message.error('Ошибка изменения порядка элементов');
+        // Revert optimistic update on error
+        onReorder(items);
+      }
+    }
+  }, [items, clientPositionId, onReorder]);
+
+  if (items.length === 0) {
+    return (
+      <div 
+        style={{ height }} 
+        className="flex items-center justify-center border border-gray-200 rounded-lg bg-gray-50"
+      >
+        <Empty
+          image={<FileTextOutlined style={{ fontSize: 48, color: '#ccc' }} />}
+          description="Нет элементов BOQ"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext items={items.map(item => item.id)} strategy={verticalListSortingStrategy}>
+        <div 
+          className="space-y-2 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50"
+          style={{ height }}
+        >
+          {items.map((item) => {
+            console.log('🎯 Rendering draggable item:', item.id);
+            return (
+              <SortableItem
+                key={item.id}
+                item={item}
+                isLoading={isLoading}
+                editingItem={editingItem}
+                editable={editable}
+                onStartEdit={onStartEdit}
+                onSaveEdit={onSaveEdit}
+                onCancelEdit={onCancelEdit}
+                onDelete={onDelete}
+                onDuplicate={onDuplicate}
+                setEditingItem={setEditingItem}
+              />
+            );
+          })}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+};
+
+export default DraggableList;

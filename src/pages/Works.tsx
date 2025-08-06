@@ -131,11 +131,11 @@ const Works: React.FC = () => {
     },
     {
       title: 'Цена',
-      dataIndex: 'base_rate',
-      key: 'base_rate',
+      dataIndex: 'base_price',
+      key: 'base_price',
       width: 120,
       render: (rate) => `${rate.toFixed(2)} ₽`,
-      sorter: (a, b) => a.base_rate - b.base_rate,
+      sorter: (a, b) => a.base_price - b.base_price,
     },
     {
       title: 'Категория',
@@ -202,7 +202,7 @@ const Works: React.FC = () => {
     total: works.length,
     categories: [...new Set(works.map(w => w.category).filter(Boolean))].length,
     avgRate: works.length > 0 
-      ? works.reduce((sum, w) => sum + w.base_rate, 0) / works.length 
+      ? works.reduce((sum, w) => sum + w.base_price, 0) / works.length 
       : 0,
     highComplexity: works.filter(w => w.complexity === 'high').length
   };
@@ -352,7 +352,7 @@ const Works: React.FC = () => {
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item
-                name="base_rate"
+                name="base_price"
                 label="Базовая ставка (₽)"
                 rules={[{ required: true, message: 'Введите ставку' }]}
               >
