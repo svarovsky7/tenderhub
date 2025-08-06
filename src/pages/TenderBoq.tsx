@@ -23,10 +23,12 @@ import {
   DeleteOutlined,
   CalculatorOutlined,
   FileTextOutlined,
-  SaveOutlined
+  SaveOutlined,
+  ArrowLeftOutlined,
+  TableOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { boqApi, materialsApi, worksApi } from '../lib/supabase/api';
 import type { BOQItem, Material, Work } from '../lib/supabase/types';
 // Removed auth imports - no authentication needed
@@ -42,6 +44,7 @@ interface ExtendedBOQItem extends BOQItem {
 
 const TenderBoq: React.FC = () => {
   const { tenderId } = useParams<{ tenderId: string }>();
+  const navigate = useNavigate();
   const [boqItems, setBoqItems] = useState<ExtendedBOQItem[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [works, setWorks] = useState<Work[]>([]);
@@ -115,7 +118,7 @@ const TenderBoq: React.FC = () => {
         unit: libraryItem?.unit || values.unit,
         quantity: values.quantity,
         unit_rate: libraryItem ? 
-          (values.item_type === 'material' ? libraryItem.base_price : (libraryItem as Work).base_rate) : 
+          (values.item_type === 'material' ? libraryItem.base_price : (libraryItem as Work).base_price) : 
           values.unit_rate,
         library_material_id: values.item_type === 'material' ? values.library_material_id : null,
         library_work_id: values.item_type === 'work' ? values.library_work_id : null,
@@ -181,7 +184,7 @@ const TenderBoq: React.FC = () => {
       selectedItem = works.find(w => w.id === itemId);
       form.setFieldsValue({
         unit: selectedItem?.unit,
-        unit_rate: (selectedItem as Work)?.base_rate,
+        unit_rate: (selectedItem as Work)?.base_price,
         library_material_id: null
       });
     }
@@ -290,6 +293,7 @@ const TenderBoq: React.FC = () => {
     return sum + ((item.quantity || 0) * (item.unit_rate || 0));
   }, 0);
 
+
   return (
     <div className="tender-boq-page">
       <Card className="mb-4">
@@ -297,7 +301,7 @@ const TenderBoq: React.FC = () => {
           <div>
             <Title level={3} className="mb-2">
               <FileTextOutlined className="mr-2" />
-              Ведомость объемов работ
+              Ведомость объемов работ тендера
             </Title>
             <Text type="secondary">Тендер ID: {tenderId}</Text>
           </div>
@@ -318,6 +322,19 @@ const TenderBoq: React.FC = () => {
       <Card>
         <div className="mb-4 flex justify-between items-center">
           <Space>
+            <Button 
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate('/tenders')}
+            >
+              К тендерам
+            </Button>
+            <Button 
+              icon={<TableOutlined />}
+              onClick={() => navigate('/boq')}
+              type="primary"
+            >
+              Управление позициями
+            </Button>
             <Button 
               icon={<SaveOutlined />} 
               onClick={loadBoqItems}
@@ -453,7 +470,7 @@ const TenderBoq: React.FC = () => {
                     >
                       {works.map(work => (
                         <Option key={work.id} value={work.id}>
-                          {work.name} ({work.unit}) - {work.base_rate.toFixed(2)} ₽
+                          {work.name} ({work.unit}) - {work.base_price.toFixed(2)} ₽
                         </Option>
                       ))}
                     </Select>

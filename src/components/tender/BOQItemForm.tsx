@@ -177,7 +177,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
       onCancel={handleCancel}
       footer={null}
       width={800}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form
         form={form}

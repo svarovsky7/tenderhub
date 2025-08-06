@@ -9,7 +9,6 @@ import {
   Space, 
   message,
   Popconfirm,
-  Tag,
   Select,
   Card,
   Row,
@@ -104,8 +103,7 @@ const Works: React.FC = () => {
   // Фильтрация по поиску
   const filteredWorks = works.filter(work => 
     work.name.toLowerCase().includes(searchText.toLowerCase()) ||
-    work.code.toLowerCase().includes(searchText.toLowerCase()) ||
-    work.category?.toLowerCase().includes(searchText.toLowerCase())
+    work.code.toLowerCase().includes(searchText.toLowerCase())
   );
 
   // Колонки таблицы
@@ -131,40 +129,11 @@ const Works: React.FC = () => {
     },
     {
       title: 'Цена',
-      dataIndex: 'base_rate',
-      key: 'base_rate',
+      dataIndex: 'base_price',
+      key: 'base_price',
       width: 120,
       render: (rate) => `${rate.toFixed(2)} ₽`,
-      sorter: (a, b) => a.base_rate - b.base_rate,
-    },
-    {
-      title: 'Категория',
-      dataIndex: 'category',
-      key: 'category',
-      render: (category) => category ? <Tag color="blue">{category}</Tag> : null,
-    },
-    {
-      title: 'Сложность',
-      dataIndex: 'complexity',
-      key: 'complexity',
-      width: 120,
-      render: (complexity) => {
-        const colors = {
-          low: 'green',
-          medium: 'orange',
-          high: 'red'
-        };
-        const labels = {
-          low: 'Низкая',
-          medium: 'Средняя',
-          high: 'Высокая'
-        };
-        return complexity ? (
-          <Tag color={colors[complexity as keyof typeof colors]}>
-            {labels[complexity as keyof typeof labels]}
-          </Tag>
-        ) : null;
-      },
+      sorter: (a, b) => a.base_price - b.base_price,
     },
     {
       title: 'Действия',
@@ -200,11 +169,9 @@ const Works: React.FC = () => {
   // Статистика
   const stats = {
     total: works.length,
-    categories: [...new Set(works.map(w => w.category).filter(Boolean))].length,
     avgRate: works.length > 0 
-      ? works.reduce((sum, w) => sum + w.base_rate, 0) / works.length 
-      : 0,
-    highComplexity: works.filter(w => w.complexity === 'high').length
+      ? works.reduce((sum, w) => sum + w.base_price, 0) / works.length 
+      : 0
   };
 
   return (
@@ -218,25 +185,12 @@ const Works: React.FC = () => {
               prefix={<ToolOutlined />}
             />
           </Col>
-          <Col span={6}>
-            <Statistic 
-              title="Категорий" 
-              value={stats.categories} 
-            />
-          </Col>
-          <Col span={6}>
+          <Col span={12}>
             <Statistic 
               title="Средняя ставка" 
               value={stats.avgRate} 
               precision={2}
               suffix="₽"
-            />
-          </Col>
-          <Col span={6}>
-            <Statistic 
-              title="Сложных работ" 
-              value={stats.highComplexity}
-              valueStyle={{ color: '#cf1322' }}
             />
           </Col>
         </Row>
@@ -352,7 +306,7 @@ const Works: React.FC = () => {
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item
-                name="base_rate"
+                name="base_price"
                 label="Базовая ставка (₽)"
                 rules={[{ required: true, message: 'Введите ставку' }]}
               >
@@ -363,35 +317,6 @@ const Works: React.FC = () => {
                   formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
                   parser={value => parseFloat(value!.replace(/\s?/g, '')) as any}
                 />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="category"
-                label="Категория"
-              >
-                <Select allowClear showSearch>
-                  <Select.Option value="Земляные работы">Земляные работы</Select.Option>
-                  <Select.Option value="Бетонные работы">Бетонные работы</Select.Option>
-                  <Select.Option value="Монтажные работы">Монтажные работы</Select.Option>
-                  <Select.Option value="Кровельные работы">Кровельные работы</Select.Option>
-                  <Select.Option value="Отделочные работы">Отделочные работы</Select.Option>
-                  <Select.Option value="Сантехнические работы">Сантехнические работы</Select.Option>
-                  <Select.Option value="Электромонтажные работы">Электромонтажные работы</Select.Option>
-                  <Select.Option value="Специальные работы">Специальные работы</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="complexity"
-                label="Сложность"
-              >
-                <Select allowClear>
-                  <Select.Option value="low">Низкая</Select.Option>
-                  <Select.Option value="medium">Средняя</Select.Option>
-                  <Select.Option value="high">Высокая</Select.Option>
-                </Select>
               </Form.Item>
             </Col>
           </Row>

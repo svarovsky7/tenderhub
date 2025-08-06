@@ -106,7 +106,7 @@ const ClientPositionForm: React.FC<ClientPositionFormProps> = ({
       onCancel={handleCancel}
       footer={null}
       width={700}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form
         form={form}

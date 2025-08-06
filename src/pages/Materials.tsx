@@ -9,7 +9,6 @@ import {
   Space, 
   message,
   Popconfirm,
-  Tag,
   Select,
   Card,
   Row,
@@ -104,8 +103,7 @@ const Materials: React.FC = () => {
   // Фильтрация по поиску
   const filteredMaterials = materials.filter(material => 
     material.name.toLowerCase().includes(searchText.toLowerCase()) ||
-    material.code.toLowerCase().includes(searchText.toLowerCase()) ||
-    material.category?.toLowerCase().includes(searchText.toLowerCase())
+    material.code.toLowerCase().includes(searchText.toLowerCase())
   );
 
   // Колонки таблицы
@@ -136,12 +134,6 @@ const Materials: React.FC = () => {
       width: 120,
       render: (price) => `${price.toFixed(2)} ₽`,
       sorter: (a, b) => a.base_price - b.base_price,
-    },
-    {
-      title: 'Категория',
-      dataIndex: 'category',
-      key: 'category',
-      render: (category) => category ? <Tag>{category}</Tag> : null,
     },
     {
       title: 'Поставщик',
@@ -182,7 +174,6 @@ const Materials: React.FC = () => {
   // Статистика
   const stats = {
     total: materials.length,
-    categories: [...new Set(materials.map(m => m.category).filter(Boolean))].length,
     avgPrice: materials.length > 0 
       ? materials.reduce((sum, m) => sum + m.base_price, 0) / materials.length 
       : 0
@@ -192,20 +183,14 @@ const Materials: React.FC = () => {
     <div className="materials-page">
       <Card className="mb-4">
         <Row gutter={16}>
-          <Col span={8}>
+          <Col span={12}>
             <Statistic 
               title="Всего материалов" 
               value={stats.total} 
               prefix={<FileExcelOutlined />}
             />
           </Col>
-          <Col span={8}>
-            <Statistic 
-              title="Категорий" 
-              value={stats.categories} 
-            />
-          </Col>
-          <Col span={8}>
+          <Col span={12}>
             <Statistic 
               title="Средняя цена" 
               value={stats.avgPrice} 
@@ -337,23 +322,6 @@ const Materials: React.FC = () => {
                   formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
                   parser={value => parseFloat(value!.replace(/\s?/g, '')) as any}
                 />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="category"
-                label="Категория"
-              >
-                <Select allowClear showSearch>
-                  <Select.Option value="Бетон и растворы">Бетон и растворы</Select.Option>
-                  <Select.Option value="Металлопрокат">Металлопрокат</Select.Option>
-                  <Select.Option value="Кирпич и блоки">Кирпич и блоки</Select.Option>
-                  <Select.Option value="Изоляция">Изоляция</Select.Option>
-                  <Select.Option value="Отделочные материалы">Отделочные материалы</Select.Option>
-                  <Select.Option value="Сантехника">Сантехника</Select.Option>
-                  <Select.Option value="Электротехника">Электротехника</Select.Option>
-                  <Select.Option value="Прочее">Прочее</Select.Option>
-                </Select>
               </Form.Item>
             </Col>
           </Row>
