@@ -78,32 +78,36 @@ export const boqCrudApi = {
 
       console.log('📋 Position found:', position);
 
-      // Get the count of existing BOQ items in this position
-      console.log('🔍 Counting existing BOQ items in position...');
-      const { count, error: countError } = await supabase
+      // Determine next sub_number by taking the current maximum
+      console.log('🔍 Fetching current max sub_number...');
+      const { data: maxSub, error: subError } = await supabase
         .from('boq_items')
-        .select('*', { count: 'exact', head: true })
-        .eq('client_position_id', item.client_position_id);
+        .select('sub_number')
+        .eq('client_position_id', item.client_position_id)
+        .order('sub_number', { ascending: false })
+        .limit(1);
 
-      console.log('📊 Count result:', { count, countError });
+      console.log('📊 Max sub_number result:', { maxSub, subError });
 
-      if (countError) {
-        console.error('❌ Failed to count existing BOQ items:', countError);
-        return { error: 'Failed to count existing BOQ items' };
+      if (subError) {
+        console.error('❌ Failed to fetch max sub_number:', subError);
+        return { error: 'Failed to fetch existing BOQ items' };
       }
 
       // Generate item_number in format "X.Y" where X is position number, Y is sub-number
-      const subNumber = (count || 0) + 1;
+      const subNumber = (maxSub?.[0]?.sub_number || 0) + 1;
       const itemNumber = `${position.position_number}.${subNumber}`;
-      
-      console.log(`🔢 Generated item_number: ${itemNumber} (position: ${position.position_number}, sub: ${subNumber})`);
+
+      console.log(
+        `🔢 Generated item_number: ${itemNumber} (position: ${position.position_number}, sub: ${subNumber})`
+      );
 
       // Create the item with generated item_number and sub_number
       const itemToInsert = {
         ...item,
         item_number: itemNumber,
         sub_number: subNumber,
-        sort_order: item.sort_order || (count || 0)
+        sort_order: item.sort_order || (maxSub?.[0]?.sub_number || 0)
       };
 
       console.log('💾 Inserting BOQ item:', itemToInsert);
