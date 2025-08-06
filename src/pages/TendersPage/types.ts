@@ -99,6 +99,15 @@ export interface ExcelUploadProps {
   onUpload: (file: File) => Promise<void>;
 }
 
+// Excel tender item interface
+export interface TenderExcelItem {
+  number: string;
+  name: string;
+  unit: string;
+  quantity: string;
+  note: string;
+}
+
 // Re-export commonly used types
 export type {
   TenderWithSummary,
