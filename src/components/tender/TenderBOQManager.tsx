@@ -14,11 +14,7 @@ import {
   message,
   Empty,
   Tooltip,
-  Progress,
-  Form,
-  Input,
-  InputNumber,
-  Select
+  Progress
 } from 'antd';
 import {
   PlusOutlined,
@@ -27,15 +23,13 @@ import {
   FolderOpenOutlined,
   ToolOutlined,
   AppstoreOutlined,
-  DollarOutlined,
-  CheckOutlined,
-  CloseOutlined
+  DollarOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import type { FormInstance } from 'antd';
 import { clientPositionsApi, boqItemsApi } from '../../lib/supabase/api';
 import type { ClientPosition, BOQItem } from '../../lib/supabase/types';
 import ClientPositionForm from './ClientPositionForm';
+import InlineBoqItemForm from './InlineBoqItemForm';
 
 const { Title, Text } = Typography;
 
@@ -48,74 +42,11 @@ interface PositionWithItems extends ClientPosition {
   items_count?: number;
 }
 
-const EditableContext = React.createContext<FormInstance<BOQItem> | null>(null);
-
-// Each row now uses the common form instance provided via context
-const EditableRow: React.FC<React.HTMLAttributes<HTMLTableRowElement>> = (props) => {
-  return <tr {...props} />;
-};
-
-interface EditableCellProps extends React.HTMLAttributes<HTMLElement> {
-  editing: boolean;
-  dataIndex: keyof BOQItem;
-  title: React.ReactNode;
-  inputType: 'number' | 'text' | 'select';
-  children: React.ReactNode;
-}
-
-const EditableCell: React.FC<EditableCellProps> = ({
-  editing,
-  dataIndex,
-  title,
-  inputType,
-  children,
-  ...restProps
-}) => {
-  let inputNode: React.ReactNode;
-
-  if (inputType === 'number') {
-    inputNode = <InputNumber />;
-  } else if (inputType === 'select') {
-    inputNode = (
-      <Select
-        options={[
-          { value: 'material', label: 'Материал' },
-          { value: 'work', label: 'Работа' }
-        ]}
-      />
-    );
-  } else {
-    inputNode = <Input />;
-  }
-
-  const rules = [{ required: true, message: `Введите ${title}` }];
-  if (dataIndex === 'quantity') {
-    rules.push({ type: 'number', min: 0.0001, message: 'Количество должно быть больше 0' });
-  }
-  if (dataIndex === 'unit_rate') {
-    rules.push({ type: 'number', min: 0, message: 'Цена не может быть отрицательной' });
-  }
-
-  return (
-    <td {...restProps}>
-      {editing ? (
-        <Form.Item name={dataIndex} style={{ margin: 0 }} rules={rules}>
-          {inputNode}
-        </Form.Item>
-      ) : (
-        children
-      )}
-    </td>
-  );
-};
-
 const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
   const [positions, setPositions] = useState<PositionWithItems[]>([]);
   const [positionFormVisible, setPositionFormVisible] = useState(false);
   const [editingPosition, setEditingPosition] = useState<ClientPosition | null>(null);
-  const [form] = Form.useForm();
-  const [editingKey, setEditingKey] = useState<string>('');
-  const [editingPositionId, setEditingPositionId] = useState<string | null>(null);
+  const [inlineFormPositionId, setInlineFormPositionId] = useState<string | null>(null);
 
   // Load positions and their BOQ items
   const loadPositions = useCallback(async () => {
@@ -180,155 +111,29 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
   };
 
   // BOQ Item handlers
-  const handleAddNewItem = (positionId: string) => {
-    console.log('🖱️ Add new BOQ item clicked', { positionId });
-    const position = positions.find((p) => p.id === positionId);
-    console.log('📊 Position current items count:', position?.items_count);
-    const newItem: BOQItem & { isNew?: boolean } = {
-      id: 'new',
-      isNew: true,
-      item_type: 'work',
-      description: '',
-      unit: '',
-      quantity: 1,
-      unit_rate: 0,
-      total_amount: 0,
-    };
-    setPositions((prev) =>
-      prev.map((p) =>
-        p.id === positionId
-          ? {
-              ...p,
-              boq_items: [...(p.boq_items || []), newItem],
-              items_count: (p.items_count || 0) + 1,
-            }
-          : p
-      )
-    );
-    console.log('📈 New items count:', (position?.items_count || 0) + 1);
-    form.setFieldsValue(newItem);
-    setEditingKey('new');
-    setEditingPositionId(positionId);
+  const handleShowInlineForm = (positionId: string) => {
+    console.log('🖱️ Add BOQ item button clicked', { positionId });
+    setInlineFormPositionId((prev) => {
+      console.log('🔄 inlineFormPositionId change', { from: prev, to: positionId });
+      return positionId;
+    });
   };
 
-  const isEditing = (record: BOQItem, positionId: string) =>
-    record.id === editingKey && positionId === editingPositionId;
-
-  const edit = (record: BOQItem, positionId: string) => {
-    console.log('✏️ Edit BOQ item', { positionId, recordId: record.id });
-    form.setFieldsValue({ ...record });
-    setEditingKey(record.id);
-    setEditingPositionId(positionId);
+  const handleInlineCancel = () => {
+    console.log('🛑 Inline BOQ form cancel');
+    setInlineFormPositionId((prev) => {
+      console.log('🔄 inlineFormPositionId change', { from: prev, to: null });
+      return null;
+    });
   };
 
-  const cancelEdit = () => {
-    console.log('🛑 Edit cancel');
-    setEditingKey('');
-    setEditingPositionId(null);
-  };
-
-  const save = async (positionId: string, key: React.Key) => {
-    console.log('💾 Save BOQ item', { positionId, key });
-    try {
-      const row = (await form.validateFields()) as Partial<BOQItem>;
-      const position = positions.find((p) => p.id === positionId);
-      if (!position) return;
-      const newData = [...(position.boq_items || [])];
-      const index = newData.findIndex((item) => item.id === key);
-      if (index > -1) {
-        const item = newData[index];
-        const quantity = row.quantity ?? item.quantity;
-        const unitRate = row.unit_rate ?? item.unit_rate;
-
-        if (quantity <= 0) {
-          message.error('Количество должно быть больше 0');
-          console.error('❌ Invalid quantity', { quantity });
-          return;
-        }
-        if (unitRate < 0) {
-          message.error('Цена не может быть отрицательной');
-          console.error('❌ Invalid unit_rate', { unitRate });
-          return;
-        }
-
-        const updated = {
-          ...item,
-          ...row,
-          quantity,
-          unit_rate: unitRate,
-          total_amount: quantity * unitRate,
-        };
-        console.log('📊 Items count before save:', (position.boq_items || []).length);
-        if (key === 'new') {
-          const {
-            id: _id,
-            isNew,
-            total_amount: _totalAmount,
-            item_number: _itemNumber,
-            sub_number: _subNumber,
-            sort_order: _sortOrder,
-            ...payload
-          } = updated as BOQItem & { isNew?: boolean };
-          const createPayload: Partial<BOQItem> & {
-            tender_id: string;
-            client_position_id: string;
-          } = {
-            ...payload,
-            tender_id: tenderId,
-            client_position_id: positionId,
-          };
-          console.log('📡 Calling boqItemsApi.create', createPayload);
-          const result = await boqItemsApi.create(createPayload);
-          console.log('📩 boqItemsApi.create result', result);
-          if (result.error || !result.data) {
-            message.error('Не удалось сохранить элемент');
-            console.error('❌ Create BOQ item error', result.error);
-            return;
-          }
-          const savedItem = {
-            ...updated,
-            ...result.data,
-            total_amount: quantity * unitRate,
-          };
-          console.log('💾 Merging created item into state', savedItem);
-          newData[index] = savedItem;
-        } else {
-          const { total_amount: _totalAmount, ...updatePayload } =
-            updated as BOQItem;
-          console.log('📡 Calling boqItemsApi.update', {
-            id: key,
-            payload: updatePayload,
-          });
-          const result = await boqItemsApi.update(
-            key as string,
-            updatePayload as Partial<BOQItem>
-          );
-          console.log('📩 boqItemsApi.update result', result);
-          if (result.error || !result.data) {
-            message.error('Не удалось обновить элемент');
-            console.error('❌ Update BOQ item error', result.error);
-            return;
-          }
-          const savedItem = { ...updated, ...result.data, total_amount: quantity * unitRate };
-          console.log('💾 Merging updated item into state', savedItem);
-          newData[index] = savedItem;
-        }
-        setPositions((prev) =>
-          prev.map((p) =>
-            p.id === positionId
-              ? { ...p, boq_items: newData, items_count: newData.length }
-              : p
-          )
-        );
-        console.log('📈 Items count after save:', newData.length);
-        form.resetFields();
-        setEditingKey('');
-        setEditingPositionId(null);
-        message.success('Элемент сохранен');
-      }
-    } catch (err) {
-      console.error('💥 Save failed', err);
-    }
+  const handleInlineSuccess = () => {
+    console.log('✅ Inline BOQ form success');
+    setInlineFormPositionId((prev) => {
+      console.log('🔄 inlineFormPositionId change', { from: prev, to: null });
+      return null;
+    });
+    loadPositions();
   };
 
   const handleDeleteBOQItem = async (itemId: string) => {
@@ -349,187 +154,120 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
   };
 
   // BOQ Items table columns
-  const getBoqColumns = (positionId: string): ColumnsType<BOQItem> => {
-    const columns: (ColumnsType<BOQItem>[number] & {
-      editable?: boolean;
-      dataIndex?: keyof BOQItem;
-    })[] = [
-      {
-        title: '№',
-        dataIndex: 'sub_number',
-        key: 'sub_number',
-        width: 60,
-        render: (_value, record) => <Text strong>{record.item_number}</Text>,
-      },
-      {
-        title: 'Тип',
-        dataIndex: 'item_type',
-        key: 'item_type',
-        width: 80,
-        editable: true,
-        render: (type) => (
-          <Tag
-            color={type === 'material' ? 'blue' : 'green'}
-            icon={type === 'material' ? <AppstoreOutlined /> : <ToolOutlined />}
-          >
-            {type === 'material' ? 'Материал' : 'Работа'}
-          </Tag>
-        ),
-      },
-      {
-        title: 'Наименование',
-        dataIndex: 'description',
-        key: 'description',
-        ellipsis: true,
-        editable: true,
-        render: (text, record) => (
-          <div>
-            <Text strong>{text}</Text>
-            {record.category && (
-              <div>
-                <Text type="secondary" className="text-xs">
-                  {record.category}
-                  {record.subcategory && ` / ${record.subcategory}`}
-                </Text>
-              </div>
-            )}
-          </div>
-        ),
-      },
-      {
-        title: 'Ед.изм.',
-        dataIndex: 'unit',
-        key: 'unit',
-        width: 80,
-        align: 'center',
-        editable: true,
-      },
-      {
-        title: 'Количество',
-        dataIndex: 'quantity',
-        key: 'quantity',
-        width: 100,
-        align: 'right',
-        editable: true,
-        render: (value) =>
-          Number(value).toLocaleString('ru-RU', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 4,
-          }),
-      },
-      {
-        title: 'Цена за ед.',
-        dataIndex: 'unit_rate',
-        key: 'unit_rate',
-        width: 120,
-        align: 'right',
-        editable: true,
-        render: (value) =>
-          `${Number(value).toLocaleString('ru-RU', {
+  const boqColumns: ColumnsType<BOQItem> = [
+    {
+      title: '№',
+      dataIndex: 'sub_number',
+      key: 'sub_number',
+      width: 60,
+      render: (_value, record) => (
+        <Text strong>{record.item_number}</Text>
+      )
+    },
+    {
+      title: 'Тип',
+      dataIndex: 'item_type',
+      key: 'item_type',
+      width: 80,
+      render: (type) => (
+        <Tag 
+          color={type === 'material' ? 'blue' : 'green'}
+          icon={type === 'material' ? <AppstoreOutlined /> : <ToolOutlined />}
+        >
+          {type === 'material' ? 'Материал' : 'Работа'}
+        </Tag>
+      )
+    },
+    {
+      title: 'Наименование',
+      dataIndex: 'description',
+      key: 'description',
+      ellipsis: true,
+      render: (text, record) => (
+        <div>
+          <Text strong>{text}</Text>
+          {record.category && (
+            <div>
+              <Text type="secondary" className="text-xs">
+                {record.category}
+                {record.subcategory && ` / ${record.subcategory}`}
+              </Text>
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      title: 'Ед.изм.',
+      dataIndex: 'unit',
+      key: 'unit',
+      width: 80,
+      align: 'center'
+    },
+    {
+      title: 'Количество',
+      dataIndex: 'quantity',
+      key: 'quantity',
+      width: 100,
+      align: 'right',
+      render: (value) => Number(value).toLocaleString('ru-RU', { 
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 4 
+      })
+    },
+    {
+      title: 'Цена за ед.',
+      dataIndex: 'unit_rate',
+      key: 'unit_rate',
+      width: 120,
+      align: 'right',
+      render: (value) => `${Number(value).toLocaleString('ru-RU', { 
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2 
+      })} ₽`
+    },
+    {
+      title: 'Сумма',
+      dataIndex: 'total_amount',
+      key: 'total_amount',
+      width: 130,
+      align: 'right',
+      render: (value) => (
+        <Text strong style={{ color: '#52c41a' }}>
+          {Number(value).toLocaleString('ru-RU', { 
             minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })} ₽`,
-      },
-      {
-        title: 'Сумма',
-        dataIndex: 'total_amount',
-        key: 'total_amount',
-        width: 130,
-        align: 'right',
-        render: (value, record) => {
-          const editing = isEditing(record, positionId);
-          const qty = editing ? form.getFieldValue('quantity') ?? record.quantity : record.quantity;
-          const rate = editing ? form.getFieldValue('unit_rate') ?? record.unit_rate : record.unit_rate;
-          const amount = Number(qty) * Number(rate);
-          return (
-            <Text strong style={{ color: '#52c41a' }}>
-              {Number(amount).toLocaleString('ru-RU', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })} ₽
-            </Text>
-          );
-        },
-      },
-      {
-        title: 'Действия',
-        key: 'actions',
-        width: 100,
-        render: (_: unknown, record: BOQItem) => {
-          const editable = isEditing(record, positionId);
-          return editable ? (
-            <Space size="small">
-              <Tooltip title="Сохранить">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<CheckOutlined />}
-                  onClick={() => save(positionId, record.id)}
-                />
-              </Tooltip>
-              <Tooltip title="Отмена">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<CloseOutlined />}
-                  onClick={cancelEdit}
-                />
-              </Tooltip>
-            </Space>
-          ) : (
-            <Space size="small">
-              <Tooltip title="Редактировать">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<EditOutlined />}
-                  onClick={() => edit(record, positionId)}
-                />
-              </Tooltip>
-              <Popconfirm
-                title="Удалить элемент BOQ?"
-                description="Это действие нельзя отменить."
-                onConfirm={() => handleDeleteBOQItem(record.id)}
-                okText="Удалить"
-                cancelText="Отмена"
-                okButtonProps={{ danger: true }}
-              >
-                <Tooltip title="Удалить">
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<DeleteOutlined />}
-                    danger
-                  />
-                </Tooltip>
-              </Popconfirm>
-            </Space>
-          );
-        },
-      },
-    ];
-
-    return columns.map((col) => {
-      if (!col.editable) {
-        return col;
-      }
-      return {
-        ...col,
-        onCell: (record: BOQItem) => ({
-          record,
-          inputType:
-            col.dataIndex === 'quantity' || col.dataIndex === 'unit_rate'
-              ? 'number'
-              : col.dataIndex === 'item_type'
-                ? 'select'
-                : 'text',
-          dataIndex: col.dataIndex!,
-          title: col.title,
-          editing: isEditing(record, positionId),
-        }),
-      };
-    });
-  };
+            maximumFractionDigits: 2 
+          })} ₽
+        </Text>
+      )
+    },
+    {
+      title: 'Действия',
+      key: 'actions',
+      width: 80,
+      render: (_, record) => (
+        <Space size="small">
+          <Popconfirm
+            title="Удалить элемент BOQ?"
+            description="Это действие нельзя отменить."
+            onConfirm={() => handleDeleteBOQItem(record.id)}
+            okText="Удалить"
+            cancelText="Отмена"
+            okButtonProps={{ danger: true }}
+          >
+            <Tooltip title="Удалить">
+              <Button
+                type="text"
+                size="small"
+                icon={<DeleteOutlined />}
+                danger
+              />
+            </Tooltip>
+          </Popconfirm>
+        </Space>
+      )
+    }
+  ];
 
   // Calculate totals
   const totals = positions.reduce((acc, position) => ({
@@ -662,14 +400,16 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
                 ),
               extra: (
                   <Space size="small" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      type="primary"
-                      size="small"
-                      icon={<PlusOutlined />}
-                      onClick={() => handleAddNewItem(position.id)}
-                    >
-                      Добавить элемент
-                    </Button>
+                    {inlineFormPositionId === position.id ? null : (
+                      <Button
+                        type="primary"
+                        size="small"
+                        icon={<PlusOutlined />}
+                        onClick={() => handleShowInlineForm(position.id)}
+                      >
+                        Добавить элемент
+                      </Button>
+                    )}
                     <Button
                       type="text"
                       size="small"
@@ -729,40 +469,39 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
                     </Col>
                   </Row>
 
-                  <Form form={form} component={false}>
-                    <EditableContext.Provider value={form}>
-                      <Table
-                        components={{
-                          body: {
-                            row: EditableRow,
-                            cell: EditableCell,
-                          },
-                        }}
-                        columns={getBoqColumns(position.id)}
-                        dataSource={position.boq_items || []}
-                        rowKey="id"
-                        size="small"
-                        pagination={false}
-                        locale={{
-                          emptyText: (
-                            <Empty
-                              description="Элементы BOQ не добавлены"
-                              image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            >
-                              <Button
-                                type="primary"
-                                size="small"
-                                icon={<PlusOutlined />}
-                                onClick={() => handleAddNewItem(position.id)}
-                              >
-                                Добавить элемент BOQ
-                              </Button>
-                            </Empty>
-                          ),
-                        }}
-                      />
-                    </EditableContext.Provider>
-                  </Form>
+                  {inlineFormPositionId === position.id && (
+                    <InlineBoqItemForm
+                      tenderId={tenderId}
+                      positionId={position.id}
+                      onSuccess={handleInlineSuccess}
+                      onCancel={handleInlineCancel}
+                    />
+                  )}
+
+                  <Table
+                    columns={boqColumns}
+                    dataSource={position.boq_items || []}
+                    rowKey="id"
+                    size="small"
+                    pagination={false}
+                    locale={{
+                      emptyText: (
+                        <Empty
+                          description="Элементы BOQ не добавлены"
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        >
+                          <Button
+                            type="primary"
+                            size="small"
+                            icon={<PlusOutlined />}
+                            onClick={() => handleShowInlineForm(position.id)}
+                          >
+                            Добавить элемент BOQ
+                          </Button>
+                        </Empty>
+                      )
+                    }}
+                  />
                 </div>
               )
             }))}
