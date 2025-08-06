@@ -54,10 +54,13 @@ export const clientWorksApi = {
           positionsMap.set(positionNum, []);
         }
         
+        const volume = row.volume ? Number(row.volume) : 0; // Allow 0 volume after removing DB constraint
+        console.log(`📊 Processing row: position=${positionNum}, work=${String(row.work_name).trim()}, unit=${row.unit || 'empty'}, volume=${volume}`);
+        
         positionsMap.get(positionNum)!.push({
           work_name: String(row.work_name).trim(),
           unit: row.unit ? String(row.unit).trim() : '',  // Allow empty unit
-          volume: row.volume ? Number(row.volume) : 0      // Allow 0 volume
+          volume: volume   // Allow 0 volume after removing DB constraint
         });
       });
 
@@ -120,22 +123,27 @@ export const clientWorksApi = {
 
         // Create BOQ items for this position
         if (position && items.length > 0) {
-          const boqItems = items.map((item, index) => ({
-            tender_id: tenderId,
-            client_position_id: position.id,
-            item_number: `${actualPositionNumber}.${index + 1}`,
-            sub_number: index + 1,
-            sort_order: index,
-            item_type: 'work' as const, // All items from Excel are works
-            description: item.work_name,
-            unit: item.unit,
-            quantity: item.volume,
-            unit_rate: 0, // Will be filled later by user
-            coefficient: 1.0,
-            notes: `Импортировано из Excel: ${file.name}`,
-            source_file: file.name,
-            imported_at: new Date().toISOString()
-          }));
+          const boqItems = items.map((item, index) => {
+            const quantity = item.volume; // Allow any quantity including 0
+            console.log(`🔢 BOQ Item ${index + 1}: work="${item.work_name}", unit="${item.unit}", quantity=${quantity}`);
+            
+            return {
+              tender_id: tenderId,
+              client_position_id: position.id,
+              item_number: `${actualPositionNumber}.${index + 1}`,
+              sub_number: index + 1,
+              sort_order: index,
+              item_type: 'work' as const, // All items from Excel are works
+              description: item.work_name,
+              unit: item.unit,
+              quantity: quantity, // Allow any quantity including 0
+              unit_rate: 0, // Will be filled later by user
+              coefficient: 1.0,
+              notes: `Импортировано из Excel: ${file.name}`,
+              source_file: file.name,
+              imported_at: new Date().toISOString()
+            };
+          });
 
           console.log(`💾 Creating ${boqItems.length} BOQ items for position ${positionKey}`);
 
