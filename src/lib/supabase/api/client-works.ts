@@ -105,9 +105,7 @@ export const clientWorksApi = {
           .insert({
             tender_id: tenderId,
             position_number: actualPositionNumber,
-            title: `Позиция ${positionKey}`,
-            description: `Импортировано из Excel файла: ${file.name}`,
-            status: 'active'
+            title: `Позиция ${positionKey}`
           })
           .select()
           .single();
@@ -138,9 +136,6 @@ export const clientWorksApi = {
               unit: item.unit,
               quantity: quantity, // Allow any quantity including 0
               unit_rate: 0, // Will be filled later by user
-              coefficient: 1.0,
-              notes: `Импортировано из Excel: ${file.name}`,
-              source_file: file.name,
               imported_at: new Date().toISOString()
             };
           });
