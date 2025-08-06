@@ -57,10 +57,6 @@ const MaterialSelector: React.FC<MaterialSelectorProps> = ({
     onFiltersChange({ ...filters, search: value });
   }, [filters, onFiltersChange]);
 
-  const handleCategoryChange = useCallback((value: string[]) => {
-    console.log('🏷️ Material category filter changed:', value);
-    onFiltersChange({ ...filters, category: value });
-  }, [filters, onFiltersChange]);
 
   const materialColumns: ColumnsType<Material> = [
     {
@@ -78,13 +74,6 @@ const MaterialSelector: React.FC<MaterialSelectorProps> = ({
           )}
         </div>
       )
-    },
-    {
-      title: 'Категория',
-      dataIndex: 'category',
-      key: 'category',
-      width: 120,
-      render: (category) => category ? <Tag>{category}</Tag> : '-'
     },
     {
       title: 'Ед. изм.',
@@ -142,23 +131,7 @@ const MaterialSelector: React.FC<MaterialSelectorProps> = ({
             allowClear
           />
         </Col>
-        <Col span={8}>
-          <Select
-            mode="multiple"
-            placeholder="Фильтр по категориям"
-            value={filters.category}
-            onChange={handleCategoryChange}
-            style={{ width: '100%' }}
-            allowClear
-          >
-            {categories.map(category => (
-              <Select.Option key={category} value={category}>
-                {category}
-              </Select.Option>
-            ))}
-          </Select>
-        </Col>
-        <Col span={4}>
+        <Col span={12}>
           <Space>
             <Button
               type="primary"

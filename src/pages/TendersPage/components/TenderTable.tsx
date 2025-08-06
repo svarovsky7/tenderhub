@@ -7,7 +7,7 @@ import {
   Tag,
   Avatar,
   Typography,
-  Dropdown,
+  Tooltip,
   Empty,
   Progress
 } from 'antd';
@@ -16,15 +16,12 @@ import {
   EyeOutlined,
   EditOutlined,
   DeleteOutlined,
-  ExportOutlined,
   FolderOpenOutlined,
   CalendarOutlined,
   DollarOutlined,
-  MoreOutlined,
   ClockCircleOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import type { MenuProps } from 'antd';
 import dayjs from 'dayjs';
 import ExcelUpload from './ExcelUpload';
 import { statusColors, statusLabels } from '../types';
@@ -182,64 +179,44 @@ const TenderTable: React.FC<TenderTableProps> = ({
     {
       title: 'Действия',
       key: 'actions',
-      width: 120,
+      width: 150,
       render: (_, record) => {
-        const menuItems: MenuProps['items'] = [
-          {
-            key: 'view',
-            icon: <EyeOutlined />,
-            label: 'Открыть',
-            onClick: () => handleViewTender(record)
-          },
-          {
-            key: 'edit',
-            icon: <EditOutlined />,
-            label: 'Редактировать',
-            onClick: () => handleEditTender(record)
-          },
-          {
-            key: 'export',
-            icon: <ExportOutlined />,
-            label: 'Экспорт'
-          },
-          {
-            type: 'divider' as const
-          },
-          {
-            key: 'delete',
-            icon: <DeleteOutlined />,
-            label: 'Удалить',
-            danger: true,
-            onClick: () => {
-              console.log('🖱️ Delete menu item clicked for record:', record);
-              console.log('🔑 Record ID:', record.id);
-              console.log('📝 Record title:', record.title);
-              handleDeleteTender(record.id!);
-            }
-          }
-        ];
-
         return (
-          <Space>
-            <Button
-              type="primary"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => handleViewTender(record)}
-            >
-              Открыть
-            </Button>
+          <Space size="small">
             <ExcelUpload 
               tenderId={record.id!}
               onUpload={(file) => handleExcelUpload(record.id!, file)}
             />
-            <Dropdown
-              menu={{ items: menuItems }}
-              trigger={['click']}
-              placement="bottomRight"
-            >
-              <Button size="small" icon={<MoreOutlined />} />
-            </Dropdown>
+            <Tooltip title="Открыть">
+              <Button
+                type="text"
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => handleViewTender(record)}
+              />
+            </Tooltip>
+            <Tooltip title="Редактировать">
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => handleEditTender(record)}
+              />
+            </Tooltip>
+            <Tooltip title="Удалить">
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => {
+                  console.log('🖱️ Delete button clicked for record:', record);
+                  console.log('🔑 Record ID:', record.id);
+                  console.log('📝 Record title:', record.title);
+                  handleDeleteTender(record.id!);
+                }}
+              />
+            </Tooltip>
           </Space>
         );
       }

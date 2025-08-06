@@ -30,8 +30,7 @@ const WorkSelector: React.FC<WorkSelectorProps> = ({
   onSelectionChange,
   onAddToCart,
   onFiltersChange,
-  filters,
-  categories
+  filters
 }) => {
   console.log('🚀 WorkSelector rendered with:', { 
     worksCount: works.length, 
@@ -57,10 +56,6 @@ const WorkSelector: React.FC<WorkSelectorProps> = ({
     onFiltersChange({ ...filters, search: value });
   }, [filters, onFiltersChange]);
 
-  const handleCategoryChange = useCallback((value: string[]) => {
-    console.log('🏷️ Work category filter changed:', value);
-    onFiltersChange({ ...filters, category: value });
-  }, [filters, onFiltersChange]);
 
   const workColumns: ColumnsType<WorkItem> = [
     {
@@ -80,13 +75,6 @@ const WorkSelector: React.FC<WorkSelectorProps> = ({
       )
     },
     {
-      title: 'Категория',
-      dataIndex: 'category',
-      key: 'category',
-      width: 120,
-      render: (category) => category ? <Tag>{category}</Tag> : '-'
-    },
-    {
       title: 'Ед. изм.',
       dataIndex: 'unit',
       key: 'unit',
@@ -99,18 +87,6 @@ const WorkSelector: React.FC<WorkSelectorProps> = ({
       width: 100,
       render: (rate) => `${rate?.toFixed(2)} ₽`,
       sorter: (a, b) => a.base_price - b.base_price
-    },
-    {
-      title: 'Сложность',
-      dataIndex: 'complexity',
-      key: 'complexity',
-      width: 100,
-      render: (complexity) => {
-        if (!complexity) return '-';
-        const colors: Record<string, string> = { low: 'green', medium: 'orange', high: 'red' };
-        const labels: Record<string, string> = { low: 'Низкая', medium: 'Средняя', high: 'Высокая' };
-        return <Tag color={colors[complexity]}>{labels[complexity]}</Tag>;
-      }
     },
     {
       title: 'Действие',
@@ -147,23 +123,7 @@ const WorkSelector: React.FC<WorkSelectorProps> = ({
             allowClear
           />
         </Col>
-        <Col span={8}>
-          <Select
-            mode="multiple"
-            placeholder="Фильтр по категориям"
-            value={filters.category}
-            onChange={handleCategoryChange}
-            style={{ width: '100%' }}
-            allowClear
-          >
-            {categories.map(category => (
-              <Select.Option key={category} value={category}>
-                {category}
-              </Select.Option>
-            ))}
-          </Select>
-        </Col>
-        <Col span={4}>
+        <Col span={12}>
           <Space>
             <Button
               type="primary"

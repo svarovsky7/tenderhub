@@ -26,13 +26,13 @@ export const clientWorksApi = {
       console.log('📊 Raw Excel data:', rows.slice(0, 3)); // Log first 3 rows for debugging
       console.log('📈 Total rows found:', rows.length);
 
-      // Filter and validate data
+      // Filter and validate data - include all rows with position number and work name
       const validRows = rows.filter((row: any) => {
         const hasPositionNumber = row.position_number && String(row.position_number).trim();
         const hasWorkName = row.work_name && String(row.work_name).trim();
-        const hasVolume = row.volume && Number(row.volume) > 0;
         
-        return hasPositionNumber && hasWorkName && hasVolume;
+        // Include row even if unit or volume is missing
+        return hasPositionNumber && hasWorkName;
       });
 
       console.log('✅ Valid rows after filtering:', validRows.length);
@@ -56,8 +56,8 @@ export const clientWorksApi = {
         
         positionsMap.get(positionNum)!.push({
           work_name: String(row.work_name).trim(),
-          unit: String(row.unit || 'шт').trim(),
-          volume: Number(row.volume) || 1
+          unit: row.unit ? String(row.unit).trim() : '',  // Allow empty unit
+          volume: row.volume ? Number(row.volume) : 0      // Allow 0 volume
         });
       });
 

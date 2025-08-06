@@ -194,16 +194,7 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
     onSelect(boqItems);
   }, [cart, onSelect]);
 
-  // Get unique categories
-  const materialCategories = useMemo(() => {
-    const categories = materials.map(m => m.category).filter(Boolean) as string[];
-    return [...new Set(categories)].sort();
-  }, [materials]);
 
-  const workCategories = useMemo(() => {
-    const categories = works.map(w => w.category).filter(Boolean) as string[];
-    return [...new Set(categories)].sort();
-  }, [works]);
 
   const handleTabChange = useCallback((key: string) => {
     console.log('🔄 Tab changed:', key);
@@ -233,7 +224,6 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
               onAddToCart={(items) => addToCart(items, 'material')}
               onFiltersChange={setMaterialFilters}
               filters={materialFilters}
-              categories={materialCategories}
             />
           </TabPane>
           
@@ -249,7 +239,6 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
               onAddToCart={(items) => addToCart(items, 'work')}
               onFiltersChange={setWorkFilters}
               filters={workFilters}
-              categories={workCategories}
             />
           </TabPane>
         </Tabs>

@@ -23,13 +23,14 @@ import {
   DeleteOutlined,
   CalculatorOutlined,
   FileTextOutlined,
-  SaveOutlined
+  SaveOutlined,
+  ArrowLeftOutlined,
+  TableOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { boqApi, materialsApi, worksApi } from '../lib/supabase/api';
 import type { BOQItem, Material, Work } from '../lib/supabase/types';
-import TenderBOQManager from '../components/tender/TenderBOQManager';
 // Removed auth imports - no authentication needed
 
 const { Title, Text } = Typography;
@@ -43,7 +44,7 @@ interface ExtendedBOQItem extends BOQItem {
 
 const TenderBoq: React.FC = () => {
   const { tenderId } = useParams<{ tenderId: string }>();
-  const [useHierarchicalView, setUseHierarchicalView] = useState(true);
+  const navigate = useNavigate();
   const [boqItems, setBoqItems] = useState<ExtendedBOQItem[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [works, setWorks] = useState<Work[]>([]);
@@ -57,11 +58,11 @@ const TenderBoq: React.FC = () => {
 
   // Загрузка данных
   useEffect(() => {
-    if (tenderId && !useHierarchicalView) {
+    if (tenderId) {
       loadBoqItems();
       loadLibraries();
     }
-  }, [tenderId, useHierarchicalView]);
+  }, [tenderId]);
 
   const loadBoqItems = async () => {
     if (!tenderId) return;
@@ -292,32 +293,6 @@ const TenderBoq: React.FC = () => {
     return sum + ((item.quantity || 0) * (item.unit_rate || 0));
   }, 0);
 
-  // Use hierarchical view with positions by default
-  if (useHierarchicalView && tenderId) {
-    return (
-      <div className="tender-boq-page">
-        <Card className="mb-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <Title level={3} className="mb-2">
-                <FileTextOutlined className="mr-2" />
-                Ведомость объемов работ
-              </Title>
-              <Text type="secondary">Тендер ID: {tenderId}</Text>
-            </div>
-            <Space>
-              <Button 
-                onClick={() => setUseHierarchicalView(false)}
-              >
-                Табличный вид
-              </Button>
-            </Space>
-          </div>
-        </Card>
-        <TenderBOQManager tenderId={tenderId} />
-      </div>
-    );
-  }
 
   return (
     <div className="tender-boq-page">
@@ -326,7 +301,7 @@ const TenderBoq: React.FC = () => {
           <div>
             <Title level={3} className="mb-2">
               <FileTextOutlined className="mr-2" />
-              Ведомость объемов работ (табличный вид)
+              Ведомость объемов работ тендера
             </Title>
             <Text type="secondary">Тендер ID: {tenderId}</Text>
           </div>
@@ -348,9 +323,17 @@ const TenderBoq: React.FC = () => {
         <div className="mb-4 flex justify-between items-center">
           <Space>
             <Button 
-              onClick={() => setUseHierarchicalView(true)}
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate('/tenders')}
             >
-              Иерархический вид
+              К тендерам
+            </Button>
+            <Button 
+              icon={<TableOutlined />}
+              onClick={() => navigate('/boq')}
+              type="primary"
+            >
+              Управление позициями
             </Button>
             <Button 
               icon={<SaveOutlined />} 

@@ -47,7 +47,7 @@ const AppLayout: React.FC = () => {
     {
       key: 'boq',
       icon: <TableOutlined />,
-      label: <Link to="/boq">BOQ Управление</Link>,
+      label: <Link to="/boq">Позиции заказчика</Link>,
       path: '/boq',
     },
     {
