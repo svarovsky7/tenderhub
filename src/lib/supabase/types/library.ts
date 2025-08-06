@@ -20,15 +20,10 @@ export type Work = Database['public']['Tables']['works_library']['Row'];
 // Filter types for libraries
 export interface MaterialFilters {
   category?: string[];
-  supplier?: string[];
-  is_active?: boolean;
   search?: string;
-  price_range?: [number, number];
 }
 
 export interface WorkItemFilters {
   category?: string[];
-  is_active?: boolean;
   search?: string;
-  price_range?: [number, number];
 }

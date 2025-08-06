@@ -29,9 +29,7 @@ export const clientPositionsApi = {
         .eq('tender_id', tenderId);
 
       // Apply filters
-      if (filters.status?.length) {
-        query = query.in('status', filters.status);
-      }
+      // Note: status field removed from schema
       
       if (filters.category?.length) {
         query = query.in('category', filters.category);
@@ -41,7 +39,7 @@ export const clientPositionsApi = {
       // These would need to be calculated from BOQ items if needed
       
       if (filters.search) {
-        query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%,category.ilike.%${filters.search}%`);
+        query = query.or(`title.ilike.%${filters.search}%,client_note.ilike.%${filters.search}%`);
       }
 
       // Apply pagination

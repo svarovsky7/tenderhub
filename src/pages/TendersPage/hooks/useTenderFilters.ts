@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react';
 import dayjs from 'dayjs';
-import type { TenderFilters, TenderStatus } from '../types';
+import type { TenderFilters } from '../types';
+// Note: TenderStatus import removed as status field was removed from schema
 
 interface UseTenderFiltersReturn {
   filters: TenderFilters;
   handleSearch: (value: string) => void;
-  handleStatusFilter: (status: TenderStatus[]) => void;
+  // handleStatusFilter removed as status field was removed from schema
   handleDateFilter: (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => void;
   handleFiltersChange: (newFilters: Partial<TenderFilters>) => void;
   resetFilters: () => void;
@@ -13,7 +14,7 @@ interface UseTenderFiltersReturn {
 
 const initialFilters: TenderFilters = {
   search: '',
-  status: [],
+  // Note: status filter removed as status field was removed from schema
   client_name: '',
   date_from: '',
   date_to: ''
@@ -36,13 +37,7 @@ export const useTenderFilters = (
     onFiltersChange?.(newFilters);
   }, [filters, onFiltersChange]);
 
-  // Handle status filter
-  const handleStatusFilter = useCallback((status: TenderStatus[]) => {
-    console.log('🏷️ Status filter changed:', status);
-    const newFilters = { ...filters, status };
-    setFilters(newFilters);
-    onFiltersChange?.(newFilters);
-  }, [filters, onFiltersChange]);
+  // Note: status filter handler removed as status field was removed from schema
 
   // Handle date range filter
   const handleDateFilter = useCallback((dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
@@ -74,7 +69,7 @@ export const useTenderFilters = (
   return {
     filters,
     handleSearch,
-    handleStatusFilter,
+    // handleStatusFilter removed as status field was removed from schema
     handleDateFilter,
     handleFiltersChange,
     resetFilters

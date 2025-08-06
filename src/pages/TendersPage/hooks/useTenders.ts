@@ -25,13 +25,13 @@ export const useTenders = (
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState<TablePaginationConfig>(initialPagination);
 
-  // Calculate statistics
+  // Calculate statistics - simplified without status-based counts
   const stats: TenderStatistics = {
     total: tenders.length,
-    active: tenders.filter(t => t.status === 'active').length,
-    submitted: tenders.filter(t => t.status === 'submitted').length,
-    won: tenders.filter(t => t.status === 'awarded').length,
-    totalValue: tenders.reduce((sum, t) => sum + (t.estimated_value || 0), 0)
+    active: 0, // Note: status-based counts removed as status field was removed from schema
+    submitted: 0,
+    won: 0,
+    totalValue: tenders.reduce((sum, t) => sum + (t.boq_total_value || 0), 0) // Using BOQ value instead of estimated_value
   };
 
   console.log('📊 Calculated stats:', stats);

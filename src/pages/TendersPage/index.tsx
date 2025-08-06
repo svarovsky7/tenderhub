@@ -28,7 +28,7 @@ const TendersPage: React.FC = () => {
   const {
     filters,
     handleSearch,
-    handleStatusFilter,
+    // handleStatusFilter removed as status field was removed from schema
     handleDateFilter,
     handleFiltersChange
   } = useTenderFilters(resetPaginationCallback);
@@ -138,7 +138,7 @@ const TendersPage: React.FC = () => {
         <TenderFilters
           filters={filters}
           onSearch={handleSearch}
-          onStatusFilter={handleStatusFilter}
+          // onStatusFilter removed as status field was removed from schema
           onDateFilter={handleDateFilter}
           onFiltersChange={handleFiltersChange}
         />

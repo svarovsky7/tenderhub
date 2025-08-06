@@ -23,9 +23,7 @@ export const tendersApi = {
         .select('*', { count: 'exact' });
 
       // Apply filters
-      if (filters.status?.length) {
-        query = query.in('status', filters.status);
-      }
+      // Note: status field removed from schema
       
       if (filters.client_name) {
         query = query.ilike('client_name', `%${filters.client_name}%`);
@@ -165,7 +163,7 @@ export const tendersApi = {
       console.log('🔍 Checking if tender exists...');
       const { data: existingTender, error: checkError } = await supabase
         .from('tenders')
-        .select('id, title, status')
+        .select('id, title')
         .eq('id', id)
         .single();
       

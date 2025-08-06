@@ -9,7 +9,7 @@ const { RangePicker } = DatePicker;
 const TenderFilters: React.FC<TenderFiltersProps> = ({
   filters,
   onSearch,
-  onStatusFilter,
+  // onStatusFilter removed as status field was removed from schema
   onDateFilter,
   onFiltersChange
 }) => {
@@ -26,10 +26,7 @@ const TenderFilters: React.FC<TenderFiltersProps> = ({
     onSearch(value);
   };
 
-  const handleStatusChange = (status: string[]) => {
-    console.log('🏷️ Status filter changed:', status);
-    onStatusFilter(status as any[]);
-  };
+  // Note: status filter handlers removed as status field was removed from schema
 
   const handleDateChange = (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
     console.log('📅 Date filter changed:', dates);
@@ -39,7 +36,7 @@ const TenderFilters: React.FC<TenderFiltersProps> = ({
   return (
     <Card className="mb-6">
       <Row gutter={16} align="middle">
-        <Col span={8}>
+        <Col span={10}>
           <Input.Search
             placeholder="Поиск по названию, номеру или клиенту..."
             value={filters.search}
@@ -48,22 +45,7 @@ const TenderFilters: React.FC<TenderFiltersProps> = ({
             allowClear
           />
         </Col>
-        <Col span={6}>
-          <Select
-            placeholder="Статус тендера"
-            value={filters.status}
-            onChange={handleStatusChange}
-            mode="multiple"
-            allowClear
-            className="w-full"
-          >
-            <Select.Option value="draft">Черновик</Select.Option>
-            <Select.Option value="active">Активный</Select.Option>
-            <Select.Option value="submitted">Подан</Select.Option>
-            <Select.Option value="awarded">Выигран</Select.Option>
-            <Select.Option value="closed">Закрыт</Select.Option>
-          </Select>
-        </Col>
+        {/* Note: status filter removed as status field was removed from schema */}
         <Col span={6}>
           <RangePicker
             placeholder={['Дата от', 'Дата до']}

@@ -18,8 +18,16 @@ import {
   Form,
   Input,
   InputNumber,
-  Select
+  Select,
+  Modal,
+  Tabs,
+  List,
+  Checkbox,
+  Badge,
+  Divider,
+  Spin
 } from 'antd';
+import ExpandableSearchBar from './ExpandableSearchBar';
 import {
   PlusOutlined,
   EditOutlined,
@@ -33,9 +41,10 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { FormInstance } from 'antd';
-import { clientPositionsApi, boqItemsApi } from '../../lib/supabase/api';
-import type { ClientPosition, BOQItem } from '../../lib/supabase/types';
+import { clientPositionsApi, boqItemsApi, materialsApi, worksApi } from '../../lib/supabase/api';
+import type { ClientPosition, BOQItem, BOQItemInsert, Material, WorkItem } from '../../lib/supabase/types';
 import ClientPositionForm from './ClientPositionForm';
+import { SearchOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 
@@ -116,6 +125,10 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
   const [form] = Form.useForm();
   const [editingKey, setEditingKey] = useState<string>('');
   const [editingPositionId, setEditingPositionId] = useState<string | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<BOQItem | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [expandedPositionId, setExpandedPositionId] = useState<string | null>(null);
 
   // Load positions and their BOQ items
   const loadPositions = useCallback(async () => {
@@ -149,6 +162,17 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
     }
   }, [tenderId, loadPositions]);
 
+  // Update form when editing item changes
+  useEffect(() => {
+    if (editingItem && editModalVisible) {
+      form.setFieldsValue(editingItem);
+    }
+  }, [editingItem, editModalVisible, form]);
+
+
+
+
+
   // Position handlers
   const handleCreatePosition = () => {
     setEditingPosition(null);
@@ -178,6 +202,61 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
     setEditingPosition(null);
     loadPositions();
   };
+
+  const handleQuickAdd = useCallback(async (item: Material | WorkItem, type: 'material' | 'work', quantity: number, positionId: string) => {
+    console.log('🚀 Quick add item to position:', { item: item.name, type, quantity, positionId });
+    
+    try {
+      // Find position to calculate next item number
+      const position = positions.find(p => p.id === positionId);
+      if (!position) {
+        console.error('❌ Position not found:', positionId);
+        throw new Error('Позиция не найдена');
+      }
+      
+      const existingItems = position.boq_items || [];
+      const lastItemNumber = existingItems.length > 0 
+        ? Math.max(...existingItems.map(item => item.sub_number || 0))
+        : 0;
+      
+      const newItemData: BOQItemInsert = {
+        tender_id: tenderId,
+        client_position_id: positionId,
+        item_number: `${position.position_number}.${lastItemNumber + 1}`,
+        sub_number: lastItemNumber + 1,
+        sort_order: lastItemNumber + 1,
+        item_type: type,
+        description: item.name,
+        unit: item.unit,
+        quantity: quantity,
+        unit_rate: 0, // Will be set manually by user
+        material_id: type === 'material' ? item.id : null,
+        work_id: type === 'work' ? item.id : null
+      };
+
+      console.log('📡 Creating new BOQ item:', newItemData);
+      
+      const result = await boqItemsApi.create(newItemData);
+      console.log('📦 Create result:', result);
+      
+      if (result.error) {
+        console.error('❌ Create failed:', result.error);
+        throw new Error(result.error);
+      }
+
+      console.log('✅ BOQ item created successfully');
+      message.success(`${type === 'material' ? 'Материал' : 'Работа'} "${item.name}" добавлена в позицию`);
+      loadPositions(); // Reload to get updated data
+    } catch (error) {
+      console.error('💥 Quick add error:', error);
+      message.error('Ошибка добавления элемента');
+    }
+  }, [positions, tenderId, loadPositions]);
+
+  const handleTogglePosition = useCallback((positionId: string) => {
+    console.log('🔄 Toggling position:', positionId);
+    setExpandedPositionId(prev => prev === positionId ? null : positionId);
+  }, []);
 
   // BOQ Item handlers
   const handleAddNewItem = (positionId: string) => {
@@ -216,9 +295,9 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
 
   const edit = (record: BOQItem, positionId: string) => {
     console.log('✏️ Edit BOQ item', { positionId, recordId: record.id });
-    form.setFieldsValue({ ...record });
-    setEditingKey(record.id);
+    setEditingItem(record);
     setEditingPositionId(positionId);
+    setEditModalVisible(true);
   };
 
   const cancelEdit = () => {
@@ -355,29 +434,14 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
       dataIndex?: keyof BOQItem;
     })[] = [
       {
-        title: '№',
+        title: '№ п.п',
         dataIndex: 'sub_number',
         key: 'sub_number',
         width: 60,
         render: (_value, record) => <Text strong>{record.item_number}</Text>,
       },
       {
-        title: 'Тип',
-        dataIndex: 'item_type',
-        key: 'item_type',
-        width: 80,
-        editable: true,
-        render: (type) => (
-          <Tag
-            color={type === 'material' ? 'blue' : 'green'}
-            icon={type === 'material' ? <AppstoreOutlined /> : <ToolOutlined />}
-          >
-            {type === 'material' ? 'Материал' : 'Работа'}
-          </Tag>
-        ),
-      },
-      {
-        title: 'Наименование',
+        title: 'Наименование работ',
         dataIndex: 'description',
         key: 'description',
         ellipsis: true,
@@ -385,19 +449,21 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
         render: (text, record) => (
           <div>
             <Text strong>{text}</Text>
-            {record.category && (
-              <div>
-                <Text type="secondary" className="text-xs">
-                  {record.category}
-                  {record.subcategory && ` / ${record.subcategory}`}
-                </Text>
-              </div>
-            )}
+            <div>
+              <Tag
+                color={record.item_type === 'material' ? 'blue' : 'green'}
+                icon={record.item_type === 'material' ? <AppstoreOutlined /> : <ToolOutlined />}
+                size="small"
+                className="mt-1"
+              >
+                {record.item_type === 'material' ? 'Материал' : 'Работа'}
+              </Tag>
+            </div>
           </div>
         ),
       },
       {
-        title: 'Ед.изм.',
+        title: 'Ед. изм.',
         dataIndex: 'unit',
         key: 'unit',
         width: 80,
@@ -405,7 +471,7 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
         editable: true,
       },
       {
-        title: 'Количество',
+        title: 'Объем работ',
         dataIndex: 'quantity',
         key: 'quantity',
         width: 100,
@@ -417,6 +483,7 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
             maximumFractionDigits: 4,
           }),
       },
+      // Note: client_note is at position level, not BOQ item level - removed this column
       {
         title: 'Цена за ед.',
         dataIndex: 'unit_rate',
@@ -520,9 +587,7 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
           inputType:
             col.dataIndex === 'quantity' || col.dataIndex === 'unit_rate'
               ? 'number'
-              : col.dataIndex === 'item_type'
-                ? 'select'
-                : 'text',
+              : 'text', // Removed item_type select since it's now shown as tag
           dataIndex: col.dataIndex!,
           title: col.title,
           editing: isEditing(record, positionId),
@@ -625,148 +690,187 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
             </Button>
           </Empty>
         ) : (
-          <Collapse 
-            className="w-full"
-            expandIconPosition="end"
-            items={positions.map((position) => ({
-              key: position.id,
-              label: (
-                  <div className="flex justify-between items-center w-full mr-4">
+          <div className="space-y-4">
+            {/* Render each position as a clickable card */}
+            {positions.map((position) => (
+              <Card 
+                key={position.id} 
+                className="position-card border border-gray-200 shadow-sm"
+                title={
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <Text strong className="text-lg">
-                        {position.position_number}. {position.title}
+                      <Text strong className="text-lg text-blue-600">
+                        Позиция {position.position_number}
                       </Text>
-                      <Tag color={position.status === 'active' ? 'green' : 'default'}>
-                        {position.status === 'active' ? 'Активна' : 'Неактивна'}
+                      <Text strong className="text-base">
+                        {position.title}
+                      </Text>
+                      <Tag color="blue" size="small">
+                        {(position.boq_items || []).length} элементов
                       </Tag>
-                      {position.category && (
-                        <Tag color="blue">{position.category}</Tag>
-                      )}
                     </div>
-                    <div className="flex items-center gap-4">
-                      <Text type="secondary">
-                        {position.items_count || 0} элементов
-                      </Text>
-                      <Text strong style={{ color: '#52c41a' }}>
-                        {((position.total_materials_cost || 0) + (position.total_works_cost || 0))
-                          .toLocaleString('ru-RU', { minimumFractionDigits: 2 })} ₽
-                      </Text>
-                      <Progress 
-                        type="circle" 
-                        size={32} 
-                        percent={getPositionProgress(position)}
-                        showInfo={false}
-                      />
-                    </div>
-                  </div>
-                ),
-              extra: (
-                  <Space size="small" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      type="primary"
-                      size="small"
-                      icon={<PlusOutlined />}
-                      onClick={() => handleAddNewItem(position.id)}
-                    >
-                      Добавить элемент
-                    </Button>
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<EditOutlined />}
-                      onClick={() => handleEditPosition(position)}
-                    />
-                    <Popconfirm
-                      title="Удалить позицию?"
-                      description="Все элементы BOQ в этой позиции также будут удалены."
-                      onConfirm={() => handleDeletePosition(position.id)}
-                      okText="Удалить"
-                      cancelText="Отмена"
-                      okButtonProps={{ danger: true }}
-                    >
+                    <Space>
                       <Button
-                        type="text"
+                        type="text" 
                         size="small"
-                        icon={<DeleteOutlined />}
-                        danger
-                      />
-                    </Popconfirm>
-                  </Space>
-                ),
-              children: (
-                <div className="pl-4">
-                  {position.description && (
-                    <Text type="secondary" className="block mb-4">
-                      {position.description}
-                    </Text>
-                  )}
-                  
-                  <Row gutter={16} className="mb-4">
-                    <Col span={8}>
-                      <Statistic
-                        title="Материалы"
-                        value={position.total_materials_cost || 0}
-                        precision={2}
-                        suffix="₽"
-                      />
-                    </Col>
-                    <Col span={8}>
-                      <Statistic
-                        title="Работы"
-                        value={position.total_works_cost || 0}
-                        precision={2}
-                        suffix="₽"
-                      />
-                    </Col>
-                    <Col span={8}>
-                      <Statistic
-                        title="Всего по позиции"
-                        value={(position.total_materials_cost || 0) + (position.total_works_cost || 0)}
-                        precision={2}
-                        suffix="₽"
-                        valueStyle={{ color: '#52c41a' }}
-                      />
-                    </Col>
-                  </Row>
-
-                  <Form form={form} component={false}>
-                    <EditableContext.Provider value={form}>
-                      <Table
-                        components={{
-                          body: {
-                            row: EditableRow,
-                            cell: EditableCell,
-                          },
-                        }}
-                        columns={getBoqColumns(position.id)}
-                        dataSource={position.boq_items || []}
-                        rowKey="id"
-                        size="small"
-                        pagination={false}
-                        locale={{
-                          emptyText: (
-                            <Empty
-                              description="Элементы BOQ не добавлены"
-                              image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            >
-                              <Button
-                                type="primary"
-                                size="small"
-                                icon={<PlusOutlined />}
-                                onClick={() => handleAddNewItem(position.id)}
-                              >
-                                Добавить элемент BOQ
-                              </Button>
-                            </Empty>
-                          ),
-                        }}
-                      />
-                    </EditableContext.Provider>
-                  </Form>
+                        icon={<EditOutlined />}
+                        onClick={() => handleEditPosition(position)}
+                      >
+                        Редактировать
+                      </Button>
+                      <Popconfirm
+                        title="Удалить позицию?"
+                        onConfirm={() => handleDeletePosition(position.id)}
+                        okText="Удалить"
+                        cancelText="Отмена"
+                        okButtonProps={{ danger: true }}
+                      >
+                        <Button 
+                          type="text"
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          danger
+                        >
+                          Удалить
+                        </Button>
+                      </Popconfirm>
+                    </Space>
+                  </div>
+                }
+                bodyStyle={{ padding: 0 }}
+              >
+                {/* Quick Add Search Bar */}
+                <div className="p-4 bg-gray-50 border-b border-gray-200">
+                  <Text strong className="block mb-3 text-gray-700">
+                    Быстрое добавление в позицию {position.position_number}
+                  </Text>
+                  <QuickAddSearchBar 
+                    onAddItem={(item, type, quantity) => handleQuickAdd(item, type, quantity, position.id)}
+                    placeholder="Поиск материалов и работ для добавления в позицию..."
+                  />
                 </div>
-              )
-            }))}
-          />
+
+                {/* BOQ Items */}
+                <div className="p-4">
+                  {(position.boq_items || []).length === 0 ? (
+                    <Empty 
+                      size="small"
+                      description="В позиции пока нет элементов"
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  ) : (
+                    <div className="space-y-3">
+                      {(position.boq_items || []).map((item, itemIndex) => (
+                        <Card 
+                          key={`${position.id}-${item.id}`} 
+                          size="small"
+                          className="border-l-4 border-l-blue-500 hover:shadow-md transition-all"
+                        >
+                          <div 
+                            className="p-2"
+                          >
+                    <Row gutter={16} align="middle">
+                      <Col span={2}>
+                        <Text strong className="text-lg text-blue-600">
+                          {position.position_number}.{itemIndex + 1}
+                        </Text>
+                      </Col>
+                      <Col span={8}>
+                        <div>
+                          <Text strong className="text-base block">
+                            {item.description}
+                          </Text>
+                          <Tag
+                            color={item.item_type === 'material' ? 'blue' : 'green'}
+                            icon={item.item_type === 'material' ? <AppstoreOutlined /> : <ToolOutlined />}
+                            size="small"
+                          >
+                            {item.item_type === 'material' ? 'Материал' : 'Работа'}
+                          </Tag>
+                        </div>
+                      </Col>
+                      <Col span={3}>
+                        <div className="text-center">
+                          <Text type="secondary" className="block text-xs">Ед. изм.</Text>
+                          <Text strong>{item.unit}</Text>
+                        </div>
+                      </Col>
+                      <Col span={3}>
+                        <div className="text-center">
+                          <Text type="secondary" className="block text-xs">Объем работ</Text>
+                          <Text strong>
+                            {Number(item.quantity).toLocaleString('ru-RU', {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 4,
+                            })}
+                          </Text>
+                        </div>
+                      </Col>
+                      <Col span={4}>
+                        <div className="text-center">
+                          <Text type="secondary" className="block text-xs">Примечание Заказчика</Text>
+                          <Text type="secondary">{position.client_note || '-'}</Text>
+                        </div>
+                      </Col>
+                      <Col span={2}>
+                        <div className="text-center">
+                          <Text type="secondary" className="block text-xs">Цена</Text>
+                          <Text strong>
+                            {Number(item.unit_rate).toLocaleString('ru-RU', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })} ₽
+                          </Text>
+                        </div>
+                      </Col>
+                      <Col span={2}>
+                        <Space>
+                          <Tooltip title="Редактировать">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<EditOutlined />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                edit(item, position.id);
+                              }}
+                            />
+                          </Tooltip>
+                          <Popconfirm
+                            title="Удалить элемент?"
+                            description="Это действие нельзя отменить."
+                            onConfirm={(e) => {
+                              e?.stopPropagation();
+                              handleDeleteBOQItem(item.id);
+                            }}
+                            okText="Удалить"
+                            cancelText="Отмена"
+                            okButtonProps={{ danger: true }}
+                          >
+                            <Tooltip title="Удалить">
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={<DeleteOutlined />}
+                                danger
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </Tooltip>
+                          </Popconfirm>
+                        </Space>
+                      </Col>
+                    </Row>
+                  </div>
+                  
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            ))}
+            
+          </div>
         )}
       </Card>
 
@@ -778,6 +882,125 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
         onSuccess={handlePositionSuccess}
         editingPosition={editingPosition}
       />
+
+      {/* BOQ Item Edit Modal */}
+      <Modal
+        title="Редактирование элемента BOQ"
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false);
+          setEditingItem(null);
+          setEditingPositionId(null);
+        }}
+        onOk={() => {
+          if (editingItem && editingPositionId) {
+            form.validateFields().then(async (values) => {
+              try {
+                const quantity = Number(values.quantity);
+                const unitRate = Number(values.unit_rate);
+                
+                if (quantity <= 0) {
+                  message.error('Количество должно быть больше 0');
+                  return;
+                }
+                if (unitRate < 0) {
+                  message.error('Цена не может быть отрицательной');
+                  return;
+                }
+
+                const updatePayload = {
+                  ...values,
+                  quantity,
+                  unit_rate: unitRate
+                };
+
+                const result = await boqItemsApi.update(editingItem.id, updatePayload);
+                if (result.error) {
+                  throw new Error(result.error);
+                }
+
+                message.success('Элемент обновлен');
+                setEditModalVisible(false);
+                setEditingItem(null);
+                setEditingPositionId(null);
+                form.resetFields();
+                loadPositions();
+              } catch (error) {
+                message.error(`Ошибка обновления: ${error}`);
+              }
+            });
+          }
+        }}
+        okText="Сохранить"
+        cancelText="Отмена"
+      >
+        {editingItem && (
+          <Form
+            form={form}
+            layout="vertical"
+            initialValues={editingItem}
+            key={editingItem.id} // Force re-render when item changes
+          >
+          <Form.Item
+            name="description"
+            label="Наименование"
+            rules={[{ required: true, message: 'Введите наименование' }]}
+          >
+            <Input />
+          </Form.Item>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                name="unit"
+                label="Ед. изм."
+                rules={[{ required: true, message: 'Введите единицу измерения' }]}
+              >
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="quantity"
+                label="Количество"
+                rules={[
+                  { required: true, message: 'Введите количество' },
+                  { type: 'number', min: 0.0001, message: 'Количество должно быть больше 0' }
+                ]}
+              >
+                <InputNumber className="w-full" precision={4} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="unit_rate"
+                label="Цена за ед."
+                rules={[
+                  { required: true, message: 'Введите цену' },
+                  { type: 'number', min: 0, message: 'Цена не может быть отрицательной' }
+                ]}
+              >
+                <InputNumber 
+                  className="w-full" 
+                  precision={2}
+                  addonAfter="₽"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item
+            name="item_type"
+            label="Тип"
+            rules={[{ required: true, message: 'Выберите тип' }]}
+          >
+            <Select>
+              <Select.Option value="material">Материал</Select.Option>
+              <Select.Option value="work">Работа</Select.Option>
+            </Select>
+          </Form.Item>
+          </Form>
+        )}
+      </Modal>
+
 
     </div>
   );

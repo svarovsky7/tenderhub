@@ -93,9 +93,8 @@ export const useTenderActions = (
         description: values.description,
         client_name: values.client_name,
         tender_number: values.tender_number,
-        submission_deadline: values.submission_deadline ? dayjs(values.submission_deadline).format('YYYY-MM-DD HH:mm:ss') : undefined,
-        estimated_value: values.estimated_value,
-        status: values.status || 'draft'
+        submission_deadline: values.submission_deadline ? dayjs(values.submission_deadline).format('YYYY-MM-DD HH:mm:ss') : undefined
+        // Note: status and estimated_value fields removed from schema
       };
 
       console.log('📡 Calling tendersApi.create...');
@@ -140,9 +139,8 @@ export const useTenderActions = (
         description: values.description,
         client_name: values.client_name,
         tender_number: values.tender_number,
-        submission_deadline: values.submission_deadline ? dayjs(values.submission_deadline).format('YYYY-MM-DD HH:mm:ss') : undefined,
-        estimated_value: values.estimated_value,
-        status: values.status
+        submission_deadline: values.submission_deadline ? dayjs(values.submission_deadline).format('YYYY-MM-DD HH:mm:ss') : undefined
+        // Note: status and estimated_value fields removed from schema
       };
 
       console.log('📡 Calling tendersApi.update...');

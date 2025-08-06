@@ -40,13 +40,11 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
   // Filters
   const [materialFilters, setMaterialFilters] = useState<MaterialFilters>({
     search: '',
-    category: [],
-    is_active: true
+    category: []
   });
   const [workFilters, setWorkFilters] = useState<WorkItemFilters>({
     search: '',
-    category: [],
-    is_active: true
+    category: []
   });
 
   // Selection
@@ -125,7 +123,7 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
       type,
       name: item.name,
       unit: item.unit,
-      basePrice: type === 'material' ? item.base_price : (item as WorkItem).base_price,
+      basePrice: 0, // Base price not available in simplified schema
       quantity: 1,
       originalItem: item
     }));
