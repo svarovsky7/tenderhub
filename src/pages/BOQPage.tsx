@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Card,
-  Button,
-  Typography,
-  Space,
+import { 
+  Card, 
+  Button, 
+  Typography, 
+  Space, 
   Select,
+  Spin,
   message,
-  Empty,
-  List
+  Empty
 } from 'antd';
-import {
+import { 
+  PlusOutlined, 
   FileTextOutlined,
   ReloadOutlined,
   FolderOpenOutlined
@@ -18,7 +19,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import TenderBOQManager from '../components/tender/TenderBOQManager';
 import { tendersApi } from '../lib/supabase/api';
 import type { Tender } from '../lib/supabase/types';
-import type { TenderExcelItem } from './TendersPage/types';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -32,7 +32,6 @@ const BOQPage: React.FC = () => {
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [tendersLoading, setTendersLoading] = useState(false);
-  const [excelItems, setExcelItems] = useState<TenderExcelItem[]>([]);
 
   // Load all tenders for selection
   const loadTenders = useCallback(async () => {
@@ -71,28 +70,6 @@ const BOQPage: React.FC = () => {
   useEffect(() => {
     loadTenders();
   }, [loadTenders]);
-
-  useEffect(() => {
-    console.log('📥 Loading Excel items from localStorage');
-    try {
-      const stored = localStorage.getItem('excelItems');
-      if (stored) {
-        const parsed = JSON.parse(stored) as TenderExcelItem[];
-        console.log('✅ Excel items loaded:', parsed.length);
-        setExcelItems(prev => {
-          console.log('🔄 Excel items state updated:', {
-            oldCount: prev.length,
-            newCount: parsed.length
-          });
-          return parsed;
-        });
-      } else {
-        console.log('ℹ️ No Excel items found in storage');
-      }
-    } catch (error) {
-      console.error('💥 Error reading Excel items from storage:', error);
-    }
-  }, []);
 
   const handleTenderChange = useCallback((tenderId: string) => {
     console.log('🔄 Tender selection changed:', tenderId);
@@ -183,8 +160,8 @@ const BOQPage: React.FC = () => {
       {/* Main Content */}
       <div className="p-6 max-w-none">
         {selectedTenderId ? (
-          <TenderBOQManager
-            tenderId={selectedTenderId}
+          <TenderBOQManager 
+            tenderId={selectedTenderId} 
             key={selectedTenderId} // Force remount when tender changes
           />
         ) : (
@@ -198,23 +175,6 @@ const BOQPage: React.FC = () => {
                   </Text>
                 </div>
               }
-            />
-          </Card>
-        )}
-
-        {excelItems.length > 0 && (
-          <Card title="Импортированные наименования" className="mt-6">
-            <List
-              dataSource={excelItems}
-              renderItem={(item) => (
-                <List.Item>
-                  <span
-                    style={{ paddingLeft: `${(item.number.split('.').length - 1) * 16}px` }}
-                  >
-                    {item.number} {item.name}
-                  </span>
-                </List.Item>
-              )}
             />
           </Card>
         )}
