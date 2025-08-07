@@ -19,6 +19,8 @@ export type DatabaseTables = {
       unit: string;
       quantity: number;
       unit_rate: number;
+      conversion_coefficient: number | null;
+      consumption_coefficient: number | null;
       total_amount: number;
       material_id: string | null;
       work_id: string | null;
@@ -38,6 +40,8 @@ export type DatabaseTables = {
       unit: string;
       quantity: number;
       unit_rate: number;
+      conversion_coefficient?: number | null;
+      consumption_coefficient?: number | null;
       material_id?: string | null;
       work_id?: string | null;
       imported_at?: string | null;
@@ -60,6 +64,8 @@ export type DatabaseTables = {
       unit?: string;
       quantity?: number;
       unit_rate?: number;
+      conversion_coefficient?: number | null;
+      consumption_coefficient?: number | null;
       material_id?: string | null;
       work_id?: string | null;
       imported_at?: string | null;
