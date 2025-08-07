@@ -170,7 +170,6 @@ CREATE TABLE IF NOT EXISTS "public"."client_positions" (
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "unit" "text",
     "volume" numeric(12,4),
-    "manual_volume" numeric(12,4),
     "client_note" "text",
     "item_no" character varying(10) NOT NULL,
     "work_name" "text" NOT NULL,
@@ -194,8 +193,6 @@ COMMENT ON COLUMN "public"."client_positions"."unit" IS 'Единица изме
 
 
 COMMENT ON COLUMN "public"."client_positions"."volume" IS 'Объем работ из Excel';
-
-COMMENT ON COLUMN "public"."client_positions"."manual_volume" IS 'Объем работ, заданный вручную';
 
 
 
