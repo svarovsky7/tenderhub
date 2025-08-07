@@ -34,8 +34,6 @@ interface FormData {
   unit: string;
   quantity: number;
   unit_rate: number;
-  conversion_coefficient?: number;
-  consumption_coefficient?: number;
   material_id?: string;
   work_id?: string;
   category?: string;
@@ -77,8 +75,6 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
         unit: editingItem.unit,
         quantity: editingItem.quantity,
         unit_rate: editingItem.unit_rate,
-        conversion_coefficient: editingItem.conversion_coefficient ?? 1,
-        consumption_coefficient: editingItem.consumption_coefficient ?? 1,
         material_id: editingItem.material_id || undefined,
         work_id: editingItem.work_id || undefined,
         category: editingItem.category || '',
@@ -88,12 +84,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
       });
     } else if (visible) {
       form.resetFields();
-      form.setFieldsValue({
-        item_type: 'material',
-        sort_order: 0,
-        conversion_coefficient: 1,
-        consumption_coefficient: 1
-      });
+      form.setFieldsValue({ item_type: 'material', sort_order: 0 });
     }
   }, [visible, editingItem, form]);
 
@@ -118,19 +109,13 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
 
   const handleLibraryItemSelect = (_value: string, option: any) => {
     const selectedItem = option.item;
-    console.log('🖱️ Library item selected:', {
-      id: selectedItem.id,
-      name: selectedItem.name,
-    });
-
+    
     // Auto-fill form fields
     form.setFieldsValue({
       description: selectedItem.name,
       unit: selectedItem.unit,
       unit_rate: selectedItem.base_price,
-      category: selectedItem.category || '',
-      conversion_coefficient: selectedItem.conversion_coefficient ?? 1,
-      consumption_coefficient: selectedItem.consumption_coefficient ?? 1,
+      category: selectedItem.category || ''
     });
   };
 
@@ -144,7 +129,6 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
   };
 
   const handleSubmit = async (values: FormData) => {
-    console.log('🚀 BOQItemForm.handleSubmit called with:', values);
     setLoading(true);
 
     try {
@@ -182,7 +166,6 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
   };
 
   const handleCancel = () => {
-    console.log('🛑 BOQItemForm.cancel');
     form.resetFields();
     onCancel();
   };
@@ -329,39 +312,6 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
             </Form.Item>
           </Col>
         </Row>
-
-        {itemType === 'material' && (
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="conversion_coefficient"
-                label="Коэффициент перевода"
-                rules={[{ required: true, message: 'Введите коэффициент перевода' }]}
-              >
-                <InputNumber
-                  min={0}
-                  precision={4}
-                  placeholder="1.0000"
-                  className="w-full"
-                />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="consumption_coefficient"
-                label="Коэффициент расхода"
-                rules={[{ required: true, message: 'Введите коэффициент расхода' }]}
-              >
-                <InputNumber
-                  min={0}
-                  precision={4}
-                  placeholder="1.0000"
-                  className="w-full"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-        )}
 
         <Row gutter={16}>
           <Col span={12}>
