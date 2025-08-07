@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PlusOutlined, EditOutlined, CalculatorOutlined, CloseOutlined } from '@ant-design/icons';
-import { message, Spin, InputNumber } from 'antd';
+import { message, Spin } from 'antd';
 import { clientPositionsApi, boqItemsApi, materialsApi, worksApi } from '../../lib/supabase/api';
 import AutoCompleteSearch from '../common/AutoCompleteSearch';
 import { formatCurrency, formatQuantity, formatUnitRate } from '../../utils/formatters';
@@ -155,41 +155,6 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       selectedItemId: prev.name !== value ? null : prev.selectedItemId
     }));
   }, []);
-
-  // Handle manual volume changes
-  const handleManualVolumeChange = useCallback(
-    (positionId: string, value: number | null) => {
-      console.log('✏️ handleManualVolumeChange called:', { positionId, value });
-
-      const oldValue = positions.find((p) => p.id === positionId)?.manual_volume ?? null;
-      setPositions((prev) =>
-        prev.map((p) => (p.id === positionId ? { ...p, manual_volume: value } : p))
-      );
-
-      clientPositionsApi
-        .update(positionId, { manual_volume: value })
-        .then((result) => {
-          console.log('📦 manual volume update result:', result);
-          if (result.error) {
-            console.error('❌ manual volume update failed:', result.error);
-            message.error('Ошибка сохранения объема');
-            setPositions((prev) =>
-              prev.map((p) => (p.id === positionId ? { ...p, manual_volume: oldValue } : p))
-            );
-          } else {
-            console.log('✅ manual volume updated successfully');
-          }
-        })
-        .catch((error) => {
-          console.error('💥 manual volume update exception:', error);
-          message.error('Ошибка сохранения объема');
-          setPositions((prev) =>
-            prev.map((p) => (p.id === positionId ? { ...p, manual_volume: oldValue } : p))
-          );
-        });
-    },
-    [positions]
-  );
 
   // Add new BOQ item
   const addItem = useCallback(async () => {
@@ -400,32 +365,10 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                         <h3 className="text-sm font-semibold text-gray-900">
                           {position.item_no}. {position.work_name}
                         </h3>
-                        {position.unit && (
-                          <>
-                            <span
-                              className="text-xs text-gray-500"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                console.log('🖱️ Original volume display clicked for position:', position.id);
-                              }}
-                            >
-                              ({formatQuantity(position.volume ?? 0)} {position.unit})
-                            </span>
-                            <InputNumber
-                              size="small"
-                              min={0}
-                              value={position.manual_volume ?? undefined}
-                              placeholder="Ручной объём"
-                              className="w-20"
-                              onChange={(value) =>
-                                handleManualVolumeChange(position.id, value as number | null)
-                              }
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                console.log('🖱️ Manual volume input clicked for position:', position.id);
-                              }}
-                            />
-                          </>
+                        {position.unit && position.volume && (
+                          <span className="text-xs text-gray-500">
+                            ({formatQuantity(position.volume)} {position.unit})
+                          </span>
                         )}
                       </div>
                       {position.client_note && (
