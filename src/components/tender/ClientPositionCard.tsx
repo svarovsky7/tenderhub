@@ -348,7 +348,7 @@ const ClientPositionCard: React.FC<ClientPositionCardProps> = ({
                 <div className="flex items-center gap-2">
                   <CalculatorOutlined className="text-gray-400" />
                   <Text strong className="text-lg">
-                    {totalCost.toLocaleString('ru-RU')} ₽
+                    {totalCost.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
                   </Text>
                 </div>
 

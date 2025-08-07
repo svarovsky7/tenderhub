@@ -14,6 +14,7 @@ import {
   SearchOutlined,
 } from '@ant-design/icons';
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import ConnectionStatus from './ConnectionStatus';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -286,6 +287,11 @@ const AppLayout: React.FC = () => {
             </div>
             
             <div className="page__content-inner">
+              {/* Connection status bar */}
+              <div className="mb-4">
+                <ConnectionStatus />
+              </div>
+              
               <Outlet />
             </div>
           </div>

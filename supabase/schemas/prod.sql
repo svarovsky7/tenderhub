@@ -135,7 +135,6 @@ CREATE TABLE IF NOT EXISTS "public"."boq_items" (
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "imported_at" timestamp with time zone,
     CONSTRAINT "chk_item_type_reference" CHECK (((("item_type" = 'material'::"public"."boq_item_type") AND ("material_id" IS NOT NULL) AND ("work_id" IS NULL)) OR (("item_type" = 'work'::"public"."boq_item_type") AND ("work_id" IS NOT NULL) AND ("material_id" IS NULL)) OR (("item_type" = ANY (ARRAY['material'::"public"."boq_item_type", 'work'::"public"."boq_item_type"])) AND ("material_id" IS NULL) AND ("work_id" IS NULL)))),
-    CONSTRAINT "chk_quantity_positive" CHECK (("quantity" > (0)::numeric)),
     CONSTRAINT "chk_sort_order_valid" CHECK (("sort_order" >= 0)),
     CONSTRAINT "chk_sub_number_positive" CHECK (("sub_number" > 0)),
     CONSTRAINT "chk_unit_rate_positive" CHECK (("unit_rate" >= (0)::numeric))
@@ -165,7 +164,6 @@ CREATE TABLE IF NOT EXISTS "public"."client_positions" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "tender_id" "uuid" NOT NULL,
     "position_number" integer NOT NULL,
-    "title" "text" NOT NULL,
     "total_materials_cost" numeric(15,2) DEFAULT 0,
     "total_works_cost" numeric(15,2) DEFAULT 0,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
@@ -173,6 +171,8 @@ CREATE TABLE IF NOT EXISTS "public"."client_positions" (
     "unit" "text",
     "volume" numeric(12,4),
     "client_note" "text",
+    "item_no" character varying(10) NOT NULL,
+    "work_name" "text" NOT NULL,
     CONSTRAINT "chk_position_number_positive" CHECK (("position_number" > 0))
 );
 
@@ -180,7 +180,7 @@ CREATE TABLE IF NOT EXISTS "public"."client_positions" (
 ALTER TABLE "public"."client_positions" OWNER TO "postgres";
 
 
-COMMENT ON TABLE "public"."client_positions" IS 'Позиции заказчика - верхний уровень группировки в BOQ';
+COMMENT ON TABLE "public"."client_positions" IS 'Позиции заказчика из Excel файла - верхний уровень группировки в BOQ';
 
 
 
@@ -188,15 +188,23 @@ COMMENT ON COLUMN "public"."client_positions"."position_number" IS 'Порядк
 
 
 
-COMMENT ON COLUMN "public"."client_positions"."unit" IS 'Единица измерения';
+COMMENT ON COLUMN "public"."client_positions"."unit" IS 'Единица измерения из Excel';
 
 
 
-COMMENT ON COLUMN "public"."client_positions"."volume" IS 'Объем работ';
+COMMENT ON COLUMN "public"."client_positions"."volume" IS 'Объем работ из Excel';
 
 
 
-COMMENT ON COLUMN "public"."client_positions"."client_note" IS 'Примечание Заказчика';
+COMMENT ON COLUMN "public"."client_positions"."client_note" IS 'Примечание заказчика из Excel';
+
+
+
+COMMENT ON COLUMN "public"."client_positions"."item_no" IS 'Номер пункта из Excel (столбец № п/п)';
+
+
+
+COMMENT ON COLUMN "public"."client_positions"."work_name" IS 'Наименование работ из Excel';
 
 
 
@@ -294,11 +302,6 @@ ALTER TABLE ONLY "public"."client_positions"
 
 
 
-ALTER TABLE ONLY "public"."client_positions"
-    ADD CONSTRAINT "uq_client_positions_tender_title" UNIQUE ("tender_id", "title");
-
-
-
 ALTER TABLE ONLY "public"."works_library"
     ADD CONSTRAINT "works_library_pkey" PRIMARY KEY ("id");
 
@@ -328,6 +331,10 @@ CREATE INDEX "idx_boq_items_work_id" ON "public"."boq_items" USING "btree" ("wor
 
 
 
+CREATE INDEX "idx_client_positions_item_no" ON "public"."client_positions" USING "btree" ("item_no");
+
+
+
 CREATE INDEX "idx_client_positions_number" ON "public"."client_positions" USING "btree" ("tender_id", "position_number");
 
 
@@ -337,6 +344,10 @@ CREATE INDEX "idx_client_positions_tender_id" ON "public"."client_positions" USI
 
 
 CREATE INDEX "idx_client_positions_tender_id_position_number" ON "public"."client_positions" USING "btree" ("tender_id", "position_number");
+
+
+
+CREATE INDEX "idx_client_positions_work_name" ON "public"."client_positions" USING "gin" ("to_tsvector"('"russian"'::"regconfig", "work_name"));
 
 
 

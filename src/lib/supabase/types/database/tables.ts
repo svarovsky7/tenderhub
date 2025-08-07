@@ -102,25 +102,27 @@ export type DatabaseTables = {
       id: string;
       tender_id: string;
       position_number: number;
-      title: string;
+      item_no: string;           // № п/п из Excel
+      work_name: string;         // Наименование работ из Excel
       total_materials_cost: number;
       total_works_cost: number;
       created_at: string;
       updated_at: string;
-      unit: string | null;
-      volume: number | null;
-      client_note: string | null;
+      unit: string | null;       // Ед. изм. из Excel
+      volume: number | null;     // Объем работ из Excel  
+      client_note: string | null; // Примечание из Excel
     };
     Insert: {
       id?: string;
       tender_id: string;
       position_number?: number;
-      title: string;
+      item_no: string;           // № п/п из Excel
+      work_name: string;         // Наименование работ из Excel
       total_materials_cost?: number;
       total_works_cost?: number;
-      unit?: string | null;
-      volume?: number | null;
-      client_note?: string | null;
+      unit?: string | null;      // Ед. изм. из Excel
+      volume?: number | null;    // Объем работ из Excel
+      client_note?: string | null; // Примечание из Excel
       created_at?: string;
       updated_at?: string;
     };
@@ -128,12 +130,13 @@ export type DatabaseTables = {
       id?: string;
       tender_id?: string;
       position_number?: number;
-      title?: string;
+      item_no?: string;          // № п/п из Excel
+      work_name?: string;        // Наименование работ из Excel
       total_materials_cost?: number;
       total_works_cost?: number;
-      unit?: string | null;
-      volume?: number | null;
-      client_note?: string | null;
+      unit?: string | null;      // Ед. изм. из Excel
+      volume?: number | null;    // Объем работ из Excel
+      client_note?: string | null; // Примечание из Excel
       created_at?: string;
       updated_at?: string;
     };
