@@ -128,6 +128,8 @@ CREATE TABLE IF NOT EXISTS "public"."boq_items" (
     "unit" "text" NOT NULL,
     "quantity" numeric(12,4) NOT NULL,
     "unit_rate" numeric(12,4) NOT NULL,
+    "consumption_coefficient" numeric(12,4) DEFAULT 1 NOT NULL,
+    "conversion_coefficient" numeric(12,4) DEFAULT 1 NOT NULL,
     "total_amount" numeric(15,2) GENERATED ALWAYS AS (("quantity" * "unit_rate")) STORED,
     "material_id" "uuid",
     "work_id" "uuid",
@@ -157,6 +159,10 @@ COMMENT ON COLUMN "public"."boq_items"."sub_number" IS 'Подномер эле�
 
 
 COMMENT ON COLUMN "public"."boq_items"."sort_order" IS 'Порядок сортировки внутри позиции заказчика';
+
+COMMENT ON COLUMN "public"."boq_items"."consumption_coefficient" IS 'Коэффициент расхода материала';
+
+COMMENT ON COLUMN "public"."boq_items"."conversion_coefficient" IS 'Коэффициент перевода единицы измерения материала';
 
 
 
