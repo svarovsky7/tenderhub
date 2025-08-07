@@ -109,7 +109,8 @@ export type DatabaseTables = {
       created_at: string;
       updated_at: string;
       unit: string | null;       // Ед. изм. из Excel
-      volume: number | null;     // Объем работ из Excel  
+      volume: number | null;     // Объем работ из Excel
+      manual_volume: number | null; // Объем, заданный вручную
       client_note: string | null; // Примечание из Excel
     };
     Insert: {
@@ -122,6 +123,7 @@ export type DatabaseTables = {
       total_works_cost?: number;
       unit?: string | null;      // Ед. изм. из Excel
       volume?: number | null;    // Объем работ из Excel
+      manual_volume?: number | null; // Объем, заданный вручную
       client_note?: string | null; // Примечание из Excel
       created_at?: string;
       updated_at?: string;
@@ -136,6 +138,7 @@ export type DatabaseTables = {
       total_works_cost?: number;
       unit?: string | null;      // Ед. изм. из Excel
       volume?: number | null;    // Объем работ из Excel
+      manual_volume?: number | null; // Объем, заданный вручную
       client_note?: string | null; // Примечание из Excel
       created_at?: string;
       updated_at?: string;
