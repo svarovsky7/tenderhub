@@ -22,6 +22,8 @@ interface FormValues {
   unit_rate: number;
   material_id?: string;
   work_id?: string;
+  consumption_coefficient: number;
+  conversion_coefficient: number;
 }
 
 interface LibraryOption {
@@ -44,6 +46,16 @@ const schema = yup.object({
     .typeError('Введите цену')
     .min(0, 'Цена не может быть отрицательной')
     .required('Введите цену'),
+  consumption_coefficient: yup
+    .number()
+    .typeError('Введите коэффициент расхода')
+    .moreThan(0, 'Коэффициент должен быть больше 0')
+    .required('Введите коэффициент расхода'),
+  conversion_coefficient: yup
+    .number()
+    .typeError('Введите коэффициент перевода')
+    .moreThan(0, 'Коэффициент должен быть больше 0')
+    .required('Введите коэффициент перевода'),
 });
 
 const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
@@ -68,6 +80,8 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
       unit: '',
       quantity: 0,
       unit_rate: 0,
+      consumption_coefficient: 1,
+      conversion_coefficient: 1,
     },
     resolver: yupResolver(schema),
   });
@@ -135,6 +149,10 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
       client_position_id: positionId,
       material_id: values.item_type === 'material' ? values.material_id : null,
       work_id: values.item_type === 'work' ? values.work_id : null,
+      consumption_coefficient:
+        values.item_type === 'material' ? values.consumption_coefficient : undefined,
+      conversion_coefficient:
+        values.item_type === 'material' ? values.conversion_coefficient : undefined,
     };
     try {
       console.log('📡 Calling boqItemsApi.create', payload);
@@ -244,10 +262,64 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
               precision={3}
               placeholder="Кол-во"
               style={{ width: 120 }}
+              onChange={(value) => {
+                console.log('✏️ Quantity changed:', value);
+                field.onChange(value);
+              }}
             />
           )}
         />
       </Form.Item>
+
+      {itemType === 'material' && (
+        <>
+          <Form.Item
+            validateStatus={errors.consumption_coefficient ? 'error' : ''}
+            help={errors.consumption_coefficient?.message}
+          >
+            <Controller
+              name="consumption_coefficient"
+              control={control}
+              render={({ field }) => (
+                <InputNumber
+                  {...field}
+                  min={0.0001}
+                  precision={4}
+                  placeholder="Коэф. расхода"
+                  style={{ width: 130 }}
+                  onChange={(value) => {
+                    console.log('✏️ Consumption coefficient changed:', value);
+                    field.onChange(value);
+                  }}
+                />
+              )}
+            />
+          </Form.Item>
+
+          <Form.Item
+            validateStatus={errors.conversion_coefficient ? 'error' : ''}
+            help={errors.conversion_coefficient?.message}
+          >
+            <Controller
+              name="conversion_coefficient"
+              control={control}
+              render={({ field }) => (
+                <InputNumber
+                  {...field}
+                  min={0.0001}
+                  precision={4}
+                  placeholder="Коэф. перевода"
+                  style={{ width: 130 }}
+                  onChange={(value) => {
+                    console.log('✏️ Conversion coefficient changed:', value);
+                    field.onChange(value);
+                  }}
+                />
+              )}
+            />
+          </Form.Item>
+        </>
+      )}
 
       <Form.Item
         validateStatus={errors.unit_rate ? 'error' : ''}

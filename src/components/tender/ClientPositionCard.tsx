@@ -166,8 +166,20 @@ const ClientPositionCard: React.FC<ClientPositionCardProps> = ({
     }
   }, []);
 
-  const handleQuickAdd = useCallback(async (item: Material | WorkItem, type: 'material' | 'work', quantity: number) => {
-    console.log('🚀 Quick add item:', { item: item.name, type, quantity });
+  const handleQuickAdd = useCallback(async (
+    item: Material | WorkItem,
+    type: 'material' | 'work',
+    quantity: number,
+    consumptionCoefficient = 1,
+    conversionCoefficient = 1
+  ) => {
+    console.log('🚀 Quick add item:', {
+      item: item.name,
+      type,
+      quantity,
+      consumptionCoefficient,
+      conversionCoefficient
+    });
     
     try {
       // Calculate next item number
@@ -188,7 +200,9 @@ const ClientPositionCard: React.FC<ClientPositionCardProps> = ({
         quantity: quantity,
         unit_rate: 0, // Will be set manually by user
         material_id: type === 'material' ? item.id : null,
-        work_id: type === 'work' ? item.id : null
+        work_id: type === 'work' ? item.id : null,
+        consumption_coefficient: type === 'material' ? consumptionCoefficient : undefined,
+        conversion_coefficient: type === 'material' ? conversionCoefficient : undefined
       };
 
       console.log('📡 Creating new BOQ item:', newItemData);

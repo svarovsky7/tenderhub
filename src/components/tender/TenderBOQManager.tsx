@@ -27,7 +27,7 @@ import {
   Divider,
   Spin
 } from 'antd';
-import ExpandableSearchBar from './ExpandableSearchBar';
+import QuickAddSearchBar from './QuickAddSearchBar';
 import {
   PlusOutlined,
   EditOutlined,
@@ -203,8 +203,23 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
     loadPositions();
   };
 
-  const handleQuickAdd = useCallback(async (item: Material | WorkItem, type: 'material' | 'work', quantity: number, positionId: string) => {
-    console.log('🚀 Quick add item to position:', { item: item.name, type, quantity, positionId });
+  const handleQuickAdd = useCallback(
+    async (
+      item: Material | WorkItem,
+      type: 'material' | 'work',
+      quantity: number,
+      consumptionCoefficient: number,
+      conversionCoefficient: number,
+      positionId: string
+    ) => {
+      console.log('🚀 Quick add item to position:', {
+        item: item.name,
+        type,
+        quantity,
+        consumptionCoefficient,
+        conversionCoefficient,
+        positionId
+      });
     
     try {
       // Find position to calculate next item number
@@ -231,7 +246,9 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
         quantity: quantity,
         unit_rate: 0, // Will be set manually by user
         material_id: type === 'material' ? item.id : null,
-        work_id: type === 'work' ? item.id : null
+        work_id: type === 'work' ? item.id : null,
+        consumption_coefficient: type === 'material' ? consumptionCoefficient : undefined,
+        conversion_coefficient: type === 'material' ? conversionCoefficient : undefined
       };
 
       console.log('📡 Creating new BOQ item:', newItemData);
@@ -744,8 +761,10 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
                   <Text strong className="block mb-3 text-gray-700">
                     Быстрое добавление в позицию {position.position_number}
                   </Text>
-                  <QuickAddSearchBar 
-                    onAddItem={(item, type, quantity) => handleQuickAdd(item, type, quantity, position.id)}
+                  <QuickAddSearchBar
+                    onAddItem={(item, type, quantity, consumption, conversion) =>
+                      handleQuickAdd(item, type, quantity, consumption || 1, conversion || 1, position.id)
+                    }
                     placeholder="Поиск материалов и работ для добавления в позицию..."
                   />
                 </div>
