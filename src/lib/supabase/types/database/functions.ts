@@ -46,4 +46,37 @@ export type DatabaseFunctions = {
     Args: Record<PropertyKey, never>;
     Returns: 'Administrator' | 'Engineer' | 'View-only';
   };
+  get_materials_for_work: {
+    Args: {
+      p_work_boq_item_id: string;
+    };
+    Returns: Array<{
+      link_id: string;
+      material_id: string;
+      material_description: string;
+      material_unit: string;
+      material_quantity: number;
+      material_unit_rate: number;
+      quantity_per_work: number;
+      usage_coefficient: number;
+      total_needed: number;
+      total_cost: number;
+    }>;
+  };
+  get_works_using_material: {
+    Args: {
+      p_material_boq_item_id: string;
+    };
+    Returns: Array<{
+      link_id: string;
+      work_id: string;
+      work_description: string;
+      work_unit: string;
+      work_quantity: number;
+      work_unit_rate: number;
+      quantity_per_work: number;
+      usage_coefficient: number;
+      total_material_usage: number;
+    }>;
+  };
 };

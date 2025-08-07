@@ -14,6 +14,17 @@ export type WorkItem = Database['public']['Tables']['works_library']['Row'];
 export type WorkItemInsert = Database['public']['Tables']['works_library']['Insert'];
 export type WorkItemUpdate = Database['public']['Tables']['works_library']['Update'];
 
+// Extended types with additional fields used in application
+export interface MaterialExtended extends Material {
+  code?: string;
+  base_price?: number;
+}
+
+export interface WorkItemExtended extends WorkItem {
+  code?: string;
+  base_price?: number;
+}
+
 // Alias for backward compatibility
 export type Work = Database['public']['Tables']['works_library']['Row'];
 

@@ -22,6 +22,11 @@ export type DatabaseTables = {
       total_amount: number;
       material_id: string | null;
       work_id: string | null;
+      consumption_coefficient: number | null;
+      conversion_coefficient: number | null;
+      category?: string | null;
+      subcategory?: string | null;
+      notes?: string | null;
       created_at: string;
       updated_at: string;
       imported_at: string | null;
@@ -30,7 +35,7 @@ export type DatabaseTables = {
       id?: string;
       tender_id: string;
       client_position_id?: string | null;
-      item_number: string;
+      item_number?: string;
       sub_number?: number;
       sort_order?: number;
       item_type: 'work' | 'material';
@@ -40,11 +45,12 @@ export type DatabaseTables = {
       unit_rate: number;
       material_id?: string | null;
       work_id?: string | null;
+      consumption_coefficient?: number | null;
+      conversion_coefficient?: number | null;
+      category?: string | null;
+      subcategory?: string | null;
+      notes?: string | null;
       imported_at?: string | null;
-      client_position_id?: string | null;
-      sub_number?: number | null;
-      sort_order?: number | null;
-      created_by?: string;
       created_at?: string;
       updated_at?: string;
     };
@@ -62,6 +68,11 @@ export type DatabaseTables = {
       unit_rate?: number;
       material_id?: string | null;
       work_id?: string | null;
+      consumption_coefficient?: number | null;
+      conversion_coefficient?: number | null;
+      category?: string | null;
+      subcategory?: string | null;
+      notes?: string | null;
       imported_at?: string | null;
       created_at?: string;
       updated_at?: string;
@@ -406,6 +417,64 @@ export type DatabaseTables = {
         columns: ['created_by'];
         isOneToOne: false;
         referencedRelation: 'users';
+        referencedColumns: ['id'];
+      }
+    ];
+  };
+  work_material_links: {
+    Row: {
+      id: string;
+      client_position_id: string;
+      work_boq_item_id: string;
+      material_boq_item_id: string;
+      material_quantity_per_work: number;
+      usage_coefficient: number;
+      notes: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+    Insert: {
+      id?: string;
+      client_position_id: string;
+      work_boq_item_id: string;
+      material_boq_item_id: string;
+      material_quantity_per_work?: number;
+      usage_coefficient?: number;
+      notes?: string | null;
+      created_at?: string;
+      updated_at?: string;
+    };
+    Update: {
+      id?: string;
+      client_position_id?: string;
+      work_boq_item_id?: string;
+      material_boq_item_id?: string;
+      material_quantity_per_work?: number;
+      usage_coefficient?: number;
+      notes?: string | null;
+      created_at?: string;
+      updated_at?: string;
+    };
+    Relationships: [
+      {
+        foreignKeyName: 'fk_work_material_links_position';
+        columns: ['client_position_id'];
+        isOneToOne: false;
+        referencedRelation: 'client_positions';
+        referencedColumns: ['id'];
+      },
+      {
+        foreignKeyName: 'fk_work_material_links_work';
+        columns: ['work_boq_item_id'];
+        isOneToOne: false;
+        referencedRelation: 'boq_items';
+        referencedColumns: ['id'];
+      },
+      {
+        foreignKeyName: 'fk_work_material_links_material';
+        columns: ['material_boq_item_id'];
+        isOneToOne: false;
+        referencedRelation: 'boq_items';
         referencedColumns: ['id'];
       }
     ];

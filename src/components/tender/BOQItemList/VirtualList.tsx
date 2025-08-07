@@ -85,6 +85,7 @@ const VirtualList: React.FC<VirtualListProps> = ({
   return (
     <List
       height={height}
+      width="100%"
       itemCount={items.length}
       itemSize={ITEM_HEIGHT}
       overscanCount={5}

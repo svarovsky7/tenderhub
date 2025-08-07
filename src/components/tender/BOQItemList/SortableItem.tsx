@@ -256,7 +256,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
                         step={0.01}
                         style={{ width: '100%' }}
                         formatter={(value) => `${value} ₽`}
-                        parser={(value) => value!.replace(' ₽', '')}
+                        parser={(value) => parseFloat(value!.replace(' ₽', '').replace(',', '.')) || 0}
                         autoFocus
                       />
                       <Space>
