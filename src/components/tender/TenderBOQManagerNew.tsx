@@ -7,7 +7,6 @@ import { supabase } from '../../lib/supabase/client';
 import AutoCompleteSearch from '../common/AutoCompleteSearch';
 import { formatCurrency, formatQuantity, formatUnitRate } from '../../utils/formatters';
 import type { ClientPosition, BOQItem, BOQItemInsert } from '../../lib/supabase/types';
-import type { WorkMaterialLinkDetailed } from '../../lib/supabase/api/work-material-links';
 
 interface TenderBOQManagerNewProps {
   tenderId: string;
@@ -30,7 +29,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
   const [selectedMaterialForLink, setSelectedMaterialForLink] = useState<string | null>(null);
   const [linkQuantity, setLinkQuantity] = useState<number>(1);
   const [linkCoefficient, setLinkCoefficient] = useState<number>(1);
-  const [existingLinks, setExistingLinks] = useState<WorkMaterialLinkDetailed[]>([]);
+  const [existingLinks, setExistingLinks] = useState<any[]>([]);
   const [loadingLinks, setLoadingLinks] = useState(false);
   const [allWorkLinks, setAllWorkLinks] = useState<Record<string, any[]>>({});
   const [formData, setFormData] = useState({
@@ -245,7 +244,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     [positions]
   );
 
-  // Add new BOQ item
+  // Add new BOQ item with retry logic
   const addItem = useCallback(async () => {
     console.log('➕ Adding new BOQ item:', formData);
     
@@ -255,47 +254,15 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     }
 
     try {
-      // Get fresh position data to ensure we have the latest BOQ items
-      console.log('🔍 Fetching latest BOQ items for position:', selectedPosition.id);
-      const freshBoqResult = await boqItemsApi.getByPosition(selectedPosition.id);
-      const freshBoqItems = freshBoqResult.error ? [] : (freshBoqResult.data || []);
-      console.log('📋 Fresh BOQ items count:', freshBoqItems.length);
-      
-      // Try to use database function for next sub_number
-      let nextSubNumber: number;
-      try {
-        console.log('🔢 Calling database function get_next_sub_number...');
-        const { data: dbSubNumber, error: subNumberError } = await supabase
-          .rpc('get_next_sub_number', { p_client_position_id: selectedPosition.id });
-        
-        if (subNumberError) {
-          console.warn('⚠️ Database function failed, falling back to manual calculation:', subNumberError);
-          // Fallback to manual calculation
-          const lastItemNumber = freshBoqItems.length > 0 
-            ? Math.max(...freshBoqItems.map(item => item.sub_number || 0))
-            : 0;
-          nextSubNumber = lastItemNumber + 1;
-        } else {
-          nextSubNumber = dbSubNumber || 1;
-          console.log('✅ Database function returned sub_number:', nextSubNumber);
-        }
-      } catch (err) {
-        console.warn('⚠️ RPC call failed, using manual calculation:', err);
-        // Fallback to manual calculation
-        const lastItemNumber = freshBoqItems.length > 0 
-          ? Math.max(...freshBoqItems.map(item => item.sub_number || 0))
-          : 0;
-        nextSubNumber = lastItemNumber + 1;
-      }
-      
-      console.log('🔢 Using next sub_number:', nextSubNumber);
+      console.log('🚀 Adding new BOQ item to position:', selectedPosition.id);
 
+      // Let the API handle sub_number and item_number generation
+      // The API will also handle retries in case of duplicates
       const newItemData: BOQItemInsert = {
         tender_id: tenderId,
         client_position_id: selectedPosition.id,
-        item_number: `${selectedPosition.position_number}.${nextSubNumber}`,
-        sub_number: nextSubNumber,
-        sort_order: nextSubNumber,
+        // Don't set item_number and sub_number - let crud.ts generate them
+        // item_number and sub_number will be auto-generated
         item_type: formData.type,
         description: formData.name,
         unit: formData.unit,
@@ -313,79 +280,6 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
 
       if (result.error) {
         console.error('❌ Create failed:', result.error);
-        
-        // Check if it's a duplicate error
-        if (result.error.includes('duplicate') || result.error.includes('already exists')) {
-          console.error('🔍 Duplicate detected. Item data that failed:', newItemData);
-          console.error('🔍 Existing items sub_numbers:', freshBoqItems.map(item => item.sub_number));
-          
-          // Try to recover by incrementing sub_number
-          console.log('🔄 Attempting recovery with incremented sub_number...');
-          const recoverySubNumber = nextSubNumber + 1;
-          const recoveryItemData = {
-            ...newItemData,
-            sub_number: recoverySubNumber,
-            item_number: `${selectedPosition.position_number}.${recoverySubNumber}`,
-            sort_order: recoverySubNumber
-          };
-          
-          console.log('📡 Retrying with recovery data:', recoveryItemData);
-          const recoveryResult = await boqItemsApi.create(recoveryItemData);
-          
-          if (recoveryResult.error) {
-            console.error('❌ Recovery also failed:', recoveryResult.error);
-            throw new Error(recoveryResult.error);
-          }
-          
-          console.log('✅ Recovery successful!');
-          const newBOQItem = recoveryResult.data;
-          if (!newBOQItem) {
-            throw new Error('No data returned from recovery');
-          }
-          
-          // Update items with recovery item
-          const updatedItems = [...freshBoqItems, newBOQItem];
-          const newTotalCost = updatedItems.reduce((sum, item) => sum + (item.total_amount || 0), 0);
-          
-          setPositions(prev => prev.map(position => {
-            if (position.id === selectedPosition.id) {
-              return {
-                ...position,
-                boq_items: updatedItems,
-                total_position_cost: newTotalCost
-              };
-            }
-            return position;
-          }));
-          
-          setSelectedPosition(prev => {
-            if (prev && prev.id === selectedPosition.id) {
-              return {
-                ...prev,
-                boq_items: updatedItems,
-                total_position_cost: newTotalCost
-              };
-            }
-            return prev;
-          });
-          
-          message.success(`${formData.type === 'work' ? 'Работа' : 'Материал'} "${formData.name}" добавлена`);
-          
-          // Clear form
-          setFormData({
-            type: 'work',
-            name: '',
-            unit: 'м²',
-            quantity: '',
-            price: '',
-            consumptionCoefficient: '',
-            conversionCoefficient: '',
-            selectedItemId: null
-          });
-          
-          return; // Exit early after successful recovery
-        }
-        
         throw new Error(result.error);
       }
 
@@ -400,8 +294,9 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       
       console.log('🎆 Adding new item to local state...');
       
-      // Update local state - use fresh items plus the new one
-      const updatedItems = [...freshBoqItems, newBOQItem];
+      // Get fresh BOQ items for the position to ensure we have the latest state
+      const freshResult = await boqItemsApi.getByPosition(selectedPosition.id);
+      const updatedItems = freshResult.error ? [newBOQItem] : (freshResult.data || []);
       const newTotalCost = updatedItems.reduce((sum, item) => sum + (item.total_amount || 0), 0);
       
       console.log('🔄 Updated position items:', updatedItems.length);
@@ -432,21 +327,23 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       
       message.success(`${formData.type === 'work' ? 'Работа' : 'Материал'} "${formData.name}" добавлена`);
       
-      // Clear form
+      // Clear form - reset all fields
       setFormData({
         type: 'work',
         name: '',
         unit: 'м²',
         quantity: '',
         price: '',
+        consumptionCoefficient: '',
+        conversionCoefficient: '',
         selectedItemId: null
       });
 
       // No need to reload positions - updated locally!
       console.log('✨ Local state updated, no reload needed');
-    } catch (error) {
-      console.error('💥 Add item error:', error);
-      message.error('Ошибка добавления элемента');
+    } catch (error: any) {
+      console.error('💥 Error adding BOQ item:', error);
+      message.error(error.message || 'Ошибка при добавлении элемента');
     }
   }, [formData, selectedPosition, tenderId]);
 
@@ -575,7 +472,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     } else {
       message.success('Связь удалена');
       // Обновляем список связей в модальном окне
-      setExistingLinks(prev => prev.filter(link => link.link_id !== linkId));
+      setExistingLinks(prev => prev.filter(link => (link.link_id || link.id) !== linkId));
       
       // Обновляем allWorkLinks для отображения в карточке
       if (selectedPosition) {
@@ -616,9 +513,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
         <div className="grid grid-cols-1 gap-2">
           {positions.map((position) => {
             const positionItems = position.boq_items || [];
-            const positionQuantity = positionItems.reduce((sum, item) => sum + item.quantity, 0);
             const positionTotal = position.total_position_cost || 0;
-            const averagePrice = positionQuantity > 0 ? positionTotal / positionQuantity : 0;
 
             return (
               <div
