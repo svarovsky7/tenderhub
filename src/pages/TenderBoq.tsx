@@ -31,6 +31,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useParams, useNavigate } from 'react-router-dom';
 import { boqApi, materialsApi, worksApi } from '../lib/supabase/api';
 import type { BOQItem, Material, Work } from '../lib/supabase/types';
+import { formatCurrency, formatQuantity, formatUnitRate } from '../utils/formatters';
 // Removed auth imports - no authentication needed
 
 const { Title, Text } = Typography;
@@ -227,23 +228,23 @@ const TenderBoq: React.FC = () => {
       dataIndex: 'quantity',
       key: 'quantity',
       width: 100,
-      render: (quantity) => quantity?.toFixed(2),
+      render: (quantity) => formatQuantity(quantity),
     },
     {
       title: 'Цена за ед.',
       dataIndex: 'unit_rate',
       key: 'unit_rate',
-      width: 120,
-      render: (rate) => `${rate?.toFixed(2)} ₽`,
+      width: 140,
+      render: (rate) => formatUnitRate(rate),
     },
     {
       title: 'Сумма',
       dataIndex: 'total_amount',
       key: 'total_amount',
-      width: 120,
+      width: 150,
       render: (_, record) => {
         const total = (record.quantity || 0) * (record.unit_rate || 0);
-        return `${total.toFixed(2)} ₽`;
+        return formatCurrency(total);
       },
     },
     {
@@ -312,7 +313,7 @@ const TenderBoq: React.FC = () => {
             <div>
               <Text strong className="text-lg">
                 <CalculatorOutlined className="mr-1" />
-                Общая сумма: {totalAmount.toFixed(2)} ₽
+                Общая сумма: {formatCurrency(totalAmount)}
               </Text>
             </div>
           </div>
@@ -367,7 +368,7 @@ const TenderBoq: React.FC = () => {
             showSizeChanger: true,
             showTotal: (total) => `Всего: ${total}`,
           }}
-          scroll={{ x: 1000 }}
+          scroll={{ x: 1100 }}
         />
       </Card>
 
@@ -449,7 +450,7 @@ const TenderBoq: React.FC = () => {
                     >
                       {materials.map(material => (
                         <Option key={material.id} value={material.id}>
-                          {material.name} ({material.unit}) - {material.base_price.toFixed(2)} ₽
+                          {material.name} ({material.unit}) - {formatUnitRate(material.base_price)}
                         </Option>
                       ))}
                     </Select>
@@ -470,7 +471,7 @@ const TenderBoq: React.FC = () => {
                     >
                       {works.map(work => (
                         <Option key={work.id} value={work.id}>
-                          {work.name} ({work.unit}) - {work.base_price.toFixed(2)} ₽
+                          {work.name} ({work.unit}) - {formatUnitRate(work.base_price)}
                         </Option>
                       ))}
                     </Select>
@@ -537,7 +538,7 @@ const TenderBoq: React.FC = () => {
                   return (
                     <Form.Item label="Сумма">
                       <Input 
-                        value={`${total.toFixed(2)} ₽`} 
+                        value={formatCurrency(total)} 
                         disabled 
                         style={{ fontWeight: 'bold' }}
                       />

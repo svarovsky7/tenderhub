@@ -31,10 +31,14 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import BOQItemList from './BOQItemList';
-import { clientPositionsApi } from '../../lib/supabase/api';
+import QuickAddSearchBar from './QuickAddSearchBar';
+import { clientPositionsApi, boqApi } from '../../lib/supabase/api';
 import type { 
   ClientPositionWithItems, 
-  ClientPositionUpdate
+  ClientPositionUpdate,
+  Material,
+  WorkItem,
+  BOQItemInsert
 } from '../../lib/supabase/types';
 import type { MenuProps } from 'antd';
 
@@ -46,6 +50,7 @@ interface ClientPositionCardProps {
   onToggle: () => void;
   onAddItems: () => void;
   onUpdate: () => void;
+  tenderId: string;
 }
 
 const statusColors = {
@@ -65,7 +70,8 @@ const ClientPositionCard: React.FC<ClientPositionCardProps> = ({
   isExpanded,
   onToggle,
   onAddItems,
-  onUpdate
+  onUpdate,
+  tenderId
 }) => {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -159,6 +165,50 @@ const ClientPositionCard: React.FC<ClientPositionCardProps> = ({
       setLoading(false);
     }
   }, []);
+
+  const handleQuickAdd = useCallback(async (item: Material | WorkItem, type: 'material' | 'work', quantity: number) => {
+    console.log('🚀 Quick add item:', { item: item.name, type, quantity });
+    
+    try {
+      // Calculate next item number
+      const existingItems = position.boq_items || [];
+      const lastItemNumber = existingItems.length > 0 
+        ? Math.max(...existingItems.map(item => item.sub_number || 0))
+        : 0;
+      
+      const newItemData: BOQItemInsert = {
+        tender_id: tenderId,
+        client_position_id: position.id,
+        item_number: `${position.position_number}.${lastItemNumber + 1}`,
+        sub_number: lastItemNumber + 1,
+        sort_order: lastItemNumber + 1,
+        item_type: type,
+        description: item.name,
+        unit: item.unit,
+        quantity: quantity,
+        unit_rate: 0, // Will be set manually by user
+        material_id: type === 'material' ? item.id : null,
+        work_id: type === 'work' ? item.id : null
+      };
+
+      console.log('📡 Creating new BOQ item:', newItemData);
+      
+      const result = await boqApi.create(newItemData);
+      console.log('📦 Create result:', result);
+      
+      if (result.error) {
+        console.error('❌ Create failed:', result.error);
+        throw new Error(result.error);
+      }
+
+      console.log('✅ BOQ item created successfully');
+      message.success(`${type === 'material' ? 'Материал' : 'Работа'} "${item.name}" добавлена в позицию`);
+      onUpdate();
+    } catch (error) {
+      console.error('💥 Quick add error:', error);
+      message.error('Ошибка добавления элемента');
+    }
+  }, [position, tenderId, onUpdate]);
 
   // Menu items for dropdown
   const menuItems = useMemo((): MenuProps['items'] => [
@@ -298,7 +348,7 @@ const ClientPositionCard: React.FC<ClientPositionCardProps> = ({
                 <div className="flex items-center gap-2">
                   <CalculatorOutlined className="text-gray-400" />
                   <Text strong className="text-lg">
-                    {totalCost.toLocaleString('ru-RU')} ₽
+                    {totalCost.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
                   </Text>
                 </div>
 
@@ -357,8 +407,19 @@ const ClientPositionCard: React.FC<ClientPositionCardProps> = ({
                   </div>
                 )}
 
+                {/* Quick Add Search Bar */}
+                <div className="p-4 border-b border-gray-200 bg-gray-50">
+                  <Title level={5} className="mb-3 text-gray-700">
+                    Быстрое добавление
+                  </Title>
+                  <QuickAddSearchBar 
+                    onAddItem={handleQuickAdd}
+                    placeholder="Поиск материалов и работ для добавления..."
+                  />
+                </div>
+
                 {/* BOQ Items */}
-                <div className="p-4">
+                <div className="p-4 bg-white">
                   <div className="flex items-center justify-between mb-4">
                     <Title level={5} className="mb-0">
                       Материалы и работы ({totalItems})
@@ -369,7 +430,7 @@ const ClientPositionCard: React.FC<ClientPositionCardProps> = ({
                       icon={<PlusOutlined />}
                       onClick={onAddItems}
                     >
-                      Добавить элементы
+                      Добавить из каталога
                     </Button>
                   </div>
 

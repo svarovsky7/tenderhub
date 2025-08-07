@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import ruRU from 'antd/locale/ru_RU';
 import AppLayout from './components/layout/AppLayout';
 import Dashboard from './pages/Dashboard';
+import { initConnectionMonitoring } from './lib/supabase/connection-status';
 import './App.css';
 
 // Lazy load pages for better performance
@@ -17,6 +18,12 @@ const SettingsPage = React.lazy(() => import('./pages/admin/SettingsPage'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 
 function App() {
+  // Initialize connection monitoring on app start
+  useEffect(() => {
+    console.log('🚀 TenderHub App starting...');
+    initConnectionMonitoring();
+  }, []);
+
   return (
     <ConfigProvider locale={ruRU}>
       <BrowserRouter>

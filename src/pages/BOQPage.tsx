@@ -16,7 +16,7 @@ import {
   FolderOpenOutlined
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import TenderBOQManager from '../components/tender/TenderBOQManager';
+import TenderBOQManagerNew from '../components/tender/TenderBOQManagerNew';
 import { tendersApi } from '../lib/supabase/api';
 import type { Tender } from '../lib/supabase/types';
 
@@ -160,7 +160,7 @@ const BOQPage: React.FC = () => {
       {/* Main Content */}
       <div className="p-6 max-w-none">
         {selectedTenderId ? (
-          <TenderBOQManager 
+          <TenderBOQManagerNew 
             tenderId={selectedTenderId} 
             key={selectedTenderId} // Force remount when tender changes
           />

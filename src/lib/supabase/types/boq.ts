@@ -78,7 +78,7 @@ export interface BOQFilters {
 
 export interface ClientPositionFilters {
   tender_id?: string;
-  status?: ClientPositionStatus[];
+  // Note: status field removed from schema
   category?: string[];
   min_cost?: number;
   max_cost?: number;

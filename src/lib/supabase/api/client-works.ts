@@ -4,20 +4,26 @@ import type { ApiResponse } from '../types';
 import { handleSupabaseError } from './utils';
 
 export const clientWorksApi = {
-  async uploadFromXlsx(tenderId: string, file: File): Promise<ApiResponse<{itemsCount: number, positionsCount: number}>> {
+  async uploadFromXlsx(
+    tenderId: string, 
+    file: File, 
+    onProgress?: (progress: number, step: string) => void
+  ): Promise<ApiResponse<{positionsCount: number}>> {
     console.log('🚀 clientWorksApi.uploadFromXlsx called with:', { tenderId, fileName: file.name });
     
     try {
+      onProgress?.(10, 'Чтение Excel файла...');
       console.log('📖 Reading Excel file...');
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       
       console.log('📋 Available sheets:', workbook.SheetNames);
+      onProgress?.(25, 'Парсинг данных из Excel...');
       
-      // Read all data from Excel with proper headers
+      // Read all data from Excel with proper headers including client_note
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-        header: ['position_number', 'work_name', 'unit', 'volume'], // Map columns to meaningful names
+        header: ['position_number', 'work_name', 'unit', 'volume', 'client_note'], // Map columns to meaningful names
         range: 1, // Skip header row
         raw: false,
         defval: ''
@@ -36,6 +42,7 @@ export const clientWorksApi = {
       });
 
       console.log('✅ Valid rows after filtering:', validRows.length);
+      onProgress?.(40, 'Валидация данных...');
 
       if (validRows.length === 0) {
         console.warn('⚠️ No valid data found in Excel file');
@@ -60,11 +67,13 @@ export const clientWorksApi = {
         positionsMap.get(positionNum)!.push({
           work_name: String(row.work_name).trim(),
           unit: row.unit ? String(row.unit).trim() : '',  // Allow empty unit
-          volume: volume   // Allow 0 volume after removing DB constraint
+          volume: volume,   // Allow 0 volume after removing DB constraint
+          client_note: row.client_note ? String(row.client_note).trim() : null
         });
       });
 
       console.log('🗂️ Grouped into positions:', positionsMap.size);
+      onProgress?.(60, 'Проверка существующих позиций...');
 
       // Get existing positions for this tender to avoid duplicates
       console.log('🔍 Checking existing positions for tender:', tenderId);
@@ -88,26 +97,33 @@ export const clientWorksApi = {
       }
       console.log('🎯 Starting position number:', nextPositionNumber);
 
-      let totalItemsCreated = 0;
       let positionsCreated = 0;
+      const totalPositions = positionsMap.size;
 
-      // Create client positions and BOQ items
+      // Create only client positions (no BOQ items)
       for (const [positionKey, items] of positionsMap) {
+        const currentPosition = positionsCreated + 1;
+        onProgress?.(60 + (currentPosition / totalPositions) * 35, `Создание позиции ${currentPosition} из ${totalPositions}...`);
         console.log(`📝 Creating position ${positionKey} with ${items.length} items`);
         
         // Use next available position number to avoid duplicates
         const actualPositionNumber = nextPositionNumber;
         console.log(`🔢 Using position number: ${actualPositionNumber} (original: ${positionKey})`);
         
-        // Create client position
+        // Get first item to extract position details
+        const firstItem = items[0];
+        
+        // Create client position with new fields
         const { data: position, error: posError } = await supabase
           .from('client_positions')
           .insert({
             tender_id: tenderId,
             position_number: actualPositionNumber,
-            title: `Позиция ${positionKey}`,
-            description: `Импортировано из Excel файла: ${file.name}`,
-            status: 'active'
+            item_no: positionKey, // № п/п from Excel
+            work_name: firstItem.work_name, // First work name as position name
+            unit: firstItem.unit || null,
+            volume: firstItem.volume || null,
+            client_note: firstItem.client_note || null // Примечание from Excel
           })
           .select()
           .single();
@@ -121,50 +137,16 @@ export const clientWorksApi = {
         positionsCreated++;
         nextPositionNumber++; // Increment for next position
 
-        // Create BOQ items for this position
-        if (position && items.length > 0) {
-          const boqItems = items.map((item, index) => {
-            const quantity = item.volume; // Allow any quantity including 0
-            console.log(`🔢 BOQ Item ${index + 1}: work="${item.work_name}", unit="${item.unit}", quantity=${quantity}`);
-            
-            return {
-              tender_id: tenderId,
-              client_position_id: position.id,
-              item_number: `${actualPositionNumber}.${index + 1}`,
-              sub_number: index + 1,
-              sort_order: index,
-              item_type: 'work' as const, // All items from Excel are works
-              description: item.work_name,
-              unit: item.unit,
-              quantity: quantity, // Allow any quantity including 0
-              unit_rate: 0, // Will be filled later by user
-              coefficient: 1.0,
-              notes: `Импортировано из Excel: ${file.name}`,
-              source_file: file.name,
-              imported_at: new Date().toISOString()
-            };
-          });
-
-          console.log(`💾 Creating ${boqItems.length} BOQ items for position ${positionKey}`);
-
-          const { error: boqError } = await supabase
-            .from('boq_items')
-            .insert(boqItems);
-
-          if (boqError) {
-            console.error('❌ Error creating BOQ items:', boqError);
-          } else {
-            console.log('✅ BOQ items created successfully');
-            totalItemsCreated += boqItems.length;
-          }
-        }
+        // NOTE: BOQ items will be created manually by user through the interface
+        // This is intentional - we only create client_positions from Excel import
       }
 
-      console.log('🎉 Import completed:', { positionsCreated, totalItemsCreated });
+      onProgress?.(100, 'Импорт завершен успешно!');
+      console.log('🎉 Import completed:', { positionsCreated });
 
       return { 
-        data: { itemsCount: totalItemsCreated, positionsCount: positionsCreated },
-        message: `Успешно импортировано: ${positionsCreated} позиций, ${totalItemsCreated} работ из файла ${file.name}` 
+        data: { positionsCount: positionsCreated },
+        message: `Успешно импортировано ${positionsCreated} позиций из файла ${file.name}` 
       };
     } catch (error) {
       console.error('💥 Excel import error:', error);

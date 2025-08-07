@@ -26,11 +26,11 @@ interface ClientPositionFormProps {
 }
 
 interface FormData {
-  title: string;
-  description?: string;
-  category?: string;
-  priority?: number;
-  status?: 'active' | 'inactive' | 'completed';
+  item_no: string;
+  work_name: string;
+  unit?: string;
+  volume?: number;
+  client_note?: string;
 }
 
 const ClientPositionForm: React.FC<ClientPositionFormProps> = ({
@@ -48,11 +48,11 @@ const ClientPositionForm: React.FC<ClientPositionFormProps> = ({
   React.useEffect(() => {
     if (visible && editingPosition) {
       form.setFieldsValue({
-        title: editingPosition.title,
-        description: editingPosition.description || '',
-        category: editingPosition.category || '',
-        priority: editingPosition.priority || 0,
-        status: editingPosition.status || 'active'
+        item_no: editingPosition.item_no,
+        work_name: editingPosition.work_name,
+        unit: editingPosition.unit || '',
+        volume: editingPosition.volume || undefined,
+        client_note: editingPosition.client_note || ''
       });
     } else if (visible) {
       form.resetFields();
@@ -115,85 +115,89 @@ const ClientPositionForm: React.FC<ClientPositionFormProps> = ({
         className="mt-4"
       >
         <Row gutter={16}>
-          <Col span={16}>
+          <Col span={6}>
             <Form.Item
-              name="title"
-              label="Название позиции"
+              name="item_no"
+              label="№ п/п"
               rules={[
-                { required: true, message: 'Введите название позиции' },
-                { min: 3, message: 'Название должно содержать минимум 3 символа' }
+                { required: true, message: 'Введите номер пункта' },
+                { max: 10, message: 'Максимум 10 символов' }
               ]}
             >
               <Input 
-                placeholder="Например: Фундаментные работы"
-                maxLength={200}
+                placeholder="1.1"
+                maxLength={10}
               />
+            </Form.Item>
+          </Col>
+          
+          <Col span={18}>
+            <Form.Item
+              name="work_name"
+              label="Наименование работ"
+              rules={[
+                { required: true, message: 'Введите наименование работ' },
+                { min: 3, message: 'Наименование должно содержать минимум 3 символа' }
+              ]}
+            >
+              <Input 
+                placeholder="Например: Устройство монолитного фундамента"
+                maxLength={500}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item
+              name="unit"
+              label="Ед. изм."
+            >
+              <Select 
+                placeholder="Выберите единицу"
+                allowClear
+              >
+                <Option value="м³">м³</Option>
+                <Option value="м²">м²</Option>
+                <Option value="м.п.">м.п.</Option>
+                <Option value="шт">шт</Option>
+                <Option value="т">т</Option>
+                <Option value="кг">кг</Option>
+                <Option value="компл.">компл.</Option>
+              </Select>
             </Form.Item>
           </Col>
           
           <Col span={8}>
             <Form.Item
-              name="category"
-              label="Категория"
+              name="volume"
+              label="Объем работ"
             >
-              <Select 
-                placeholder="Выберите категорию"
-                allowClear
-              >
-                <Option value="строительство">Строительство</Option>
-                <Option value="материалы">Материалы</Option>
-                <Option value="оборудование">Оборудование</Option>
-                <Option value="проектирование">Проектирование</Option>
-                <Option value="монтаж">Монтаж</Option>
-                <Option value="отделка">Отделка</Option>
-                <Option value="инженерные системы">Инженерные системы</Option>
-                <Option value="прочее">Прочее</Option>
-              </Select>
+              <Input 
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+              />
             </Form.Item>
+          </Col>
+
+          <Col span={8}>
+            {/* Empty column for alignment */}
           </Col>
         </Row>
 
         <Form.Item
-          name="description"
-          label="Описание позиции"
+          name="client_note"
+          label="Примечание заказчика"
         >
           <TextArea 
             rows={3}
-            placeholder="Подробное описание работ или материалов в данной позиции"
+            placeholder="Дополнительные требования или пояснения от заказчика"
             maxLength={1000}
             showCount
           />
         </Form.Item>
-
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item
-              name="priority"
-              label="Приоритет"
-              initialValue={0}
-            >
-              <Select>
-                <Option value={0}>Обычный</Option>
-                <Option value={1}>Высокий</Option>
-                <Option value={2}>Критический</Option>
-              </Select>
-            </Form.Item>
-          </Col>
-          
-          <Col span={12}>
-            <Form.Item
-              name="status"
-              label="Статус"
-              initialValue="active"
-            >
-              <Select>
-                <Option value="active">Активна</Option>
-                <Option value="inactive">Неактивна</Option>
-                <Option value="completed">Завершена</Option>
-              </Select>
-            </Form.Item>
-          </Col>
-        </Row>
 
         <Divider />
 

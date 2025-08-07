@@ -102,19 +102,11 @@ const Materials: React.FC = () => {
 
   // Фильтрация по поиску
   const filteredMaterials = materials.filter(material => 
-    material.name.toLowerCase().includes(searchText.toLowerCase()) ||
-    material.code.toLowerCase().includes(searchText.toLowerCase())
+    material.name.toLowerCase().includes(searchText.toLowerCase())
   );
 
   // Колонки таблицы
   const columns: ColumnsType<Material> = [
-    {
-      title: 'Код',
-      dataIndex: 'code',
-      key: 'code',
-      width: 120,
-      sorter: (a, b) => a.code.localeCompare(b.code),
-    },
     {
       title: 'Наименование',
       dataIndex: 'name',
@@ -128,17 +120,9 @@ const Materials: React.FC = () => {
       width: 100,
     },
     {
-      title: 'Цена',
-      dataIndex: 'base_price',
-      key: 'base_price',
-      width: 120,
-      render: (price) => `${price.toFixed(2)} ₽`,
-      sorter: (a, b) => a.base_price - b.base_price,
-    },
-    {
-      title: 'Поставщик',
-      dataIndex: 'supplier',
-      key: 'supplier',
+      title: 'Категория',
+      dataIndex: 'category',
+      key: 'category',
     },
     {
       title: 'Действия',
@@ -173,10 +157,7 @@ const Materials: React.FC = () => {
 
   // Статистика
   const stats = {
-    total: materials.length,
-    avgPrice: materials.length > 0 
-      ? materials.reduce((sum, m) => sum + m.base_price, 0) / materials.length 
-      : 0
+    total: materials.length
   };
 
   return (
@@ -192,10 +173,9 @@ const Materials: React.FC = () => {
           </Col>
           <Col span={12}>
             <Statistic 
-              title="Средняя цена" 
-              value={stats.avgPrice} 
-              precision={2}
-              suffix="₽"
+              title="Активных материалов" 
+              value={stats.total} 
+              prefix={<FileExcelOutlined />}
             />
           </Col>
         </Row>
@@ -266,15 +246,6 @@ const Materials: React.FC = () => {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                name="code"
-                label="Код"
-                rules={[{ required: true, message: 'Введите код материала' }]}
-              >
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
                 name="unit"
                 label="Единица измерения"
                 rules={[{ required: true, message: 'Введите единицу измерения' }]}
@@ -308,29 +279,19 @@ const Materials: React.FC = () => {
             <Input.TextArea rows={3} />
           </Form.Item>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="base_price"
-                label="Базовая цена (₽)"
-                rules={[{ required: true, message: 'Введите цену' }]}
-              >
-                <InputNumber 
-                  min={0} 
-                  step={0.01}
-                  style={{ width: '100%' }}
-                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
-                  parser={value => parseFloat(value!.replace(/\s?/g, '')) as any}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
 
           <Form.Item
-            name="supplier"
-            label="Поставщик"
+            name="category"
+            label="Категория"
           >
-            <Input />
+            <Select placeholder="Выберите категорию">
+              <Select.Option value="Металлопрокат">Металлопрокат</Select.Option>
+              <Select.Option value="Кабельная продукция">Кабельная продукция</Select.Option>
+              <Select.Option value="Электротехника">Электротехника</Select.Option>
+              <Select.Option value="Крепеж">Крепеж</Select.Option>
+              <Select.Option value="Инструмент">Инструмент</Select.Option>
+              <Select.Option value="Расходные материалы">Расходные материалы</Select.Option>
+            </Select>
           </Form.Item>
 
           <Form.Item className="mb-0">

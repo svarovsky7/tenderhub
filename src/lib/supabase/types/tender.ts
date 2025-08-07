@@ -60,7 +60,7 @@ export interface TenderWithFullHierarchy extends Tender {
 
 // Filter types for tenders
 export interface TenderFilters {
-  status?: TenderStatus[];
+  // Note: status field removed from schema
   client_name?: string;
   created_by?: string;
   date_from?: string;

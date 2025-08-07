@@ -19,8 +19,7 @@ export const materialsApi = {
     try {
       let query = supabase
         .from('materials_library')
-        .select('*', { count: 'exact' })
-        .eq('is_active', filters.is_active ?? true);
+        .select('*', { count: 'exact' });
 
       // Apply filters
       if (filters.category?.length) {

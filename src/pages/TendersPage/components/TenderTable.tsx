@@ -24,7 +24,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import ExcelUpload from './ExcelUpload';
-import { statusColors, statusLabels } from '../types';
+// Note: status-related imports removed as status field was removed from schema
 import type { TenderTableProps, TenderWithSummary } from '../types';
 
 const { Text } = Typography;
@@ -83,9 +83,7 @@ const TenderTable: React.FC<TenderTableProps> = ({
               >
                 {record.title}
               </Text>
-              <Tag color={statusColors[record.status]}>
-                {statusLabels[record.status]}
-              </Tag>
+              {/* Note: status tag removed as status field was removed from schema */}
             </div>
             <Text type="secondary" className="text-sm block">
               №{record.tender_number} • {record.client_name}
@@ -119,23 +117,24 @@ const TenderTable: React.FC<TenderTableProps> = ({
       sorter: (a, b) => dayjs(a.submission_deadline || 0).unix() - dayjs(b.submission_deadline || 0).unix()
     },
     {
-      title: 'Стоимость',
-      key: 'value',
+      title: 'ВОР Стоимость',
+      key: 'boq_value',
       width: 120,
       render: (_, record) => (
         <div className="text-center">
           <DollarOutlined className="mb-1 block text-green-500" />
-          <Text strong className="text-sm block">
-            {record.estimated_value ? `${(record.estimated_value / 1000000).toFixed(1)}М ₽` : '-'}
-          </Text>
-          {record.boq_total_value && (
-            <Text type="secondary" className="text-xs block">
-              ВОР: {(record.boq_total_value / 1000000).toFixed(1)}М ₽
+          {record.boq_total_value ? (
+            <Text strong className="text-sm block">
+              {(record.boq_total_value / 1000000).toFixed(1)}М ₽
+            </Text>
+          ) : (
+            <Text type="secondary" className="text-sm block">
+              Не заполнено
             </Text>
           )}
         </div>
       ),
-      sorter: (a, b) => (a.estimated_value || 0) - (b.estimated_value || 0)
+      sorter: (a, b) => (a.boq_total_value || 0) - (b.boq_total_value || 0)
     },
     {
       title: 'Прогресс',

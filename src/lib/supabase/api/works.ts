@@ -19,8 +19,7 @@ export const worksApi = {
     try {
       let query = supabase
         .from('works_library')
-        .select('*', { count: 'exact' })
-        .eq('is_active', filters.is_active ?? true);
+        .select('*', { count: 'exact' });
 
       // Apply filters
       if (filters.category?.length) {

@@ -102,19 +102,11 @@ const Works: React.FC = () => {
 
   // Фильтрация по поиску
   const filteredWorks = works.filter(work => 
-    work.name.toLowerCase().includes(searchText.toLowerCase()) ||
-    work.code.toLowerCase().includes(searchText.toLowerCase())
+    work.name.toLowerCase().includes(searchText.toLowerCase())
   );
 
   // Колонки таблицы
   const columns: ColumnsType<Work> = [
-    {
-      title: 'Код',
-      dataIndex: 'code',
-      key: 'code',
-      width: 120,
-      sorter: (a, b) => a.code.localeCompare(b.code),
-    },
     {
       title: 'Наименование',
       dataIndex: 'name',
@@ -126,14 +118,6 @@ const Works: React.FC = () => {
       dataIndex: 'unit',
       key: 'unit',
       width: 100,
-    },
-    {
-      title: 'Цена',
-      dataIndex: 'base_price',
-      key: 'base_price',
-      width: 120,
-      render: (rate) => `${rate.toFixed(2)} ₽`,
-      sorter: (a, b) => a.base_price - b.base_price,
     },
     {
       title: 'Действия',
@@ -168,10 +152,7 @@ const Works: React.FC = () => {
 
   // Статистика
   const stats = {
-    total: works.length,
-    avgRate: works.length > 0 
-      ? works.reduce((sum, w) => sum + w.base_price, 0) / works.length 
-      : 0
+    total: works.length
   };
 
   return (
@@ -187,10 +168,9 @@ const Works: React.FC = () => {
           </Col>
           <Col span={12}>
             <Statistic 
-              title="Средняя ставка" 
-              value={stats.avgRate} 
-              precision={2}
-              suffix="₽"
+              title="Активных работ" 
+              value={stats.total} 
+              prefix={<ToolOutlined />}
             />
           </Col>
         </Row>
@@ -261,15 +241,6 @@ const Works: React.FC = () => {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                name="code"
-                label="Код"
-                rules={[{ required: true, message: 'Введите код работы' }]}
-              >
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
                 name="unit"
                 label="Единица измерения"
                 rules={[{ required: true, message: 'Введите единицу измерения' }]}
@@ -303,23 +274,6 @@ const Works: React.FC = () => {
             <Input.TextArea rows={3} />
           </Form.Item>
 
-          <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
-                name="base_price"
-                label="Базовая ставка (₽)"
-                rules={[{ required: true, message: 'Введите ставку' }]}
-              >
-                <InputNumber 
-                  min={0} 
-                  step={0.01}
-                  style={{ width: '100%' }}
-                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
-                  parser={value => parseFloat(value!.replace(/\s?/g, '')) as any}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
 
           <Form.Item className="mb-0">
             <Space className="w-full justify-end">

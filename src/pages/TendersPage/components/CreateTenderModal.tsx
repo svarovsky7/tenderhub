@@ -23,9 +23,8 @@ const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
         description: values.description,
         client_name: values.client_name,
         tender_number: values.tender_number,
-        submission_deadline: values.submission_deadline?.format('YYYY-MM-DD HH:mm:ss'),
-        estimated_value: values.estimated_value,
-        status: values.status || 'draft'
+        submission_deadline: values.submission_deadline?.format('YYYY-MM-DD HH:mm:ss')
+        // Note: status and estimated_value fields removed from schema
       };
 
       console.log('🔄 Calling onSubmit with processed data:', tenderData);
@@ -95,7 +94,7 @@ const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
         </Form.Item>
 
         <Row gutter={16}>
-          <Col span={8}>
+          <Col span={24}>
             <Form.Item
               name="submission_deadline"
               label="Срок подачи заявки"
@@ -107,30 +106,7 @@ const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
               />
             </Form.Item>
           </Col>
-          <Col span={8}>
-            <Form.Item
-              name="estimated_value"
-              label="Ориентировочная стоимость"
-            >
-              <Input 
-                type="number" 
-                placeholder="0"
-                addonAfter="₽"
-              />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item
-              name="status"
-              label="Статус"
-              initialValue="draft"
-            >
-              <Select>
-                <Select.Option value="draft">Черновик</Select.Option>
-                <Select.Option value="active">Активный</Select.Option>
-              </Select>
-            </Form.Item>
-          </Col>
+          {/* Note: estimated_value and status fields removed from schema */}
         </Row>
 
         <div className="flex justify-end gap-2 pt-4 border-t">

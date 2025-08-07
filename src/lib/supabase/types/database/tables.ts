@@ -10,31 +10,29 @@ export type DatabaseTables = {
     Row: {
       id: string;
       tender_id: string;
+      client_position_id: string | null;
       item_number: string;
+      sub_number: number;
+      sort_order: number;
       item_type: 'work' | 'material';
       description: string;
       unit: string;
       quantity: number;
       unit_rate: number;
-      total_amount: number | null;
+      total_amount: number;
       material_id: string | null;
       work_id: string | null;
-      library_material_id: string | null;
-      library_work_id: string | null;
-      category: string | null;
-      subcategory: string | null;
-      notes: string | null;
-      markup_percentage: number | null;
-      client_position_id: string | null;
-      sub_number: number | null;
-      sort_order: number | null;
       created_at: string;
       updated_at: string;
+      imported_at: string | null;
     };
     Insert: {
       id?: string;
       tender_id: string;
-      item_number?: string;
+      client_position_id?: string | null;
+      item_number: string;
+      sub_number?: number;
+      sort_order?: number;
       item_type: 'work' | 'material';
       description: string;
       unit: string;
@@ -42,12 +40,7 @@ export type DatabaseTables = {
       unit_rate: number;
       material_id?: string | null;
       work_id?: string | null;
-      library_material_id?: string | null;
-      library_work_id?: string | null;
-      category?: string | null;
-      subcategory?: string | null;
-      notes?: string | null;
-      markup_percentage?: number | null;
+      imported_at?: string | null;
       client_position_id?: string | null;
       sub_number?: number | null;
       sort_order?: number | null;
@@ -58,7 +51,10 @@ export type DatabaseTables = {
     Update: {
       id?: string;
       tender_id?: string;
+      client_position_id?: string | null;
       item_number?: string;
+      sub_number?: number;
+      sort_order?: number;
       item_type?: 'work' | 'material';
       description?: string;
       unit?: string;
@@ -66,14 +62,7 @@ export type DatabaseTables = {
       unit_rate?: number;
       material_id?: string | null;
       work_id?: string | null;
-      category?: string | null;
-      subcategory?: string | null;
-      notes?: string | null;
-      markup_percentage?: number | null;
-      client_position_id?: string | null;
-      sub_number?: number | null;
-      sort_order?: number | null;
-      created_by?: string;
+      imported_at?: string | null;
       created_at?: string;
       updated_at?: string;
     };
@@ -113,24 +102,29 @@ export type DatabaseTables = {
       id: string;
       tender_id: string;
       position_number: number;
-      title: string;
-      description: string | null;
-      category: string | null;
-      status: 'active' | 'inactive' | 'completed';
-      sort_order: number | null;
+      item_no: string;           // № п/п из Excel
+      work_name: string;         // Наименование работ из Excel
+      total_materials_cost: number;
+      total_works_cost: number;
       created_at: string;
       updated_at: string;
+      unit: string | null;       // Ед. изм. из Excel
+      volume: number | null;     // Объем работ из Excel
+      manual_volume: number | null; // Объем, заданный вручную
+      client_note: string | null; // Примечание из Excel
     };
     Insert: {
       id?: string;
       tender_id: string;
       position_number?: number;
-      title: string;
-      description?: string | null;
-      category?: string | null;
-      status?: 'active' | 'inactive' | 'completed';
-      sort_order?: number | null;
-      created_by?: string;
+      item_no: string;           // № п/п из Excel
+      work_name: string;         // Наименование работ из Excel
+      total_materials_cost?: number;
+      total_works_cost?: number;
+      unit?: string | null;      // Ед. изм. из Excel
+      volume?: number | null;    // Объем работ из Excel
+      manual_volume?: number | null; // Объем, заданный вручную
+      client_note?: string | null; // Примечание из Excel
       created_at?: string;
       updated_at?: string;
     };
@@ -138,12 +132,14 @@ export type DatabaseTables = {
       id?: string;
       tender_id?: string;
       position_number?: number;
-      title?: string;
-      description?: string | null;
-      category?: string | null;
-      status?: 'active' | 'inactive' | 'completed';
-      sort_order?: number | null;
-      created_by?: string;
+      item_no?: string;          // № п/п из Excel
+      work_name?: string;        // Наименование работ из Excel
+      total_materials_cost?: number;
+      total_works_cost?: number;
+      unit?: string | null;      // Ед. изм. из Excel
+      volume?: number | null;    // Объем работ из Excel
+      manual_volume?: number | null; // Объем, заданный вручную
+      client_note?: string | null; // Примечание из Excel
       created_at?: string;
       updated_at?: string;
     };
@@ -209,47 +205,27 @@ export type DatabaseTables = {
     Row: {
       id: string;
       name: string;
-      code: string | null;
       description: string | null;
       unit: string;
-      base_price: number;
       category: string | null;
-      subcategory: string | null;
-      supplier: string | null;
-      specifications: Json | null;
-      is_active: boolean;
       created_at: string;
       updated_at: string;
     };
     Insert: {
       id?: string;
       name: string;
-      code?: string | null;
       description?: string | null;
       unit: string;
-      base_price: number;
       category?: string | null;
-      subcategory?: string | null;
-      supplier?: string | null;
-      specifications?: Json | null;
-      is_active?: boolean;
-      created_by?: string;
       created_at?: string;
       updated_at?: string;
     };
     Update: {
       id?: string;
       name?: string;
-      code?: string | null;
       description?: string | null;
       unit?: string;
-      base_price?: number;
       category?: string | null;
-      subcategory?: string | null;
-      supplier?: string | null;
-      specifications?: Json | null;
-      is_active?: boolean;
-      created_by?: string;
       created_at?: string;
       updated_at?: string;
     };
@@ -328,13 +304,8 @@ export type DatabaseTables = {
       title: string;
       description: string | null;
       client_name: string;
-      client_contact: string | null;
-      project_location: string | null;
-      deadline: string | null;
-      budget_estimate: number | null;
-      status: 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'completed';
-      priority: 'low' | 'medium' | 'high';
-      tags: string[] | null;
+      tender_number: string;
+      submission_deadline: string | null;
       created_at: string;
       updated_at: string;
     };
@@ -343,14 +314,8 @@ export type DatabaseTables = {
       title: string;
       description?: string | null;
       client_name: string;
-      client_contact?: string | null;
-      project_location?: string | null;
-      deadline?: string | null;
-      budget_estimate?: number | null;
-      status?: 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'completed';
-      priority?: 'low' | 'medium' | 'high';
-      tags?: string[] | null;
-      created_by?: string;
+      tender_number: string;
+      submission_deadline?: string | null;
       created_at?: string;
       updated_at?: string;
     };
@@ -359,14 +324,8 @@ export type DatabaseTables = {
       title?: string;
       description?: string | null;
       client_name?: string;
-      client_contact?: string | null;
-      project_location?: string | null;
-      deadline?: string | null;
-      budget_estimate?: number | null;
-      status?: 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'completed';
-      priority?: 'low' | 'medium' | 'high';
-      tags?: string[] | null;
-      created_by?: string;
+      tender_number?: string;
+      submission_deadline?: string | null;
       created_at?: string;
       updated_at?: string;
     };
@@ -419,40 +378,25 @@ export type DatabaseTables = {
   works_library: {
     Row: {
       id: string;
-      code: string;
       name: string;
       description: string | null;
       unit: string;
-      base_price: number;
-      labor_component: number;
-      category: string | null;
-      is_active: boolean;
       created_at: string;
       updated_at: string;
     };
     Insert: {
       id?: string;
-      code: string;
       name: string;
       description?: string | null;
       unit: string;
-      base_price: number;
-      labor_component?: number;
-      category?: string | null;
-      is_active?: boolean;
       created_at?: string;
       updated_at?: string;
     };
     Update: {
       id?: string;
-      code?: string;
       name?: string;
       description?: string | null;
       unit?: string;
-      base_price?: number;
-      labor_component?: number;
-      category?: string | null;
-      is_active?: boolean;
       created_at?: string;
       updated_at?: string;
     };

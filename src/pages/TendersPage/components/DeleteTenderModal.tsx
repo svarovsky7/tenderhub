@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, Button } from 'antd';
-import { statusLabels } from '../types';
+// Note: statusLabels import removed as status field was removed from schema
 import type { DeleteTenderModalProps } from '../types';
 
 const DeleteTenderModal: React.FC<DeleteTenderModalProps> = ({
@@ -56,7 +56,7 @@ const DeleteTenderModal: React.FC<DeleteTenderModalProps> = ({
         <div className="mt-4 p-3 bg-gray-50 rounded">
           <p><strong>Клиент:</strong> {tenderToDelete.client_name}</p>
           <p><strong>Номер:</strong> {tenderToDelete.tender_number}</p>
-          <p><strong>Статус:</strong> {statusLabels[tenderToDelete.status]}</p>
+          {/* Note: status display removed as status field was removed from schema */}
         </div>
       )}
     </Modal>
