@@ -121,6 +121,30 @@ $$;
 ALTER FUNCTION "public"."get_materials_for_work"("p_work_boq_item_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_next_sub_number"("p_client_position_id" "uuid") RETURNS integer
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    next_number INTEGER;
+BEGIN
+    -- Получаем максимальный sub_number для данной позиции
+    SELECT COALESCE(MAX(sub_number), 0) + 1
+    INTO next_number
+    FROM public.boq_items
+    WHERE client_position_id = p_client_position_id;
+    
+    RETURN next_number;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_next_sub_number"("p_client_position_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."get_next_sub_number"("p_client_position_id" "uuid") IS 'Возвращает следующий доступный sub_number для позиции заказчика';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."get_works_using_material"("p_material_boq_item_id" "uuid") RETURNS TABLE("link_id" "uuid", "work_id" "uuid", "work_description" "text", "work_unit" "text", "work_quantity" numeric, "work_unit_rate" numeric, "quantity_per_work" numeric, "usage_coefficient" numeric, "total_material_usage" numeric)
     LANGUAGE "plpgsql"
     AS $$
@@ -674,6 +698,12 @@ GRANT ALL ON FUNCTION "public"."check_work_material_types"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."get_materials_for_work"("p_work_boq_item_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_materials_for_work"("p_work_boq_item_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_materials_for_work"("p_work_boq_item_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_next_sub_number"("p_client_position_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_next_sub_number"("p_client_position_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_next_sub_number"("p_client_position_id" "uuid") TO "service_role";
 
 
 
