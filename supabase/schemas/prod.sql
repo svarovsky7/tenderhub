@@ -134,6 +134,8 @@ CREATE TABLE IF NOT EXISTS "public"."boq_items" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "imported_at" timestamp with time zone,
+    "consumption_coefficient" numeric(12,4),
+    "conversion_coefficient" numeric(12,4),
     CONSTRAINT "chk_item_type_reference" CHECK (((("item_type" = 'material'::"public"."boq_item_type") AND ("material_id" IS NOT NULL) AND ("work_id" IS NULL)) OR (("item_type" = 'work'::"public"."boq_item_type") AND ("work_id" IS NOT NULL) AND ("material_id" IS NULL)) OR (("item_type" = ANY (ARRAY['material'::"public"."boq_item_type", 'work'::"public"."boq_item_type"])) AND ("material_id" IS NULL) AND ("work_id" IS NULL)))),
     CONSTRAINT "chk_sort_order_valid" CHECK (("sort_order" >= 0)),
     CONSTRAINT "chk_sub_number_positive" CHECK (("sub_number" > 0)),
@@ -160,6 +162,14 @@ COMMENT ON COLUMN "public"."boq_items"."sort_order" IS 'Порядок сорт�
 
 
 
+COMMENT ON COLUMN "public"."boq_items"."consumption_coefficient" IS 'Коэффициент расхода материала';
+
+
+
+COMMENT ON COLUMN "public"."boq_items"."conversion_coefficient" IS 'Коэффициент перевода единицы измерения материала';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."client_positions" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "tender_id" "uuid" NOT NULL,
@@ -170,10 +180,10 @@ CREATE TABLE IF NOT EXISTS "public"."client_positions" (
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "unit" "text",
     "volume" numeric(12,4),
-    "manual_volume" numeric(12,4),
     "client_note" "text",
     "item_no" character varying(10) NOT NULL,
     "work_name" "text" NOT NULL,
+    "manual_volume" numeric,
     CONSTRAINT "chk_position_number_positive" CHECK (("position_number" > 0))
 );
 
@@ -195,8 +205,6 @@ COMMENT ON COLUMN "public"."client_positions"."unit" IS 'Единица изме
 
 COMMENT ON COLUMN "public"."client_positions"."volume" IS 'Объем работ из Excel';
 
-COMMENT ON COLUMN "public"."client_positions"."manual_volume" IS 'Объем работ, заданный вручную';
-
 
 
 COMMENT ON COLUMN "public"."client_positions"."client_note" IS 'Примечание заказчика из Excel';
@@ -208,6 +216,10 @@ COMMENT ON COLUMN "public"."client_positions"."item_no" IS 'Номер пунк�
 
 
 COMMENT ON COLUMN "public"."client_positions"."work_name" IS 'Наименование работ из Excel';
+
+
+
+COMMENT ON COLUMN "public"."client_positions"."manual_volume" IS 'Объём работ, заданный вручную';
 
 
 
