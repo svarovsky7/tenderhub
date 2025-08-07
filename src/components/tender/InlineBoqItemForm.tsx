@@ -20,6 +20,8 @@ interface FormValues {
   unit: string;
   quantity: number;
   unit_rate: number;
+  conversion_coefficient?: number;
+  consumption_coefficient?: number;
   material_id?: string;
   work_id?: string;
 }
@@ -44,6 +46,24 @@ const schema = yup.object({
     .typeError('Введите цену')
     .min(0, 'Цена не может быть отрицательной')
     .required('Введите цену'),
+  conversion_coefficient: yup
+    .number()
+    .typeError('Введите коэффициент перевода')
+    .min(0, 'Коэффициент не может быть отрицательным')
+    .when('item_type', {
+      is: 'material',
+      then: s => s.required('Введите коэффициент перевода'),
+      otherwise: s => s.optional(),
+    }),
+  consumption_coefficient: yup
+    .number()
+    .typeError('Введите коэффициент расхода')
+    .min(0, 'Коэффициент не может быть отрицательным')
+    .when('item_type', {
+      is: 'material',
+      then: s => s.required('Введите коэффициент расхода'),
+      otherwise: s => s.optional(),
+    }),
 });
 
 const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
@@ -68,6 +88,8 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
       unit: '',
       quantity: 0,
       unit_rate: 0,
+      conversion_coefficient: 1,
+      consumption_coefficient: 1,
     },
     resolver: yupResolver(schema),
   });
@@ -121,6 +143,8 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
     if (itemType === 'material') {
       setValue('material_id', option.item.id);
       setValue('work_id', undefined);
+      setValue('conversion_coefficient', (option.item as any).conversion_coefficient ?? 1);
+      setValue('consumption_coefficient', (option.item as any).consumption_coefficient ?? 1);
     } else {
       setValue('work_id', option.item.id);
       setValue('material_id', undefined);
@@ -135,6 +159,10 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
       client_position_id: positionId,
       material_id: values.item_type === 'material' ? values.material_id : null,
       work_id: values.item_type === 'work' ? values.work_id : null,
+      conversion_coefficient:
+        values.item_type === 'material' ? values.conversion_coefficient : null,
+      consumption_coefficient:
+        values.item_type === 'material' ? values.consumption_coefficient : null,
     };
     try {
       console.log('📡 Calling boqItemsApi.create', payload);
@@ -256,17 +284,59 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
         <Controller
           name="unit_rate"
           control={control}
-          render={({ field }) => (
-            <InputNumber
-              {...field}
-              min={0}
-              precision={2}
-              placeholder="Цена за ед."
-              style={{ width: 130 }}
-            />
-          )}
+      render={({ field }) => (
+        <InputNumber
+          {...field}
+          min={0}
+          precision={2}
+          placeholder="Цена за ед."
+          style={{ width: 130 }}
         />
-      </Form.Item>
+      )}
+    />
+  </Form.Item>
+
+      {itemType === 'material' && (
+        <>
+          <Form.Item
+            validateStatus={errors.conversion_coefficient ? 'error' : ''}
+            help={errors.conversion_coefficient?.message}
+          >
+            <Controller
+              name="conversion_coefficient"
+              control={control}
+              render={({ field }) => (
+                <InputNumber
+                  {...field}
+                  min={0}
+                  precision={4}
+                  placeholder="Коэф. перев."
+                  style={{ width: 120 }}
+                />
+              )}
+            />
+          </Form.Item>
+
+          <Form.Item
+            validateStatus={errors.consumption_coefficient ? 'error' : ''}
+            help={errors.consumption_coefficient?.message}
+          >
+            <Controller
+              name="consumption_coefficient"
+              control={control}
+              render={({ field }) => (
+                <InputNumber
+                  {...field}
+                  min={0}
+                  precision={4}
+                  placeholder="Коэф. расхода"
+                  style={{ width: 130 }}
+                />
+              )}
+            />
+          </Form.Item>
+        </>
+      )}
 
       <Form.Item>
         <InputNumber
