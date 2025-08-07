@@ -125,15 +125,18 @@ CREATE OR REPLACE FUNCTION "public"."get_next_sub_number"("p_client_position_id"
     LANGUAGE "plpgsql"
     AS $$
 DECLARE
-    next_number INTEGER;
+  v_next_sub_number INTEGER;
 BEGIN
-    -- Получаем максимальный sub_number для данной позиции
-    SELECT COALESCE(MAX(sub_number), 0) + 1
-    INTO next_number
-    FROM public.boq_items
-    WHERE client_position_id = p_client_position_id;
-    
-    RETURN next_number;
+  -- Lock the client position row to prevent concurrent modifications
+  PERFORM 1 FROM public.client_positions WHERE id = p_client_position_id FOR UPDATE;
+  
+  -- Get the maximum sub_number for this position
+  SELECT COALESCE(MAX(sub_number), 0) + 1
+  INTO v_next_sub_number
+  FROM public.boq_items
+  WHERE client_position_id = p_client_position_id;
+  
+  RETURN v_next_sub_number;
 END;
 $$;
 
@@ -141,7 +144,7 @@ $$;
 ALTER FUNCTION "public"."get_next_sub_number"("p_client_position_id" "uuid") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."get_next_sub_number"("p_client_position_id" "uuid") IS 'Возвращает следующий доступный sub_number для позиции заказчика';
+COMMENT ON FUNCTION "public"."get_next_sub_number"("p_client_position_id" "uuid") IS 'Safely gets the next available sub_number for a client position with row locking to prevent duplicates';
 
 
 
