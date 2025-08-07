@@ -53,6 +53,99 @@ CREATE TYPE "public"."tender_status" AS ENUM (
 ALTER TYPE "public"."tender_status" OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."check_work_material_types"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    -- Проверяем, что work_boq_item_id действительно указывает на работу
+    IF NOT EXISTS (
+        SELECT 1 FROM public.boq_items 
+        WHERE id = NEW.work_boq_item_id 
+        AND item_type = 'work'
+    ) THEN
+        RAISE EXCEPTION 'work_boq_item_id must reference a BOQ item with type "work"';
+    END IF;
+    
+    -- Проверяем, что material_boq_item_id действительно указывает на материал
+    IF NOT EXISTS (
+        SELECT 1 FROM public.boq_items 
+        WHERE id = NEW.material_boq_item_id 
+        AND item_type = 'material'
+    ) THEN
+        RAISE EXCEPTION 'material_boq_item_id must reference a BOQ item with type "material"';
+    END IF;
+    
+    -- Проверяем, что оба элемента принадлежат одной позиции
+    IF NOT EXISTS (
+        SELECT 1 FROM public.boq_items w, public.boq_items m
+        WHERE w.id = NEW.work_boq_item_id 
+        AND m.id = NEW.material_boq_item_id
+        AND w.client_position_id = NEW.client_position_id
+        AND m.client_position_id = NEW.client_position_id
+    ) THEN
+        RAISE EXCEPTION 'Both work and material must belong to the specified client position';
+    END IF;
+    
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."check_work_material_types"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_materials_for_work"("p_work_boq_item_id" "uuid") RETURNS TABLE("link_id" "uuid", "material_id" "uuid", "material_description" "text", "material_unit" "text", "material_quantity" numeric, "material_unit_rate" numeric, "quantity_per_work" numeric, "usage_coefficient" numeric, "total_needed" numeric, "total_cost" numeric)
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        wml.id AS link_id,
+        m.id AS material_id,
+        m.description AS material_description,
+        m.unit AS material_unit,
+        m.quantity AS material_quantity,
+        m.unit_rate AS material_unit_rate,
+        wml.material_quantity_per_work AS quantity_per_work,
+        wml.usage_coefficient,
+        (w.quantity * wml.material_quantity_per_work * wml.usage_coefficient) AS total_needed,
+        (w.quantity * wml.material_quantity_per_work * wml.usage_coefficient * m.unit_rate) AS total_cost
+    FROM public.work_material_links wml
+    INNER JOIN public.boq_items w ON wml.work_boq_item_id = w.id
+    INNER JOIN public.boq_items m ON wml.material_boq_item_id = m.id
+    WHERE wml.work_boq_item_id = p_work_boq_item_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_materials_for_work"("p_work_boq_item_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_works_using_material"("p_material_boq_item_id" "uuid") RETURNS TABLE("link_id" "uuid", "work_id" "uuid", "work_description" "text", "work_unit" "text", "work_quantity" numeric, "work_unit_rate" numeric, "quantity_per_work" numeric, "usage_coefficient" numeric, "total_material_usage" numeric)
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        wml.id AS link_id,
+        w.id AS work_id,
+        w.description AS work_description,
+        w.unit AS work_unit,
+        w.quantity AS work_quantity,
+        w.unit_rate AS work_unit_rate,
+        wml.material_quantity_per_work AS quantity_per_work,
+        wml.usage_coefficient,
+        (w.quantity * wml.material_quantity_per_work * wml.usage_coefficient) AS total_material_usage
+    FROM public.work_material_links wml
+    INNER JOIN public.boq_items w ON wml.work_boq_item_id = w.id
+    WHERE wml.material_boq_item_id = p_material_boq_item_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_works_using_material"("p_material_boq_item_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."recalculate_client_position_totals"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -260,6 +353,91 @@ COMMENT ON TABLE "public"."tenders" IS 'Main tender projects with client details
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."work_material_links" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "client_position_id" "uuid" NOT NULL,
+    "work_boq_item_id" "uuid" NOT NULL,
+    "material_boq_item_id" "uuid" NOT NULL,
+    "material_quantity_per_work" numeric(12,4) DEFAULT 1.0000,
+    "usage_coefficient" numeric(12,4) DEFAULT 1.0000,
+    "notes" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "chk_material_quantity_positive" CHECK (("material_quantity_per_work" > (0)::numeric)),
+    CONSTRAINT "chk_usage_coefficient_positive" CHECK (("usage_coefficient" > (0)::numeric))
+);
+
+
+ALTER TABLE "public"."work_material_links" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."work_material_links" IS 'Связи между работами и материалами в позициях ВОРа заказчика';
+
+
+
+COMMENT ON COLUMN "public"."work_material_links"."client_position_id" IS 'ID позиции заказчика, в которой находятся связываемые работы и материалы';
+
+
+
+COMMENT ON COLUMN "public"."work_material_links"."work_boq_item_id" IS 'ID элемента BOQ типа work (работа)';
+
+
+
+COMMENT ON COLUMN "public"."work_material_links"."material_boq_item_id" IS 'ID элемента BOQ типа material (материал)';
+
+
+
+COMMENT ON COLUMN "public"."work_material_links"."material_quantity_per_work" IS 'Количество материала, необходимое на единицу работы';
+
+
+
+COMMENT ON COLUMN "public"."work_material_links"."usage_coefficient" IS 'Коэффициент использования материала в работе';
+
+
+
+COMMENT ON COLUMN "public"."work_material_links"."notes" IS 'Примечания к связи работы и материала';
+
+
+
+CREATE OR REPLACE VIEW "public"."work_material_links_detailed" AS
+ SELECT "wml"."id",
+    "wml"."client_position_id",
+    "wml"."work_boq_item_id",
+    "wml"."material_boq_item_id",
+    "wml"."material_quantity_per_work",
+    "wml"."usage_coefficient",
+    "wml"."notes",
+    "wml"."created_at",
+    "wml"."updated_at",
+    "cp"."position_number",
+    "cp"."work_name" AS "position_name",
+    "cp"."tender_id",
+    "w"."item_number" AS "work_item_number",
+    "w"."description" AS "work_description",
+    "w"."unit" AS "work_unit",
+    "w"."quantity" AS "work_quantity",
+    "w"."unit_rate" AS "work_unit_rate",
+    "w"."total_amount" AS "work_total_amount",
+    "m"."item_number" AS "material_item_number",
+    "m"."description" AS "material_description",
+    "m"."unit" AS "material_unit",
+    "m"."quantity" AS "material_quantity",
+    "m"."unit_rate" AS "material_unit_rate",
+    "m"."total_amount" AS "material_total_amount",
+    "m"."consumption_coefficient" AS "material_consumption_coefficient",
+    "m"."conversion_coefficient" AS "material_conversion_coefficient",
+    (("w"."quantity" * "wml"."material_quantity_per_work") * "wml"."usage_coefficient") AS "total_material_needed",
+    ((("w"."quantity" * "wml"."material_quantity_per_work") * "wml"."usage_coefficient") * "m"."unit_rate") AS "total_material_cost"
+   FROM ((("public"."work_material_links" "wml"
+     JOIN "public"."client_positions" "cp" ON (("wml"."client_position_id" = "cp"."id")))
+     JOIN "public"."boq_items" "w" ON (("wml"."work_boq_item_id" = "w"."id")))
+     JOIN "public"."boq_items" "m" ON (("wml"."material_boq_item_id" = "m"."id")))
+  WHERE (("w"."item_type" = 'work'::"public"."boq_item_type") AND ("m"."item_type" = 'material'::"public"."boq_item_type"));
+
+
+ALTER VIEW "public"."work_material_links_detailed" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."works_library" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "name" "text" NOT NULL,
@@ -314,6 +492,16 @@ ALTER TABLE ONLY "public"."boq_items"
 
 ALTER TABLE ONLY "public"."client_positions"
     ADD CONSTRAINT "uq_client_positions_tender_number" UNIQUE ("tender_id", "position_number");
+
+
+
+ALTER TABLE ONLY "public"."work_material_links"
+    ADD CONSTRAINT "uq_work_material_link" UNIQUE ("work_boq_item_id", "material_boq_item_id");
+
+
+
+ALTER TABLE ONLY "public"."work_material_links"
+    ADD CONSTRAINT "work_material_links_pkey" PRIMARY KEY ("id");
 
 
 
@@ -382,7 +570,23 @@ CREATE INDEX "idx_tenders_tender_number" ON "public"."tenders" USING "btree" ("t
 
 
 
+CREATE INDEX "idx_work_material_links_material" ON "public"."work_material_links" USING "btree" ("material_boq_item_id");
+
+
+
+CREATE INDEX "idx_work_material_links_position" ON "public"."work_material_links" USING "btree" ("client_position_id");
+
+
+
+CREATE INDEX "idx_work_material_links_work" ON "public"."work_material_links" USING "btree" ("work_boq_item_id");
+
+
+
 CREATE INDEX "idx_works_library_name" ON "public"."works_library" USING "btree" ("name");
+
+
+
+CREATE OR REPLACE TRIGGER "check_work_material_types_trigger" BEFORE INSERT OR UPDATE ON "public"."work_material_links" FOR EACH ROW EXECUTE FUNCTION "public"."check_work_material_types"();
 
 
 
@@ -403,6 +607,10 @@ CREATE OR REPLACE TRIGGER "update_materials_library_updated_at" BEFORE UPDATE ON
 
 
 CREATE OR REPLACE TRIGGER "update_tenders_updated_at" BEFORE UPDATE ON "public"."tenders" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
+CREATE OR REPLACE TRIGGER "update_work_material_links_updated_at" BEFORE UPDATE ON "public"."work_material_links" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
 
 
 
@@ -435,10 +643,43 @@ ALTER TABLE ONLY "public"."client_positions"
 
 
 
+ALTER TABLE ONLY "public"."work_material_links"
+    ADD CONSTRAINT "fk_work_material_links_material" FOREIGN KEY ("material_boq_item_id") REFERENCES "public"."boq_items"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."work_material_links"
+    ADD CONSTRAINT "fk_work_material_links_position" FOREIGN KEY ("client_position_id") REFERENCES "public"."client_positions"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."work_material_links"
+    ADD CONSTRAINT "fk_work_material_links_work" FOREIGN KEY ("work_boq_item_id") REFERENCES "public"."boq_items"("id") ON DELETE CASCADE;
+
+
+
 GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."check_work_material_types"() TO "anon";
+GRANT ALL ON FUNCTION "public"."check_work_material_types"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."check_work_material_types"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_materials_for_work"("p_work_boq_item_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_materials_for_work"("p_work_boq_item_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_materials_for_work"("p_work_boq_item_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_works_using_material"("p_material_boq_item_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_works_using_material"("p_material_boq_item_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_works_using_material"("p_material_boq_item_id" "uuid") TO "service_role";
 
 
 
@@ -475,6 +716,18 @@ GRANT ALL ON TABLE "public"."materials_library" TO "service_role";
 GRANT ALL ON TABLE "public"."tenders" TO "anon";
 GRANT ALL ON TABLE "public"."tenders" TO "authenticated";
 GRANT ALL ON TABLE "public"."tenders" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."work_material_links" TO "anon";
+GRANT ALL ON TABLE "public"."work_material_links" TO "authenticated";
+GRANT ALL ON TABLE "public"."work_material_links" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."work_material_links_detailed" TO "anon";
+GRANT ALL ON TABLE "public"."work_material_links_detailed" TO "authenticated";
+GRANT ALL ON TABLE "public"."work_material_links_detailed" TO "service_role";
 
 
 
