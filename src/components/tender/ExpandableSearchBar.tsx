@@ -24,13 +24,7 @@ const { Text } = Typography;
 const { Option } = Select;
 
 export interface ExpandableSearchBarProps {
-  onAddItem: (
-    item: Material | WorkItem,
-    type: 'material' | 'work',
-    quantity: number,
-    consumptionCoefficient?: number,
-    conversionCoefficient?: number
-  ) => void;
+  onAddItem: (item: Material | WorkItem, type: 'material' | 'work', quantity: number) => void;
   onClose?: () => void;
   placeholder?: string;
 }
@@ -58,8 +52,6 @@ const ExpandableSearchBar: React.FC<ExpandableSearchBarProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [works, setWorks] = useState<WorkItem[]>([]);
-  const [consumptionCoefficient, setConsumptionCoefficient] = useState(1);
-  const [conversionCoefficient, setConversionCoefficient] = useState(1);
 
   // Load data on mount
   useEffect(() => {
@@ -171,9 +163,6 @@ const ExpandableSearchBar: React.FC<ExpandableSearchBarProps> = ({
       type: selectedOption.type
     });
 
-    setConsumptionCoefficient(1);
-    setConversionCoefficient(1);
-
     // Clear search
     setSearchValue('');
     setSearchOptions([]);
@@ -194,25 +183,15 @@ const ExpandableSearchBar: React.FC<ExpandableSearchBarProps> = ({
     console.log('➕ Adding item:', {
       item: selectedItem.item.name,
       type: selectedItem.type,
-      quantity,
-      consumptionCoefficient,
-      conversionCoefficient
+      quantity
     });
 
-    onAddItem(
-      selectedItem.item,
-      selectedItem.type,
-      quantity,
-      consumptionCoefficient,
-      conversionCoefficient
-    );
+    onAddItem(selectedItem.item, selectedItem.type, quantity);
     
     // Reset form
     setSelectedItem(null);
     setQuantity(1);
     setSearchValue('');
-    setConsumptionCoefficient(1);
-    setConversionCoefficient(1);
     
     if (onClose) {
       onClose();
@@ -310,53 +289,18 @@ const ExpandableSearchBar: React.FC<ExpandableSearchBarProps> = ({
         )}
 
         {/* Quantity and Add Button */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <Text className="whitespace-nowrap">Количество:</Text>
           <InputNumber
             value={quantity}
-            onChange={(value) => {
-              console.log('✏️ Quantity changed:', value);
-              setQuantity(value || 1);
-            }}
+            onChange={(value) => setQuantity(value || 1)}
             min={0.01}
             step={0.01}
             placeholder="Кол-во"
             style={{ width: 100 }}
             size="middle"
           />
-
-          {selectedItem?.type === 'material' && (
-            <>
-              <Text className="whitespace-nowrap">Коэф. расхода:</Text>
-              <InputNumber
-                value={consumptionCoefficient}
-                onChange={(value) => {
-                  console.log('✏️ Consumption coefficient changed:', value);
-                  setConsumptionCoefficient(value || 1);
-                }}
-                min={0.0001}
-                step={0.0001}
-                placeholder="Расход"
-                style={{ width: 100 }}
-                size="middle"
-              />
-
-              <Text className="whitespace-nowrap">Коэф. перевода:</Text>
-              <InputNumber
-                value={conversionCoefficient}
-                onChange={(value) => {
-                  console.log('✏️ Conversion coefficient changed:', value);
-                  setConversionCoefficient(value || 1);
-                }}
-                min={0.0001}
-                step={0.0001}
-                placeholder="Перевод"
-                style={{ width: 100 }}
-                size="middle"
-              />
-            </>
-          )}
-
+          
           <Button
             type="primary"
             icon={<PlusOutlined />}
