@@ -40,8 +40,6 @@ interface FormData {
   subcategory?: string;
   notes?: string;
   sort_order?: number;
-  consumption_coefficient?: number;
-  conversion_coefficient?: number;
 }
 
 const BOQItemForm: React.FC<BOQItemFormProps> = ({
@@ -82,18 +80,11 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
         category: editingItem.category || '',
         subcategory: editingItem.subcategory || '',
         notes: editingItem.notes || '',
-        sort_order: editingItem.sort_order || 0,
-        consumption_coefficient: editingItem.consumption_coefficient || 1,
-        conversion_coefficient: editingItem.conversion_coefficient || 1
+        sort_order: editingItem.sort_order || 0
       });
     } else if (visible) {
       form.resetFields();
-      form.setFieldsValue({
-        item_type: 'material',
-        sort_order: 0,
-        consumption_coefficient: 1,
-        conversion_coefficient: 1,
-      });
+      form.setFieldsValue({ item_type: 'material', sort_order: 0 });
     }
   }, [visible, editingItem, form]);
 
@@ -138,7 +129,6 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
   };
 
   const handleSubmit = async (values: FormData) => {
-    console.log('🚀 BOQItemForm handleSubmit called with:', values);
     setLoading(true);
 
     try {
@@ -147,14 +137,8 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
         tender_id: tenderId,
         client_position_id: positionId,
         material_id: values.item_type === 'material' ? values.material_id : null,
-        work_id: values.item_type === 'work' ? values.work_id : null,
-        consumption_coefficient:
-          values.item_type === 'material' ? values.consumption_coefficient : undefined,
-        conversion_coefficient:
-          values.item_type === 'material' ? values.conversion_coefficient : undefined,
+        work_id: values.item_type === 'work' ? values.work_id : null
       };
-
-      console.log('📡 Sending BOQ item data:', itemData);
 
       if (isEditing && editingItem) {
         const result = await boqItemsApi.update(editingItem.id, itemData);
@@ -328,46 +312,6 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
             </Form.Item>
           </Col>
         </Row>
-
-        {itemType === 'material' && (
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="consumption_coefficient"
-                label="Коэф. расхода"
-                rules={[{ required: true, message: 'Введите коэффициент расхода' }]}
-              >
-                <InputNumber
-                  min={0.0001}
-                  precision={4}
-                  placeholder="1.0000"
-                  className="w-full"
-                  onChange={(value) =>
-                    console.log('✏️ Consumption coefficient changed:', value)
-                  }
-                />
-              </Form.Item>
-            </Col>
-
-            <Col span={12}>
-              <Form.Item
-                name="conversion_coefficient"
-                label="Коэф. перевода"
-                rules={[{ required: true, message: 'Введите коэффициент перевода' }]}
-              >
-                <InputNumber
-                  min={0.0001}
-                  precision={4}
-                  placeholder="1.0000"
-                  className="w-full"
-                  onChange={(value) =>
-                    console.log('✏️ Conversion coefficient changed:', value)
-                  }
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-        )}
 
         <Row gutter={16}>
           <Col span={12}>
