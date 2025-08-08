@@ -6,7 +6,8 @@ import {
   Input,
   InputNumber,
   Dropdown,
-  Space
+  Space,
+  Card
 } from 'antd';
 import {
   EditOutlined,
@@ -17,7 +18,9 @@ import {
   BgColorsOutlined,
   SaveOutlined,
   CloseOutlined,
-  CopyOutlined
+  CopyOutlined,
+  LinkOutlined,
+  ArrowRightOutlined
 } from '@ant-design/icons';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -36,6 +39,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
   onCancelEdit,
   onDelete,
   onDuplicate,
+  onEditItem,
   setEditingItem
 }) => {
   console.log('🚀 SortableItem rendered for item:', item.id);
@@ -91,6 +95,13 @@ const SortableItem: React.FC<SortableItemProps> = ({
     onDuplicate(item);
   }, [onDuplicate, item]);
 
+  const handleEditClick = useCallback(() => {
+    console.log('✏️ Edit clicked for item:', item.id);
+    if (onEditItem) {
+      onEditItem(item);
+    }
+  }, [onEditItem, item]);
+
   const menuItems: MenuProps['items'] = [
     {
       key: 'edit-description',
@@ -133,12 +144,18 @@ const SortableItem: React.FC<SortableItemProps> = ({
     }
   ];
 
+  // Check if this is a linked material
+  const isLinkedMaterial = (item as any).is_linked_material;
+  const linkData = (item as any).link_data;
+
   const typeIcon = item.item_type === 'material' ? 
-    <BgColorsOutlined style={{ color: '#1890ff' }} /> : 
+    <BgColorsOutlined style={{ color: isLinkedMaterial ? '#fa8c16' : '#1890ff' }} /> : 
     <ToolOutlined style={{ color: '#52c41a' }} />;
 
-  const typeColor = item.item_type === 'material' ? 'blue' : 'green';
-  const typeLabel = item.item_type === 'material' ? 'Материал' : 'Работа';
+  const typeColor = item.item_type === 'material' ? 
+    (isLinkedMaterial ? 'orange' : 'blue') : 'green';
+  const typeLabel = item.item_type === 'material' ? 
+    (isLinkedMaterial ? 'Связанный материал' : 'Материал') : 'Работа';
 
   return (
     <div
@@ -148,6 +165,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
         border border-gray-200 rounded-lg p-4 bg-white hover:shadow-md transition-shadow
         ${isDragging ? 'shadow-lg' : ''}
         ${isEditing ? 'ring-2 ring-blue-500' : ''}
+        ${isLinkedMaterial ? 'ml-8 border-orange-200 bg-orange-50' : ''}
       `}
     >
       <div className="flex items-start justify-between">
@@ -162,10 +180,29 @@ const SortableItem: React.FC<SortableItemProps> = ({
 
           <div className="flex-1 space-y-2">
             <div className="flex items-center space-x-2">
+              {isLinkedMaterial && (
+                <ArrowRightOutlined className="text-orange-500" />
+              )}
               <Text strong className="text-sm">{item.item_number}</Text>
               <Tag color={typeColor} icon={typeIcon}>
                 {typeLabel}
               </Tag>
+              {isLinkedMaterial && (
+                <Tag color="volcano" icon={<LinkOutlined />}>
+                  Связан с работой
+                </Tag>
+              )}
+              {onEditItem && (
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={handleEditClick}
+                  disabled={isLoading}
+                  className="text-gray-500 hover:text-blue-500"
+                  title="Редактировать элемент"
+                />
+              )}
             </div>
 
             <div>
@@ -238,7 +275,15 @@ const SortableItem: React.FC<SortableItemProps> = ({
                       </Space>
                     </div>
                   ) : (
-                    <Text strong>{item.quantity} {item.unit}</Text>
+                    <div className="space-y-1">
+                      <Text strong>{item.quantity} {item.unit}</Text>
+                      {isLinkedMaterial && linkData && (
+                        <div className="text-xs text-orange-600">
+                          <div>{item.quantity} × {linkData.conversion_coefficient || 1} × {linkData.usage_coefficient}</div>
+                          <div>Итого: {linkData.calculated_quantity?.toFixed(2)} {item.unit}</div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -287,10 +332,18 @@ const SortableItem: React.FC<SortableItemProps> = ({
 
               <div>
                 <Text type="secondary">Сумма:</Text>
-                <div>
+                <div className="space-y-1">
                   <Text strong className="text-green-600">
-                    {item.total_amount?.toFixed(2)} ₽
+                    {isLinkedMaterial && linkData ? 
+                      `${linkData.calculated_total?.toFixed(2)} ₽` :
+                      `${item.total_amount?.toFixed(2)} ₽`
+                    }
                   </Text>
+                  {isLinkedMaterial && linkData && (
+                    <div className="text-xs text-orange-600">
+                      Объем × Коэф.перевода × Коэф.расхода × Стоимость ед.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

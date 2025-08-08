@@ -18,6 +18,7 @@ const VirtualList: React.FC<VirtualListProps> = ({
   onCancelEdit,
   onDelete,
   onDuplicate,
+  onEditItem,
   setEditingItem
 }) => {
   console.log('🚀 VirtualList rendered with:', { 
@@ -43,6 +44,7 @@ const VirtualList: React.FC<VirtualListProps> = ({
             onCancelEdit={onCancelEdit}
             onDelete={onDelete}
             onDuplicate={onDuplicate}
+            onEditItem={onEditItem}
             setEditingItem={setEditingItem}
           />
         </div>
@@ -58,6 +60,7 @@ const VirtualList: React.FC<VirtualListProps> = ({
     onCancelEdit,
     onDelete,
     onDuplicate,
+    onEditItem,
     setEditingItem
   ]);
 

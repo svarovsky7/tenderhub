@@ -10,6 +10,21 @@ import type {
 import { handleSupabaseError, applyPagination, type PaginationOptions } from '../utils';
 
 /**
+ * Extended BOQ item with linked materials information
+ */
+export interface BOQItemWithLinkedMaterials extends BOQItemWithLibrary {
+  linked_materials?: Array<{
+    link_id: string;
+    material_item: BOQItemWithLibrary;
+    material_quantity_per_work: number;
+    usage_coefficient: number;
+    conversion_coefficient: number;
+    calculated_quantity: number;
+    calculated_total: number;
+  }>;
+}
+
+/**
  * BOQ Query Operations
  * Advanced query operations for retrieving BOQ items with filtering, pagination, and relationships
  */
@@ -261,6 +276,147 @@ export const boqQueryApi = {
       console.error('💥 Exception in getByPosition:', error);
       return {
         error: handleSupabaseError(error, 'Get BOQ items by position'),
+      };
+    }
+  },
+
+  /**
+   * Get BOQ items with linked materials for hierarchical display
+   * Returns work items with their linked materials nested underneath
+   */
+  async getHierarchicalByPosition(
+    clientPositionId: string
+  ): Promise<ApiResponse<BOQItemWithLinkedMaterials[]>> {
+    console.log('🚀 boqQueryApi.getHierarchicalByPosition called with:', clientPositionId);
+    
+    try {
+      console.log('📡 Fetching work items for position...');
+      
+      // First, get all work items in the position
+      const { data: workItems, error: workError } = await supabase
+        .from('boq_items')
+        .select(`
+          *,
+          material:materials_library(*),
+          work_item:works_library(*)
+        `)
+        .eq('client_position_id', clientPositionId)
+        .eq('item_type', 'work')
+        .order('sub_number')
+        .order('sort_order');
+
+      if (workError) {
+        console.error('❌ Failed to fetch work items:', workError);
+        return {
+          error: handleSupabaseError(workError, 'Get work items for position'),
+        };
+      }
+
+      console.log('📦 Work items fetched:', workItems?.length || 0);
+
+      // Now get linked materials for each work item
+      const hierarchicalItems: BOQItemWithLinkedMaterials[] = [];
+      
+      for (const workItem of workItems || []) {
+        console.log('🔗 Processing work item:', workItem.id);
+        
+        // Get linked materials using the database function
+        const { data: linkedMaterials, error: materialsError } = await supabase
+          .rpc('get_materials_for_work', { 
+            p_work_boq_item_id: workItem.id 
+          });
+
+        if (materialsError) {
+          console.error('❌ Failed to fetch linked materials for work:', workItem.id, materialsError);
+          // Continue with empty linked materials instead of failing
+        }
+
+        console.log(`📋 Found ${linkedMaterials?.length || 0} linked materials for work:`, workItem.description);
+
+        // Fetch full material item details for each linked material
+        const linkedMaterialsWithDetails = [];
+        for (const linkedMat of linkedMaterials || []) {
+          console.log('📦 Fetching material details for:', linkedMat.material_id);
+          
+          const { data: materialItem, error: matError } = await supabase
+            .from('boq_items')
+            .select(`
+              *,
+              material:materials_library(*),
+              work_item:works_library(*)
+            `)
+            .eq('id', linkedMat.material_id) // Fixed: use material_id from function result
+            .single();
+
+          if (!matError && materialItem) {
+            linkedMaterialsWithDetails.push({
+              link_id: linkedMat.link_id,
+              material_item: materialItem,
+              material_quantity_per_work: linkedMat.quantity_per_work || 0,
+              usage_coefficient: linkedMat.usage_coefficient || 1,
+              conversion_coefficient: linkedMat.conversion_coefficient || 1,
+              calculated_quantity: linkedMat.total_needed || 0,
+              calculated_total: linkedMat.total_cost || 0
+            });
+          }
+        }
+
+        // Add work item with linked materials
+        hierarchicalItems.push({
+          ...workItem,
+          linked_materials: linkedMaterialsWithDetails
+        });
+
+        // Add each linked material as a nested item (visually indented)
+        for (const linkedMat of linkedMaterialsWithDetails) {
+          hierarchicalItems.push({
+            ...linkedMat.material_item,
+            // Mark as linked material for special rendering
+            is_linked_material: true,
+            parent_work_id: workItem.id,
+            link_data: {
+              link_id: linkedMat.link_id,
+              material_quantity_per_work: linkedMat.material_quantity_per_work,
+              usage_coefficient: linkedMat.usage_coefficient,
+              conversion_coefficient: linkedMat.conversion_coefficient,
+              calculated_quantity: linkedMat.calculated_quantity,
+              calculated_total: linkedMat.calculated_total
+            }
+          } as any);
+        }
+      }
+
+      // Finally, get all standalone materials (not linked to works)
+      console.log('📡 Fetching standalone materials...');
+      const { data: standaloneMaterials, error: standaloneError } = await supabase
+        .from('boq_items')
+        .select(`
+          *,
+          material:materials_library(*),
+          work_item:works_library(*)
+        `)
+        .eq('client_position_id', clientPositionId)
+        .eq('item_type', 'material')
+        .not('id', 'in', `(${hierarchicalItems
+          .filter(item => (item as any).is_linked_material)
+          .map(item => item.id)
+          .join(',')})`)
+        .order('sub_number')
+        .order('sort_order');
+
+      if (!standaloneError && standaloneMaterials) {
+        hierarchicalItems.push(...standaloneMaterials.map(mat => ({ ...mat })));
+      }
+
+      console.log('✅ Hierarchical BOQ items constructed:', hierarchicalItems.length);
+      return {
+        data: hierarchicalItems,
+        message: 'Hierarchical BOQ items loaded successfully',
+      };
+    } catch (error) {
+      console.error('💥 Exception in getHierarchicalByPosition:', error);
+      return {
+        error: handleSupabaseError(error, 'Get hierarchical BOQ items'),
       };
     }
   },

@@ -7,6 +7,7 @@ export interface BOQItemListProps {
   maxHeight?: number;
   searchable?: boolean;
   editable?: boolean;
+  onEditItem?: (item: BOQItemWithLibrary) => void;
 }
 
 export interface EditingItem {
@@ -25,6 +26,7 @@ export interface SortableItemProps {
   onCancelEdit: () => void;
   onDelete: (itemId: string) => void;
   onDuplicate: (item: BOQItemWithLibrary) => void;
+  onEditItem?: (item: BOQItemWithLibrary) => void;
   setEditingItem: React.Dispatch<React.SetStateAction<EditingItem | null>>;
 }
 
@@ -39,6 +41,7 @@ export interface VirtualListProps {
   onCancelEdit: () => void;
   onDelete: (itemId: string) => void;
   onDuplicate: (item: BOQItemWithLibrary) => void;
+  onEditItem?: (item: BOQItemWithLibrary) => void;
   setEditingItem: React.Dispatch<React.SetStateAction<EditingItem | null>>;
 }
 
@@ -55,5 +58,6 @@ export interface DraggableListProps {
   onCancelEdit: () => void;
   onDelete: (itemId: string) => void;
   onDuplicate: (item: BOQItemWithLibrary) => void;
+  onEditItem?: (item: BOQItemWithLibrary) => void;
   setEditingItem: React.Dispatch<React.SetStateAction<EditingItem | null>>;
 }

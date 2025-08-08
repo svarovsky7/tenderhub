@@ -38,7 +38,8 @@ import type {
   ClientPositionUpdate,
   Material,
   WorkItem,
-  BOQItemInsert
+  BOQItemInsert,
+  BOQItemWithLibrary
 } from '../../lib/supabase/types';
 import type { MenuProps } from 'antd';
 
@@ -164,6 +165,12 @@ const ClientPositionCard: React.FC<ClientPositionCardProps> = ({
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const handleEditBOQItem = useCallback((item: BOQItemWithLibrary) => {
+    console.log('🚀 Edit BOQ item requested:', item.id);
+    // TODO: Implement edit modal for BOQ items
+    message.info('Функция редактирования элемента будет реализована в следующей версии');
   }, []);
 
   const handleQuickAdd = useCallback(async (item: Material | WorkItem, type: 'material' | 'work', quantity: number) => {
@@ -439,6 +446,7 @@ const ClientPositionCard: React.FC<ClientPositionCardProps> = ({
                     clientPositionId={position.id}
                     onUpdate={onUpdate}
                     maxHeight={400}
+                    onEditItem={handleEditBOQItem}
                   />
                 </div>
               </div>

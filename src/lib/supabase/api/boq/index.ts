@@ -20,6 +20,7 @@ export const boqApi = {
   getByClientPositionId: boqQueryApi.getByClientPositionId,
   getByTender: boqQueryApi.getByTender,
   getByPosition: boqQueryApi.getByPosition,
+  getHierarchicalByPosition: boqQueryApi.getHierarchicalByPosition,
   
   // Bulk operations
   bulkCreate: boqBulkApi.bulkCreate,
@@ -55,7 +56,7 @@ export const boqItemsApi = {
 
 // Export individual modules for direct access if needed
 export { boqCrudApi } from './crud';
-export { boqQueryApi } from './queries';
+export { boqQueryApi, type BOQItemWithLinkedMaterials } from './queries';
 export { boqBulkApi } from './bulk';
 export { boqHierarchyApi } from './hierarchy';
 export { boqAnalyticsApi } from './analytics';

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PlusOutlined, EditOutlined, CloseOutlined, LinkOutlined, DisconnectOutlined } from '@ant-design/icons';
 import { message, Spin, InputNumber, Modal, Select, Button, Tooltip } from 'antd';
-import { clientPositionsApi, boqItemsApi } from '../../lib/supabase/api';
+import { clientPositionsApi, boqItemsApi, boqApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import { supabase } from '../../lib/supabase/client';
 import AutoCompleteSearch from '../common/AutoCompleteSearch';
@@ -80,9 +80,17 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
             item_no: position.item_no
           });
           
-          const boqResult = await boqItemsApi.getByPosition(position.id);
+          // Use hierarchical API to get items with linked materials
+          const boqResult = await boqApi.getHierarchicalByPosition(position.id);
           const boqItems = boqResult.error ? [] : (boqResult.data || []);
-          const totalCost = boqItems.reduce((sum, item) => sum + (item.total_amount || 0), 0);
+          
+          // Calculate total cost including linked materials
+          const totalCost = boqItems.reduce((sum, item) => {
+            const itemCost = (item as any).is_linked_material && (item as any).link_data 
+              ? (item as any).link_data.calculated_total 
+              : (item.total_amount || 0);
+            return sum + itemCost;
+          }, 0);
           
           return {
             ...position,
@@ -329,10 +337,17 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       
       console.log('🎆 Adding new item to local state...');
       
-      // Get fresh BOQ items for the position to ensure we have the latest state
-      const freshResult = await boqItemsApi.getByPosition(selectedPosition.id);
+      // Get fresh hierarchical BOQ items for the position to ensure we have the latest state
+      const freshResult = await boqApi.getHierarchicalByPosition(selectedPosition.id);
       const updatedItems = freshResult.error ? [newBOQItem] : (freshResult.data || []);
-      const newTotalCost = updatedItems.reduce((sum, item) => sum + (item.total_amount || 0), 0);
+      
+      // Calculate total cost including linked materials
+      const newTotalCost = updatedItems.reduce((sum, item) => {
+        const itemCost = (item as any).is_linked_material && (item as any).link_data 
+          ? (item as any).link_data.calculated_total 
+          : (item.total_amount || 0);
+        return sum + itemCost;
+      }, 0);
       
       console.log('🔄 Updated position items:', updatedItems.length);
       console.log('💰 New total cost:', newTotalCost);
@@ -397,11 +412,20 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
 
       console.log('✅ Sub-item deleted successfully');
       
-      // Update local state - remove item from positions
+      // Update local state - remove item from positions and refresh hierarchical data
+      const freshResult = await boqApi.getHierarchicalByPosition(positionId);
+      const updatedItems = freshResult.error ? [] : (freshResult.data || []);
+      
+      // Calculate total cost including linked materials
+      const newTotalCost = updatedItems.reduce((sum, item) => {
+        const itemCost = (item as any).is_linked_material && (item as any).link_data 
+          ? (item as any).link_data.calculated_total 
+          : (item.total_amount || 0);
+        return sum + itemCost;
+      }, 0);
+      
       setPositions(prev => prev.map(position => {
         if (position.id === positionId) {
-          const updatedItems = (position.boq_items || []).filter(item => item.id !== subItemId);
-          const newTotalCost = updatedItems.reduce((sum, item) => sum + (item.total_amount || 0), 0);
           
           console.log('🔄 Updated position after deletion - items:', updatedItems.length);
           console.log('💰 New total cost after deletion:', newTotalCost);
@@ -418,11 +442,10 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       // Update selectedPosition if it matches the deleted item's position
       setSelectedPosition(prev => {
         if (prev && prev.id === positionId) {
-          const updatedItems = (prev.boq_items || []).filter(item => item.id !== subItemId);
           return {
             ...prev,
             boq_items: updatedItems,
-            total_position_cost: updatedItems.reduce((sum, item) => sum + (item.total_amount || 0), 0)
+            total_position_cost: newTotalCost
           };
         }
         return prev;
