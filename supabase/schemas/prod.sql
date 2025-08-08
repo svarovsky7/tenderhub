@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-08-08T04:19:09.328435
+-- Generated: 2025-08-08T05:16:57.091799
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -812,7 +812,7 @@ $function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea)
+CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -820,7 +820,7 @@ AS '$libdir/pgcrypto', $function$pg_armor$function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
+CREATE OR REPLACE FUNCTION extensions.armor(bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -860,7 +860,7 @@ AS '$libdir/pgcrypto', $function$pg_decrypt_iv$function$
 
 
 -- Function: extensions.digest
-CREATE OR REPLACE FUNCTION extensions.digest(text, text)
+CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -868,7 +868,7 @@ AS '$libdir/pgcrypto', $function$pg_digest$function$
 
 
 -- Function: extensions.digest
-CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.digest(text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -908,19 +908,19 @@ AS '$libdir/pgcrypto', $function$pg_random_uuid$function$
 
 
 -- Function: extensions.gen_salt
-CREATE OR REPLACE FUNCTION extensions.gen_salt(text)
- RETURNS text
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pg_gen_salt$function$
-
-
--- Function: extensions.gen_salt
 CREATE OR REPLACE FUNCTION extensions.gen_salt(text, integer)
  RETURNS text
  LANGUAGE c
  PARALLEL SAFE STRICT
 AS '$libdir/pgcrypto', $function$pg_gen_salt_rounds$function$
+
+
+-- Function: extensions.gen_salt
+CREATE OR REPLACE FUNCTION extensions.gen_salt(text)
+ RETURNS text
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_gen_salt$function$
 
 
 -- Function: extensions.grant_pg_cron_access
@@ -1067,7 +1067,7 @@ $function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1075,7 +1075,7 @@ AS '$libdir/pgcrypto', $function$pg_hmac$function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1123,6 +1123,14 @@ AS '$libdir/pgcrypto', $function$pgp_key_id_w$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
+ RETURNS text
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
+
+
+-- Function: extensions.pgp_pub_decrypt
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
  RETURNS text
  LANGUAGE c
@@ -1138,16 +1146,8 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
 AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
--- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
- RETURNS text
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
-
-
 -- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1155,7 +1155,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1171,14 +1171,6 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
- RETURNS bytea
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
-
-
--- Function: extensions.pgp_pub_encrypt
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
  RETURNS bytea
  LANGUAGE c
@@ -1186,8 +1178,16 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
 AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
 
 
+-- Function: extensions.pgp_pub_encrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
+ RETURNS bytea
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
+
+
 -- Function: extensions.pgp_pub_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1195,7 +1195,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1251,7 +1251,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
 
 
 -- Function: extensions.pgp_sym_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1259,7 +1259,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1643,8 +1643,9 @@ $function$
 
 
 -- Function: public.get_materials_for_work
+-- Description: Returns materials for work with correct formula: объем × коэф.перевода × коэф.расхода × стоимость
 CREATE OR REPLACE FUNCTION public.get_materials_for_work(p_work_boq_item_id uuid)
- RETURNS TABLE(link_id uuid, material_id uuid, material_description text, material_unit text, material_quantity numeric, material_unit_rate numeric, quantity_per_work numeric, usage_coefficient numeric, total_needed numeric, total_cost numeric)
+ RETURNS TABLE(link_id uuid, material_id uuid, material_description text, material_unit text, material_quantity numeric, material_unit_rate numeric, quantity_per_work numeric, usage_coefficient numeric, conversion_coefficient numeric, total_needed numeric, total_cost numeric)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -1658,8 +1659,11 @@ BEGIN
         m.unit_rate AS material_unit_rate,
         wml.material_quantity_per_work AS quantity_per_work,
         wml.usage_coefficient,
-        (w.quantity * wml.material_quantity_per_work * wml.usage_coefficient) AS total_needed,
-        (w.quantity * wml.material_quantity_per_work * wml.usage_coefficient * m.unit_rate) AS total_cost
+        COALESCE(w.conversion_coefficient, 1) AS conversion_coefficient,
+        -- Corrected formula: объем × коэф.перевода × коэф.расхода
+        (w.quantity * COALESCE(w.conversion_coefficient, 1) * wml.usage_coefficient) AS total_needed,
+        -- Стоимость: объем × коэф.перевода × коэф.расхода × стоимость_за_единицу
+        (w.quantity * COALESCE(w.conversion_coefficient, 1) * wml.usage_coefficient * m.unit_rate) AS total_cost
     FROM public.work_material_links wml
     INNER JOIN public.boq_items w ON wml.work_boq_item_id = w.id
     INNER JOIN public.boq_items m ON wml.material_boq_item_id = m.id
@@ -3260,16 +3264,10 @@ CREATE TRIGGER prefixes_delete_hierarchy AFTER DELETE ON storage.prefixes FOR EA
 -- ============================================
 
 -- Index on auth.audit_log_entries
-CREATE UNIQUE INDEX audit_log_entries_pkey ON auth.audit_log_entries USING btree (id);
-
--- Index on auth.audit_log_entries
 CREATE INDEX audit_logs_instance_id_idx ON auth.audit_log_entries USING btree (instance_id);
 
 -- Index on auth.flow_state
 CREATE INDEX flow_state_created_at_idx ON auth.flow_state USING btree (created_at DESC);
-
--- Index on auth.flow_state
-CREATE UNIQUE INDEX flow_state_pkey ON auth.flow_state USING btree (id);
 
 -- Index on auth.flow_state
 CREATE INDEX idx_auth_code ON auth.flow_state USING btree (auth_code);
@@ -3281,37 +3279,22 @@ CREATE INDEX idx_user_id_auth_method ON auth.flow_state USING btree (user_id, au
 CREATE INDEX identities_email_idx ON auth.identities USING btree (email text_pattern_ops);
 
 -- Index on auth.identities
-CREATE UNIQUE INDEX identities_pkey ON auth.identities USING btree (id);
-
--- Index on auth.identities
 CREATE UNIQUE INDEX identities_provider_id_provider_unique ON auth.identities USING btree (provider_id, provider);
 
 -- Index on auth.identities
 CREATE INDEX identities_user_id_idx ON auth.identities USING btree (user_id);
 
--- Index on auth.instances
-CREATE UNIQUE INDEX instances_pkey ON auth.instances USING btree (id);
-
 -- Index on auth.mfa_amr_claims
 CREATE UNIQUE INDEX amr_id_pk ON auth.mfa_amr_claims USING btree (id);
 
--- Index on auth.mfa_amr_claims
-CREATE UNIQUE INDEX mfa_amr_claims_session_id_authentication_method_pkey ON auth.mfa_amr_claims USING btree (session_id, authentication_method);
-
 -- Index on auth.mfa_challenges
 CREATE INDEX mfa_challenge_created_at_idx ON auth.mfa_challenges USING btree (created_at DESC);
-
--- Index on auth.mfa_challenges
-CREATE UNIQUE INDEX mfa_challenges_pkey ON auth.mfa_challenges USING btree (id);
 
 -- Index on auth.mfa_factors
 CREATE INDEX factor_id_created_at_idx ON auth.mfa_factors USING btree (user_id, created_at);
 
 -- Index on auth.mfa_factors
 CREATE UNIQUE INDEX mfa_factors_last_challenged_at_key ON auth.mfa_factors USING btree (last_challenged_at);
-
--- Index on auth.mfa_factors
-CREATE UNIQUE INDEX mfa_factors_pkey ON auth.mfa_factors USING btree (id);
 
 -- Index on auth.mfa_factors
 CREATE UNIQUE INDEX mfa_factors_user_friendly_name_unique ON auth.mfa_factors USING btree (friendly_name, user_id) WHERE (TRIM(BOTH FROM friendly_name) <> ''::text);
@@ -3321,9 +3304,6 @@ CREATE INDEX mfa_factors_user_id_idx ON auth.mfa_factors USING btree (user_id);
 
 -- Index on auth.mfa_factors
 CREATE UNIQUE INDEX unique_phone_factor_per_user ON auth.mfa_factors USING btree (user_id, phone);
-
--- Index on auth.one_time_tokens
-CREATE UNIQUE INDEX one_time_tokens_pkey ON auth.one_time_tokens USING btree (id);
 
 -- Index on auth.one_time_tokens
 CREATE INDEX one_time_tokens_relates_to_hash_idx ON auth.one_time_tokens USING hash (relates_to);
@@ -3344,9 +3324,6 @@ CREATE INDEX refresh_tokens_instance_id_user_id_idx ON auth.refresh_tokens USING
 CREATE INDEX refresh_tokens_parent_idx ON auth.refresh_tokens USING btree (parent);
 
 -- Index on auth.refresh_tokens
-CREATE UNIQUE INDEX refresh_tokens_pkey ON auth.refresh_tokens USING btree (id);
-
--- Index on auth.refresh_tokens
 CREATE INDEX refresh_tokens_session_id_revoked_idx ON auth.refresh_tokens USING btree (session_id, revoked);
 
 -- Index on auth.refresh_tokens
@@ -3359,9 +3336,6 @@ CREATE INDEX refresh_tokens_updated_at_idx ON auth.refresh_tokens USING btree (u
 CREATE UNIQUE INDEX saml_providers_entity_id_key ON auth.saml_providers USING btree (entity_id);
 
 -- Index on auth.saml_providers
-CREATE UNIQUE INDEX saml_providers_pkey ON auth.saml_providers USING btree (id);
-
--- Index on auth.saml_providers
 CREATE INDEX saml_providers_sso_provider_id_idx ON auth.saml_providers USING btree (sso_provider_id);
 
 -- Index on auth.saml_relay_states
@@ -3371,19 +3345,10 @@ CREATE INDEX saml_relay_states_created_at_idx ON auth.saml_relay_states USING bt
 CREATE INDEX saml_relay_states_for_email_idx ON auth.saml_relay_states USING btree (for_email);
 
 -- Index on auth.saml_relay_states
-CREATE UNIQUE INDEX saml_relay_states_pkey ON auth.saml_relay_states USING btree (id);
-
--- Index on auth.saml_relay_states
 CREATE INDEX saml_relay_states_sso_provider_id_idx ON auth.saml_relay_states USING btree (sso_provider_id);
-
--- Index on auth.schema_migrations
-CREATE UNIQUE INDEX schema_migrations_pkey ON auth.schema_migrations USING btree (version);
 
 -- Index on auth.sessions
 CREATE INDEX sessions_not_after_idx ON auth.sessions USING btree (not_after DESC);
-
--- Index on auth.sessions
-CREATE UNIQUE INDEX sessions_pkey ON auth.sessions USING btree (id);
 
 -- Index on auth.sessions
 CREATE INDEX sessions_user_id_idx ON auth.sessions USING btree (user_id);
@@ -3395,13 +3360,7 @@ CREATE INDEX user_id_created_at_idx ON auth.sessions USING btree (user_id, creat
 CREATE UNIQUE INDEX sso_domains_domain_idx ON auth.sso_domains USING btree (lower(domain));
 
 -- Index on auth.sso_domains
-CREATE UNIQUE INDEX sso_domains_pkey ON auth.sso_domains USING btree (id);
-
--- Index on auth.sso_domains
 CREATE INDEX sso_domains_sso_provider_id_idx ON auth.sso_domains USING btree (sso_provider_id);
-
--- Index on auth.sso_providers
-CREATE UNIQUE INDEX sso_providers_pkey ON auth.sso_providers USING btree (id);
 
 -- Index on auth.sso_providers
 CREATE UNIQUE INDEX sso_providers_resource_id_idx ON auth.sso_providers USING btree (lower(resource_id));
@@ -3436,12 +3395,6 @@ CREATE INDEX users_is_anonymous_idx ON auth.users USING btree (is_anonymous);
 -- Index on auth.users
 CREATE UNIQUE INDEX users_phone_key ON auth.users USING btree (phone);
 
--- Index on auth.users
-CREATE UNIQUE INDEX users_pkey ON auth.users USING btree (id);
-
--- Index on public.boq_items
-CREATE UNIQUE INDEX boq_items_pkey ON public.boq_items USING btree (id);
-
 -- Index on public.boq_items
 CREATE INDEX idx_boq_items_client_position_id ON public.boq_items USING btree (client_position_id);
 
@@ -3470,9 +3423,6 @@ CREATE UNIQUE INDEX uq_boq_position_sub_number ON public.boq_items USING btree (
 CREATE UNIQUE INDEX uq_boq_tender_item_number ON public.boq_items USING btree (tender_id, item_number);
 
 -- Index on public.client_positions
-CREATE UNIQUE INDEX client_positions_pkey ON public.client_positions USING btree (id);
-
--- Index on public.client_positions
 CREATE INDEX idx_client_positions_item_no ON public.client_positions USING btree (item_no);
 
 -- Index on public.client_positions
@@ -3499,17 +3449,11 @@ CREATE INDEX idx_materials_library_category ON public.materials_library USING bt
 -- Index on public.materials_library
 CREATE INDEX idx_materials_library_name ON public.materials_library USING btree (name);
 
--- Index on public.materials_library
-CREATE UNIQUE INDEX materials_library_pkey ON public.materials_library USING btree (id);
-
 -- Index on public.tenders
 CREATE INDEX idx_tenders_created_at ON public.tenders USING btree (created_at DESC);
 
 -- Index on public.tenders
 CREATE INDEX idx_tenders_tender_number ON public.tenders USING btree (tender_number);
-
--- Index on public.tenders
-CREATE UNIQUE INDEX tenders_pkey ON public.tenders USING btree (id);
 
 -- Index on public.tenders
 CREATE UNIQUE INDEX tenders_tender_number_key ON public.tenders USING btree (tender_number);
@@ -3526,20 +3470,8 @@ CREATE INDEX idx_work_material_links_work ON public.work_material_links USING bt
 -- Index on public.work_material_links
 CREATE UNIQUE INDEX uq_work_material_link ON public.work_material_links USING btree (work_boq_item_id, material_boq_item_id);
 
--- Index on public.work_material_links
-CREATE UNIQUE INDEX work_material_links_pkey ON public.work_material_links USING btree (id);
-
 -- Index on public.works_library
 CREATE INDEX idx_works_library_name ON public.works_library USING btree (name);
-
--- Index on public.works_library
-CREATE UNIQUE INDEX works_library_pkey ON public.works_library USING btree (id);
-
--- Index on realtime.messages
-CREATE UNIQUE INDEX messages_pkey ON ONLY realtime.messages USING btree (id, inserted_at);
-
--- Index on realtime.schema_migrations
-CREATE UNIQUE INDEX schema_migrations_pkey ON realtime.schema_migrations USING btree (version);
 
 -- Index on realtime.subscription
 CREATE INDEX ix_realtime_subscription_entity ON realtime.subscription USING btree (entity);
@@ -3553,17 +3485,8 @@ CREATE UNIQUE INDEX subscription_subscription_id_entity_filters_key ON realtime.
 -- Index on storage.buckets
 CREATE UNIQUE INDEX bname ON storage.buckets USING btree (name);
 
--- Index on storage.buckets
-CREATE UNIQUE INDEX buckets_pkey ON storage.buckets USING btree (id);
-
--- Index on storage.buckets_analytics
-CREATE UNIQUE INDEX buckets_analytics_pkey ON storage.buckets_analytics USING btree (id);
-
 -- Index on storage.migrations
 CREATE UNIQUE INDEX migrations_name_key ON storage.migrations USING btree (name);
-
--- Index on storage.migrations
-CREATE UNIQUE INDEX migrations_pkey ON storage.migrations USING btree (id);
 
 -- Index on storage.objects
 CREATE UNIQUE INDEX bucketid_objname ON storage.objects USING btree (bucket_id, name);
@@ -3583,32 +3506,11 @@ CREATE INDEX name_prefix_search ON storage.objects USING btree (name text_patter
 -- Index on storage.objects
 CREATE UNIQUE INDEX objects_bucket_id_level_idx ON storage.objects USING btree (bucket_id, level, name COLLATE "C");
 
--- Index on storage.objects
-CREATE UNIQUE INDEX objects_pkey ON storage.objects USING btree (id);
-
 -- Index on storage.prefixes
 CREATE INDEX idx_prefixes_lower_name ON storage.prefixes USING btree (bucket_id, level, ((string_to_array(name, '/'::text))[level]), lower(name) text_pattern_ops);
-
--- Index on storage.prefixes
-CREATE UNIQUE INDEX prefixes_pkey ON storage.prefixes USING btree (bucket_id, level, name);
 
 -- Index on storage.s3_multipart_uploads
 CREATE INDEX idx_multipart_uploads_list ON storage.s3_multipart_uploads USING btree (bucket_id, key, created_at);
 
--- Index on storage.s3_multipart_uploads
-CREATE UNIQUE INDEX s3_multipart_uploads_pkey ON storage.s3_multipart_uploads USING btree (id);
-
--- Index on storage.s3_multipart_uploads_parts
-CREATE UNIQUE INDEX s3_multipart_uploads_parts_pkey ON storage.s3_multipart_uploads_parts USING btree (id);
-
--- Index on supabase_migrations.schema_migrations
-CREATE UNIQUE INDEX schema_migrations_pkey ON supabase_migrations.schema_migrations USING btree (version);
-
--- Index on supabase_migrations.seed_files
-CREATE UNIQUE INDEX seed_files_pkey ON supabase_migrations.seed_files USING btree (path);
-
 -- Index on vault.secrets
 CREATE UNIQUE INDEX secrets_name_idx ON vault.secrets USING btree (name) WHERE (name IS NOT NULL);
-
--- Index on vault.secrets
-CREATE UNIQUE INDEX secrets_pkey ON vault.secrets USING btree (id);
