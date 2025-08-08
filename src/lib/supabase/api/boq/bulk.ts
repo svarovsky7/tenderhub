@@ -145,7 +145,7 @@ export const boqBulkApi = {
       console.log('🔍 Checking item existence before deletion...');
       const { data: existingItems, error: checkError } = await supabase
         .from('boq_items')
-        .select('id, item_number')
+        .select('id,item_number')
         .in('id', itemIds);
 
       console.log('📋 Existence check result:', { 

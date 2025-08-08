@@ -163,7 +163,7 @@ export const tendersApi = {
       console.log('🔍 Checking if tender exists...');
       const { data: existingTender, error: checkError } = await supabase
         .from('tenders')
-        .select('id, title')
+        .select('id,title')
         .eq('id', id)
         .single();
       

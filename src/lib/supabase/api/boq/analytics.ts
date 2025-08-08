@@ -21,7 +21,7 @@ export const boqAnalyticsApi = {
       console.log('📡 Fetching BOQ items for summary calculation...');
       const { data: boqItems, error } = await supabase
         .from('boq_items')
-        .select('total_amount, item_type')
+        .select('total_amount,item_type')
         .eq('tender_id', tenderId);
       
       console.log('📦 BOQ items response:', { itemsCount: boqItems?.length, error });
@@ -77,7 +77,7 @@ export const boqAnalyticsApi = {
       console.log('📡 Fetching BOQ items for category analysis...');
       const { data: items, error } = await supabase
         .from('boq_items')
-        .select('category, subcategory, total_amount')
+        .select('category,subcategory,total_amount')
         .eq('tender_id', tenderId)
         .not('category', 'is', null);
 
@@ -160,7 +160,7 @@ export const boqAnalyticsApi = {
       console.log('📡 Fetching BOQ items for cost distribution analysis...');
       const { data: items, error } = await supabase
         .from('boq_items')
-        .select('id, item_number, description, total_amount')
+        .select('id,item_number,description,total_amount')
         .eq('tender_id', tenderId)
         .not('total_amount', 'is', null)
         .order('total_amount', { ascending: false });
@@ -247,7 +247,7 @@ export const boqAnalyticsApi = {
       console.log('📡 Fetching BOQ items for completion analysis...');
       const { data: items, error } = await supabase
         .from('boq_items')
-        .select('material_id, work_id, notes, category, subcategory')
+        .select('material_id,work_id,notes,category,subcategory')
         .eq('tender_id', tenderId);
 
       console.log('📦 Completion items response:', { itemsCount: items?.length, error });

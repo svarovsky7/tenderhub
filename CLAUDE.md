@@ -2,150 +2,127 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**⚠️ IMPORTANT: This file must always be kept synchronized with `AGENTS.md`. Any changes to CLAUDE.md should be immediately replicated to AGENTS.md to ensure consistency.**
+
 ## Project Overview
 
-TenderHub is a construction tender management system built with React 19, TypeScript 5.8, and Vite 7. The application manages Bill of Quantities (BOQ), materials/works libraries, and tender workflows. Currently operates without authentication.
+TenderHub is a construction tender management portal built with React 19, TypeScript 5.8, and Vite 7. The application manages hierarchical Bill of Quantities (BOQ), materials/works libraries, and tender workflows for construction project bidding. Currently operates without authentication for simplified development.
 
 ## Development Commands
 
 ```bash
-npm install                    # Install dependencies
-npm run dev                    # Start dev server (http://localhost:5173)
-npm run build                  # Production build (runs tsc -b && vite build)
-npm run lint                   # Run ESLint
-npm run preview                # Preview production build
-npm run db:schema              # Export schema to supabase/schemas/prod.sql
+npm install          # Install dependencies
+npm run dev          # Start dev server (http://localhost:5173)
+npm run build        # Production build (tsc -b && vite build)
+npm run preview      # Preview production build
+npm run lint         # Run ESLint checks
+npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 ```
 
-**Note**: No typecheck script exists. Type checking happens during `npm run build` via `tsc -b`.
+## Environment Configuration
 
-## Environment Setup
-
-Configure `.env.local` with Supabase credentials:
+Create `.env.local` with:
 ```
-VITE_SUPABASE_URL=https://lkmgbizyyaaacetllbzr.supabase.co
+VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your_anon_key_here
 ```
-
-**Security Note**: The `.env.local` file contains sensitive credentials (DB password). Never commit this file.
 
 ## Tech Stack
 
 - **Frontend**: React 19.1.0, TypeScript 5.8.3, Vite 7.0.4
-- **UI**: Ant Design 5.26.7 + React 19 compatibility patch (`@ant-design/v5-patch-for-react-19`)
-- **State**: TanStack Query 5.84.1
-- **Database**: Supabase (PostgreSQL 17, RLS disabled)
-- **Styling**: Tailwind CSS 3.4.17
-- **Excel**: XLSX 0.18.5
-- **Lists**: react-window 1.8.11 (virtualization)
-- **DnD**: @dnd-kit/core 6.3.1, @dnd-kit/sortable 10.0.0
+- **UI**: Ant Design 5.26.7 + React 19 compatibility patch (@ant-design/v5-patch-for-react-19)
+- **State**: TanStack Query 5.84.1 for server state management
+- **Database**: Supabase 2.53.0 (PostgreSQL 16 with RLS completely disabled)
+- **Styling**: Tailwind CSS 3.4.17 + PostCSS
+- **Excel**: XLSX 0.18.5 for import/export operations
+- **Drag & Drop**: @dnd-kit/core 6.3.1, @dnd-kit/sortable 10.0.0
+- **Virtual Scrolling**: react-window 1.8.11 for large lists
+- **Forms**: react-hook-form 7.62.0 + yup 1.7.0 validation
+- **Routing**: react-router-dom 7.7.1
 
-## Architecture
-
-### Core Modules
-
-```
-src/lib/supabase/api/          # API layer split by domain
-  - boq/                       # BOQ operations - modular structure
-    - analytics.ts             # Cost distribution, summaries
-    - bulk.ts                  # Bulk create/update/delete
-    - crud.ts                  # Basic CRUD operations
-    - hierarchy.ts             # Move items between positions
-    - queries.ts               # Fetch by tender/position
-    - index.ts                 # Main boqApi export + legacy boqItemsApi
-  - client-positions.ts        # Position management with auto-numbering
-  - materials.ts               # Materials library CRUD
-  - works.ts                   # Works library CRUD
-  - work-material-links.ts    # Material-work relationships
-  - tenders.ts                 # Tender CRUD operations
-  - client-works.ts            # Client-specific work items
-  - users.ts                   # User management (future use)
-  - subscriptions.ts           # Realtime subscriptions
-  - hierarchy.ts               # Generic hierarchy utilities
-  - utils.ts                   # Shared utilities
-  - index.ts                   # Barrel exports
-
-src/components/tender/         # Tender UI components
-  - TenderBOQManagerNew.tsx    # Main BOQ interface with material links
-  - TenderBOQManager.tsx       # Legacy BOQ interface
-  - BOQItemList/              # Virtualized list components
-    - VirtualList.tsx         # react-window implementation
-    - DraggableList.tsx       # Drag-and-drop support
-    - SortableItem.tsx        # Individual draggable items
-  - LibrarySelector/          # Material/work selection modal
-    - MaterialSelector.tsx    # Material search and selection
-    - WorkSelector.tsx        # Work search and selection
-    - Cart.tsx               # Selection cart management
-
-src/pages/                   # Page components
-  - TendersPage/             # Main tender listing
-    - components/            # Table, filters, modals
-    - hooks/                 # Custom hooks for data fetching
-  - TenderDetailPage.tsx     # Individual tender view
-  - MaterialsPage.tsx        # Materials library management
-  - WorksPage.tsx           # Works library management
-```
+## Architecture Highlights
 
 ### Database Schema
-
-**Production Schema**: Available in `supabase/schemas/prod.sql` (exported via `npm run db:schema`)
+**CRITICAL**: Always refer to `supabase/schemas/prod.sql` for authoritative schema. RLS is completely disabled by design.
 
 Key tables:
-- `tenders` - Main tender projects
-- `client_positions` - BOQ groupings with auto-numbering (position_number)
-- `boq_items` - Hierarchical items under positions
-  - Auto-calculated: `total_amount = quantity × unit_rate`
-  - Types: 'material' or 'work'
-  - Sub-numbering: item_number format "X.Y" (X=position, Y=sub)
-- `materials_library` & `works_library` - Searchable catalogs
-- `work_material_links` - Material-work relationships (new feature)
+- `tenders` - Main tender projects with status tracking
+- `client_positions` - Top-level BOQ groupings with auto-numbering via `get_next_client_position_number()`, includes `manual_volume` field
+- `boq_items` - Hierarchical items with auto-calculated totals, includes `consumption_coefficient` & `conversion_coefficient`
+- `materials_library` & `works_library` - Searchable catalogs with GIN indexes for full-text search
+- `work_material_links` - Links works to materials with usage coefficients, validated by `check_work_material_types()` trigger
 
-Database features:
-- PostgreSQL 17 with extensions enabled
-- RLS disabled (no auth required)
-- Auto-update triggers for `updated_at` columns
-- Auto-recalculation trigger for position totals
-- GIN indexes for full-text search (Russian language)
-- Unique constraints on position/item numbering
+Key functions:
+- `bulk_insert_boq_items()` - Optimized for Excel imports (5000+ rows)
+- `get_next_sub_number()` - Auto-numbering for hierarchical items
+- `get_materials_for_work()` - Retrieves linked materials with calculations
 
-### API Patterns
+### API Layer (`lib/supabase/api/`)
+Modular structure split from original 2,344-line file into domain-specific modules (all < 600 lines):
 
-The API layer follows consistent patterns:
+Core modules:
+- `boq/` - BOQ operations subdirectory:
+  - `crud.ts` - Create, read, update, delete operations
+  - `hierarchy.ts` - Tree structure management
+  - `bulk.ts` - Batch operations for Excel imports
+  - `analytics.ts` - Statistics and calculations
+  - `queries.ts` - Complex search queries
+- `client-positions.ts` (296 lines) - Client position CRUD with auto-numbering
+- `tenders.ts` (234 lines) - Tender lifecycle management
+- `materials.ts` (147 lines) & `works.ts` (143 lines) - Library management
+- `work-material-links.ts` - Work-Material relationships
+- `client-works.ts` (165 lines) - Excel import functionality
+- `hierarchy.ts` (454 lines) - Complete tender structure operations
+- `subscriptions.ts` (121 lines) - Real-time subscriptions (infrastructure ready)
+- `utils.ts` (37 lines) - Shared error handling and pagination
+- `index.ts` - Barrel exports for backward compatibility
 
-```typescript
-// Standard CRUD operations
-export const entityApi = {
-  getAll: (filters?) => Promise<{ data, error }>,
-  getById: (id) => Promise<{ data, error }>,
-  create: (data) => Promise<{ data, error }>,
-  update: (id, data) => Promise<{ data, error }>,
-  delete: (id) => Promise<{ data, error }>
-}
-
-// BOQ API has modular structure
-export const boqApi = {
-  // From crud.ts
-  getById, create, update, delete,
-  // From queries.ts
-  getByTenderId, getByClientPositionId,
-  // From bulk.ts
-  bulkCreate, bulkUpdate, bulkDelete,
-  // From hierarchy.ts
-  moveToPosition, batchMove, reorderInPosition,
-  // From analytics.ts
-  getSummary, getCategoryAnalytics, getCostDistribution
-}
+### Component Organization
+```
+src/components/tender/  # Core tender components
+  - TenderBOQManager.tsx # Main BOQ interface
+  - BOQItemList/         # Virtualized item lists with drag-drop
+  - LibrarySelector/     # Material/work selection with cart
+src/pages/              # Route components
+  - TendersPage/         # Tender listing with filters & stats
+lib/supabase/           # Supabase integration
+  - api/                 # Domain-specific API modules
+  - types/               # Comprehensive type definitions
 ```
 
-## Critical Rules
+## Testing Commands
 
-### 1. File Size Limits
-- **Maximum 600 lines per file**
-- Split large files into domain modules
-- Use barrel exports (`index.ts`)
+```bash
+npm run lint          # Run ESLint with configured rules
+npm run build         # Type-check and build (will fail on type errors)
+```
 
-### 2. Logging Requirements
-Every function must include comprehensive logging:
+**Note**: No test suite currently implemented. Verify functionality through:
+- Manual testing in development server
+- Type checking via `npm run build`
+- ESLint for code quality
+
+## Critical Implementation Rules
+
+### 1. Database Operations
+- **NEVER enable RLS** - Disabled by design for simplified development
+- **ALWAYS check** `supabase/schemas/prod.sql` for authoritative schema before database work
+- Use `bulk_insert_boq_items()` for large imports (handles 5000+ rows efficiently)
+- Auto-numbering handled by database functions:
+  - `get_next_client_position_number()` for positions
+  - `get_next_sub_number()` for hierarchical items
+- Work-Material links validated by `check_work_material_types()` trigger
+- All tables use UUID primary keys
+- Timestamps (`created_at`, `updated_at`) auto-managed
+
+### 2. File Size Limits
+- **Maximum 600 lines per file** - Split larger files
+- Extract hooks to separate files
+- Split API by domain (already implemented in `api/` folder)
+- Use barrel exports
+
+### 3. Logging Requirements
+**MANDATORY**: Every function must include comprehensive logging:
 
 ```typescript
 console.log('🚀 [FunctionName] called with:', params);
@@ -153,28 +130,20 @@ console.log('✅ [FunctionName] completed:', result);
 console.log('❌ [FunctionName] failed:', error);
 ```
 
-Emoji system:
+Use emoji system:
 - 🚀 Function start
 - ✅ Success
-- ❌ Error  
+- ❌ Error
 - 📡 API call
 - 📦 API response
 - 🔍 Validation
 - 🔄 State change
-- 💥 Critical error (with full context)
-
-### 3. Database Operations
-- **RLS is disabled** - No authentication required
-- Use bulk operations for large imports (5000+ rows)
-- Check existence before create operations
-- Auto-numbering handled by database functions
-- Use transactions for multi-table operations
 
 ### 4. Error Handling
 ```typescript
 try {
   console.log('🔍 Checking existence...');
-  // Check first
+  // Check existence before operations
   console.log('📡 Calling API...');
   // Perform operation
   console.log('✅ Success');
@@ -184,96 +153,131 @@ try {
     context: relevantData,
     timestamp: new Date().toISOString()
   });
-  // Return error to caller
-  return { data: null, error };
 }
 ```
 
-## Common Tasks
+## Current Status
 
-### Working with BOQ
-1. BOQ items are hierarchical under client positions
-2. Items auto-calculate: `total = quantity × unit_rate`
-3. Coefficients available: `consumption_coefficient`, `conversion_coefficient`
-4. Use `LibrarySelector` for material/work selection
-5. Positions auto-number via database functions
-6. Sub-items numbered as "position.sub" (e.g., "1.1", "1.2")
+### ✅ Implemented
+- Hierarchical BOQ with drag-drop reordering
+- Excel import/export with progress tracking
+- Materials/Works libraries with search
+- Dashboard with statistics
+- Russian UI throughout
+- Work-Material linking system with usage coefficients
+- Virtual scrolling for large datasets
+- Expandable search bars with autocomplete
 
-### Excel Import
-1. Drag-drop XLSX file to `ExcelUpload` component
-2. System uses bulk operations for performance
-3. Handles 5000+ rows efficiently
-4. Creates client positions from Excel structure
-5. Preserves Excel fields: item_no, work_name, unit, volume
+### ⚠️ Disabled
+- Authentication (no login required)
+- Real-time features (infrastructure ready)
 
-### Adding New API Endpoints
-1. Add to appropriate file in `lib/supabase/api/`
-2. For BOQ: use modular structure in `boq/` subdirectory
-3. Follow existing CRUD patterns
-4. Include comprehensive logging
-5. Update barrel exports in `index.ts`
-6. Handle both success and error cases
+### ❌ Not Implemented
+- File storage/documents
+- Edge Functions for commercial cost calculation
+- Advanced analytics
+- OAuth 2.0 integration
 
-### Material-Work Links
-New feature for linking materials to works:
-- API: `workMaterialLinksApi` in `work-material-links.ts`
-- Tables: `work_material_links` with detailed join views
-- UI: Implemented in `TenderBOQManagerNew.tsx`
-- Fields: quantity per work, usage coefficient, notes
+## Common Development Tasks
 
-## React 19 Compatibility
+### Running the Application
+```bash
+npm install          # Install all dependencies
+npm run dev          # Start development server at http://localhost:5173
+```
 
-- Using `@ant-design/v5-patch-for-react-19` for Ant Design compatibility
-- Updated Modal APIs: `destroyOnClose` → `destroyOnHidden`
-- No React.FC usage - use explicit typing
-- Strict mode enabled
+### Adding BOQ Items
+1. Use `LibrarySelector` component for material/work selection with cart functionality
+2. Items auto-calculate: `total = quantity × consumption_coefficient × conversion_coefficient × price`
+3. Positions auto-number via `get_next_client_position_number()` database function
 
-## Performance Considerations
+### Excel Import/Export
+1. Import: Drag-drop XLSX file to upload area in TendersPage
+2. System uses `bulk_insert_boq_items()` for performance
+3. Handles 5000+ rows efficiently with `UploadProgressModal`
+4. Export: Uses XLSX library to generate formatted spreadsheets
 
-- **Virtualized lists**: react-window for large datasets
-- **Bulk operations**: For Excel imports and mass updates
-- **Indexes**: GIN for text search, btree for lookups
-- **Generated columns**: Auto-calculations in database
-- **Memoization**: Use React.memo for expensive components
-- **Query optimization**: Use specific queries over generic ones
+### Database Schema Changes
+1. Modify schema in Supabase dashboard (https://supabase.com/dashboard)
+2. Run `npm run db:schema` to export updated schema to `supabase/schemas/prod.sql`
+3. Update TypeScript types in `lib/supabase/types/database/`
+4. Regenerate types if needed using Supabase CLI
+
+### Working with Real-time Features
+Real-time infrastructure is ready but currently disabled. To enable:
+1. Uncomment subscription code in `lib/supabase/api/subscriptions.ts`
+2. Add channel management in components
+3. Handle optimistic updates for better UX
+
+## Performance Optimizations
+
+### Database Level
+- GIN indexes on `materials_library` and `works_library` for full-text search
+- Generated columns for auto-calculations (reduces client-side computation)
+- Bulk operations via `bulk_insert_boq_items()` function
+- Optimized queries with proper indexing on foreign keys
+
+### Frontend Level
+- Virtual scrolling with react-window for BOQ lists (handles 10,000+ items)
+- Lazy loading with InfiniteLoader for pagination
+- Memoization of expensive calculations
+- Debounced search inputs (300ms default)
+- Optimistic updates prepared for real-time features
+
+### Bundle Optimization
+- Code splitting by route
+- Tree-shaking enabled via modular API structure
+- Dynamic imports for heavy components (Excel processing)
+
+## Project Conventions
+
+### UI/UX
+- **Language**: Russian UI throughout (all user-facing text)
+- **Components**: Ant Design components with custom styling
+- **Layout**: Responsive design with Tailwind utilities
+- **Forms**: react-hook-form with yup validation
+- **Tables**: Virtual scrolling for performance
+- **Modals**: Used for all create/edit operations
+
+### Code Organization
+- **Components**: Grouped by feature in `components/tender/`
+- **Pages**: Route components in `pages/` with subdirectories for complex pages
+- **Hooks**: Custom hooks extracted to separate files
+- **Types**: Centralized in `lib/supabase/types/`
+- **API**: Domain-specific modules in `lib/supabase/api/`
+
+### State Management
+- **Server State**: TanStack Query with 5-minute cache
+- **Local State**: React hooks (useState, useReducer)
+- **Form State**: react-hook-form
+- **No global state management** (Redux/Zustand not used)
 
 ## Development Workflow
 
-1. Check API modules in `lib/supabase/api/` for existing operations
-2. Add comprehensive logging to all new functions
-3. Keep files under 600 lines (split if needed)
-4. Test with large datasets (5000+ rows)
-5. Verify Russian UI text displays correctly
-6. Use TypeScript strict mode
-7. Handle loading and error states in UI
+### Before Starting
+1. Ensure `.env.local` exists with Supabase credentials
+2. Run `npm install` to get all dependencies
+3. Start dev server with `npm run dev`
 
-## Testing
+### When Making Changes
+1. **Database**: Always check `supabase/schemas/prod.sql` first
+2. **Logging**: Add comprehensive logging to all functions (see Logging Requirements)
+3. **File Size**: Keep files under 600 lines - split if larger
+4. **Testing**: Test with large datasets (5000+ rows) for performance
+5. **UI**: Verify Russian text displays correctly
+6. **Types**: Run `npm run build` to catch type errors
+7. **Linting**: Run `npm run lint` before committing
 
-Currently no test framework configured. Manual testing performed through UI.
-For development testing:
-- Use `npm run dev` for hot reload
-- Test with production data via Supabase connection
-- Verify bulk operations with large Excel files
+### Current Limitations
+- **No Authentication**: All features accessible without login (development mode)
+- **No Real-time**: Infrastructure ready but disabled
+- **No File Storage**: Document upload UI exists but not connected
+- **No Edge Functions**: Commercial cost calculation not implemented
+- **No Tests**: Manual testing only
 
-## Deployment
+### Known Issues
+- Large Excel imports (>10,000 rows) may timeout
+- Drag-drop reordering can be slow with many items
+- Some Ant Design components show React 19 compatibility warnings (patches applied)
 
-- **Frontend**: Local development via Vite
-- **Backend**: Supabase Cloud (production)
-- **Build**: `npm run build` creates production bundle
-- No CI/CD pipeline configured yet
-
-## Supabase Configuration
-
-Local Supabase setup available via `supabase/config.toml`:
-- API port: 54321
-- Database port: 54322  
-- Studio port: 54323
-- Major version: PostgreSQL 17
-- Migrations enabled but folder empty (prod schema only)
-
-## Notes
-
-- Application designed for Russian market (UI text, search)
-- No authentication implemented (future enhancement)
-- Excel import is primary data entry method
-- Focus on construction industry terminology
+Remember: This is a simplified development environment. Production deployment will require enabling authentication, RLS, and other security features.

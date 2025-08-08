@@ -67,21 +67,37 @@ export const boqCrudApi = {
         return { error: 'Client position ID is required' };
       }
 
-      console.log('🔍 Fetching client position info...');
-      const { data: position, error: positionError } = await supabase
+      console.log('🔍 Fetching client position info for ID:', item.client_position_id);
+      const { data: positionData, error: positionError } = await supabase
         .from('client_positions')
-        .select('position_number')
+        .select('*')
         .eq('id', item.client_position_id)
         .single();
 
-      console.log('📦 Position response:', { position, positionError });
+      console.log('📦 Position response:', { positionData, positionError });
+      console.log('📦 Position data type:', typeof positionData);
+      console.log('📦 Position keys:', positionData ? Object.keys(positionData) : 'null');
+      
+      // Handle array response from Supabase
+      const position = Array.isArray(positionData) ? positionData[0] : positionData;
 
       if (positionError || !position) {
         console.error('❌ Failed to fetch client position:', positionError);
         return { error: 'Failed to fetch client position information' };
       }
 
-      console.log('📋 Position found:', position);
+      console.log('📋 Position found:', {
+        id: position.id,
+        position_number: position.position_number,
+        item_no: position.item_no,
+        work_name: position.work_name
+      });
+      
+      // Check if position_number is valid
+      if (!position.position_number && position.position_number !== 0) {
+        console.error('❌ Position has invalid position_number:', position.position_number);
+        return { error: `Client position ${position.id} has no position_number assigned. Please contact support.` };
+      }
 
       // Check if sub_number and item_number are already provided
       let subNumber = item.sub_number;
@@ -141,7 +157,7 @@ export const boqCrudApi = {
       console.log('🔍 Checking for duplicate sub_number before insert...');
       const { data: existingBySubNumber } = await supabase
         .from('boq_items')
-        .select('id, item_number, sub_number, description')
+        .select('id,item_number,sub_number,description')
         .eq('client_position_id', item.client_position_id)
         .eq('sub_number', subNumber);
       
@@ -152,7 +168,7 @@ export const boqCrudApi = {
       const { data, error } = await supabase
         .from('boq_items')
         .insert(itemToInsert)
-        .select()
+        .select('*')
         .single();
 
       console.log('📦 Insert response:', { data, error });
@@ -189,6 +205,31 @@ export const boqCrudApi = {
         
         return {
           error: handleSupabaseError(error, 'Create BOQ item'),
+        };
+      }
+
+      // If insert was successful but data is null, fetch the created item
+      if (!data) {
+        console.log('⚠️ Insert successful but no data returned, fetching created item...');
+        const { data: createdItem, error: fetchError } = await supabase
+          .from('boq_items')
+          .select('*')
+          .eq('tender_id', itemToInsert.tender_id)
+          .eq('client_position_id', itemToInsert.client_position_id)
+          .eq('sub_number', itemToInsert.sub_number)
+          .single();
+        
+        if (fetchError || !createdItem) {
+          console.error('❌ Failed to fetch created item:', fetchError);
+          return {
+            error: 'Item created but could not retrieve details',
+          };
+        }
+        
+        console.log('✅ BOQ item created and fetched successfully:', createdItem.id);
+        return {
+          data: createdItem,
+          message: 'BOQ item created successfully',
         };
       }
 
@@ -271,7 +312,7 @@ export const boqCrudApi = {
       console.log('🔍 Checking if BOQ item exists...');
       const { data: existing, error: checkError } = await supabase
         .from('boq_items')
-        .select('id, item_number, description')
+        .select('id,item_number,description')
         .eq('id', id)
         .single();
 

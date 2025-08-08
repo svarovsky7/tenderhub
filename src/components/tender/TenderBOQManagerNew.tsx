@@ -65,10 +65,21 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       // Handle paginated response
       const positions = result.data || [];
       console.log('📋 Raw positions data:', positions);
+      console.log('🔍 First position details:', positions[0] ? {
+        id: positions[0].id,
+        position_number: positions[0].position_number,
+        item_no: positions[0].item_no,
+        work_name: positions[0].work_name
+      } : 'No positions');
       
       // Load BOQ items for each position
       const positionsWithItems = await Promise.all(
         positions.map(async (position) => {
+          console.log(`📋 Processing position ${position.id}:`, {
+            position_number: position.position_number,
+            item_no: position.item_no
+          });
+          
           const boqResult = await boqItemsApi.getByPosition(position.id);
           const boqItems = boqResult.error ? [] : (boqResult.data || []);
           const totalCost = boqItems.reduce((sum, item) => sum + (item.total_amount || 0), 0);
@@ -128,6 +139,18 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
   // Open/close position
   const openModal = useCallback(async (position: PositionWithItems) => {
     console.log('🔄 Toggling position:', position.id);
+    console.log('📋 Position details in openModal:', {
+      id: position.id,
+      position_number: position.position_number,
+      item_no: position.item_no,
+      work_name: position.work_name
+    });
+    
+    if (!position.position_number && position.position_number !== 0) {
+      console.error('❌ Position missing position_number!', position);
+      message.error('Ошибка: У позиции отсутствует номер. Пожалуйста, обновите страницу.');
+      return;
+    }
     
     if (selectedPosition?.id !== position.id) {
       // Opening a new position - load links
@@ -254,7 +277,19 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     }
 
     try {
-      console.log('🚀 Adding new BOQ item to position:', selectedPosition.id);
+      console.log('🚀 Adding new BOQ item to position:', {
+        id: selectedPosition.id,
+        position_number: selectedPosition.position_number,
+        item_no: selectedPosition.item_no,
+        work_name: selectedPosition.work_name
+      });
+      
+      // Check if position has valid position_number
+      if (!selectedPosition.position_number && selectedPosition.position_number !== 0) {
+        console.error('❌ Selected position missing position_number!', selectedPosition);
+        message.error('Ошибка: У позиции отсутствует номер. Пожалуйста, обновите страницу.');
+        return;
+      }
 
       // Let the API handle sub_number and item_number generation
       // The API will also handle retries in case of duplicates

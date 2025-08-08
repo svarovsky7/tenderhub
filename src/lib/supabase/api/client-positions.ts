@@ -22,6 +22,8 @@ export const clientPositionsApi = {
     filters: ClientPositionFilters = {},
     pagination: PaginationOptions = {}
   ): Promise<PaginatedResponse<ClientPositionSummary>> {
+    console.log('🚀 clientPositionsApi.getByTenderId called:', { tenderId, filters, pagination });
+    
     try {
       let query = supabase
         .from('client_positions')
@@ -48,13 +50,28 @@ export const clientPositionsApi = {
       // Order by position number
       const { data, error, count } = await paginatedQuery.order('position_number');
 
+      console.log('📦 Query result:', { 
+        dataLength: data?.length, 
+        error, 
+        count,
+        firstItem: data?.[0] ? {
+          id: data[0].id,
+          position_number: data[0].position_number,
+          item_no: data[0].item_no,
+          work_name: data[0].work_name
+        } : null
+      });
+
       if (error) {
+        console.error('❌ Error fetching positions:', error);
         return {
           error: handleSupabaseError(error, 'Get client positions'),
         };
       }
 
       const { page = 1, limit = 20 } = pagination;
+      
+      console.log('✅ Returning positions:', data?.length || 0);
       
       return {
         data: data || [],
@@ -105,7 +122,45 @@ export const clientPositionsApi = {
    * Position number is automatically assigned if not provided
    */
   async create(position: ClientPositionInsert): Promise<ApiResponse<ClientPosition>> {
+    console.log('🚀 clientPositionsApi.create called with:', position);
+    
     try {
+      // If position_number is not provided or is 0, get the next available number
+      if (!position.position_number || position.position_number === 0) {
+        console.log('🔍 Position number not provided, fetching next available...');
+        
+        // Try to use database function first for thread-safe generation
+        const { data: dbPositionNumber, error: rpcError } = await supabase
+          .rpc('get_next_position_number', { p_tender_id: position.tender_id });
+        
+        if (rpcError) {
+          console.error('❌ Failed to get next position_number from database function:', rpcError);
+          // Fallback to manual calculation
+          console.log('⚠️ Falling back to manual calculation...');
+          
+          const { data: maxPosition, error: maxError } = await supabase
+            .from('client_positions')
+            .select('position_number')
+            .eq('tender_id', position.tender_id)
+            .order('position_number', { ascending: false })
+            .limit(1);
+
+          if (maxError) {
+            console.error('❌ Failed to fetch max position number:', maxError);
+            position.position_number = 1; // Default to 1 if all else fails
+          } else {
+            const nextNumber = (maxPosition?.[0]?.position_number || 0) + 1;
+            position.position_number = nextNumber;
+            console.log('✅ Manually calculated position_number:', nextNumber);
+          }
+        } else {
+          position.position_number = dbPositionNumber;
+          console.log('✅ Database function assigned position_number:', dbPositionNumber);
+        }
+      }
+
+      console.log('💾 Creating client position with data:', position);
+      
       const { data, error } = await supabase
         .from('client_positions')
         .insert(position)
@@ -113,16 +168,19 @@ export const clientPositionsApi = {
         .single();
 
       if (error) {
+        console.error('❌ Failed to create client position:', error);
         return {
           error: handleSupabaseError(error, 'Create client position'),
         };
       }
 
+      console.log('✅ Client position created successfully:', data);
       return {
         data,
         message: 'Client position created successfully',
       };
     } catch (error) {
+      console.error('💥 Exception in create client position:', error);
       return {
         error: handleSupabaseError(error, 'Create client position'),
       };

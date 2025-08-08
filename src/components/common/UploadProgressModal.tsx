@@ -76,7 +76,7 @@ const UploadProgressModal: React.FC<UploadProgressModalProps> = ({
             percent={Math.round(progress)} 
             strokeColor={getProgressColor()}
             trailColor="#f0f0f0"
-            strokeWidth={12}
+            size={{ height: 12 }}
             format={(percent) => (
               <span style={{ 
                 fontSize: '16px', 
