@@ -20,6 +20,8 @@ interface FormValues {
   unit: string;
   quantity: number;
   unit_rate: number;
+  consumption_coefficient?: number;
+  conversion_coefficient?: number;
   material_id?: string;
   work_id?: string;
 }
@@ -68,6 +70,8 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
       unit: '',
       quantity: 0,
       unit_rate: 0,
+      consumption_coefficient: undefined,
+      conversion_coefficient: undefined,
     },
     resolver: yupResolver(schema),
   });
@@ -135,6 +139,8 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
       client_position_id: positionId,
       material_id: values.item_type === 'material' ? values.material_id : null,
       work_id: values.item_type === 'work' ? values.work_id : null,
+      consumption_coefficient: values.item_type === 'material' ? values.consumption_coefficient : null,
+      conversion_coefficient: values.item_type === 'material' ? values.conversion_coefficient : null,
     };
     try {
       console.log('📡 Calling boqItemsApi.create', payload);
@@ -267,6 +273,42 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
           )}
         />
       </Form.Item>
+
+      {itemType === 'material' && (
+        <>
+          <Form.Item>
+            <Controller
+              name="consumption_coefficient"
+              control={control}
+              render={({ field }) => (
+                <InputNumber
+                  {...field}
+                  min={0}
+                  precision={4}
+                  placeholder="Коэф. расхода"
+                  style={{ width: 130 }}
+                />
+              )}
+            />
+          </Form.Item>
+
+          <Form.Item>
+            <Controller
+              name="conversion_coefficient"
+              control={control}
+              render={({ field }) => (
+                <InputNumber
+                  {...field}
+                  min={0}
+                  precision={4}
+                  placeholder="Коэф. перевода"
+                  style={{ width: 130 }}
+                />
+              )}
+            />
+          </Form.Item>
+        </>
+      )}
 
       <Form.Item>
         <InputNumber

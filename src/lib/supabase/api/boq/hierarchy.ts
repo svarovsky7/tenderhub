@@ -28,7 +28,7 @@ export const boqHierarchyApi = {
       console.log('🔍 Fetching current item info...');
       const { data: currentItem, error: itemError } = await supabase
         .from('boq_items')
-        .select('id, item_number, client_position_id')
+        .select('id,item_number,client_position_id')
         .eq('id', itemId)
         .single();
 

@@ -34,6 +34,8 @@ interface FormData {
   unit: string;
   quantity: number;
   unit_rate: number;
+  consumption_coefficient?: number;
+  conversion_coefficient?: number;
   material_id?: string;
   work_id?: string;
   category?: string;
@@ -80,7 +82,9 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
         category: editingItem.category || '',
         subcategory: editingItem.subcategory || '',
         notes: editingItem.notes || '',
-        sort_order: editingItem.sort_order || 0
+        sort_order: editingItem.sort_order || 0,
+        consumption_coefficient: editingItem.consumption_coefficient || undefined,
+        conversion_coefficient: editingItem.conversion_coefficient || undefined
       });
     } else if (visible) {
       form.resetFields();
@@ -137,7 +141,9 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
         tender_id: tenderId,
         client_position_id: positionId,
         material_id: values.item_type === 'material' ? values.material_id : null,
-        work_id: values.item_type === 'work' ? values.work_id : null
+        work_id: values.item_type === 'work' ? values.work_id : null,
+        consumption_coefficient: values.item_type === 'material' ? values.consumption_coefficient : null,
+        conversion_coefficient: values.item_type === 'material' ? values.conversion_coefficient : null
       };
 
       if (isEditing && editingItem) {
@@ -312,6 +318,40 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
             </Form.Item>
           </Col>
         </Row>
+
+        {itemType === 'material' && (
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="consumption_coefficient"
+                label="Коэффициент расхода материала"
+                tooltip="Коэффициент расхода материала на единицу работ"
+              >
+                <InputNumber
+                  min={0}
+                  precision={4}
+                  placeholder="1.0000"
+                  className="w-full"
+                />
+              </Form.Item>
+            </Col>
+            
+            <Col span={12}>
+              <Form.Item
+                name="conversion_coefficient"
+                label="Коэффициент перевода единицы измерения"
+                tooltip="Коэффициент для перевода единиц измерения"
+              >
+                <InputNumber
+                  min={0}
+                  precision={4}
+                  placeholder="1.0000"
+                  className="w-full"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        )}
 
         <Row gutter={16}>
           <Col span={12}>

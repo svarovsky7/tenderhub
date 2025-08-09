@@ -55,74 +55,195 @@ export const boqCrudApi = {
   async create(item: BOQItemInsert): Promise<ApiResponse<BOQItem>> {
     console.log('🚀 boqCrudApi.create called with:', item);
     
-    try {
+    const maxRetries = 3;
+    let retryCount = 0;
+    
+    while (retryCount < maxRetries) {
+      try {
+        console.log(`🔄 Attempt ${retryCount + 1}/${maxRetries} to create BOQ item`);
       // Get client position to determine item_number format
       if (!item.client_position_id) {
         console.error('❌ Missing client_position_id for BOQ item');
         return { error: 'Client position ID is required' };
       }
 
-      console.log('🔍 Fetching client position info...');
-      const { data: position, error: positionError } = await supabase
+      console.log('🔍 Fetching client position info for ID:', item.client_position_id);
+      const { data: positionData, error: positionError } = await supabase
         .from('client_positions')
-        .select('position_number')
+        .select('*')
         .eq('id', item.client_position_id)
         .single();
 
-      console.log('📦 Position response:', { position, positionError });
+      console.log('📦 Position response:', { positionData, positionError });
+      console.log('📦 Position data type:', typeof positionData);
+      console.log('📦 Position keys:', positionData ? Object.keys(positionData) : 'null');
+      
+      // Handle array response from Supabase
+      const position = Array.isArray(positionData) ? positionData[0] : positionData;
 
       if (positionError || !position) {
         console.error('❌ Failed to fetch client position:', positionError);
         return { error: 'Failed to fetch client position information' };
       }
 
-      console.log('📋 Position found:', position);
-
-      // Determine next sub_number by taking the current maximum
-      console.log('🔍 Fetching current max sub_number...');
-      const { data: maxSub, error: subError } = await supabase
-        .from('boq_items')
-        .select('sub_number')
-        .eq('client_position_id', item.client_position_id)
-        .order('sub_number', { ascending: false })
-        .limit(1);
-
-      console.log('📊 Max sub_number result:', { maxSub, subError });
-
-      if (subError) {
-        console.error('❌ Failed to fetch max sub_number:', subError);
-        return { error: 'Failed to fetch existing BOQ items' };
+      console.log('📋 Position found:', {
+        id: position.id,
+        position_number: position.position_number,
+        item_no: position.item_no,
+        work_name: position.work_name
+      });
+      
+      // Check if position_number is valid
+      if (!position.position_number && position.position_number !== 0) {
+        console.error('❌ Position has invalid position_number:', position.position_number);
+        return { error: `Client position ${position.id} has no position_number assigned. Please contact support.` };
       }
 
-      // Generate item_number in format "X.Y" where X is position number, Y is sub-number
-      const subNumber = (maxSub?.[0]?.sub_number || 0) + 1;
-      const itemNumber = `${position.position_number}.${subNumber}`;
+      // Check if sub_number and item_number are already provided
+      let subNumber = item.sub_number;
+      let itemNumber = item.item_number;
 
-      console.log(
-        `🔢 Generated item_number: ${itemNumber} (position: ${position.position_number}, sub: ${subNumber})`
-      );
+      // Only generate sub_number and item_number if not provided
+      if (!subNumber || !itemNumber) {
+        console.log('🔍 sub_number or item_number not provided, generating...');
+        
+        // Use database function for thread-safe sub_number generation
+        console.log('🔢 Calling database function get_next_sub_number with position:', item.client_position_id);
+        
+        // Validate client_position_id before calling RPC
+        if (!item.client_position_id || item.client_position_id === '') {
+          console.error('❌ Invalid client_position_id for get_next_sub_number');
+          throw new Error('Client position ID is required for creating BOQ item');
+        }
+        
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(item.client_position_id)) {
+          console.error('❌ Invalid UUID format for client_position_id:', item.client_position_id);
+          throw new Error('Invalid client position ID format');
+        }
+        
+        const { data: dbSubNumber, error: rpcError } = await supabase
+          .rpc('get_next_sub_number', { p_client_position_id: item.client_position_id });
+        
+        if (rpcError) {
+          console.error('❌ Failed to get next sub_number from database function:', rpcError);
+          // Fallback to manual calculation if function fails
+          console.log('⚠️ Falling back to manual calculation...');
+          const { data: maxSub, error: subError } = await supabase
+            .from('boq_items')
+            .select('sub_number')
+            .eq('client_position_id', item.client_position_id)
+            .order('sub_number', { ascending: false })
+            .limit(1);
 
-      // Create the item with generated item_number and sub_number
+          if (subError) {
+            console.error('❌ Failed to fetch max sub_number:', subError);
+            return { error: 'Failed to fetch existing BOQ items' };
+          }
+          
+          subNumber = (maxSub?.[0]?.sub_number || 0) + 1;
+        } else {
+          subNumber = dbSubNumber;
+          console.log('✅ Database function returned sub_number:', subNumber);
+        }
+        
+        itemNumber = itemNumber || `${position.position_number}.${subNumber}`;
+
+        console.log(
+          `🔢 Generated item_number: ${itemNumber} (position: ${position.position_number}, sub: ${subNumber})`
+        );
+      } else {
+        console.log(`🔢 Using provided values - item_number: ${itemNumber}, sub_number: ${subNumber}`);
+      }
+
+      // Create the item with provided or generated values
       const itemToInsert = {
         ...item,
         item_number: itemNumber,
         sub_number: subNumber,
-        sort_order: item.sort_order || (maxSub?.[0]?.sub_number || 0)
+        sort_order: item.sort_order !== undefined ? item.sort_order : subNumber
       };
 
       console.log('💾 Inserting BOQ item:', itemToInsert);
+      
+      // Check for existing items with same sub_number (only this constraint remains)
+      console.log('🔍 Checking for duplicate sub_number before insert...');
+      const { data: existingBySubNumber } = await supabase
+        .from('boq_items')
+        .select('id,item_number,sub_number,description')
+        .eq('client_position_id', item.client_position_id)
+        .eq('sub_number', subNumber);
+      
+      if (existingBySubNumber && existingBySubNumber.length > 0) {
+        console.error('❌ Duplicate sub_number found in position:', existingBySubNumber);
+      }
+      
       const { data, error } = await supabase
         .from('boq_items')
         .insert(itemToInsert)
-        .select()
+        .select('*')
         .single();
 
       console.log('📦 Insert response:', { data, error });
+      
+      if (error && (error as any).code === '23505') {
+        console.error('🔍 Unique constraint violation (uq_boq_position_sub_number):', {
+          error_code: (error as any).code,
+          error_details: (error as any).details,
+          error_hint: (error as any).hint,
+          error_message: (error as any).message,
+          attempted_values: {
+            client_position_id: itemToInsert.client_position_id,
+            sub_number: itemToInsert.sub_number,
+            item_number: itemToInsert.item_number
+          }
+        });
+      }
 
       if (error) {
         console.error('❌ Failed to insert BOQ item:', error);
+        
+        // If it's a duplicate error and we haven't exhausted retries
+        if ((error as any).code === '23505' && retryCount < maxRetries - 1) {
+          retryCount++;
+          const waitTime = 100 * Math.pow(2, retryCount); // 200ms, 400ms
+          console.log(`⏳ Duplicate detected. Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          
+          // Clear sub_number and item_number to force regeneration
+          item.sub_number = undefined;
+          item.item_number = undefined;
+          continue; // Retry with new numbers
+        }
+        
         return {
           error: handleSupabaseError(error, 'Create BOQ item'),
+        };
+      }
+
+      // If insert was successful but data is null, fetch the created item
+      if (!data) {
+        console.log('⚠️ Insert successful but no data returned, fetching created item...');
+        const { data: createdItem, error: fetchError } = await supabase
+          .from('boq_items')
+          .select('*')
+          .eq('tender_id', itemToInsert.tender_id)
+          .eq('client_position_id', itemToInsert.client_position_id)
+          .eq('sub_number', itemToInsert.sub_number)
+          .single();
+        
+        if (fetchError || !createdItem) {
+          console.error('❌ Failed to fetch created item:', fetchError);
+          return {
+            error: 'Item created but could not retrieve details',
+          };
+        }
+        
+        console.log('✅ BOQ item created and fetched successfully:', createdItem.id);
+        return {
+          data: createdItem,
+          message: 'BOQ item created successfully',
         };
       }
 
@@ -132,11 +253,29 @@ export const boqCrudApi = {
         message: 'BOQ item created successfully',
       };
     } catch (error) {
-      console.error('💥 Exception in create BOQ item:', error);
+      console.error('💥 Exception in create BOQ item attempt:', error);
+      
+      // If not the last retry, continue
+      if (retryCount < maxRetries - 1) {
+        retryCount++;
+        const waitTime = 100 * Math.pow(2, retryCount);
+        console.log(`⏳ Exception occurred. Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        
+        // Clear sub_number and item_number to force regeneration
+        item.sub_number = undefined;
+        item.item_number = undefined;
+        continue;
+      }
+      
       return {
         error: handleSupabaseError(error, 'Create BOQ item'),
       };
     }
+    }
+    
+    // Should never reach here, but TypeScript needs this
+    return { error: 'Maximum retries exceeded' }
   },
 
   /**
@@ -187,7 +326,7 @@ export const boqCrudApi = {
       console.log('🔍 Checking if BOQ item exists...');
       const { data: existing, error: checkError } = await supabase
         .from('boq_items')
-        .select('id, item_number, description')
+        .select('id,item_number,description')
         .eq('id', id)
         .single();
 

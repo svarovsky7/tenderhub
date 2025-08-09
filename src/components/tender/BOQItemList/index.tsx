@@ -19,7 +19,8 @@ const BOQItemList: React.FC<BOQItemListProps> = ({
   onUpdate,
   maxHeight = 600,
   searchable = true,
-  editable = true
+  editable = true,
+  onEditItem
 }) => {
   console.log('🚀 BOQItemList called with:', {
     itemsCount: items.length,
@@ -233,6 +234,7 @@ const BOQItemList: React.FC<BOQItemListProps> = ({
           onCancelEdit={handleCancelEdit}
           onDelete={handleDelete}
           onDuplicate={handleDuplicate}
+          onEditItem={onEditItem}
           setEditingItem={setEditingItem}
         />
       ) : (
@@ -249,6 +251,7 @@ const BOQItemList: React.FC<BOQItemListProps> = ({
           onCancelEdit={handleCancelEdit}
           onDelete={handleDelete}
           onDuplicate={handleDuplicate}
+          onEditItem={onEditItem}
           setEditingItem={setEditingItem}
         />
       )}

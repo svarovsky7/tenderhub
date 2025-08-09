@@ -121,4 +121,37 @@ export type DatabaseViews = {
       }
     ];
   };
+  work_material_links_detailed: {
+    Row: {
+      id: string | null;
+      client_position_id: string | null;
+      work_boq_item_id: string | null;
+      material_boq_item_id: string | null;
+      material_quantity_per_work: number | null;
+      usage_coefficient: number | null;
+      notes: string | null;
+      created_at: string | null;
+      updated_at: string | null;
+      position_number: number | null;
+      position_name: string | null;
+      tender_id: string | null;
+      work_item_number: string | null;
+      work_description: string | null;
+      work_unit: string | null;
+      work_quantity: number | null;
+      work_unit_rate: number | null;
+      work_total_amount: number | null;
+      material_item_number: string | null;
+      material_description: string | null;
+      material_unit: string | null;
+      material_quantity: number | null;
+      material_unit_rate: number | null;
+      material_total_amount: number | null;
+      material_consumption_coefficient: number | null;
+      material_conversion_coefficient: number | null;
+      total_material_needed: number | null;
+      total_material_cost: number | null;
+    };
+    Relationships: [];
+  };
 };

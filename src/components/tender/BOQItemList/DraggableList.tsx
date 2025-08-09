@@ -34,6 +34,7 @@ const DraggableList: React.FC<DraggableListProps> = ({
   onCancelEdit,
   onDelete,
   onDuplicate,
+  onEditItem,
   setEditingItem
 }) => {
   console.log('🚀 DraggableList rendered with:', { 
@@ -145,6 +146,7 @@ const DraggableList: React.FC<DraggableListProps> = ({
                 onCancelEdit={onCancelEdit}
                 onDelete={onDelete}
                 onDuplicate={onDuplicate}
+                onEditItem={onEditItem}
                 setEditingItem={setEditingItem}
               />
             );

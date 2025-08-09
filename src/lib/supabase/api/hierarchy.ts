@@ -91,7 +91,7 @@ export const hierarchyApi = {
       // Get BOQ items summary  
       const { data: boqItems, error: boqError } = await supabase
         .from('boq_items')
-        .select('total_amount, item_type')
+        .select('total_amount,item_type')
         .eq('tender_id', tenderId);
 
       const data = {

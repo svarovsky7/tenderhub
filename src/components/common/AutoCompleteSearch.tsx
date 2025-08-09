@@ -177,9 +177,13 @@ const AutoCompleteSearch: React.FC<AutoCompleteSearchProps> = ({
       suffixIcon={loading ? <Spin size="small" /> : <SearchOutlined />}
       popupMatchSelectWidth={false}
       style={{ width: '100%' }}
-      dropdownStyle={{ 
-        maxWidth: '400px',
-        zIndex: 1050
+      styles={{
+        popup: {
+          root: {
+            maxWidth: '400px',
+            zIndex: 1050
+          }
+        }
       }}
       getPopupContainer={(triggerNode) => triggerNode.parentElement || document.body}
     />
