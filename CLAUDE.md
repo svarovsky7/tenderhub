@@ -52,10 +52,14 @@ Key tables:
 - `materials_library` & `works_library` - Searchable catalogs with GIN indexes for full-text search
 - `work_material_links` - Links works to materials with usage coefficients, validated by `check_work_material_types()` trigger
 
-Key functions:
-- `bulk_insert_boq_items()` - Optimized for Excel imports (5000+ rows)
-- `get_next_sub_number()` - Auto-numbering for hierarchical items
+Key database functions:
+- `get_next_client_position_number()` - Auto-numbering for client positions
+- `get_next_sub_number()` - Auto-numbering for hierarchical BOQ items
 - `get_materials_for_work()` - Retrieves linked materials with calculations
+- `get_works_using_material()` - Finds works that use a specific material
+- `check_work_material_types()` - Validates work-material link types
+- `recalculate_client_position_totals()` - Updates position totals based on child items
+- `auto_assign_position_number()` - Trigger function for automatic position numbering
 
 ### API Layer (`lib/supabase/api/`)
 Modular structure split from original 2,344-line file into domain-specific modules (all < 600 lines):
@@ -107,13 +111,14 @@ npm run build         # Type-check and build (will fail on type errors)
 ### 1. Database Operations
 - **NEVER enable RLS** - Disabled by design for simplified development
 - **ALWAYS check** `supabase/schemas/prod.sql` for authoritative schema before database work
-- Use `bulk_insert_boq_items()` for large imports (handles 5000+ rows efficiently)
+- **Note**: `bulk_insert_boq_items()` function may not exist in current schema - use batch inserts via API
 - Auto-numbering handled by database functions:
   - `get_next_client_position_number()` for positions
   - `get_next_sub_number()` for hierarchical items
 - Work-Material links validated by `check_work_material_types()` trigger
 - All tables use UUID primary keys
 - Timestamps (`created_at`, `updated_at`) auto-managed
+- Position totals auto-recalculated via `recalculate_client_position_totals()` trigger
 
 ### 2. File Size Limits
 - **Maximum 600 lines per file** - Split larger files
@@ -193,9 +198,10 @@ npm run dev          # Start development server at http://localhost:5173
 
 ### Excel Import/Export
 1. Import: Drag-drop XLSX file to upload area in TendersPage
-2. System uses `bulk_insert_boq_items()` for performance
+2. System uses batch API operations for performance (via `client-works.ts`)
 3. Handles 5000+ rows efficiently with `UploadProgressModal`
 4. Export: Uses XLSX library to generate formatted spreadsheets
+5. Import target: 5000 rows in ≤ 30 seconds (per technical requirements)
 
 ### Database Schema Changes
 1. Modify schema in Supabase dashboard (https://supabase.com/dashboard)
@@ -281,3 +287,18 @@ Real-time infrastructure is ready but currently disabled. To enable:
 - Some Ant Design components show React 19 compatibility warnings (patches applied)
 
 Remember: This is a simplified development environment. Production deployment will require enabling authentication, RLS, and other security features.
+
+## Future Requirements (from Technical Task v1.1)
+
+The following features are planned but not yet implemented:
+- **Authentication**: OAuth 2.0 (Google, Microsoft) via Supabase Auth
+- **User Roles**: Administrator, Engineer, Viewer with specific permissions
+- **Real-time Collaboration**: Optimistic locking with conflict resolution
+- **File Storage**: Document upload/preview (PDF, DWG) with versioning
+- **Edge Functions**: Commercial cost calculation with markups (overhead %, risk %, margin %)
+- **Advanced Analytics**: Win-rate dashboards, cost dynamics, XLSX/PDF reports
+- **Performance Targets**: 
+  - Import 5000 rows ≤ 30 seconds
+  - Render 10,000 rows ≤ 100ms
+  - Support 100 concurrent users
+  - 99.9% uptime

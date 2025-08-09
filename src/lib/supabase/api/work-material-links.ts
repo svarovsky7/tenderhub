@@ -69,10 +69,111 @@ export const workMaterialLinksApi = {
     console.log('🚀 Getting links for position:', positionId);
     
     try {
-      const { data, error } = await supabase
+      // Первый подход: попробуем через представление
+      let { data, error } = await supabase
         .from('work_material_links_detailed')
         .select('*')
         .eq('client_position_id', positionId);
+
+      // Если представление не работает, используем прямой запрос
+      if (error && error.message.includes('work_material_links_detailed')) {
+        console.log('⚠️ View not found, using direct query');
+        
+        // Прямой запрос к таблице с JOIN
+        const result = await supabase
+          .from('work_material_links')
+          .select(`
+            *,
+            work:boq_items!work_material_links_work_boq_item_id_fkey(
+              id,
+              description,
+              quantity,
+              unit,
+              unit_rate,
+              client_position_id
+            ),
+            material:boq_items!work_material_links_material_boq_item_id_fkey(
+              id,
+              description,
+              quantity,
+              unit,
+              unit_rate,
+              consumption_coefficient,
+              conversion_coefficient
+            )
+          `)
+          .eq('work.client_position_id', positionId);
+        
+        if (result.error) {
+          console.error('❌ Direct query also failed:', result.error);
+          // Последняя попытка - простой запрос без JOIN
+          const simpleResult = await supabase
+            .from('work_material_links')
+            .select('*');
+          
+          if (simpleResult.error) {
+            console.error('❌ Simple query failed:', simpleResult.error);
+            return { error: simpleResult.error.message };
+          }
+          
+          // Фильтруем по positionId вручную
+          const boqItems = await supabase
+            .from('boq_items')
+            .select('id, description, quantity, unit, unit_rate, consumption_coefficient, conversion_coefficient, client_position_id')
+            .eq('client_position_id', positionId)
+            .eq('item_type', 'work');
+          
+          if (boqItems.data) {
+            const workIds = boqItems.data.map(item => item.id);
+            const filteredLinks = simpleResult.data?.filter(link => 
+              workIds.includes(link.work_boq_item_id)
+            ) || [];
+            
+            // Обогащаем данные
+            const enrichedLinks = await Promise.all(filteredLinks.map(async (link) => {
+              const workItem = boqItems.data.find(w => w.id === link.work_boq_item_id);
+              const { data: materialItem } = await supabase
+                .from('boq_items')
+                .select('*')
+                .eq('id', link.material_boq_item_id)
+                .single();
+              
+              return {
+                ...link,
+                client_position_id: positionId,
+                work_description: workItem?.description,
+                work_quantity: workItem?.quantity,
+                work_unit: workItem?.unit,
+                material_description: materialItem?.description,
+                material_unit: materialItem?.unit,
+                material_unit_rate: materialItem?.unit_rate,
+                material_consumption_coefficient: materialItem?.consumption_coefficient,
+                material_conversion_coefficient: materialItem?.conversion_coefficient
+              };
+            }));
+            
+            console.log('✅ Links retrieved via fallback');
+            return { data: enrichedLinks };
+          }
+          
+          return { data: [] };
+        }
+        
+        // Преобразуем результат в нужный формат
+        data = result.data?.map(link => ({
+          ...link,
+          client_position_id: link.work?.client_position_id || positionId,
+          work_description: link.work?.description,
+          work_quantity: link.work?.quantity,
+          work_unit: link.work?.unit,
+          material_description: link.material?.description,
+          material_unit: link.material?.unit,
+          material_unit_rate: link.material?.unit_rate,
+          material_consumption_coefficient: link.material?.consumption_coefficient,
+          material_conversion_coefficient: link.material?.conversion_coefficient
+        })) || [];
+        error = null;
+      }
 
       console.log('📦 Links fetched:', { count: data?.length, error });
 

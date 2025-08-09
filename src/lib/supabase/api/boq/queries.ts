@@ -369,26 +369,39 @@ export const boqQueryApi = {
 
         // Add each linked material as a nested item (visually indented)
         for (const linkedMat of linkedMaterialsWithDetails) {
-          hierarchicalItems.push({
-            ...linkedMat.material_item,
-            // Mark as linked material for special rendering
-            is_linked_material: true,
-            parent_work_id: workItem.id,
-            link_data: {
-              link_id: linkedMat.link_id,
-              material_quantity_per_work: linkedMat.material_quantity_per_work,
-              usage_coefficient: linkedMat.usage_coefficient,
-              conversion_coefficient: linkedMat.conversion_coefficient,
-              calculated_quantity: linkedMat.calculated_quantity,
-              calculated_total: linkedMat.calculated_total
-            }
-          } as any);
+          // Ensure material_item has a valid ID before adding
+          if (linkedMat.material_item && linkedMat.material_item.id) {
+            hierarchicalItems.push({
+              ...linkedMat.material_item,
+              // Mark as linked material for special rendering
+              is_linked_material: true,
+              parent_work_id: workItem.id,
+              link_data: {
+                link_id: linkedMat.link_id,
+                material_quantity_per_work: linkedMat.material_quantity_per_work,
+                usage_coefficient: linkedMat.usage_coefficient,
+                conversion_coefficient: linkedMat.conversion_coefficient,
+                calculated_quantity: linkedMat.calculated_quantity,
+                calculated_total: linkedMat.calculated_total
+              }
+            } as any);
+          }
         }
       }
 
       // Finally, get all standalone materials (not linked to works)
       console.log('📡 Fetching standalone materials...');
-      const { data: standaloneMaterials, error: standaloneError } = await supabase
+      
+      // Get IDs of already linked materials
+      const linkedMaterialIds = hierarchicalItems
+        .filter(item => (item as any).is_linked_material)
+        .map(item => item.id)
+        .filter(id => id && id !== ''); // Filter out empty or null IDs
+      
+      console.log('🔗 Already linked material IDs:', linkedMaterialIds);
+      
+      // Build query for standalone materials
+      let standaloneQuery = supabase
         .from('boq_items')
         .select(`
           *,
@@ -397,14 +410,20 @@ export const boqQueryApi = {
         `)
         .eq('client_position_id', clientPositionId)
         .eq('item_type', 'material')
-        .not('id', 'in', `(${hierarchicalItems
-          .filter(item => (item as any).is_linked_material)
-          .map(item => item.id)
-          .join(',')})`)
         .order('sub_number')
         .order('sort_order');
+      
+      // Only add the NOT IN clause if there are valid linked materials to exclude
+      if (linkedMaterialIds.length > 0 && linkedMaterialIds.every(id => id && id !== '')) {
+        standaloneQuery = standaloneQuery.not('id', 'in', `(${linkedMaterialIds.join(',')})`);
+      }
+      
+      const { data: standaloneMaterials, error: standaloneError } = await standaloneQuery;
 
-      if (!standaloneError && standaloneMaterials) {
+      if (standaloneError) {
+        console.error('⚠️ Failed to fetch standalone materials:', standaloneError);
+      } else if (standaloneMaterials) {
+        console.log(`📦 Found ${standaloneMaterials.length} standalone materials`);
         hierarchicalItems.push(...standaloneMaterials.map(mat => ({ ...mat })));
       }
 

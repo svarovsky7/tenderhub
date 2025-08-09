@@ -108,7 +108,21 @@ export const boqCrudApi = {
         console.log('🔍 sub_number or item_number not provided, generating...');
         
         // Use database function for thread-safe sub_number generation
-        console.log('🔢 Calling database function get_next_sub_number...');
+        console.log('🔢 Calling database function get_next_sub_number with position:', item.client_position_id);
+        
+        // Validate client_position_id before calling RPC
+        if (!item.client_position_id || item.client_position_id === '') {
+          console.error('❌ Invalid client_position_id for get_next_sub_number');
+          throw new Error('Client position ID is required for creating BOQ item');
+        }
+        
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(item.client_position_id)) {
+          console.error('❌ Invalid UUID format for client_position_id:', item.client_position_id);
+          throw new Error('Invalid client position ID format');
+        }
+        
         const { data: dbSubNumber, error: rpcError } = await supabase
           .rpc('get_next_sub_number', { p_client_position_id: item.client_position_id });
         

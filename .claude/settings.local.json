@@ -29,7 +29,9 @@
       "Bash(npm run:*)",
       "Bash(psql:*)",
       "Bash(npx supabase:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(npx tsx:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": []
   }
