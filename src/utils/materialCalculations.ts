@@ -4,32 +4,28 @@
 
 /**
  * Рассчитывает объем материала по формуле:
- * объем = manual_volume × consumption_coefficient × conversion_coefficient × usage_coefficient
+ * объем = manual_volume × consumption_coefficient × conversion_coefficient
  * 
  * @param manualVolume - Объем работы из client_positions.manual_volume
  * @param consumptionCoefficient - Коэффициент расхода материала
  * @param conversionCoefficient - Коэффициент перевода единиц измерения материала
- * @param usageCoefficient - Коэффициент использования из связи (по умолчанию 1)
  * @returns Рассчитанный объем материала
  */
 export function calculateMaterialVolume(
   manualVolume: number | null | undefined,
   consumptionCoefficient: number | null | undefined,
-  conversionCoefficient: number | null | undefined,
-  usageCoefficient: number | null | undefined = 1
+  conversionCoefficient: number | null | undefined
 ): number {
   const volume = manualVolume ?? 0;
   const consumption = consumptionCoefficient ?? 1;
   const conversion = conversionCoefficient ?? 1;
-  const usage = usageCoefficient ?? 1;
   
-  const result = volume * consumption * conversion * usage;
+  const result = volume * consumption * conversion;
   
   console.log('📊 Material volume calculation:', {
     manualVolume: volume,
     consumptionCoefficient: consumption,
     conversionCoefficient: conversion,
-    usageCoefficient: usage,
     result
   });
   
@@ -67,13 +63,11 @@ export function updateLinkWithCalculatedVolume(
 ): any {
   const consumptionCoeff = materialData?.consumption_coefficient ?? link.material_consumption_coefficient ?? 1;
   const conversionCoeff = materialData?.conversion_coefficient ?? link.material_conversion_coefficient ?? 1;
-  const usageCoeff = link.usage_coefficient ?? 1;
   
   const calculatedVolume = calculateMaterialVolume(
     manualVolume,
     consumptionCoeff,
-    conversionCoeff,
-    usageCoeff
+    conversionCoeff
   );
   
   const calculatedCost = calculateMaterialCost(

@@ -13,6 +13,7 @@ import AutoCompleteSearch from '../common/AutoCompleteSearch';
 import { formatCurrency, formatQuantity, formatUnitRate } from '../../utils/formatters';
 import { calculateMaterialVolume, updateLinkWithCalculatedVolume } from '../../utils/materialCalculations';
 import { SortableBOQItem } from './SortableBOQItem';
+import { DroppableWorkItem } from './DroppableWorkItem';
 import type { ClientPosition, BOQItem, BOQItemInsert } from '../../lib/supabase/types';
 
 interface TenderBOQManagerNewProps {
@@ -169,8 +170,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
               const materialVolume = calculateMaterialVolume(
                 workVolume,
                 link.material_consumption_coefficient || 1,
-                link.material_conversion_coefficient || 1,
-                link.usage_coefficient || 1
+                link.material_conversion_coefficient || 1
               );
               
               positionWorkLinks[link.work_boq_item_id].push({
@@ -244,8 +244,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
           const materialVolume = calculateMaterialVolume(
             workVolume,
             link.material_consumption_coefficient || 1,
-            link.material_conversion_coefficient || 1,
-            link.usage_coefficient || 1
+            link.material_conversion_coefficient || 1
           );
           
           // Обновляем связь с правильным расчетом
@@ -270,12 +269,32 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
         if (!freshResult.error && freshResult.data) {
           const updatedItems = freshResult.data;
           
+          // Calculate new totals
+          const newTotalCost = calculatePositionTotalCost(updatedItems, linksByWork);
+          const materialsTotal = updatedItems.filter(i => i.item_type === 'material').reduce((sum, i) => sum + (i.total_amount || 0), 0);
+          const worksTotal = updatedItems.filter(i => i.item_type === 'work').reduce((sum, i) => sum + (i.total_amount || 0), 0);
+          
+          // Update position totals in database
+          const updateResult = await clientPositionsApi.update(positionId, {
+            total_materials_cost: materialsTotal,
+            total_works_cost: worksTotal
+          });
+          
+          if (updateResult.error) {
+            console.error('❌ Failed to update position totals:', updateResult.error);
+          } else {
+            console.log('✅ Position totals updated in database');
+          }
+          
           // Обновляем selectedPosition если это текущая позиция
           setSelectedPosition(prev => {
             if (prev && prev.id === positionId) {
               return {
                 ...prev,
-                boq_items: updatedItems
+                boq_items: updatedItems,
+                total_position_cost: newTotalCost,
+                total_materials_cost: materialsTotal,
+                total_works_cost: worksTotal
               };
             }
             return prev;
@@ -286,7 +305,10 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
             if (p.id === positionId) {
               return {
                 ...p,
-                boq_items: updatedItems
+                boq_items: updatedItems,
+                total_position_cost: newTotalCost,
+                total_materials_cost: materialsTotal,
+                total_works_cost: worksTotal
               };
             }
             return p;
@@ -564,11 +586,28 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       console.log('🔄 Updated position items:', updatedItems.length);
       console.log('💰 New total cost:', newTotalCost);
       
+      // Update position totals in database  
+      const materialsTotal = updatedItems.filter(i => i.item_type === 'material').reduce((sum, i) => sum + (i.total_amount || 0), 0);
+      const worksTotal = updatedItems.filter(i => i.item_type === 'work').reduce((sum, i) => sum + (i.total_amount || 0), 0);
+      
+      const updateResult = await clientPositionsApi.update(selectedPosition.id, {
+        total_materials_cost: materialsTotal,
+        total_works_cost: worksTotal
+      });
+      
+      if (updateResult.error) {
+        console.error('❌ Failed to update position totals:', updateResult.error);
+      } else {
+        console.log('✅ Position totals updated in database');
+      }
+      
       // Сначала обновляем selectedPosition
       const updatedSelectedPosition = {
         ...selectedPosition,
         boq_items: updatedItems,
-        total_position_cost: newTotalCost
+        total_position_cost: newTotalCost,
+        total_materials_cost: materialsTotal,
+        total_works_cost: worksTotal
       };
       
       setSelectedPosition(updatedSelectedPosition);
@@ -669,6 +708,21 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       console.log('🔄 Updated position after deletion - items:', updatedItems.length);
       console.log('💰 New total cost after deletion:', newTotalCost);
       
+      // Update position totals in database
+      const materialsTotal = updatedItems.filter(i => i.item_type === 'material').reduce((sum, i) => sum + (i.total_amount || 0), 0);
+      const worksTotal = updatedItems.filter(i => i.item_type === 'work').reduce((sum, i) => sum + (i.total_amount || 0), 0);
+      
+      const updateResult = await clientPositionsApi.update(positionId, {
+        total_materials_cost: materialsTotal,
+        total_works_cost: worksTotal
+      });
+      
+      if (updateResult.error) {
+        console.error('❌ Failed to update position totals:', updateResult.error);
+      } else {
+        console.log('✅ Position totals updated in database after deletion');
+      }
+      
       // Update both selectedPosition and positions
       const updatedPosition = {
         ...targetPosition,
@@ -723,6 +777,21 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       // Calculate total cost including only works and their linked materials
       const newTotalCost = calculatePositionTotalCost(updatedItems, allWorkLinks);
       
+      // Update position totals in database
+      const materialsTotal = updatedItems.filter(i => i.item_type === 'material').reduce((sum, i) => sum + (i.total_amount || 0), 0);
+      const worksTotal = updatedItems.filter(i => i.item_type === 'work').reduce((sum, i) => sum + (i.total_amount || 0), 0);
+      
+      const updateResult = await clientPositionsApi.update(positionId, {
+        total_materials_cost: materialsTotal,
+        total_works_cost: worksTotal
+      });
+      
+      if (updateResult.error) {
+        console.error('❌ Failed to update position totals:', updateResult.error);
+      } else {
+        console.log('✅ Position totals updated in database after edit');
+      }
+      
       setPositions(prev => prev.map(position => {
         if (position.id === positionId) {
           console.log('🔄 Updated position after edit - items:', updatedItems.length);
@@ -731,7 +800,9 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
           return {
             ...position,
             boq_items: updatedItems,
-            total_position_cost: newTotalCost
+            total_position_cost: newTotalCost,
+            total_materials_cost: materialsTotal,
+            total_works_cost: worksTotal
           };
         }
         return position;
@@ -823,9 +894,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       const result = await workMaterialLinksApi.createLink({
         client_position_id: position.id,
         work_boq_item_id: workItem.id,
-        material_boq_item_id: materialItem.id,
-        material_quantity_per_work: 1,
-        usage_coefficient: 1
+        material_boq_item_id: materialItem.id
       });
       
       if (result.error) {
@@ -1207,14 +1276,15 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                           >
                             <SortableContext
                               items={positionItems.filter(item => {
-                                // Исключаем привязанные материалы из списка для drag-and-drop
+                                // Только несвязанные материалы участвуют в сортировке
+                                // Работы НЕ участвуют в сортировке - они только принимают материалы
                                 if (item.item_type === 'material') {
                                   const isLinked = Object.values(allWorkLinks).some((links: any) => 
                                     links.some((link: any) => link.material_boq_item_id === item.id)
                                   );
                                   return !isLinked;
                                 }
-                                return true;
+                                return false; // Работы не включаем в sortable context
                               }).map(item => item.id)}
                               strategy={verticalListSortingStrategy}
                             >
@@ -1248,18 +1318,19 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                   
                                   return (
                                   <div key={subItem.id}>
-                                    <SortableBOQItem
-                                      item={subItem}
-                                      linkedMaterialsTotal={linkedMaterialsTotal}
-                                      onRemove={(e) => {
-                                        e.stopPropagation();
-                                        removeSubItem(position.id, subItem.id);
-                                      }}
-                                      onEdit={updateSubItem}
-                                    />
-                                    
-                                    {/* Отображение связанных материалов для работ */}
-                                    {subItem.item_type === 'work' && allWorkLinks[subItem.id] && allWorkLinks[subItem.id].length > 0 && (
+                                    {subItem.item_type === 'work' ? (
+                                      // Работы - только droppable, не sortable
+                                      <DroppableWorkItem
+                                        item={subItem}
+                                        linkedMaterialsTotal={linkedMaterialsTotal}
+                                        onRemove={(e) => {
+                                          e.stopPropagation();
+                                          removeSubItem(position.id, subItem.id);
+                                        }}
+                                        onEdit={updateSubItem}
+                                      >
+                                        {/* Отображение связанных материалов для работ */}
+                                        {allWorkLinks[subItem.id] && allWorkLinks[subItem.id].length > 0 && (
                                   <div className="ml-6 mt-1 p-2 bg-blue-50 rounded border-l-2 border-blue-300">
                                     <div className="text-xs font-medium text-blue-700 mb-1">
                                       Связанные материалы:
@@ -1302,6 +1373,15 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                               <div className="flex items-center flex-1 gap-1">
                                                 <HolderOutlined className="text-gray-400 cursor-move" style={{ fontSize: '10px' }} title="Перетащите на другую работу для переноса" />
                                                 <span className="font-medium text-gray-700">{link.material_description}</span>
+                                                <span className="text-gray-400">
+                                                  {link.material_consumption_coefficient && link.material_consumption_coefficient !== 1 && (
+                                                    <span className="ml-2">К.расх: {link.material_consumption_coefficient}</span>
+                                                  )}
+                                                  {link.material_conversion_coefficient && link.material_conversion_coefficient !== 1 && (
+                                                    <span className="ml-2">К.пер: {link.material_conversion_coefficient}</span>
+                                                  )}
+                                                  <span className="ml-2">Цена: {formatCurrency(link.material_unit_rate || 0)}/{link.material_unit}</span>
+                                                </span>
                                               </div>
                                             <div className="flex items-center gap-2">
                                               <div className="text-blue-600 font-semibold">
@@ -1371,35 +1451,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                               )}
                                             </div>
                                           </div>
-                                          {!isEditing ? (
-                                            <>
-                                              <div className="flex items-center justify-between text-xs text-gray-500">
-                                                <div>
-                                                  <span className="mr-2">Расчет:</span>
-                                                  <span className="font-mono bg-white px-1 py-0.5 rounded">
-                                                    {formatQuantity(subItem.quantity)} {subItem.unit}
-                                                    {link.material_consumption_coefficient && link.material_consumption_coefficient !== 1 && 
-                                                      ` × ${link.material_consumption_coefficient}`}
-                                                    {link.material_conversion_coefficient && link.material_conversion_coefficient !== 1 && 
-                                                      ` × ${link.material_conversion_coefficient}`}
-                                                    {link.usage_coefficient && link.usage_coefficient !== 1 && 
-                                                      ` × ${link.usage_coefficient}`}
-                                                  </span>
-                                                </div>
-                                                <div className="font-medium">
-                                                  = {formatQuantity(link.calculated_material_volume || link.total_material_needed)} {link.material_unit}
-                                                </div>
-                                              </div>
-                                              <div className="flex items-center justify-between text-xs text-gray-500">
-                                                <div>
-                                                  Стоимость: {formatQuantity(link.calculated_material_volume || link.total_material_needed)} {link.material_unit} × {formatCurrency(link.material_unit_rate || 0)}
-                                                </div>
-                                                <div className="font-medium text-blue-600">
-                                                  = {formatCurrency(link.calculated_total || 0)}
-                                                </div>
-                                              </div>
-                                            </>
-                                          ) : (
+                                          {!isEditing ? null : (
                                             <div className="grid grid-cols-3 gap-2 mt-2">
                                               <div>
                                                 <label className="block text-xs text-gray-600 mb-0.5">К. расхода</label>
@@ -1442,7 +1494,20 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                       })}
                                     </div>
                                   </div>
-                                )}
+                                        )}
+                                      </DroppableWorkItem>
+                                    ) : (
+                                      // Материалы - sortable и draggable
+                                      <SortableBOQItem
+                                        item={subItem}
+                                        linkedMaterialsTotal={linkedMaterialsTotal}
+                                        onRemove={(e) => {
+                                          e.stopPropagation();
+                                          removeSubItem(position.id, subItem.id);
+                                        }}
+                                        onEdit={updateSubItem}
+                                      />
+                                    )}
                               </div>
                               );
                             })}

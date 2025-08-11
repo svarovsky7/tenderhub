@@ -157,38 +157,24 @@ export const SortableBOQItem: React.FC<SortableBOQItemProps> = ({
             </div>
             <div className="text-xs text-gray-500 mt-0.5">
               {formatQuantity(item.quantity)} {item.unit} × {formatCurrency(item.unit_rate)}/ед.
-              {item.consumption_coefficient && item.consumption_coefficient !== 1 && (
-                <span className="ml-2">
-                  К.расх: {item.consumption_coefficient}
-                </span>
-              )}
-              {item.conversion_coefficient && item.conversion_coefficient !== 1 && (
-                <span className="ml-2">
-                  К.пер: {item.conversion_coefficient}
-                </span>
+              {item.item_type === 'material' && (
+                <>
+                  {item.consumption_coefficient && item.consumption_coefficient !== 1 && (
+                    <span className="ml-2">К.расх: {item.consumption_coefficient}</span>
+                  )}
+                  {item.conversion_coefficient && item.conversion_coefficient !== 1 && (
+                    <span className="ml-2">К.пер: {item.conversion_coefficient}</span>
+                  )}
+                </>
               )}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="text-right">
-            {item.item_type === 'work' && linkedMaterialsTotal > 0 ? (
-              <>
-                <div className="text-xs text-gray-500">
-                  Работа: {formatCurrency(item.total_amount || 0)}
-                </div>
-                <div className="text-xs text-gray-500">
-                  Материалы: {formatCurrency(linkedMaterialsTotal)}
-                </div>
-                <div className="font-semibold text-blue-600 border-t border-gray-300 pt-1">
-                  Итого: {formatCurrency((item.total_amount || 0) + linkedMaterialsTotal)}
-                </div>
-              </>
-            ) : (
-              <span className="font-semibold text-blue-600">
-                {formatCurrency(item.total_amount || 0)}
-              </span>
-            )}
+            <span className="font-semibold text-blue-600">
+              {formatCurrency(item.total_amount || 0)}
+            </span>
           </div>
           {!item.is_linked_material && onRemove && (
             <>
