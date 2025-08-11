@@ -108,10 +108,10 @@ const ExcelUpload: React.FC<ExcelUploadProps> = ({ tenderId, onUpload }) => {
                   </p>
                 </div>
               ),
-              okText: 'Перейти к ВОР',
+              okText: 'Перейти к управлению ВОР',
               onOk: () => {
-                console.log('🔄 User clicked OK, navigating to BOQ page...');
-                navigate(`/tender/${tenderId}/boq`);
+                console.log('🔄 User clicked OK, navigating to BOQ management page...');
+                navigate('/BOQ');
               },
               centered: true,
               width: 450

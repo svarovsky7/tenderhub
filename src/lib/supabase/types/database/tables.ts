@@ -427,8 +427,6 @@ export type DatabaseTables = {
       client_position_id: string;
       work_boq_item_id: string;
       material_boq_item_id: string;
-      material_quantity_per_work: number;
-      usage_coefficient: number;
       notes: string | null;
       created_at: string;
       updated_at: string;
@@ -438,8 +436,6 @@ export type DatabaseTables = {
       client_position_id: string;
       work_boq_item_id: string;
       material_boq_item_id: string;
-      material_quantity_per_work?: number;
-      usage_coefficient?: number;
       notes?: string | null;
       created_at?: string;
       updated_at?: string;
@@ -449,8 +445,6 @@ export type DatabaseTables = {
       client_position_id?: string;
       work_boq_item_id?: string;
       material_boq_item_id?: string;
-      material_quantity_per_work?: number;
-      usage_coefficient?: number;
       notes?: string | null;
       created_at?: string;
       updated_at?: string;

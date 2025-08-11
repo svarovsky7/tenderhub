@@ -7,8 +7,6 @@ export interface WorkMaterialLink {
   client_position_id: string;
   work_boq_item_id: string;
   material_boq_item_id: string;
-  material_quantity_per_work?: number;
-  usage_coefficient?: number;
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -40,8 +38,6 @@ export const workMaterialLinksApi = {
           client_position_id: link.client_position_id,
           work_boq_item_id: link.work_boq_item_id,
           material_boq_item_id: link.material_boq_item_id,
-          material_quantity_per_work: link.material_quantity_per_work || 1.0,
-          usage_coefficient: link.usage_coefficient || 1.0,
           notes: link.notes
         })
         .select()
@@ -254,8 +250,6 @@ export const workMaterialLinksApi = {
       const { data, error } = await supabase
         .from('work_material_links')
         .update({
-          material_quantity_per_work: updates.material_quantity_per_work,
-          usage_coefficient: updates.usage_coefficient,
           notes: updates.notes
         })
         .eq('id', linkId)

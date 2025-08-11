@@ -127,8 +127,6 @@ export type DatabaseViews = {
       client_position_id: string | null;
       work_boq_item_id: string | null;
       material_boq_item_id: string | null;
-      material_quantity_per_work: number | null;
-      usage_coefficient: number | null;
       notes: string | null;
       created_at: string | null;
       updated_at: string | null;
