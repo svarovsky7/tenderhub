@@ -3066,6 +3066,12 @@ CREATE OR REPLACE FUNCTION storage.search_v2(prefix text, bucket_name text, limi
  RETURNS TABLE(key text, name text, id uuid, updated_at timestamp with time zone, created_at timestamp with time zone, metadata jsonb)
  LANGUAGE plpgsql
  STABLE
+    code text,
+    unit text,
+    unit text,
+create unique index if not exists cost_categories_code_idx on public.cost_categories(code);
+create unique index if not exists location_city_idx on public.location(city);
+
 AS $function$
 BEGIN
     RETURN query EXECUTE
