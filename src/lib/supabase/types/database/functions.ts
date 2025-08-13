@@ -79,4 +79,8 @@ export type DatabaseFunctions = {
       total_material_usage: number;
     }>;
   };
+  schema_cache_purge: {
+    Args: Record<PropertyKey, never>;
+    Returns: undefined;
+  };
 };

@@ -476,19 +476,25 @@ export type DatabaseTables = {
   cost_categories: {
     Row: {
       id: string;
+      code: string | null;
       name: string;
+      unit: string | null;
       description: string | null;
       created_at: string | null;
     };
     Insert: {
       id?: string;
+      code?: string | null;
       name: string;
+      unit?: string | null;
       description?: string | null;
       created_at?: string;
     };
     Update: {
       id?: string;
+      code?: string | null;
       name?: string;
+      unit?: string | null;
       description?: string | null;
       created_at?: string;
     };
@@ -524,6 +530,7 @@ export type DatabaseTables = {
       cost_category_id: string;
       location_id: string;
       name: string;
+      unit: string | null;
       unit_cost: number | null;
       created_at: string | null;
     };
@@ -532,6 +539,7 @@ export type DatabaseTables = {
       cost_category_id: string;
       location_id: string;
       name: string;
+      unit?: string | null;
       unit_cost?: number | null;
       created_at?: string;
     };
@@ -540,6 +548,7 @@ export type DatabaseTables = {
       cost_category_id?: string;
       location_id?: string;
       name?: string;
+      unit?: string | null;
       unit_cost?: number | null;
       created_at?: string;
     };
