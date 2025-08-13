@@ -1,21 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Typography, Form, Input, Button, Table, Select, InputNumber, message, Upload } from 'antd';
+import { Card, Typography, Button, Table, message, Upload } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import type {
-  CostCategory,
-  Location,
   DetailCostWithRelations,
-  CostCategoryInsert,
-  LocationInsert,
-  DetailCostCategoryInsert,
 } from '../../lib/supabase/types';
 import { costsApi } from '../../lib/supabase/api';
 
 const { Title } = Typography;
 
 const ConstructionCostsPage: React.FC = () => {
-  const [categories, setCategories] = useState<CostCategory[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
   const [details, setDetails] = useState<DetailCostWithRelations[]>([]);
 
   const loadData = async () => {
@@ -27,52 +20,12 @@ const ConstructionCostsPage: React.FC = () => {
       return;
     }
     setDetails(data || []);
-    const cats = data?.map(d => d.cost_categories).filter(Boolean) as CostCategory[];
-    const locs = data?.map(d => d.location).filter(Boolean) as Location[];
-    setCategories(cats ?? []);
-    setLocations(locs ?? []);
     console.log('✅ [ConstructionCostsPage.loadData] completed');
   };
 
   useEffect(() => {
     loadData();
   }, []);
-
-  const onCreateCategory = async (values: CostCategoryInsert) => {
-    console.log('🚀 [onCreateCategory] called with:', values);
-    const { data, error } = await costsApi.createCategory(values);
-    if (error) {
-      console.error('❌ [onCreateCategory] failed:', error);
-      return message.error(error);
-    }
-    setCategories(prev => [...prev, data!]);
-    message.success('Категория создана');
-    console.log('✅ [onCreateCategory] completed:', data);
-  };
-
-  const onCreateLocation = async (values: LocationInsert) => {
-    console.log('🚀 [onCreateLocation] called with:', values);
-    const { data, error } = await costsApi.createLocation(values);
-    if (error) {
-      console.error('❌ [onCreateLocation] failed:', error);
-      return message.error(error);
-    }
-    setLocations(prev => [...prev, data!]);
-    message.success('Локация создана');
-    console.log('✅ [onCreateLocation] completed:', data);
-  };
-
-  const onCreateDetail = async (values: DetailCostCategoryInsert) => {
-    console.log('🚀 [onCreateDetail] called with:', values);
-    const { error } = await costsApi.createDetail(values);
-    if (error) {
-      console.error('❌ [onCreateDetail] failed:', error);
-      return message.error(error);
-    }
-    await loadData();
-    message.success('Детализация добавлена');
-    console.log('✅ [onCreateDetail] completed');
-  };
 
   return (
     <div className="w-full min-h-full bg-gray-50">
@@ -83,33 +36,6 @@ const ConstructionCostsPage: React.FC = () => {
       </div>
 
       <div className="p-6 space-y-6 max-w-none">
-        <Card title="Добавить категорию">
-          <Form layout="inline" onFinish={onCreateCategory}>
-            <Form.Item name="name" rules={[{ required: true, message: 'Введите название' }]}> <Input placeholder="Название" /> </Form.Item>
-            <Form.Item name="description"> <Input placeholder="Описание" /> </Form.Item>
-            <Form.Item> <Button type="primary" htmlType="submit">Сохранить</Button> </Form.Item>
-          </Form>
-        </Card>
-
-        <Card title="Добавить локацию">
-          <Form layout="inline" onFinish={onCreateLocation}>
-            <Form.Item name="country"> <Input placeholder="Страна" /> </Form.Item>
-            <Form.Item name="region"> <Input placeholder="Регион" /> </Form.Item>
-            <Form.Item name="city"> <Input placeholder="Город" /> </Form.Item>
-            <Form.Item> <Button type="primary" htmlType="submit">Сохранить</Button> </Form.Item>
-          </Form>
-        </Card>
-
-        <Card title="Добавить детализацию">
-          <Form layout="inline" onFinish={onCreateDetail}>
-            <Form.Item name="cost_category_id" rules={[{ required: true, message: 'Категория' }]}> <Select placeholder="Категория" style={{ width: 200 }}>{categories.map(c => (<Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>))}</Select> </Form.Item>
-            <Form.Item name="location_id" rules={[{ required: true, message: 'Локация' }]}> <Select placeholder="Локация" style={{ width: 200 }}>{locations.map(l => (<Select.Option key={l.id} value={l.id}>{l.country} {l.city}</Select.Option>))}</Select> </Form.Item>
-            <Form.Item name="name" rules={[{ required: true, message: 'Название' }]}> <Input placeholder="Название" /> </Form.Item>
-            <Form.Item name="unit_cost"> <InputNumber placeholder="Стоимость" /> </Form.Item>
-            <Form.Item> <Button type="primary" htmlType="submit">Сохранить</Button> </Form.Item>
-          </Form>
-        </Card>
-
         <Card title="Импорт из Excel">
           <Upload
             accept=".xlsx,.xls"
@@ -131,7 +57,6 @@ const ConstructionCostsPage: React.FC = () => {
             <Button icon={<UploadOutlined />}>Загрузить файл</Button>
           </Upload>
         </Card>
-
         <Card title="Детализация затрат">
           <Table
             dataSource={details}
@@ -139,7 +64,17 @@ const ConstructionCostsPage: React.FC = () => {
             columns={[
               { title: 'Категория', dataIndex: ['cost_categories', 'name'] },
               { title: 'Деталь', dataIndex: 'name' },
-              { title: 'Стоимость', dataIndex: 'unit_cost' },
+              {
+                title: 'Стоимость',
+                dataIndex: 'unit_cost',
+                render: (value?: number | null) =>
+                  value != null
+                    ? value.toLocaleString('ru-RU', {
+                        style: 'currency',
+                        currency: 'RUB',
+                      })
+                    : '',
+              },
               {
                 title: 'Локация',
                 render: (_: unknown, record: DetailCostWithRelations) => `${record.location?.country || ''} ${record.location?.city || ''}`,
