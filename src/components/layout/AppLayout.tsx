@@ -29,6 +29,7 @@ interface MenuItem {
 
 const AppLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const [openKeys, setOpenKeys] = useState<string[]>(['libraries', 'admin']);
   const location = useLocation();
 
   // Menu items configuration
@@ -102,24 +103,62 @@ const AppLayout: React.FC = () => {
   // Get current selected menu key based on location
   const getCurrentMenuKey = (): string[] => {
     const pathname = location.pathname;
+    console.log('🚀 [getCurrentMenuKey] called with pathname:', pathname);
     
-    // Find matching menu item
-    const findMenuKey = (items: MenuItem[]): string | null => {
+    // Find matching menu item and parent keys
+    const findMenuKeys = (items: MenuItem[], parentKey?: string): { selectedKey: string | null, parentKey: string | null } => {
       for (const item of items) {
-        if (pathname.startsWith(item.path)) {
-          return item.key;
-        }
+        // Check children first for more specific matches
         if (item.children) {
-          const childKey = findMenuKey(item.children);
-          if (childKey) return childKey;
+          for (const child of item.children) {
+            if (pathname.startsWith(child.path)) {
+              console.log('✅ [getCurrentMenuKey] Found child match:', child.key, 'Parent:', item.key);
+              return { selectedKey: child.key, parentKey: item.key };
+            }
+          }
+        }
+        
+        // Then check parent item
+        if (pathname.startsWith(item.path)) {
+          console.log('✅ [getCurrentMenuKey] Found parent match:', item.key);
+          return { selectedKey: item.key, parentKey: null };
         }
       }
-      return null;
+      return { selectedKey: null, parentKey: null };
     };
 
-    const selectedKey = findMenuKey(menuItems);
-    return selectedKey ? [selectedKey] : ['dashboard'];
+    const { selectedKey, parentKey } = findMenuKeys(menuItems);
+    
+    // Return array with selected key
+    const result = selectedKey ? [selectedKey] : ['dashboard'];
+    console.log('✅ [getCurrentMenuKey] Result:', result);
+    return result;
   };
+  
+  // Update open keys when location changes
+  React.useEffect(() => {
+    console.log('🚀 [useEffect] Location changed:', location.pathname);
+    
+    const pathname = location.pathname;
+    const newOpenKeys: string[] = [...openKeys];
+    
+    // Check if we need to open a parent menu
+    for (const item of menuItems) {
+      if (item.children) {
+        for (const child of item.children) {
+          if (pathname.startsWith(child.path)) {
+            if (!newOpenKeys.includes(item.key)) {
+              newOpenKeys.push(item.key);
+              console.log('✅ [useEffect] Auto-opening parent menu:', item.key);
+            }
+            break;
+          }
+        }
+      }
+    }
+    
+    setOpenKeys(newOpenKeys);
+  }, [location.pathname]);
 
   // Generate breadcrumb items
   const getBreadcrumbItems = () => {
@@ -214,7 +253,11 @@ const AppLayout: React.FC = () => {
         <Menu
           mode="inline"
           selectedKeys={getCurrentMenuKey()}
-          defaultOpenKeys={['libraries', 'admin']}
+          openKeys={openKeys}
+          onOpenChange={(keys) => {
+            console.log('🔄 [Menu] onOpenChange:', keys);
+            setOpenKeys(keys);
+          }}
           style={{ borderRight: 0, marginTop: 8 }}
           items={menuItems.map(item => ({
             key: item.key,

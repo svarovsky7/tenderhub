@@ -94,6 +94,70 @@
   padding: 0;
 }
 
+/* Menu styles for better active state highlighting */
+.ant-menu-light .ant-menu-item-selected {
+  background-color: #e6f4ff !important;
+  border-right: 3px solid #1890ff;
+}
+
+.ant-menu-light .ant-menu-item-selected > a,
+.ant-menu-light .ant-menu-item-selected > a:hover {
+  color: #1890ff !important;
+  font-weight: 600;
+}
+
+/* Submenu active state */
+.ant-menu-light .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  color: #1890ff !important;
+  font-weight: 600;
+}
+
+.ant-menu-light .ant-menu-submenu-selected > .ant-menu-submenu-title .ant-menu-submenu-arrow {
+  color: #1890ff !important;
+}
+
+/* Parent menu item when child is selected */
+.ant-menu-light .ant-menu-submenu-open > .ant-menu-submenu-title {
+  background-color: #f0f8ff;
+}
+
+/* Hover states */
+.ant-menu-light .ant-menu-item:hover:not(.ant-menu-item-selected) {
+  background-color: #f5f5f5;
+}
+
+.ant-menu-light .ant-menu-submenu-title:hover {
+  background-color: #f5f5f5;
+}
+
+/* Active submenu item */
+.ant-menu-light .ant-menu-inline .ant-menu-item-selected {
+  background-color: #e6f4ff !important;
+  position: relative;
+}
+
+.ant-menu-light .ant-menu-inline .ant-menu-item-selected::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: #1890ff;
+}
+
+/* Transition effects */
+.ant-menu-item,
+.ant-menu-submenu-title {
+  transition: all 0.3s ease;
+}
+
+/* Icon color for selected items */
+.ant-menu-item-selected .anticon,
+.ant-menu-submenu-selected .anticon {
+  color: #1890ff !important;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .sidebar {
