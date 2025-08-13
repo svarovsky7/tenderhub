@@ -3066,6 +3066,12 @@ CREATE OR REPLACE FUNCTION storage.search_v2(prefix text, bucket_name text, limi
  RETURNS TABLE(key text, name text, id uuid, updated_at timestamp with time zone, created_at timestamp with time zone, metadata jsonb)
  LANGUAGE plpgsql
  STABLE
+    code text,
+    unit text,
+    unit text,
+create unique index if not exists cost_categories_code_idx on public.cost_categories(code);
+create unique index if not exists location_city_idx on public.location(city);
+
 AS $function$
 BEGIN
     RETURN query EXECUTE
@@ -3316,6 +3322,17 @@ create table if not exists public.detail_cost_categories (
 
 create index if not exists detail_cost_categories_cost_category_id_idx on public.detail_cost_categories(cost_category_id);
 create index if not exists detail_cost_categories_location_id_idx on public.detail_cost_categories(location_id);
+
+-- Function: public.schema_cache_purge
+-- Description: Reloads PostgREST schema cache after DDL changes
+CREATE OR REPLACE FUNCTION public.schema_cache_purge()
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+AS $function$
+  NOTIFY pgrst, 'reload schema';
+$function$;
+
 CREATE INDEX mfa_challenge_created_at_idx ON auth.mfa_challenges USING btree (created_at DESC);
 
 -- Index on auth.mfa_factors
