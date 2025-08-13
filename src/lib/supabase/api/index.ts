@@ -14,3 +14,4 @@ export { usersApi } from './users';
 export { clientWorksApi } from './client-works';
 export { subscriptions } from './subscriptions';
 export { workMaterialLinksApi } from './work-material-links';
+export { costsApi } from './costs';

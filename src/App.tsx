@@ -15,6 +15,7 @@ const Materials = React.lazy(() => import('./pages/Materials'));
 const Works = React.lazy(() => import('./pages/Works'));
 const UsersPage = React.lazy(() => import('./pages/admin/UsersPage'));
 const SettingsPage = React.lazy(() => import('./pages/admin/SettingsPage'));
+const ConstructionCostsPage = React.lazy(() => import('./pages/admin/ConstructionCostsPage'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 
 function App() {
@@ -84,16 +85,24 @@ function App() {
 
             {/* Admin routes */}
             <Route path="admin">
-              <Route 
-                path="users" 
+              <Route
+                path="users"
                 element={
                   <React.Suspense fallback={<div>Загрузка...</div>}>
                     <UsersPage />
                   </React.Suspense>
                 } 
               />
-              <Route 
-                path="settings" 
+              <Route
+                path="construction-costs"
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <ConstructionCostsPage />
+                  </React.Suspense>
+                }
+              />
+              <Route
+                path="settings"
                 element={
                   <React.Suspense fallback={<div>Загрузка...</div>}>
                     <SettingsPage />
