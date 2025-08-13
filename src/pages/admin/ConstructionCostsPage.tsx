@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Typography, Form, Input, Button, Table, Select, InputNumber, message, Upload } from 'antd';
-import { UploadOutlined } from '@ant-design/icons';
+import { Card, Typography, Form, Input, Button, Table, Select, InputNumber, message } from 'antd';
 import type {
   CostCategory,
   Location,
@@ -108,28 +107,6 @@ const ConstructionCostsPage: React.FC = () => {
             <Form.Item name="unit_cost"> <InputNumber placeholder="Стоимость" /> </Form.Item>
             <Form.Item> <Button type="primary" htmlType="submit">Сохранить</Button> </Form.Item>
           </Form>
-        </Card>
-
-        <Card title="Импорт из Excel">
-          <Upload
-            accept=".xlsx,.xls"
-            showUploadList={false}
-            beforeUpload={async file => {
-              console.log('🚀 [ConstructionCostsPage.import] called with:', file.name);
-              const { error } = await costsApi.importFromXlsx(file as File);
-              if (error) {
-                console.error('❌ [ConstructionCostsPage.import] failed:', error);
-                message.error(error);
-              } else {
-                message.success('Импорт завершен');
-                await loadData();
-                console.log('✅ [ConstructionCostsPage.import] completed');
-              }
-              return false;
-            }}
-          >
-            <Button icon={<UploadOutlined />}>Загрузить файл</Button>
-          </Upload>
         </Card>
 
         <Card title="Детализация затрат">
