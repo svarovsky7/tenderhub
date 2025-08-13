@@ -139,7 +139,17 @@ const ConstructionCostsPage: React.FC = () => {
             columns={[
               { title: 'Категория', dataIndex: ['cost_categories', 'name'] },
               { title: 'Деталь', dataIndex: 'name' },
-              { title: 'Стоимость', dataIndex: 'unit_cost' },
+              {
+                title: 'Стоимость',
+                dataIndex: 'unit_cost',
+                render: (value?: number | null) =>
+                  value != null
+                    ? value.toLocaleString('ru-RU', {
+                        style: 'currency',
+                        currency: 'RUB',
+                      })
+                    : '',
+              },
               {
                 title: 'Локация',
                 render: (_: unknown, record: DetailCostWithRelations) => `${record.location?.country || ''} ${record.location?.city || ''}`,

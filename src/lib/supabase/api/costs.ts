@@ -115,10 +115,18 @@ export const costsApi = {
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-        header: ['cat_code', 'cat_name', 'cat_unit', 'detail_name', 'detail_unit', 'location'],
+        header: [
+          'cat_code',
+          'cat_name',
+          'cat_unit',
+          'detail_name',
+          'detail_unit',
+          'unit_cost',
+          'location',
+        ],
         range: 1,
         raw: false,
-        defval: ''
+        defval: '',
       });
 
       console.log('📊 Raw rows:', rows.slice(0, 3));
@@ -175,12 +183,21 @@ export const costsApi = {
       locData?.forEach(l => locIdByName.set(l.city || '', l.id));
 
       const details: DetailCostCategoryInsert[] = validRows
-        .map(r => ({
-          cost_category_id: catIdByCode.get(String(r.cat_code || '').trim())!,
-          location_id: locIdByName.get(String(r.location || '').trim())!,
-          name: String(r.detail_name || '').trim(),
-          unit: String(r.detail_unit || '').trim() || null,
-        }))
+        .map(r => {
+          const cost = parseFloat(
+            String(r.unit_cost || '')
+              .trim()
+              .replace(/\s/g, '')
+              .replace(',', '.')
+          );
+          return {
+            cost_category_id: catIdByCode.get(String(r.cat_code || '').trim())!,
+            location_id: locIdByName.get(String(r.location || '').trim())!,
+            name: String(r.detail_name || '').trim(),
+            unit: String(r.detail_unit || '').trim() || null,
+            unit_cost: Number.isFinite(cost) ? cost : null,
+          };
+        })
         .filter(d => d.cost_category_id && d.location_id && d.name);
 
       console.log('📡 Inserting details:', details.length);
