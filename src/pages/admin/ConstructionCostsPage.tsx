@@ -9,7 +9,6 @@ import type {
   DetailCostCategoryInsert,
 } from '../../lib/supabase/types';
 import { costsApi } from '../../lib/supabase/api';
-import CostExcelUpload from './components/CostExcelUpload';
 
 const { Title } = Typography;
 
@@ -83,10 +82,6 @@ const ConstructionCostsPage: React.FC = () => {
       </div>
 
       <div className="p-6 space-y-6 max-w-none">
-        <Card title="Импорт из Excel">
-          <CostExcelUpload onUploaded={loadData} />
-        </Card>
-
         <Card title="Добавить категорию">
           <Form layout="inline" onFinish={onCreateCategory}>
             <Form.Item name="name" rules={[{ required: true, message: 'Введите название' }]}> <Input placeholder="Название" /> </Form.Item>
