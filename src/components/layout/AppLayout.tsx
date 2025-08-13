@@ -84,6 +84,12 @@ const AppLayout: React.FC = () => {
           path: '/admin/users',
         },
         {
+          key: 'construction-costs',
+          icon: null,
+          label: <Link to="/admin/construction-costs">Затраты на строительство</Link>,
+          path: '/admin/construction-costs',
+        },
+        {
           key: 'settings',
           icon: null,
           label: <Link to="/admin/settings">Настройки</Link>,
@@ -147,6 +153,8 @@ const AppLayout: React.FC = () => {
           breadcrumbItems.push({ title: <span>Администрирование</span> });
           if (pathSegments[1] === 'users') {
             breadcrumbItems.push({ title: <span>Пользователи</span> });
+          } else if (pathSegments[1] === 'construction-costs') {
+            breadcrumbItems.push({ title: <span>Затраты на строительство</span> });
           } else if (pathSegments[1] === 'settings') {
             breadcrumbItems.push({ title: <span>Настройки</span> });
           }

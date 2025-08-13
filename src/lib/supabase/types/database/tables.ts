@@ -473,4 +473,91 @@ export type DatabaseTables = {
       }
     ];
   };
+  cost_categories: {
+    Row: {
+      id: string;
+      name: string;
+      description: string | null;
+      created_at: string | null;
+    };
+    Insert: {
+      id?: string;
+      name: string;
+      description?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      name?: string;
+      description?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  location: {
+    Row: {
+      id: string;
+      country: string | null;
+      region: string | null;
+      city: string | null;
+      created_at: string | null;
+    };
+    Insert: {
+      id?: string;
+      country?: string | null;
+      region?: string | null;
+      city?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      country?: string | null;
+      region?: string | null;
+      city?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  detail_cost_categories: {
+    Row: {
+      id: string;
+      cost_category_id: string;
+      location_id: string;
+      name: string;
+      unit_cost: number | null;
+      created_at: string | null;
+    };
+    Insert: {
+      id?: string;
+      cost_category_id: string;
+      location_id: string;
+      name: string;
+      unit_cost?: number | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      cost_category_id?: string;
+      location_id?: string;
+      name?: string;
+      unit_cost?: number | null;
+      created_at?: string;
+    };
+    Relationships: [
+      {
+        foreignKeyName: 'detail_cost_categories_cost_category_id_fkey';
+        columns: ['cost_category_id'];
+        isOneToOne: false;
+        referencedRelation: 'cost_categories';
+        referencedColumns: ['id'];
+      },
+      {
+        foreignKeyName: 'detail_cost_categories_location_id_fkey';
+        columns: ['location_id'];
+        isOneToOne: false;
+        referencedRelation: 'location';
+        referencedColumns: ['id'];
+      }
+    ];
+  };
 };
