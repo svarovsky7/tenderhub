@@ -7,6 +7,8 @@ export interface WorkMaterialLink {
   client_position_id: string;
   work_boq_item_id: string;
   material_boq_item_id: string;
+  material_quantity_per_work?: number;
+  usage_coefficient?: number;
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -38,6 +40,8 @@ export const workMaterialLinksApi = {
           client_position_id: link.client_position_id,
           work_boq_item_id: link.work_boq_item_id,
           material_boq_item_id: link.material_boq_item_id,
+          material_quantity_per_work: link.material_quantity_per_work || 1,
+          usage_coefficient: link.usage_coefficient || 1,
           notes: link.notes
         })
         .select()
@@ -247,11 +251,17 @@ export const workMaterialLinksApi = {
     console.log('🚀 Updating work-material link:', { linkId, updates });
     
     try {
+      // Подготавливаем объект обновления, включая все возможные поля
+      const updateData: any = {};
+      if (updates.work_boq_item_id !== undefined) updateData.work_boq_item_id = updates.work_boq_item_id;
+      if (updates.material_boq_item_id !== undefined) updateData.material_boq_item_id = updates.material_boq_item_id;
+      if (updates.material_quantity_per_work !== undefined) updateData.material_quantity_per_work = updates.material_quantity_per_work;
+      if (updates.usage_coefficient !== undefined) updateData.usage_coefficient = updates.usage_coefficient;
+      if (updates.notes !== undefined) updateData.notes = updates.notes;
+      
       const { data, error } = await supabase
         .from('work_material_links')
-        .update({
-          notes: updates.notes
-        })
+        .update(updateData)
         .eq('id', linkId)
         .select()
         .single();

@@ -1,19 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusOutlined, EditOutlined, CloseOutlined, DisconnectOutlined, HolderOutlined, LinkOutlined, PlusCircleOutlined, SwapOutlined } from '@ant-design/icons';
-import { message, Spin, InputNumber, Tooltip, Modal, Button, Input, Radio } from 'antd';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { PlusOutlined, EditOutlined, CloseOutlined, DisconnectOutlined, HolderOutlined, LinkOutlined, PlusCircleOutlined, SwapOutlined, SendOutlined, DeleteOutlined } from '@ant-design/icons';
+import { message, Spin, InputNumber, Tooltip, Modal, Button, Input, Radio, List, Empty } from 'antd';
+// Drag-and-drop disabled - using modal for material movement
 import { clientPositionsApi, boqItemsApi, boqApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import { supabase } from '../../lib/supabase/client';
 import AutoCompleteSearch from '../common/AutoCompleteSearch';
 import { formatCurrency, formatQuantity, formatUnitRate } from '../../utils/formatters';
 import { calculateMaterialVolume, updateLinkWithCalculatedVolume } from '../../utils/materialCalculations';
-import { SortableBOQItem } from './SortableBOQItem';
-import { DroppableWorkItem } from './DroppableWorkItem';
+// Components for drag-and-drop removed - using modal approach
 import type { ClientPosition, BOQItem, BOQItemInsert } from '../../lib/supabase/types';
 
 interface TenderBOQManagerNewProps {
@@ -35,6 +30,36 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
   const [allWorkLinks, setAllWorkLinks] = useState<Record<string, any[]>>({});
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [editingLinkData, setEditingLinkData] = useState<any>({});
+  
+  // Move material modal state
+  const [moveModal, setMoveModal] = useState<{
+    visible: boolean;
+    materialId: string | null;
+    materialName: string;
+    currentWorkId: string | null;
+    currentWorkName: string;
+    isLinkedMaterial: boolean;
+    linkId?: string;
+  }>({
+    visible: false,
+    materialId: null,
+    materialName: '',
+    currentWorkId: null,
+    currentWorkName: '',
+    isLinkedMaterial: false
+  });
+  
+  // State for editing item
+  const [editingItem, setEditingItem] = useState<BOQItem | null>(null);
+  const [editFormData, setEditFormData] = useState<{
+    description: string;
+    quantity: number;
+    unit_rate: number;
+  }>({
+    description: '',
+    quantity: 0,
+    unit_rate: 0
+  });
   
   // Conflict resolution modal state
   const [conflictModal, setConflictModal] = useState<{
@@ -71,28 +96,39 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
 
   const units = ['м²', 'м³', 'шт.', 'кг', 'т', 'м.п.', 'компл.'];
   
-  // Helper function to calculate total cost including only works and their linked materials
+  // Helper function to calculate total cost including all works and materials
   const calculatePositionTotalCost = (items: BOQItem[], workLinks: Record<string, any[]>) => {
     let total = 0;
     let worksTotal = 0;
     let linkedMaterialsTotal = 0;
+    let unlinkedMaterialsTotal = 0;
     
     console.log('💰 Calculating position total cost...');
     console.log('📋 Items count:', items?.length || 0);
     console.log('🔗 Work links:', Object.keys(workLinks || {}).length);
     
-    // Считаем только работы и их привязанные материалы
+    // Создаем список ID связанных материалов
+    const linkedMaterialIds = new Set<string>();
+    Object.values(workLinks || {}).forEach((links: any[]) => {
+      links.forEach((link: any) => {
+        if (link.material_boq_item_id) {
+          linkedMaterialIds.add(link.material_boq_item_id);
+        }
+      });
+    });
+    
+    // Считаем работы, привязанные материалы и несвязанные материалы
     for (const item of items || []) {
       if (item.item_type === 'work') {
-        // Добавляем стоимость работы
+        // Добавляем стоимость работы (всегда, независимо от наличия материалов)
         const workAmount = item.total_amount || 0;
         worksTotal += workAmount;
         total += workAmount;
         
         console.log(`  🔧 Work: ${item.description} = ${workAmount}`);
         
-        // Добавляем стоимость привязанных к работе материалов
-        if (workLinks[item.id]) {
+        // Добавляем стоимость привязанных к работе материалов (если есть)
+        if (workLinks[item.id] && workLinks[item.id].length > 0) {
           const materialsTotal = workLinks[item.id].reduce((sum: number, link: any) => {
             const linkTotal = link.calculated_total || 0;
             console.log(`    📦 Linked material: ${linkTotal}`);
@@ -103,8 +139,14 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
           console.log(`    📦 Total materials for work: ${materialsTotal}`);
         }
       } else if (item.item_type === 'material') {
-        // Логируем несвязанные материалы, но НЕ добавляем их к сумме
-        console.log(`  ⚠️ Standalone material (NOT counted): ${item.description} = ${item.total_amount || 0}`);
+        // Проверяем, не является ли этот материал связанным
+        if (!linkedMaterialIds.has(item.id)) {
+          // Это несвязанный материал - добавляем его стоимость
+          const materialAmount = item.total_amount || 0;
+          unlinkedMaterialsTotal += materialAmount;
+          total += materialAmount;
+          console.log(`  📦 Unlinked material: ${item.description} = ${materialAmount}`);
+        }
       }
     }
     
@@ -755,7 +797,19 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
   }, [positions, selectedPosition, allWorkLinks]);
 
   // Update BOQ sub-item
-  const updateSubItem = useCallback(async (item: BOQItem, updates: Partial<BOQItem>) => {
+  const updateSubItem = useCallback(async (item: BOQItem, updates?: Partial<BOQItem>) => {
+    // If no updates provided, open edit modal inline
+    if (!updates) {
+      console.log('✏️ Opening inline edit for:', item);
+      setEditingItem(item);
+      setEditFormData({
+        description: item.description || '',
+        quantity: item.quantity || 0,
+        unit_rate: item.unit_rate || 0
+      });
+      return;
+    }
+    
     console.log('✏️ Updating sub-item:', { itemId: item.id, updates });
     
     try {
@@ -769,10 +823,29 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
 
       console.log('✅ Sub-item updated successfully');
       
-      // Update local state with the updated item
+      // Update local state immediately with calculated total_amount
       const positionId = item.client_position_id;
-      const freshResult = await boqApi.getHierarchicalByPosition(positionId);
-      const updatedItems = freshResult.error ? [] : (freshResult.data || []);
+      
+      // Find current position
+      const currentPosition = positions.find(p => p.id === positionId);
+      if (!currentPosition) return;
+      
+      // Update the item locally with calculated total_amount
+      const updatedItems = currentPosition.boq_items?.map(boqItem => {
+        if (boqItem.id === item.id) {
+          // Calculate new total_amount based on quantity and unit_rate
+          const newQuantity = updates.quantity !== undefined ? updates.quantity : boqItem.quantity;
+          const newUnitRate = updates.unit_rate !== undefined ? updates.unit_rate : boqItem.unit_rate;
+          const newTotalAmount = (newQuantity || 0) * (newUnitRate || 0);
+          
+          return {
+            ...boqItem,
+            ...updates,
+            total_amount: newTotalAmount
+          };
+        }
+        return boqItem;
+      }) || [];
       
       // Calculate total cost including only works and their linked materials
       const newTotalCost = calculatePositionTotalCost(updatedItems, allWorkLinks);
@@ -828,10 +901,129 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       console.error('💥 Update error:', error);
       message.error('Ошибка обновления элемента');
     }
-  }, []);
+  }, [positions, allWorkLinks, calculatePositionTotalCost, clientPositionsApi, boqItemsApi]);
 
+  // Save edited item
+  const handleSaveEdit = useCallback(async () => {
+    if (!editingItem) return;
+    
+    console.log('💾 Saving edited item:', editingItem.id);
+    
+    try {
+      // Don't update total_amount - it's calculated automatically in the database
+      const updates: Partial<BOQItem> = {
+        description: editFormData.description,
+        quantity: editFormData.quantity,
+        unit_rate: editFormData.unit_rate
+      };
+      
+      // Call the update function with updates
+      await updateSubItem(editingItem, updates);
+      
+      // Close edit modal
+      setEditingItem(null);
+      setEditFormData({
+        description: '',
+        quantity: 0,
+        unit_rate: 0
+      });
+      
+    } catch (error) {
+      console.error('💥 Save edit error:', error);
+      message.error('Ошибка сохранения изменений');
+    }
+  }, [editingItem, editFormData, updateSubItem]);
 
-  // Обработка перетаскивания материала на работу
+  // Открытие модального окна для перемещения материала
+  const openMoveModal = useCallback((materialId: string, materialName: string, currentWorkId: string | null = null, isLinked: boolean = false, linkId?: string) => {
+    console.log('🚀 Opening move modal for material:', materialId);
+    
+    // Найдем название текущей работы если материал привязан
+    let currentWorkName = '';
+    if (currentWorkId && selectedPosition) {
+      const work = selectedPosition.boq_items?.find(item => item.id === currentWorkId);
+      if (work) {
+        currentWorkName = work.description || '';
+      }
+    }
+    
+    setMoveModal({
+      visible: true,
+      materialId,
+      materialName,
+      currentWorkId,
+      currentWorkName,
+      isLinkedMaterial: isLinked,
+      linkId
+    });
+  }, [selectedPosition]);
+
+  // Обработка перемещения материала в выбранную работу
+  const handleMoveMaterial = useCallback(async (targetWorkId: string) => {
+    if (!moveModal.materialId || !selectedPosition) return;
+    
+    console.log('🚀 Moving material to work:', { 
+      materialId: moveModal.materialId, 
+      targetWorkId,
+      isLinked: moveModal.isLinkedMaterial,
+      currentWorkId: moveModal.currentWorkId
+    });
+    
+    try {
+      if (moveModal.isLinkedMaterial && moveModal.currentWorkId) {
+        // Перемещение уже связанного материала
+        if (moveModal.linkId) {
+          // Обновляем существующую связь
+          const updateResult = await workMaterialLinksApi.updateLink(moveModal.linkId, {
+            work_boq_item_id: targetWorkId
+          });
+          
+          if (updateResult.error) {
+            throw new Error(updateResult.error);
+          }
+          
+          message.success(`Материал "${moveModal.materialName}" перемещен`);
+        }
+      } else {
+        // Создание новой связи для несвязанного материала
+        const linkData = {
+          client_position_id: selectedPosition.id,
+          work_boq_item_id: targetWorkId,
+          material_boq_item_id: moveModal.materialId,
+          material_quantity_per_work: 1,
+          usage_coefficient: 1
+        };
+        
+        console.log('📡 Creating link:', linkData);
+        const createResult = await workMaterialLinksApi.createLink(linkData);
+        
+        if (createResult.error) {
+          throw new Error(createResult.error);
+        }
+        
+        message.success(`Материал "${moveModal.materialName}" привязан к работе`);
+      }
+      
+      // Перезагружаем связи для обновления UI
+      await loadLinksForPosition(selectedPosition.id);
+      
+      // Закрываем модальное окно
+      setMoveModal({
+        visible: false,
+        materialId: null,
+        materialName: '',
+        currentWorkId: null,
+        currentWorkName: '',
+        isLinkedMaterial: false
+      });
+      
+    } catch (error) {
+      console.error('❌ Move error:', error);
+      message.error('Ошибка перемещения материала');
+    }
+  }, [moveModal, selectedPosition, loadLinksForPosition]);
+
+  // Обработка перетаскивания материала на работу (оставляем для обратной совместимости)
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
     
@@ -1070,6 +1262,86 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     }
   }, [selectedPosition, loadLinksForPosition]);
 
+  // Удаление материала полностью (из связей и из BOQ)
+  const handleDeleteMaterial = useCallback(async (materialId: string, linkId: string, materialName: string) => {
+    console.log('🚀 Deleting material completely:', { materialId, linkId, materialName });
+    
+    try {
+      // 1. Сначала удаляем связь
+      console.log('🔗 Step 1: Deleting work-material link...');
+      const linkDeleteResult = await workMaterialLinksApi.deleteLink(linkId);
+      
+      if (linkDeleteResult.error) {
+        console.error('❌ Failed to delete link:', linkDeleteResult.error);
+        message.error('Ошибка удаления связи материала');
+        return;
+      }
+      
+      console.log('✅ Link deleted successfully');
+      
+      // 2. Затем удаляем сам материал из BOQ
+      console.log('🗑️ Step 2: Deleting material from BOQ...');
+      const materialDeleteResult = await boqItemsApi.delete(materialId);
+      
+      if (materialDeleteResult.error) {
+        console.error('❌ Failed to delete material:', materialDeleteResult.error);
+        message.error('Ошибка удаления материала');
+        return;
+      }
+      
+      console.log('✅ Material deleted successfully');
+      message.success(`Материал "${materialName}" удален`);
+      
+      // 3. Обновляем состояние локально
+      if (selectedPosition) {
+        console.log('🔄 Refreshing position data...');
+        
+        // Удаляем материал из списка BOQ items
+        const updatedItems = selectedPosition.boq_items?.filter(item => item.id !== materialId) || [];
+        
+        // Пересчитываем общую стоимость
+        const newTotalCost = calculatePositionTotalCost(updatedItems, allWorkLinks);
+        
+        // Обновляем totals в базе данных
+        const materialsTotal = updatedItems.filter(i => i.item_type === 'material').reduce((sum, i) => sum + (i.total_amount || 0), 0);
+        const worksTotal = updatedItems.filter(i => i.item_type === 'work').reduce((sum, i) => sum + (i.total_amount || 0), 0);
+        
+        await clientPositionsApi.update(selectedPosition.id, {
+          total_materials_cost: materialsTotal,
+          total_works_cost: worksTotal
+        });
+        
+        // Обновляем selectedPosition
+        const updatedSelectedPosition = {
+          ...selectedPosition,
+          boq_items: updatedItems,
+          total_position_cost: newTotalCost,
+          total_materials_cost: materialsTotal,
+          total_works_cost: worksTotal
+        };
+        
+        setSelectedPosition(updatedSelectedPosition);
+        
+        // Обновляем positions
+        setPositions(prev => prev.map(position => {
+          if (position.id === selectedPosition.id) {
+            return updatedSelectedPosition;
+          }
+          return position;
+        }));
+        
+        // Обновляем связи для отображения
+        await loadLinksForPosition(selectedPosition.id);
+        
+        console.log('✨ State updated after material deletion');
+      }
+      
+    } catch (error) {
+      console.error('💥 Exception in handleDeleteMaterial:', error);
+      message.error('Ошибка удаления материала');
+    }
+  }, [selectedPosition, workMaterialLinksApi, boqItemsApi, calculatePositionTotalCost, clientPositionsApi, allWorkLinks, loadLinksForPosition]);
+
   // Update linked material
   const handleUpdateLinkedMaterial = useCallback(async (linkId: string, materialId: string) => {
     console.log('🚀 Updating linked material:', { linkId, materialId, data: editingLinkData });
@@ -1112,18 +1384,6 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       message.error('Ошибка обновления материала');
     }
   }, [selectedPosition, loadLinksForPosition, editingLinkData]);
-
-  // Настройка сенсоров для drag-and-drop
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
 
   // Calculate totals
   const totalProject = positions.reduce((sum, position) => sum + (position.total_position_cost || 0), 0);
@@ -1269,25 +1529,6 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                               (перетащите материал на работу для создания связи)
                             </span>
                           </h4>
-                          <DndContext
-                            sensors={sensors}
-                            collisionDetection={closestCenter}
-                            onDragEnd={handleDragEnd}
-                          >
-                            <SortableContext
-                              items={positionItems.filter(item => {
-                                // Только несвязанные материалы участвуют в сортировке
-                                // Работы НЕ участвуют в сортировке - они только принимают материалы
-                                if (item.item_type === 'material') {
-                                  const isLinked = Object.values(allWorkLinks).some((links: any) => 
-                                    links.some((link: any) => link.material_boq_item_id === item.id)
-                                  );
-                                  return !isLinked;
-                                }
-                                return false; // Работы не включаем в sortable context
-                              }).map(item => item.id)}
-                              strategy={verticalListSortingStrategy}
-                            >
                               <div className="space-y-1">
                                 {positionItems.map((subItem, index) => {
                                   // Проверяем, не является ли этот материал привязанным к какой-либо работе
@@ -1319,24 +1560,103 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                   return (
                                   <div key={subItem.id}>
                                     {subItem.item_type === 'work' ? (
-                                      // Работы - только droppable, не sortable
-                                      <DroppableWorkItem
-                                        item={subItem}
-                                        linkedMaterialsTotal={linkedMaterialsTotal}
-                                        onRemove={(e) => {
-                                          e.stopPropagation();
-                                          removeSubItem(position.id, subItem.id);
-                                        }}
-                                        onEdit={updateSubItem}
-                                      >
+                                      // Работы
+                                      <div className="bg-white rounded border border-gray-300 mb-2">
+                                        <div className="p-2 bg-gray-50 border-b border-gray-200">
+                                          {editingItem?.id === subItem.id ? (
+                                            // Inline edit form
+                                            <div className="space-y-2">
+                                              <div className="flex items-center gap-2">
+                                                <input
+                                                  type="text"
+                                                  value={editFormData.description}
+                                                  onChange={(e) => setEditFormData({...editFormData, description: e.target.value})}
+                                                  className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                                                  placeholder="Название работы"
+                                                />
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <input
+                                                  type="number"
+                                                  value={editFormData.quantity}
+                                                  onChange={(e) => setEditFormData({...editFormData, quantity: parseFloat(e.target.value) || 0})}
+                                                  className="w-24 px-2 py-1 text-sm border border-gray-300 rounded"
+                                                  placeholder="Кол-во"
+                                                />
+                                                <span className="text-xs text-gray-500">{subItem.unit}</span>
+                                                <input
+                                                  type="number"
+                                                  value={editFormData.unit_rate}
+                                                  onChange={(e) => setEditFormData({...editFormData, unit_rate: parseFloat(e.target.value) || 0})}
+                                                  className="w-32 px-2 py-1 text-sm border border-gray-300 rounded"
+                                                  placeholder="Цена за ед."
+                                                  step="0.01"
+                                                />
+                                                <span className="text-sm font-semibold text-green-600">
+                                                  = {formatCurrency(editFormData.quantity * editFormData.unit_rate)}
+                                                </span>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleSaveEdit();
+                                                  }}
+                                                  className="text-green-500 hover:text-green-700 p-1"
+                                                >
+                                                  ✓
+                                                </button>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setEditingItem(null);
+                                                  }}
+                                                  className="text-gray-500 hover:text-gray-700 p-1"
+                                                >
+                                                  ✕
+                                                </button>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            // Normal display
+                                            <div className="flex items-center justify-between">
+                                              <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-sm font-semibold">🔧 {subItem.description}</span>
+                                                  <span className="text-xs text-gray-500">
+                                                    {subItem.quantity} {subItem.unit} × {formatCurrency(subItem.unit_rate || 0)}/{subItem.unit}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-sm font-bold text-green-600">
+                                                  {formatCurrency(subItem.total_amount || 0)}
+                                                </span>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    updateSubItem(subItem);
+                                                  }}
+                                                  className="text-blue-500 hover:text-blue-700 p-1"
+                                                >
+                                                  <EditOutlined style={{ fontSize: '14px' }} />
+                                                </button>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  removeSubItem(position.id, subItem.id);
+                                                }}
+                                                className="text-red-500 hover:text-red-700 p-1"
+                                              >
+                                                <CloseOutlined style={{ fontSize: '14px' }} />
+                                              </button>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
                                         {/* Отображение связанных материалов для работ */}
                                         {allWorkLinks[subItem.id] && allWorkLinks[subItem.id].length > 0 && (
                                   <div className="ml-6 mt-1 p-2 bg-blue-50 rounded border-l-2 border-blue-300">
                                     <div className="text-xs font-medium text-blue-700 mb-1">
                                       Связанные материалы:
-                                      <span className="ml-2 text-xs text-gray-500 font-normal">
-                                        (перетащите на другую работу для перемещения, с Ctrl для копирования)
-                                      </span>
                                     </div>
                                     <div className="space-y-1">
                                       {allWorkLinks[subItem.id].map((link: any) => {
@@ -1355,23 +1675,10 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                         };
                                         
                                         return (
-                                        <SortableBOQItem
-                                          key={link.id}
-                                          item={linkedMaterialItem}
-                                          isDraggable={!isEditing}
-                                          dragData={{
-                                            type: 'material',
-                                            item: linkedMaterialItem,
-                                            isLinkedMaterial: true,
-                                            sourceWorkId: subItem.id,
-                                            linkId: link.id || link.link_id
-                                          }}
-                                          className="mb-1"
-                                        >
+                                        <div key={link.id} className="mb-1">
                                           <div className="flex flex-col gap-1 pb-1 border-b border-blue-200 last:border-0">
                                             <div className="flex items-center justify-between text-xs">
                                               <div className="flex items-center flex-1 gap-1">
-                                                <HolderOutlined className="text-gray-400 cursor-move" style={{ fontSize: '10px' }} title="Перетащите на другую работу для переноса" />
                                                 <span className="font-medium text-gray-700">{link.material_description}</span>
                                                 <span className="text-gray-400">
                                                   {link.material_consumption_coefficient && link.material_consumption_coefficient !== 1 && (
@@ -1404,23 +1711,39 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                                   >
                                                     <EditOutlined style={{ fontSize: '12px' }} />
                                                   </button>
-                                                  <Tooltip title="Отвязать материал от работы">
+                                                  <Tooltip title="Переместить в другую работу">
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openMoveModal(
+                                                          link.material_boq_item_id,
+                                                          link.material_description,
+                                                          subItem.id,
+                                                          true,
+                                                          link.id || link.link_id
+                                                        );
+                                                      }}
+                                                      className="text-purple-500 hover:text-purple-700 p-0.5 transition-colors"
+                                                      title="Переместить в другую работу"
+                                                    >
+                                                      <SendOutlined style={{ fontSize: '12px' }} />
+                                                    </button>
+                                                  </Tooltip>
+                                                  <Tooltip title="Удалить материал">
                                                     <button
                                                       onClick={async (e) => {
                                                         e.stopPropagation();
-                                                        // Удаление связи
-                                                        const deleteResult = await workMaterialLinksApi.deleteLink(link.id || link.link_id);
-                                                        if (!deleteResult.error) {
-                                                          message.success('Материал отвязан от работы');
-                                                          await loadLinksForPosition(position.id);
-                                                        } else {
-                                                          message.error('Ошибка отвязки материала');
-                                                        }
+                                                        // Полное удаление материала
+                                                        await handleDeleteMaterial(
+                                                          link.material_boq_item_id, 
+                                                          link.id || link.link_id, 
+                                                          link.material_description
+                                                        );
                                                       }}
-                                                      className="text-amber-600 hover:text-amber-800 p-0.5 transition-colors"
-                                                      title="Отвязать материал от работы"
+                                                      className="text-red-600 hover:text-red-800 p-0.5 transition-colors"
+                                                      title="Удалить материал"
                                                     >
-                                                      <DisconnectOutlined style={{ fontSize: '12px' }} />
+                                                      <DeleteOutlined style={{ fontSize: '12px' }} />
                                                     </button>
                                                   </Tooltip>
                                                 </>
@@ -1489,31 +1812,78 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                             </div>
                                           )}
                                         </div>
-                                        </SortableBOQItem>
+                                        </div>
                                         );
                                       })}
                                     </div>
                                   </div>
                                         )}
-                                      </DroppableWorkItem>
+                                      </div>
                                     ) : (
-                                      // Материалы - sortable и draggable
-                                      <SortableBOQItem
-                                        item={subItem}
-                                        linkedMaterialsTotal={linkedMaterialsTotal}
-                                        onRemove={(e) => {
-                                          e.stopPropagation();
-                                          removeSubItem(position.id, subItem.id);
-                                        }}
-                                        onEdit={updateSubItem}
-                                      />
+                                      // Несвязанные материалы
+                                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 transition-colors mb-1">
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm font-medium">{subItem.description}</span>
+                                            <span className="text-xs text-gray-500">
+                                              {subItem.quantity} {subItem.unit}
+                                            </span>
+                                            {subItem.consumption_coefficient && subItem.consumption_coefficient !== 1 && (
+                                              <span className="text-xs text-gray-500">К.расх: {subItem.consumption_coefficient}</span>
+                                            )}
+                                            {subItem.conversion_coefficient && subItem.conversion_coefficient !== 1 && (
+                                              <span className="text-xs text-gray-500">К.пер: {subItem.conversion_coefficient}</span>
+                                            )}
+                                          </div>
+                                          <div className="text-xs text-gray-600 mt-1">
+                                            Цена: {formatCurrency(subItem.unit_rate || 0)}/{subItem.unit}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-sm font-semibold text-blue-600">
+                                            {formatCurrency(subItem.total_amount || 0)}
+                                          </span>
+                                          <Tooltip title="Привязать к работе">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                openMoveModal(
+                                                  subItem.id,
+                                                  subItem.description || '',
+                                                  null,
+                                                  false
+                                                );
+                                              }}
+                                              className="text-purple-500 hover:text-purple-700 p-1 transition-colors"
+                                            >
+                                              <LinkOutlined style={{ fontSize: '14px' }} />
+                                            </button>
+                                          </Tooltip>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              updateSubItem(subItem);
+                                            }}
+                                            className="text-blue-500 hover:text-blue-700 p-1"
+                                          >
+                                            <EditOutlined style={{ fontSize: '14px' }} />
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              removeSubItem(position.id, subItem.id);
+                                            }}
+                                            className="text-red-500 hover:text-red-700 p-1"
+                                          >
+                                            <CloseOutlined style={{ fontSize: '14px' }} />
+                                          </button>
+                                        </div>
+                                      </div>
                                     )}
                               </div>
                               );
                             })}
                               </div>
-                            </SortableContext>
-                          </DndContext>
                         </div>
                       )}
 
@@ -1737,6 +2107,85 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
               </div>
             </Radio>
           </Radio.Group>
+        </div>
+      </Modal>
+
+      {/* Модальное окно для перемещения материала */}
+      <Modal
+        title={
+          <div className="flex items-center gap-2">
+            <SendOutlined className="text-purple-600" />
+            <span>Переместить материал</span>
+          </div>
+        }
+        open={moveModal.visible}
+        onCancel={() => setMoveModal({
+          visible: false,
+          materialId: null,
+          materialName: '',
+          currentWorkId: null,
+          currentWorkName: '',
+          isLinkedMaterial: false
+        })}
+        footer={null}
+        width={600}
+      >
+        <div className="space-y-4">
+          <div className="bg-blue-50 p-3 rounded">
+            <p className="text-sm">
+              <strong>Материал:</strong> {moveModal.materialName}
+            </p>
+            {moveModal.currentWorkId && (
+              <p className="text-sm mt-1">
+                <strong>Текущая работа:</strong> {moveModal.currentWorkName}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <p className="text-sm font-medium mb-3">
+              Выберите работу для привязки материала:
+            </p>
+            
+            {selectedPosition && selectedPosition.boq_items ? (
+              <List
+                dataSource={selectedPosition.boq_items.filter(item => 
+                  item.item_type === 'work' && item.id !== moveModal.currentWorkId
+                )}
+                renderItem={(work) => (
+                  <List.Item
+                    className="cursor-pointer hover:bg-gray-50 px-3 py-2 rounded transition-colors"
+                    onClick={() => handleMoveMaterial(work.id)}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex-1">
+                        <div className="font-medium">{work.description}</div>
+                        <div className="text-sm text-gray-500">
+                          {work.quantity} {work.unit}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-green-600">
+                          {formatCurrency(work.total_amount || 0)}
+                        </span>
+                        <SendOutlined className="text-gray-400" />
+                      </div>
+                    </div>
+                  </List.Item>
+                )}
+                locale={{
+                  emptyText: (
+                    <Empty
+                      description="Нет доступных работ"
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  )
+                }}
+              />
+            ) : (
+              <Empty description="Нет доступных работ" />
+            )}
+          </div>
         </div>
       </Modal>
 
