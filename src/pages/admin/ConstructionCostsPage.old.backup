@@ -86,7 +86,6 @@ const ConstructionCostsPage: React.FC = () => {
     console.log('🚀 [ConstructionCostsPage] Loading data');
     setLoading(true);
     
-    
     try {
       // Загружаем категории с деталями
       const { data: categoriesData, error: catError } = await getCategoriesWithDetails();
@@ -114,98 +113,41 @@ const ConstructionCostsPage: React.FC = () => {
         });
         setDetails(allDetails);
         
-        
-        // Группируем детали по названию (так как одна деталь может иметь много локализаций)
-        const detailsByName = new Map<string, any[]>();
-        allDetails.forEach(detail => {
-          const key = detail.name;
-          if (!detailsByName.has(key)) {
-            detailsByName.set(key, []);
-          }
-          detailsByName.get(key)!.push(detail);
-        });
-        
         // Преобразуем в дерево
-        const tree = categoriesData.map((category: any) => {
-          // Группируем детали категории по названию
-          const categoryDetailsByName = new Map<string, any[]>();
-          category.details?.forEach((detail: any) => {
-            const key = detail.name;
-            if (!categoryDetailsByName.has(key)) {
-              categoryDetailsByName.set(key, []);
-            }
-            categoryDetailsByName.get(key)!.push(detail);
-          });
-          
-          // Создаем узлы для уникальных деталей
-          const detailNodes: any[] = [];
-          categoryDetailsByName.forEach((detailGroup, detailName) => {
-            const locations = detailGroup.map(d => d.location).filter(Boolean);
-            const uniqueLocations = locations.filter((loc, index, self) => 
-              index === self.findIndex(l => 
-                l?.id === loc?.id
-              )
-            );
-            
-            
-            detailNodes.push({
-              key: `detail-${detailGroup[0].id}-group`,
-              title: (
-                <Space>
-                  <FileOutlined />
-                  <span>{detailName}</span>
-                  {uniqueLocations.length > 0 && (
-                    <Space size={4}>
-                      <GlobalOutlined style={{ color: '#52c41a' }} />
-                      <span style={{ fontSize: '12px', color: '#52c41a' }}>
-                        {uniqueLocations.length} локализаци{uniqueLocations.length === 1 ? 'я' : uniqueLocations.length < 5 ? 'и' : 'й'}
-                      </span>
-                    </Space>
-                  )}
-                  {detailGroup[0].unit_cost && (
-                    <Tag color="orange">{detailGroup[0].unit_cost} ₽</Tag>
-                  )}
-                </Space>
-              ),
-              children: uniqueLocations.map((loc, idx) => {
-                // Формируем отображаемое название локализации
-                const locationName = [loc.city, loc.region, loc.country].filter(Boolean).join(', ') || 'Не указано';
-                
-                return {
-                  key: `detail-${detailGroup[0].id}-loc-${idx}`,
-                  title: (
-                    <Tag color="green" style={{ fontSize: '11px' }}>
-                      <GlobalOutlined /> {locationName}
-                    </Tag>
-                  ),
-                  isLeaf: true
-                };
-              }),
-              data: detailGroup[0],
-              type: 'detail' as const,
-              isLeaf: uniqueLocations.length === 0
-            });
-          });
-          
-          return {
-            key: `cat-${category.id}`,
+        const tree = categoriesData.map((category: any) => ({
+          key: `cat-${category.id}`,
+          title: (
+            <Space>
+              <FolderOutlined />
+              <span>{category.name}</span>
+              {category.description && (
+                <Tag color="blue" style={{ fontSize: '10px' }}>{category.description}</Tag>
+              )}
+            </Space>
+          ),
+          children: category.details?.map((detail: any) => ({
+            key: `detail-${detail.id}`,
             title: (
               <Space>
-                <FolderOutlined />
-                <span style={{ fontWeight: 'bold' }}>{category.name}</span>
-                {category.description && (
-                  <Tag color="blue" style={{ fontSize: '10px' }}>{category.description}</Tag>
+                <FileOutlined />
+                <span>{detail.name}</span>
+                {detail.location && (
+                  <Tag color="green" style={{ fontSize: '10px' }}>
+                    <GlobalOutlined /> {[detail.location.city, detail.location.country].filter(Boolean).join(', ')}
+                  </Tag>
                 )}
-                <span style={{ fontSize: '12px', color: '#999' }}>
-                  ({detailNodes.length} вид{detailNodes.length === 1 ? '' : detailNodes.length < 5 ? 'а' : 'ов'} затрат)
-                </span>
+                {detail.unit_cost && (
+                  <Tag color="orange">{detail.unit_cost} ₽</Tag>
+                )}
               </Space>
             ),
-            children: detailNodes,
-            data: category,
-            type: 'category' as const
-          };
-        });
+            data: detail,
+            type: 'detail' as const,
+            isLeaf: true
+          })) || [],
+          data: category,
+          type: 'category' as const
+        }));
         
         setTreeData(tree);
         
@@ -336,52 +278,34 @@ const ConstructionCostsPage: React.FC = () => {
     console.log('🚀 [ConstructionCostsPage] Exporting to Excel');
     
     const exportData: any[] = [];
-    let rowNumber = 1;
     
     categories.forEach(category => {
-      // Группируем детали по названию
-      const detailsByName = new Map<string, any[]>();
-      category.details?.forEach((detail: any) => {
-        const key = detail.name;
-        if (!detailsByName.has(key)) {
-          detailsByName.set(key, []);
-        }
-        detailsByName.get(key)!.push(detail);
+      // Добавляем категорию
+      exportData.push({
+        '№': '',
+        'Категория': category.name,
+        'Ед.изм. категории': category.description?.replace('Единица измерения: ', '') || '',
+        'Вид затрат': '',
+        'Ед.изм. детали': '',
+        'Локализация': ''
       });
       
-      // Для каждой уникальной детали добавляем строку с категорией
-      let isFirstDetail = true;
-      detailsByName.forEach((detailGroup, detailName) => {
-        detailGroup.forEach((detail, index) => {
-          const detailNameClean = detailName.replace(/ \([^)]*\)$/, ''); // Убираем единицу измерения из названия
-          const detailUnit = detailName.match(/\(([^)]*)\)$/)?.[1] || ''; // Извлекаем единицу измерения
+      // Добавляем детали категории
+      if (category.details) {
+        category.details.forEach((detail: any) => {
+          const detailName = detail.name.replace(/ \([^)]*\)$/, ''); // Убираем единицу измерения из названия
+          const detailUnit = detail.name.match(/\(([^)]*)\)$/)?.[1] || ''; // Извлекаем единицу измерения
           
           exportData.push({
-            '№': index === 0 ? rowNumber++ : '',
-            'Категория': isFirstDetail ? category.name : '',
-            'Ед.изм. категории': isFirstDetail ? (category.description?.replace('Единица измерения: ', '') || '') : '',
-            'Вид затрат': index === 0 ? detailNameClean : '',
-            'Ед.изм. детали': index === 0 ? detailUnit : '',
+            '№': '',
+            'Категория': '',
+            'Ед.изм. категории': '',
+            'Вид затрат': detailName,
+            'Ед.изм. детали': detailUnit,
             'Локализация': detail.location ? 
               [detail.location.city, detail.location.region, detail.location.country]
                 .filter(Boolean).join(', ') : ''
           });
-          
-          if (isFirstDetail) {
-            isFirstDetail = false;
-          }
-        });
-      });
-      
-      // Если у категории нет деталей, добавляем пустую строку с категорией
-      if (!category.details || category.details.length === 0) {
-        exportData.push({
-          '№': rowNumber++,
-          'Категория': category.name,
-          'Ед.изм. категории': category.description?.replace('Единица измерения: ', '') || '',
-          'Вид затрат': '',
-          'Ед.изм. детали': '',
-          'Локализация': ''
         });
       }
     });
@@ -500,7 +424,7 @@ const ConstructionCostsPage: React.FC = () => {
                 </div>
 
                 <Tabs defaultActiveKey="1">
-                  <TabPane tab={`Категории и детали`} key="1">
+                  <TabPane tab={`Категории и детали (${details.length})`} key="1">
                     <Card>
                       <Spin spinning={loading}>
                         {treeData.length > 0 ? (
