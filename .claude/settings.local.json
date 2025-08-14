@@ -31,7 +31,9 @@
       "Bash(npx supabase:*)",
       "Bash(npm run:*)",
       "Bash(npx tsx:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(touch:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   }
