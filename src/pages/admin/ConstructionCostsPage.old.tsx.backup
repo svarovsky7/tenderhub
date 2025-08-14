@@ -1,0 +1,1240 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Layout,
+  Tree,
+  Button,
+  Space,
+  Card,
+  Modal,
+  Form,
+  Input,
+  Select,
+  Switch,
+  message,
+  Upload,
+  Popconfirm,
+  Tag,
+  Tooltip,
+  Row,
+  Col,
+  Spin,
+  Empty,
+  Breadcrumb,
+  Progress
+} from 'antd';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  UploadOutlined,
+  FolderOutlined,
+  FileOutlined,
+  ReloadOutlined,
+  DownloadOutlined,
+  DragOutlined,
+  FolderAddOutlined
+} from '@ant-design/icons';
+import type { DataNode, TreeProps } from 'antd/es/tree';
+import * as XLSX from 'xlsx';
+import {
+  getCostNodesTree,
+  createCostNode,
+  updateCostNode,
+  deleteCostNode,
+  moveCostNode,
+  getUnits,
+  getLocations,
+  importCostNodesFromExcel,
+  type CostNode,
+  type CreateCostNodeDto,
+  type UpdateCostNodeDto
+} from '../../lib/supabase/api/cost-nodes';
+import { importConstructionCosts, type ImportRow } from '../../lib/supabase/api/import-costs';
+import { supabase } from '../../lib/supabase/client';
+
+const { Content } = Layout;
+const { Option } = Select;
+
+interface TreeNode extends DataNode {
+  data: CostNode;
+}
+
+const ConstructionCostsPage: React.FC = () => {
+  const [loading, setLoading] = useState(false);
+  const [treeData, setTreeData] = useState<TreeNode[]>([]);
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [selectedNode, setSelectedNode] = useState<CostNode | null>(null);
+  const [units, setUnits] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
+  
+  // Модальные окна
+  const [isNodeModalVisible, setIsNodeModalVisible] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isImportModalVisible, setIsImportModalVisible] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importStatus, setImportStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
+  const [importLog, setImportLog] = useState<string[]>([]);
+  
+  const [form] = Form.useForm();
+
+  // Загрузка данных при монтировании
+  useEffect(() => {
+    loadData();
+    loadDictionaries();
+  }, []);
+
+  // Загрузка дерева
+  const loadData = async () => {
+    console.log('🚀 [ConstructionCostsPage] Loading data');
+    setLoading(true);
+    
+    try {
+      const { data, error } = await getCostNodesTree();
+      
+      if (error) {
+        message.error('Ошибка загрузки данных: ' + error.message);
+        return;
+      }
+
+      if (data) {
+        const tree = convertToTreeData(data);
+        setTreeData(tree);
+        
+        // Раскрываем первый уровень
+        const firstLevelKeys = data
+          .filter(node => !node.parent_id)
+          .map(node => node.id);
+        setExpandedKeys(firstLevelKeys);
+      }
+      
+      console.log('✅ [ConstructionCostsPage] Data loaded');
+    } catch (err: any) {
+      console.error('❌ [ConstructionCostsPage] Error:', err);
+      message.error('Ошибка загрузки данных');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Загрузка справочников
+  const loadDictionaries = async () => {
+    console.log('🚀 [ConstructionCostsPage] Loading dictionaries');
+    
+    try {
+      const [unitsRes, locationsRes] = await Promise.all([
+        getUnits(),
+        getLocations()
+      ]);
+
+      if (unitsRes.data) setUnits(unitsRes.data);
+      if (locationsRes.data) setLocations(locationsRes.data);
+      
+      console.log('✅ [ConstructionCostsPage] Dictionaries loaded');
+    } catch (err) {
+      console.error('❌ [ConstructionCostsPage] Error loading dictionaries:', err);
+    }
+  };
+
+  // Преобразование данных для Tree компонента
+  const convertToTreeData = (nodes: CostNode[]): TreeNode[] => {
+    return nodes.map(node => ({
+      key: node.id,
+      title: (
+        <Space>
+          {node.kind === 'group' ? <FolderOutlined /> : <FileOutlined />}
+          <span>{node.name}</span>
+          {node.code && <Tag color="blue">{node.code}</Tag>}
+          {node.unit && <Tag color="green">{node.unit.code}</Tag>}
+          {!node.is_active && <Tag color="red">Неактивно</Tag>}
+        </Space>
+      ),
+      icon: node.kind === 'group' ? <FolderOutlined /> : <FileOutlined />,
+      children: node.children ? convertToTreeData(node.children) : undefined,
+      data: node
+    }));
+  };
+
+  // Обработка выбора узла
+  const onSelect: TreeProps['onSelect'] = (selectedKeys, info) => {
+    console.log('🚀 [ConstructionCostsPage] Node selected:', selectedKeys);
+    setSelectedKeys(selectedKeys as string[]);
+    
+    if (info.selected) {
+      const node = (info.node as TreeNode).data;
+      setSelectedNode(node);
+    } else {
+      setSelectedNode(null);
+    }
+  };
+
+  // Открытие модального окна для создания/редактирования
+  const showNodeModal = (editMode: boolean = false, parentNode?: CostNode) => {
+    console.log('🚀 [ConstructionCostsPage] Show modal:', { editMode, parentNode });
+    
+    setIsEditMode(editMode);
+    
+    if (editMode && selectedNode) {
+      // Редактирование
+      form.setFieldsValue({
+        kind: selectedNode.kind,
+        name: selectedNode.name,
+        code: selectedNode.code,
+        unit_id: selectedNode.unit_id,
+        location_id: selectedNode.location_id,
+        sort_order: selectedNode.sort_order,
+        is_active: selectedNode.is_active
+      });
+    } else {
+      // Создание
+      form.resetFields();
+      form.setFieldsValue({
+        kind: parentNode ? 'item' : 'group',
+        parent_id: parentNode?.id || selectedNode?.id,
+        is_active: true,
+        sort_order: 100
+      });
+    }
+    
+    setIsNodeModalVisible(true);
+  };
+
+  // Сохранение узла
+  const handleSaveNode = async () => {
+    console.log('🚀 [ConstructionCostsPage] Saving node');
+    
+    try {
+      const values = await form.validateFields();
+      setLoading(true);
+
+      if (isEditMode && selectedNode) {
+        // Обновление
+        const updates: UpdateCostNodeDto = {
+          name: values.name,
+          code: values.code,
+          unit_id: values.unit_id,
+          location_id: values.location_id,
+          sort_order: values.sort_order,
+          is_active: values.is_active
+        };
+
+        const { error } = await updateCostNode(selectedNode.id, updates);
+        
+        if (error) {
+          message.error('Ошибка обновления: ' + error.message);
+          return;
+        }
+        
+        message.success('Узел успешно обновлен');
+      } else {
+        // Создание
+        const newNode: CreateCostNodeDto = {
+          parent_id: values.parent_id || null,
+          kind: values.kind,
+          name: values.name,
+          code: values.code,
+          unit_id: values.unit_id,
+          location_id: values.location_id,
+          sort_order: values.sort_order,
+          is_active: values.is_active
+        };
+
+        const { error } = await createCostNode(newNode);
+        
+        if (error) {
+          message.error('Ошибка создания: ' + error.message);
+          return;
+        }
+        
+        message.success('Узел успешно создан');
+      }
+
+      setIsNodeModalVisible(false);
+      form.resetFields();
+      await loadData();
+      
+      console.log('✅ [ConstructionCostsPage] Node saved');
+    } catch (err: any) {
+      console.error('❌ [ConstructionCostsPage] Error saving:', err);
+      message.error('Ошибка сохранения');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Удаление узла
+  const handleDeleteNode = async () => {
+    if (!selectedNode) return;
+    
+    console.log('🚀 [ConstructionCostsPage] Deleting node:', selectedNode.id);
+    setLoading(true);
+    
+    try {
+      const { error } = await deleteCostNode(selectedNode.id);
+      
+      if (error) {
+        message.error('Ошибка удаления: ' + error.message);
+        return;
+      }
+      
+      message.success('Узел успешно удален');
+      setSelectedNode(null);
+      setSelectedKeys([]);
+      await loadData();
+      
+      console.log('✅ [ConstructionCostsPage] Node deleted');
+    } catch (err: any) {
+      console.error('❌ [ConstructionCostsPage] Error deleting:', err);
+      message.error('Ошибка удаления');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Обработка перетаскивания
+  const onDrop: TreeProps['onDrop'] = async (info) => {
+    console.log('🚀 [ConstructionCostsPage] Drop:', info);
+    
+    const dragNode = info.dragNode as TreeNode;
+    const dropNode = info.node as TreeNode;
+    const dropPos = info.node.pos.split('-');
+    const dropPosition = info.dropPosition - Number(dropPos[dropPos.length - 1]);
+
+    setLoading(true);
+    
+    try {
+      let newParentId: string | null = null;
+      let newSortOrder: number | undefined;
+
+      if (dropPosition === 0) {
+        // Вставка внутрь узла
+        newParentId = dropNode.data.id;
+      } else {
+        // Вставка до или после узла
+        newParentId = dropNode.data.parent_id;
+        newSortOrder = dropNode.data.sort_order + (dropPosition > 0 ? 10 : -10);
+      }
+
+      const { error } = await moveCostNode(dragNode.data.id, newParentId, newSortOrder);
+      
+      if (error) {
+        message.error('Ошибка перемещения: ' + error.message);
+        return;
+      }
+      
+      message.success('Узел успешно перемещен');
+      await loadData();
+      
+      console.log('✅ [ConstructionCostsPage] Node moved');
+    } catch (err: any) {
+      console.error('❌ [ConstructionCostsPage] Error moving:', err);
+      message.error('Ошибка перемещения');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Импорт из Excel с новой логикой для правильных таблиц
+  const handleImportExcel = async (file: File) => {
+    console.log('🚀 [ConstructionCostsPage] Importing Excel with new logic:', file.name);
+    
+    // Сброс состояния
+    setImportProgress(0);
+    setImportStatus('processing');
+    setImportLog([`Начало импорта файла: ${file.name}`]);
+    
+    const reader = new FileReader();
+    
+    reader.onload = async (e) => {
+      try {
+        setImportLog(prev => [...prev, 'Чтение файла...']);
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+        
+        console.log('📦 [ConstructionCostsPage] Parsed Excel data:', jsonData);
+        setImportLog(prev => [...prev, `Найдено строк: ${jsonData.length}`]);
+        
+        setLoading(true);
+        
+        // Проверяем формат данных
+        if (jsonData.length > 0 && jsonData[0].length >= 6) {
+          // Новый формат импорта (6 колонок)
+          const errors: string[] = [];
+          let successCount = 0;
+          let skipCount = 0;
+          
+          // Сначала загружаем справочники
+          setImportLog(prev => [...prev, 'Загрузка справочников...']);
+          const { data: unitsData } = await supabase.from('units').select('*');
+          const { data: locationsData } = await supabase.from('location').select('*');
+          const { data: costCategoriesData } = await supabase.from('cost_categories').select('*');
+          const { data: detailCategoriesData } = await supabase.from('detail_cost_categories').select('*');
+          
+          const units = unitsData || [];
+          const locations = locationsData || [];
+          const costCategories = costCategoriesData || [];
+          const detailCategories = detailCategoriesData || [];
+          
+          setImportLog(prev => [...prev, `Загружено: ${units.length} единиц измерения, ${locations.length} локализаций, ${costCategories.length} категорий затрат, ${detailCategories.length} детальных категорий`]);
+          
+          // Обрабатываем категории
+          const categoriesMap = new Map<string, string>();
+          
+          const totalRows = jsonData.length;
+          for (let i = 0; i < totalRows; i++) {
+            const row = jsonData[i];
+            if (!row || row.length === 0) continue;
+            
+            // Обновляем прогресс
+            const progress = Math.round((i / totalRows) * 100);
+            setImportProgress(progress);
+            
+            const catOrder = row[0] ? Number(row[0]) : null;
+            const catName = row[1] ? String(row[1]).trim() : null;
+            const catUnit = row[2] ? String(row[2]).trim() : null;
+            const detName = row[3] ? String(row[3]).trim() : null;
+            const detUnit = row[4] ? String(row[4]).trim() : null;
+            const locName = row[5] ? String(row[5]).trim() : null;
+            
+            console.log(`🔍 Строка ${i + 1}:`, { catOrder, catName, catUnit, detName, detUnit, locName });
+            
+            // Пропускаем заголовок
+            if (i === 0 && catName === 'Категория') {
+              console.log(`⏭️ Пропускаем заголовок`);
+              continue;
+            }
+            
+            // Пропускаем пустые строки
+            if (!catName && !detName) {
+              skipCount++;
+              continue;
+            }
+            
+            // Валидация
+            if (detName && !catName) {
+              errors.push(`Строка ${i + 1}: Вид затрат без категории`);
+              continue;
+            }
+            
+            try {
+              // Обрабатываем категорию затрат (столбец 2 -> cost_categories)
+              if (catName && !categoriesMap.has(catName)) {
+                // Ищем единицу измерения
+                let unitId = null;
+                if (catUnit) {
+                  const unit = units.find(u => u.title === catUnit || u.code === catUnit);
+                  if (unit) {
+                    unitId = unit.id;
+                    console.log(`✅ Найдена единица измерения: ${catUnit} -> ${unit.id}`);
+                  } else {
+                    // Создаем новую единицу измерения только если её нет
+                    const proposedCode = catUnit.substring(0, 10);
+                    
+                    // Проверяем, что код не дублируется
+                    const existingByCode = units.find(u => u.code === proposedCode);
+                    if (existingByCode) {
+                      console.log(`⚠️ Единица измерения с кодом ${proposedCode} уже существует, используем её`);
+                      unitId = existingByCode.id;
+                    } else {
+                      try {
+                        const { data: newUnitArray, error: unitError } = await supabase
+                          .from('units')
+                          .insert({ title: catUnit, code: proposedCode })
+                          .select();
+                        
+                        if (unitError) {
+                          console.error(`❌ Ошибка создания единицы измерения ${catUnit}:`, unitError);
+                          // Пробуем найти существующую с таким кодом
+                          const { data: existingUnit } = await supabase
+                            .from('units')
+                            .select('*')
+                            .eq('code', proposedCode)
+                            .limit(1);
+                          
+                          if (existingUnit && existingUnit.length > 0) {
+                            unitId = existingUnit[0].id;
+                            units.push(existingUnit[0]);
+                            console.log(`✅ Найдена существующая единица: ${proposedCode}`);
+                          }
+                        } else if (newUnitArray && newUnitArray.length > 0) {
+                          const newUnit = newUnitArray[0];
+                          unitId = newUnit.id;
+                          units.push(newUnit);
+                          console.log(`✅ Создана новая единица измерения: ${catUnit} -> ${newUnit.id}`);
+                        }
+                      } catch (err: any) {
+                        console.error(`❌ Критическая ошибка при создании единицы измерения:`, err);
+                      }
+                    }
+                  }
+                }
+                
+                // Проверяем существование категории (учитываем уникальное ограничение parent_id + name)
+                const { data: existingCats, error: checkError } = await supabase
+                  .from('cost_nodes')
+                  .select('*')
+                  .eq('name', catName)
+                  .is('parent_id', null)
+                  .eq('kind', 'group')
+                  .limit(1);
+                
+                if (checkError) {
+                  console.error(`❌ Ошибка проверки категории ${catName}:`, checkError);
+                }
+                
+                const existingCat = existingCats && existingCats.length > 0 ? existingCats[0] : null;
+                
+                if (existingCat) {
+                  categoriesMap.set(catName, existingCat.id);
+                  console.log(`✅ Найдена существующая категория: ${catName}`);
+                } else {
+                  // Создаем категорию
+                  console.log(`🔍 Попытка создать категорию:`, { 
+                    parent_id: null,
+                    kind: 'group',
+                    name: catName,
+                    unit_id: unitId,
+                    sort_order: catOrder || 100
+                  });
+                  
+                  const { data: newCatArray, error: catError } = await supabase
+                    .from('cost_nodes')
+                    .insert({
+                      parent_id: null,
+                      kind: 'group',
+                      name: catName,
+                      unit_id: unitId,
+                      sort_order: catOrder || 100,
+                      is_active: true  // Добавляем явно, если это поле обязательное
+                    })
+                    .select();
+                  
+                  const newCat = newCatArray && newCatArray.length > 0 ? newCatArray[0] : null;
+                  
+                  if (catError) {
+                    console.error(`❌ Ошибка создания категории ${catName}:`, catError);
+                    
+                    // Если ошибка из-за уникального ограничения, попробуем найти существующую категорию
+                    if (catError.code === '23505') { // код ошибки unique violation
+                      console.log(`🔍 Пытаемся найти существующую категорию ${catName} из-за нарушения уникальности`);
+                      const { data: foundCats } = await supabase
+                        .from('cost_nodes')
+                        .select('*')
+                        .eq('name', catName)
+                        .is('parent_id', null)
+                        .eq('kind', 'group')
+                        .limit(1);
+                      
+                      if (foundCats && foundCats.length > 0) {
+                        categoriesMap.set(catName, foundCats[0].id);
+                        console.log(`✅ Найдена существующая категория после конфликта: ${catName}`);
+                      } else {
+                        errors.push(`Строка ${i + 1}: Не удалось создать категорию "${catName}": ${catError.message}`);
+                        continue;
+                      }
+                    } else {
+                      errors.push(`Строка ${i + 1}: Не удалось создать категорию "${catName}": ${catError.message}`);
+                      continue;
+                    }
+                  }
+                  
+                  if (newCat) {
+                    categoriesMap.set(catName, newCat.id);
+                    console.log(`✅ Создана новая категория: ${catName}`);
+                  }
+                }
+              }
+              
+              // Обрабатываем деталь
+              if (detName && catName) {
+                const categoryId = categoriesMap.get(catName);
+                if (!categoryId) {
+                  errors.push(`Строка ${i + 1}: Не удалось создать категорию`);
+                  continue;
+                }
+                
+                // Ищем единицу измерения для детали
+                let detailUnitId = null;
+                if (detUnit) {
+                  const unit = units.find(u => u.title === detUnit || u.code === detUnit);
+                  if (unit) {
+                    detailUnitId = unit.id;
+                  } else {
+                    // Создаем новую единицу измерения только если её нет
+                    const proposedCode = detUnit.substring(0, 10);
+                    
+                    // Проверяем, что код не дублируется
+                    const existingByCode = units.find(u => u.code === proposedCode);
+                    if (existingByCode) {
+                      detailUnitId = existingByCode.id;
+                    } else {
+                      try {
+                        const { data: newUnitArray, error: unitError } = await supabase
+                          .from('units')
+                          .insert({ title: detUnit, code: proposedCode })
+                          .select();
+                        
+                        if (unitError) {
+                          // Пробуем найти существующую с таким кодом
+                          const { data: existingUnit } = await supabase
+                            .from('units')
+                            .select('*')
+                            .eq('code', proposedCode)
+                            .limit(1);
+                          
+                          if (existingUnit && existingUnit.length > 0) {
+                            detailUnitId = existingUnit[0].id;
+                            units.push(existingUnit[0]);
+                          }
+                        } else if (newUnitArray && newUnitArray.length > 0) {
+                          const newUnit = newUnitArray[0];
+                          detailUnitId = newUnit.id;
+                          units.push(newUnit);
+                        }
+                      } catch (err: any) {
+                        console.error(`❌ Ошибка при создании единицы измерения детали:`, err);
+                      }
+                    }
+                  }
+                }
+                
+                // Ищем локализацию (не создаем новые)
+                let locationId = null;
+                if (locName) {
+                  const location = locations.find(l => l.title === locName);
+                  if (location) {
+                    locationId = location.id;
+                  }
+                }
+                
+                // Создаем деталь (дубликаты разрешены для локализации)
+                try {
+                  const { error: detailError } = await supabase
+                    .from('cost_nodes')
+                    .insert({
+                      parent_id: categoryId,
+                      kind: 'item',
+                      name: detName,
+                      unit_id: detailUnitId,
+                      location_id: locationId,
+                      sort_order: 100,
+                      is_active: true
+                    });
+                  
+                  if (detailError) {
+                    console.error(`❌ Ошибка создания детали ${detName}:`, detailError);
+                    
+                    // Если ошибка уникальности, но у нас есть локализация - попробуем создать с модифицированным именем
+                    if (detailError.code === '23505' && locationId) {
+                      console.log(`🔍 Пытаемся создать деталь с уникальным именем для локализации`);
+                      const uniqueName = `${detName} (${locName})`;
+                      const { error: uniqueDetailError } = await supabase
+                        .from('cost_nodes')
+                        .insert({
+                          parent_id: categoryId,
+                          kind: 'item',
+                          name: uniqueName,
+                          unit_id: detailUnitId,
+                          location_id: locationId,
+                          sort_order: 100,
+                          is_active: true
+                        });
+                      
+                      if (uniqueDetailError) {
+                        console.error(`❌ Не удалось создать деталь даже с уникальным именем:`, uniqueDetailError);
+                        throw uniqueDetailError;
+                      } else {
+                        console.log(`✅ Создана деталь с уникальным именем: ${uniqueName}`);
+                      }
+                    } else {
+                      throw detailError;
+                    }
+                  } else {
+                    console.log(`✅ Создана деталь: ${detName}`);
+                  }
+                } catch (err: any) {
+                  console.error(`❌ Критическая ошибка создания детали ${detName}:`, err);
+                  throw err;
+                }
+              }
+              
+              successCount++;
+              // Показываем только каждую 10-ю успешную строку для больших файлов
+              if (totalRows <= 50 || successCount % 10 === 0 || successCount === 1) {
+                setImportLog(prev => [...prev, `✅ Строка ${i + 1}: обработана успешно`]);
+              }
+            } catch (err: any) {
+              errors.push(`Строка ${i + 1}: ${err.message}`);
+              setImportLog(prev => [...prev, `❌ Строка ${i + 1}: ${err.message}`]);
+            }
+          }
+          
+          setImportProgress(100);
+          setImportLog(prev => [...prev, 
+            '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            `📊 Итоги импорта:`,
+            `✅ Успешно обработано: ${successCount} записей`,
+            `⏭️ Пропущено пустых строк: ${skipCount}`,
+            `❌ Ошибок: ${errors.length}`,
+            '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+          ]);
+          
+          if (errors.length > 0) {
+            Modal.warning({
+              title: 'Импорт завершен с предупреждениями',
+              content: (
+                <div>
+                  <p>Успешно импортировано: {successCount}</p>
+                  <p>Пропущено пустых: {skipCount}</p>
+                  <p>Ошибок: {errors.length}</p>
+                  {errors.length > 0 && (
+                    <div>
+                      <p>Детали ошибок:</p>
+                      <ul style={{ maxHeight: 200, overflow: 'auto' }}>
+                        {errors.slice(0, 10).map((err, idx) => (
+                          <li key={idx}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )
+            });
+          } else {
+            message.success(`Успешно импортировано ${successCount} записей`);
+          }
+        } else {
+          // Старый формат импорта
+          const jsonObjects = XLSX.utils.sheet_to_json(worksheet);
+          const result = await importCostNodesFromExcel(jsonObjects);
+          
+          if (result.failed > 0) {
+            Modal.warning({
+              title: 'Импорт завершен с ошибками',
+              content: (
+                <div>
+                  <p>Успешно импортировано: {result.success}</p>
+                  <p>Ошибок: {result.failed}</p>
+                  {result.errors.length > 0 && (
+                    <div>
+                      <p>Детали ошибок:</p>
+                      <ul>
+                        {result.errors.slice(0, 5).map((err, idx) => (
+                          <li key={idx}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )
+            });
+          } else {
+            message.success(`Успешно импортировано ${result.success} записей`);
+          }
+        }
+        
+        await loadData();
+        setImportStatus('completed');
+        console.log('✅ [ConstructionCostsPage] Import complete');
+      } catch (err: any) {
+        console.error('❌ [ConstructionCostsPage] Import error:', err);
+        message.error('Ошибка импорта: ' + err.message);
+        setImportLog(prev => [...prev, `❌ Критическая ошибка: ${err.message}`]);
+        setImportStatus('error');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    reader.readAsArrayBuffer(file);
+    return false; // Prevent default upload
+  };
+
+  // Экспорт в Excel
+  const handleExportExcel = () => {
+    console.log('🚀 [ConstructionCostsPage] Exporting to Excel');
+    
+    const exportData = flattenTree(treeData);
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Затраты на строительство');
+    XLSX.writeFile(wb, 'construction_costs.xlsx');
+    
+    message.success('Данные экспортированы');
+    console.log('✅ [ConstructionCostsPage] Export complete');
+  };
+
+  // Преобразование дерева в плоский список для экспорта
+  const flattenTree = (nodes: TreeNode[], parentPath: string = ''): any[] => {
+    const result: any[] = [];
+    
+    nodes.forEach(node => {
+      const path = parentPath ? `${parentPath} / ${node.data.name}` : node.data.name;
+      
+      result.push({
+        'Путь': path,
+        'Тип': node.data.kind === 'group' ? 'Категория' : 'Элемент',
+        'Название': node.data.name,
+        'Код': node.data.code || '',
+        'Единица измерения': node.data.unit?.title || '',
+        'Локализация': node.data.location?.title || '',
+        'Порядок': node.data.sort_order,
+        'Активно': node.data.is_active ? 'Да' : 'Нет'
+      });
+      
+      if (node.children) {
+        result.push(...flattenTree(node.children, path));
+      }
+    });
+    
+    return result;
+  };
+
+  return (
+    <Layout style={{ minHeight: '100vh', background: '#f0f2f5' }}>
+      <Content style={{ padding: '24px' }}>
+        <Row gutter={[16, 16]}>
+          <Col span={24}>
+            <Card>
+              <Space direction="vertical" style={{ width: '100%' }} size="large">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h2 style={{ margin: 0 }}>Управление затратами на строительство</h2>
+                  <Space>
+                    <Button
+                      icon={<ReloadOutlined />}
+                      onClick={loadData}
+                      loading={loading}
+                    >
+                      Обновить
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        console.log('🔍 Тестируем создание категории...');
+                        const { data, error } = await supabase
+                          .from('cost_nodes')
+                          .insert({
+                            parent_id: null,
+                            kind: 'group',
+                            name: 'Тестовая категория из UI',
+                            sort_order: 100,
+                            is_active: true
+                          })
+                          .select()
+                          .single();
+                        
+                        if (error) {
+                          console.error('❌ Ошибка создания:', error);
+                          message.error(`Ошибка: ${error.message}`);
+                        } else {
+                          console.log('✅ Успешно создано:', data);
+                          message.success('Категория создана!');
+                          loadData();
+                        }
+                      }}
+                    >
+                      Тест создания
+                    </Button>
+                    <Button
+                      icon={<DownloadOutlined />}
+                      onClick={handleExportExcel}
+                    >
+                      Экспорт
+                    </Button>
+                    <Button
+                      icon={<UploadOutlined />}
+                      onClick={() => setIsImportModalVisible(true)}
+                    >
+                      Импорт
+                    </Button>
+                    <Button
+                      type="primary"
+                      icon={<FolderAddOutlined />}
+                      onClick={() => showNodeModal(false)}
+                    >
+                      Добавить категорию
+                    </Button>
+                  </Space>
+                </div>
+
+                <Row gutter={16}>
+                  <Col span={16}>
+                    <Card
+                      title="Структура затрат"
+                      extra={
+                        selectedNode && (
+                          <Space>
+                            <Button
+                              size="small"
+                              icon={<PlusOutlined />}
+                              onClick={() => showNodeModal(false, selectedNode)}
+                            >
+                              Добавить дочерний
+                            </Button>
+                            <Button
+                              size="small"
+                              icon={<EditOutlined />}
+                              onClick={() => showNodeModal(true)}
+                            >
+                              Редактировать
+                            </Button>
+                            <Popconfirm
+                              title="Удалить узел?"
+                              description="Это также удалит все дочерние элементы"
+                              onConfirm={handleDeleteNode}
+                              okText="Да"
+                              cancelText="Нет"
+                            >
+                              <Button
+                                size="small"
+                                danger
+                                icon={<DeleteOutlined />}
+                              >
+                                Удалить
+                              </Button>
+                            </Popconfirm>
+                          </Space>
+                        )
+                      }
+                    >
+                      <Spin spinning={loading}>
+                        {treeData.length > 0 ? (
+                          <Tree
+                            showLine
+                            showIcon
+                            draggable
+                            blockNode
+                            treeData={treeData}
+                            expandedKeys={expandedKeys}
+                            selectedKeys={selectedKeys}
+                            onExpand={setExpandedKeys}
+                            onSelect={onSelect}
+                            onDrop={onDrop}
+                            style={{ minHeight: 400 }}
+                          />
+                        ) : (
+                          <Empty description="Нет данных" />
+                        )}
+                      </Spin>
+                    </Card>
+                  </Col>
+
+                  <Col span={8}>
+                    {selectedNode && (
+                      <Card title="Детали узла">
+                        <Space direction="vertical" style={{ width: '100%' }}>
+                          <div>
+                            <strong>Тип:</strong>{' '}
+                            <Tag color={selectedNode.kind === 'group' ? 'blue' : 'green'}>
+                              {selectedNode.kind === 'group' ? 'Категория' : 'Элемент'}
+                            </Tag>
+                          </div>
+                          <div>
+                            <strong>Название:</strong> {selectedNode.name}
+                          </div>
+                          {selectedNode.code && (
+                            <div>
+                              <strong>Код:</strong> {selectedNode.code}
+                            </div>
+                          )}
+                          {selectedNode.unit && (
+                            <div>
+                              <strong>Единица измерения:</strong> {selectedNode.unit.title}
+                            </div>
+                          )}
+                          {selectedNode.location && (
+                            <div>
+                              <strong>Локализация:</strong> {selectedNode.location.title}
+                            </div>
+                          )}
+                          <div>
+                            <strong>Порядок сортировки:</strong> {selectedNode.sort_order}
+                          </div>
+                          <div>
+                            <strong>Статус:</strong>{' '}
+                            <Tag color={selectedNode.is_active ? 'green' : 'red'}>
+                              {selectedNode.is_active ? 'Активно' : 'Неактивно'}
+                            </Tag>
+                          </div>
+                          <div>
+                            <strong>Путь:</strong> <code>{selectedNode.path}</code>
+                          </div>
+                          <div>
+                            <strong>Создано:</strong>{' '}
+                            {new Date(selectedNode.created_at).toLocaleString('ru-RU')}
+                          </div>
+                          <div>
+                            <strong>Обновлено:</strong>{' '}
+                            {new Date(selectedNode.updated_at).toLocaleString('ru-RU')}
+                          </div>
+                        </Space>
+                      </Card>
+                    )}
+                  </Col>
+                </Row>
+              </Space>
+            </Card>
+          </Col>
+        </Row>
+
+        {/* Модальное окно для создания/редактирования */}
+        <Modal
+          title={isEditMode ? 'Редактирование узла' : 'Создание узла'}
+          open={isNodeModalVisible}
+          onOk={handleSaveNode}
+          onCancel={() => {
+            setIsNodeModalVisible(false);
+            form.resetFields();
+          }}
+          confirmLoading={loading}
+          width={600}
+        >
+          <Form form={form} layout="vertical">
+            <Form.Item name="parent_id" hidden>
+              <Input />
+            </Form.Item>
+
+            <Form.Item
+              name="kind"
+              label="Тип"
+              rules={[{ required: true, message: 'Выберите тип' }]}
+            >
+              <Select disabled={isEditMode}>
+                <Option value="group">Категория</Option>
+                <Option value="item">Элемент</Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              name="name"
+              label="Название"
+              rules={[{ required: true, message: 'Введите название' }]}
+            >
+              <Input placeholder="Введите название" />
+            </Form.Item>
+
+            <Form.Item name="code" label="Код">
+              <Input placeholder="Введите код (опционально)" />
+            </Form.Item>
+
+            <Form.Item
+              noStyle
+              shouldUpdate={(prevValues, currentValues) =>
+                prevValues.kind !== currentValues.kind
+              }
+            >
+              {({ getFieldValue }) =>
+                getFieldValue('kind') === 'item' && (
+                  <>
+                    <Form.Item name="unit_id" label="Единица измерения">
+                      <Select placeholder="Выберите единицу измерения" allowClear>
+                        {units.map(unit => (
+                          <Option key={unit.id} value={unit.id}>
+                            {unit.title} ({unit.code})
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+
+                    <Form.Item name="location_id" label="Локализация">
+                      <Select placeholder="Выберите локализацию" allowClear>
+                        {locations.map(loc => (
+                          <Option key={loc.id} value={loc.id}>
+                            {loc.title || loc.code}
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                  </>
+                )
+              }
+            </Form.Item>
+
+            <Form.Item name="sort_order" label="Порядок сортировки">
+              <Input type="number" placeholder="100" />
+            </Form.Item>
+
+            <Form.Item name="is_active" label="Активно" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* Модальное окно импорта */}
+        <Modal
+          title="Импорт данных из Excel"
+          open={isImportModalVisible}
+          onCancel={() => {
+            setIsImportModalVisible(false);
+            setImportStatus('idle');
+            setImportProgress(0);
+            setImportLog([]);
+          }}
+          footer={
+            importStatus === 'completed' || importStatus === 'error' ? [
+              <Button 
+                key="close" 
+                type="primary"
+                onClick={() => {
+                  setIsImportModalVisible(false);
+                  setImportStatus('idle');
+                  setImportProgress(0);
+                  setImportLog([]);
+                }}
+              >
+                Закрыть
+              </Button>
+            ] : null
+          }
+          width={700}
+        >
+          <Space direction="vertical" style={{ width: '100%' }}>
+            {importStatus === 'idle' && (
+              <>
+                <p>
+                  <strong>Формат Excel файла (6 колонок):</strong>
+                </p>
+                <table style={{ width: '100%', fontSize: '12px', border: '1px solid #d9d9d9' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#fafafa' }}>
+                      <th style={{ padding: '8px', border: '1px solid #d9d9d9' }}>A: №</th>
+                      <th style={{ padding: '8px', border: '1px solid #d9d9d9' }}>B: Категория</th>
+                      <th style={{ padding: '8px', border: '1px solid #d9d9d9' }}>C: Ед.изм. категории</th>
+                      <th style={{ padding: '8px', border: '1px solid #d9d9d9' }}>D: Вид затрат</th>
+                      <th style={{ padding: '8px', border: '1px solid #d9d9d9' }}>E: Ед.изм. детали</th>
+                      <th style={{ padding: '8px', border: '1px solid #d9d9d9' }}>F: Локализация</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}>1</td>
+                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}>Материалы</td>
+                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}>т</td>
+                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}></td>
+                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}></td>
+                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}></td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}></td>
+                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}></td>
+                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}></td>
+                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}>Цемент М500</td>
+                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}>кг</td>
+                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}>Россия</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p style={{ fontSize: '12px', color: '#666' }}>
+                  <strong>Правила импорта:</strong><br/>
+                  • Если заполнена только категория - создается категория<br/>
+                  • Если заполнены категория и вид затрат - создается вид затрат в категории<br/>
+                  • Виды затрат без категории будут пропущены
+                </p>
+
+                <Upload.Dragger
+                  accept=".xlsx,.xls"
+                  beforeUpload={handleImportExcel}
+                  showUploadList={false}
+                >
+                  <p className="ant-upload-drag-icon">
+                    <UploadOutlined style={{ fontSize: 48 }} />
+                  </p>
+                  <p className="ant-upload-text">
+                    Нажмите или перетащите файл для загрузки
+                  </p>
+                  <p className="ant-upload-hint">
+                    Поддерживаются только файлы Excel (.xlsx, .xls)
+                  </p>
+                </Upload.Dragger>
+              </>
+            )}
+
+            {(importStatus === 'processing' || importStatus === 'completed' || importStatus === 'error') && (
+              <>
+                <div style={{ padding: '20px 0' }}>
+                  <Progress
+                    percent={importProgress}
+                    status={
+                      importStatus === 'error' ? 'exception' : 
+                      importStatus === 'completed' ? 'success' : 
+                      'active'
+                    }
+                    strokeColor={
+                      importStatus === 'error' ? '#ff4d4f' :
+                      importStatus === 'completed' ? '#52c41a' :
+                      undefined
+                    }
+                  />
+                </div>
+
+                <div style={{ 
+                  backgroundColor: '#f5f5f5', 
+                  borderRadius: '8px', 
+                  padding: '12px',
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  fontSize: '12px',
+                  fontFamily: 'monospace'
+                }}>
+                  <div style={{ marginBottom: '8px', fontWeight: 'bold', color: '#1890ff' }}>
+                    📋 Журнал импорта:
+                  </div>
+                  {importLog.map((log, index) => (
+                    <div 
+                      key={index} 
+                      style={{ 
+                        marginBottom: '4px',
+                        color: log.includes('❌') ? '#ff4d4f' : 
+                               log.includes('✅') ? '#52c41a' : 
+                               '#595959'
+                      }}
+                    >
+                      {log}
+                    </div>
+                  ))}
+                  {importStatus === 'processing' && (
+                    <div style={{ color: '#1890ff', marginTop: '8px' }}>
+                      <Spin size="small" /> Обработка данных...
+                    </div>
+                  )}
+                </div>
+
+                {importStatus === 'completed' && (
+                  <div style={{ 
+                    marginTop: '16px', 
+                    padding: '12px', 
+                    backgroundColor: '#f6ffed', 
+                    borderRadius: '8px',
+                    border: '1px solid #b7eb8f'
+                  }}>
+                    <div style={{ color: '#52c41a', fontWeight: 'bold' }}>
+                      ✅ Импорт успешно завершен!
+                    </div>
+                  </div>
+                )}
+
+                {importStatus === 'error' && (
+                  <div style={{ 
+                    marginTop: '16px', 
+                    padding: '12px', 
+                    backgroundColor: '#fff2f0', 
+                    borderRadius: '8px',
+                    border: '1px solid #ffccc7'
+                  }}>
+                    <div style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+                      ❌ Импорт завершен с ошибками
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </Space>
+        </Modal>
+      </Content>
+    </Layout>
+  );
+};
+
+export default ConstructionCostsPage;
