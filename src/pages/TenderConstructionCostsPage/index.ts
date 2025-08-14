@@ -1,0 +1,1 @@
+export { TenderConstructionCostsPage as default } from './TenderConstructionCostsPage';

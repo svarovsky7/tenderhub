@@ -1,0 +1,1 @@
+export { ConstructionCostsPage as default } from './ConstructionCostsPage';
