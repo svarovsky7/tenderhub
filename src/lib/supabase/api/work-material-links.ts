@@ -7,8 +7,10 @@ export interface WorkMaterialLink {
   client_position_id: string;
   work_boq_item_id: string;
   material_boq_item_id: string;
-  material_quantity_per_work?: number;
-  usage_coefficient?: number;
+  material_quantity_per_work?: number;  // Не используется в расчетах, всегда 1
+  usage_coefficient?: number;  // Не используется в расчетах, всегда 1
+  delivery_price_type?: 'included' | 'not_included' | 'amount';
+  delivery_amount?: number;
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -22,6 +24,10 @@ export interface WorkMaterialLinkDetailed extends WorkMaterialLink {
   material_unit?: string;
   material_quantity?: number;
   material_unit_rate?: number;
+  material_consumption_coefficient?: number;
+  material_conversion_coefficient?: number;
+  material_delivery_price_type?: string;
+  material_delivery_amount?: number;
   total_material_needed?: number;
   total_material_cost?: number;
 }
@@ -40,8 +46,10 @@ export const workMaterialLinksApi = {
           client_position_id: link.client_position_id,
           work_boq_item_id: link.work_boq_item_id,
           material_boq_item_id: link.material_boq_item_id,
-          material_quantity_per_work: link.material_quantity_per_work || 1,
-          usage_coefficient: link.usage_coefficient || 1,
+          material_quantity_per_work: 1,  // Всегда 1, не используется в расчетах
+          usage_coefficient: 1,  // Всегда 1, не используется в расчетах
+          delivery_price_type: link.delivery_price_type || 'included',
+          delivery_amount: link.delivery_amount || 0,
           notes: link.notes
         })
         .select()
@@ -99,7 +107,9 @@ export const workMaterialLinksApi = {
               unit,
               unit_rate,
               consumption_coefficient,
-              conversion_coefficient
+              conversion_coefficient,
+              delivery_price_type,
+              delivery_amount
             )
           `)
           .eq('work.client_position_id', positionId);
@@ -119,7 +129,7 @@ export const workMaterialLinksApi = {
           // Фильтруем по positionId вручную
           const boqItems = await supabase
             .from('boq_items')
-            .select('id, description, quantity, unit, unit_rate, consumption_coefficient, conversion_coefficient, client_position_id')
+            .select('id, description, quantity, unit, unit_rate, consumption_coefficient, conversion_coefficient, delivery_price_type, delivery_amount, client_position_id')
             .eq('client_position_id', positionId)
             .eq('item_type', 'work');
           
@@ -148,7 +158,9 @@ export const workMaterialLinksApi = {
                 material_unit: materialItem?.unit,
                 material_unit_rate: materialItem?.unit_rate,
                 material_consumption_coefficient: materialItem?.consumption_coefficient,
-                material_conversion_coefficient: materialItem?.conversion_coefficient
+                material_conversion_coefficient: materialItem?.conversion_coefficient,
+                material_delivery_price_type: materialItem?.delivery_price_type,
+                material_delivery_amount: materialItem?.delivery_amount
               };
             }));
             
@@ -170,7 +182,9 @@ export const workMaterialLinksApi = {
           material_unit: link.material?.unit,
           material_unit_rate: link.material?.unit_rate,
           material_consumption_coefficient: link.material?.consumption_coefficient,
-          material_conversion_coefficient: link.material?.conversion_coefficient
+          material_conversion_coefficient: link.material?.conversion_coefficient,
+          material_delivery_price_type: link.material?.delivery_price_type,
+          material_delivery_amount: link.material?.delivery_amount
         })) || [];
         error = null;
       }
@@ -257,6 +271,8 @@ export const workMaterialLinksApi = {
       if (updates.material_boq_item_id !== undefined) updateData.material_boq_item_id = updates.material_boq_item_id;
       if (updates.material_quantity_per_work !== undefined) updateData.material_quantity_per_work = updates.material_quantity_per_work;
       if (updates.usage_coefficient !== undefined) updateData.usage_coefficient = updates.usage_coefficient;
+      if (updates.delivery_price_type !== undefined) updateData.delivery_price_type = updates.delivery_price_type;
+      if (updates.delivery_amount !== undefined) updateData.delivery_amount = updates.delivery_amount;
       if (updates.notes !== undefined) updateData.notes = updates.notes;
       
       const { data, error } = await supabase

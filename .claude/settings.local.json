@@ -33,8 +33,10 @@
       "Bash(npx tsx:*)",
       "Bash(taskkill:*)",
       "Bash(touch:*)",
+      "Bash(git checkout:*)",
       "Bash(git checkout:*)"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "acceptEdits"
   }
 }

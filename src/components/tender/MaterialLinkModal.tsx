@@ -21,6 +21,7 @@ import {
 } from '@ant-design/icons';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import type { WorkMaterialLink } from '../../lib/supabase/api/work-material-links';
+import { boqItemsApi } from '../../lib/supabase/api/boq/items';
 import type { BOQItemWithLibrary } from '../../lib/supabase/types';
 
 const { Option } = Select;
@@ -40,8 +41,6 @@ interface MaterialLinkModalProps {
 type DeliveryPriceType = 'included' | 'not_included' | 'amount';
 
 interface FormValues {
-  material_quantity_per_work: number;
-  usage_coefficient: number;
   delivery_price_type: DeliveryPriceType;
   delivery_amount?: number;
   notes?: string;
@@ -67,8 +66,6 @@ const MaterialLinkModal: React.FC<MaterialLinkModalProps> = ({
       if (existingLink) {
         // Редактирование существующей связи
         form.setFieldsValue({
-          material_quantity_per_work: existingLink.material_quantity_per_work || 1.0,
-          usage_coefficient: existingLink.usage_coefficient || 1.0,
           delivery_price_type: existingLink.delivery_price_type || 'included',
           delivery_amount: existingLink.delivery_amount || 0,
           notes: existingLink.notes || ''
@@ -81,8 +78,6 @@ const MaterialLinkModal: React.FC<MaterialLinkModalProps> = ({
         
         form.resetFields();
         form.setFieldsValue({
-          material_quantity_per_work: 1.0,
-          usage_coefficient: 1.0,
           delivery_price_type: defaultDeliveryType,
           delivery_amount: defaultDeliveryAmount
         });
@@ -112,14 +107,23 @@ const MaterialLinkModal: React.FC<MaterialLinkModalProps> = ({
     setLoading(true);
 
     try {
+      // Сначала обновляем параметры доставки в самом материале
+      const materialUpdateResult = await boqItemsApi.update(materialItem.id, {
+        delivery_price_type: values.delivery_price_type,
+        delivery_amount: values.delivery_price_type === 'amount' ? values.delivery_amount : 0
+      });
+
+      if (materialUpdateResult.error) {
+        throw new Error(`Ошибка обновления материала: ${materialUpdateResult.error}`);
+      }
+
+      // Затем создаем или обновляем связь
       const linkData: WorkMaterialLink = {
         client_position_id: positionId,
         work_boq_item_id: workItem.id,
         material_boq_item_id: materialItem.id,
-        material_quantity_per_work: values.material_quantity_per_work,
-        usage_coefficient: values.usage_coefficient,
-        delivery_price_type: values.delivery_price_type,
-        delivery_amount: values.delivery_price_type === 'amount' ? values.delivery_amount : 0,
+        material_quantity_per_work: 1.0,  // Всегда 1, не используется в расчетах
+        usage_coefficient: 1.0,  // Всегда 1, не используется в расчетах
         notes: values.notes
       };
 
@@ -156,16 +160,19 @@ const MaterialLinkModal: React.FC<MaterialLinkModalProps> = ({
   const calculateTotalCost = () => {
     if (!materialItem || !workItem) return 0;
     
-    const quantity = form.getFieldValue('material_quantity_per_work') || 1;
-    const coefficient = form.getFieldValue('usage_coefficient') || 1;
+    // Используем коэффициенты из самого материала
+    const consumptionCoeff = materialItem.consumption_coefficient || 1;
+    const conversionCoeff = materialItem.conversion_coefficient || 1;
     const workQuantity = workItem.quantity || 0;
     const materialRate = materialItem.unit_rate || 0;
     
-    const baseCost = workQuantity * quantity * coefficient * materialRate;
+    const baseCost = workQuantity * consumptionCoeff * conversionCoeff * materialRate;
     
     if (deliveryType === 'amount') {
       const deliveryAmount = form.getFieldValue('delivery_amount') || 0;
-      return baseCost + deliveryAmount;
+      // Доставка добавляется к цене единицы материала
+      const totalWithDelivery = workQuantity * consumptionCoeff * conversionCoeff * (materialRate + deliveryAmount);
+      return totalWithDelivery;
     }
     
     return baseCost;
@@ -195,6 +202,8 @@ const MaterialLinkModal: React.FC<MaterialLinkModalProps> = ({
                 <div><strong>Материал:</strong> {materialItem.description}</div>
                 <div><strong>Количество работ:</strong> {workItem.quantity} {workItem.unit}</div>
                 <div><strong>Цена материала:</strong> {materialItem.unit_rate} ₽/{materialItem.unit}</div>
+                <div><strong>Коэффициент расхода:</strong> {materialItem.consumption_coefficient || 1}</div>
+                <div><strong>Коэффициент перевода:</strong> {materialItem.conversion_coefficient || 1}</div>
               </div>
             }
             type="info"
@@ -208,53 +217,10 @@ const MaterialLinkModal: React.FC<MaterialLinkModalProps> = ({
             layout="vertical"
             onFinish={handleSubmit}
             initialValues={{
-              material_quantity_per_work: 1.0,
-              usage_coefficient: 1.0,
               delivery_price_type: 'included',
               delivery_amount: 0
             }}
           >
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  name="material_quantity_per_work"
-                  label="Количество материала на единицу работы"
-                  rules={[
-                    { required: true, message: 'Укажите количество' },
-                    { type: 'number', min: 0.0001, message: 'Количество должно быть больше 0' }
-                  ]}
-                  tooltip="Сколько единиц материала требуется на одну единицу работы"
-                >
-                  <InputNumber
-                    min={0.0001}
-                    precision={4}
-                    placeholder="1.0000"
-                    style={{ width: '100%' }}
-                    addonAfter={materialItem.unit}
-                  />
-                </Form.Item>
-              </Col>
-
-              <Col span={12}>
-                <Form.Item
-                  name="usage_coefficient"
-                  label="Коэффициент использования"
-                  rules={[
-                    { required: true, message: 'Укажите коэффициент' },
-                    { type: 'number', min: 0.0001, message: 'Коэффициент должен быть больше 0' }
-                  ]}
-                  tooltip="Коэффициент потерь/запаса материала (1.1 = +10% на потери)"
-                >
-                  <InputNumber
-                    min={0.0001}
-                    precision={4}
-                    placeholder="1.0000"
-                    style={{ width: '100%' }}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-
             <Divider orientation="left">
               <Space>
                 <TruckOutlined />
@@ -340,7 +306,7 @@ const MaterialLinkModal: React.FC<MaterialLinkModalProps> = ({
                 </Col>
                 <Col span={12} className="text-right">
                   <Text>
-                    {((workItem.quantity || 0) * (form.getFieldValue('material_quantity_per_work') || 1) * (form.getFieldValue('usage_coefficient') || 1)).toFixed(4)} {materialItem.unit}
+                    {((workItem.quantity || 0) * (materialItem.consumption_coefficient || 1) * (materialItem.conversion_coefficient || 1)).toFixed(4)} {materialItem.unit}
                   </Text>
                 </Col>
               </Row>

@@ -4,6 +4,106 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **⚠️ IMPORTANT: This file must always be kept synchronized with `AGENTS.md`. Any changes to CLAUDE.md should be immediately replicated to AGENTS.md to ensure consistency.**
 
+## Available Agents
+
+Claude Code can leverage specialized agents for complex tasks. Use them proactively when the task matches their expertise:
+
+### 🎨 UI/UX Designer Agent (`ui-ux-designer`)
+**Purpose**: Create beautiful, responsive, and user-friendly interfaces
+**When to use**:
+- Designing new pages or components with complex UI requirements
+- Creating design systems and component libraries
+- Improving user experience and visual appeal
+- Implementing animations and micro-interactions
+- Optimizing accessibility and responsive design
+
+### 🏗️ Backend Architect Agent (`backend-architect`)
+**Purpose**: Design robust backend systems and APIs
+**When to use**:
+- Creating new API endpoints or services
+- Designing database schemas and migrations
+- Implementing complex business logic
+- Optimizing database queries and performance
+- Setting up microservices architecture
+
+### 📘 TypeScript Pro Agent (`typescript-pro`)
+**Purpose**: Handle complex TypeScript implementations
+**When to use**:
+- Creating advanced type definitions and generics
+- Implementing decorators and metadata reflection
+- Setting up strict type safety patterns
+- Resolving complex type inference issues
+- Building type-safe APIs and contracts
+
+### 🗄️ SQL Pro Agent (`sql-pro`)
+**Purpose**: Write and optimize complex SQL queries
+**When to use**:
+- Creating complex joins and subqueries
+- Optimizing slow queries with indexes
+- Designing normalized database schemas
+- Writing stored procedures and functions
+- Implementing CTEs and window functions
+
+### ⚛️ Frontend Developer Agent (`frontend-developer`)
+**Purpose**: Build modern React components and features
+**When to use**:
+- Creating React components with hooks
+- Implementing state management solutions
+- Handling client-side routing and navigation
+- Optimizing frontend performance
+- Building responsive layouts
+
+### 📚 Docs Architect Agent (`docs-architect`)
+**Purpose**: Create comprehensive technical documentation
+**When to use**:
+- Generating API documentation
+- Writing architecture guides
+- Creating developer onboarding materials
+- Documenting complex systems
+- Building technical specifications
+
+### 🐛 Debugger Agent (`debugger`)
+**Purpose**: Solve bugs and fix errors
+**When to use**:
+- Debugging runtime errors
+- Fixing test failures
+- Resolving build issues
+- Investigating performance problems
+- Analyzing error logs
+
+### ⚡ Database Optimizer Agent (`database-optimizer`)
+**Purpose**: Optimize database performance
+**When to use**:
+- Fixing slow queries and N+1 problems
+- Designing efficient indexes
+- Implementing caching strategies
+- Optimizing database migrations
+- Analyzing query execution plans
+
+### 🔄 Context Manager Agent (`context-manager`)
+**Purpose**: Manage complex multi-agent workflows
+**When to use**:
+- Coordinating multiple agents for large tasks
+- Managing context across long conversations
+- Projects exceeding 10k tokens
+- Complex multi-step implementations
+
+### 🔍 General Purpose Agent (`general-purpose`)
+**Purpose**: Research and multi-step task execution
+**When to use**:
+- Searching across multiple files
+- Understanding complex codebases
+- Executing multi-step research tasks
+- When unsure which specialized agent to use
+
+## Agent Usage Guidelines
+
+1. **Be Proactive**: Use agents when their expertise matches the task, even if not explicitly requested
+2. **Batch Operations**: Launch multiple agents concurrently for parallel tasks
+3. **Clear Instructions**: Provide detailed task descriptions for autonomous execution
+4. **Trust Output**: Agent outputs are generally reliable and should be trusted
+5. **Specify Intent**: Clearly state if the agent should write code or just research
+
 ## Project Overview
 
 TenderHub is a construction tender management portal built with React 19, TypeScript 5.8, and Vite 7. The application manages hierarchical Bill of Quantities (BOQ), materials/works libraries, and tender workflows for construction project bidding. Currently operates without authentication for simplified development.
@@ -36,30 +136,35 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - **Styling**: Tailwind CSS 3.4.17 + PostCSS
 - **Excel**: XLSX 0.18.5 for import/export operations
 - **Drag & Drop**: @dnd-kit/core 6.3.1, @dnd-kit/sortable 10.0.0
-- **Virtual Scrolling**: react-window 1.8.11 for large lists
+- **Virtual Scrolling**: react-window 1.8.11 + react-window-infinite-loader 1.0.10
 - **Forms**: react-hook-form 7.62.0 + yup 1.7.0 validation
 - **Routing**: react-router-dom 7.7.1
 
 ## Architecture
 
 ### Database Schema
-**CRITICAL**: Always refer to `supabase/schemas/prod.sql` for authoritative schema. RLS is completely disabled by design.
+**🚨 CRITICAL DATABASE RULE 🚨**
+```
+ALL database schema information MUST be taken EXCLUSIVELY from:
+supabase/schemas/prod.sql
 
-Key tables:
-- `tenders` - Main tender projects with status tracking
-- `client_positions` - Top-level BOQ groupings with auto-numbering via `get_next_client_position_number()`, includes `manual_volume` field
-- `boq_items` - Hierarchical items with auto-calculated totals, includes `consumption_coefficient` & `conversion_coefficient`
-- `materials_library` & `works_library` - Searchable catalogs with GIN indexes for full-text search
-- `work_material_links` - Links works to materials with usage coefficients, validated by `check_work_material_types()` trigger
+This includes:
+- Tables and their columns
+- Functions and procedures  
+- Views
+- Triggers
+- ENUMs and custom types
+- Indexes
+- Constraints
 
-Key database functions:
-- `get_next_client_position_number()` - Auto-numbering for client positions
-- `get_next_sub_number()` - Auto-numbering for hierarchical BOQ items
-- `get_materials_for_work()` - Retrieves linked materials with calculations
-- `get_works_using_material()` - Finds works that use a specific material
-- `check_work_material_types()` - Validates work-material link types
-- `recalculate_client_position_totals()` - Updates position totals based on child items
-- `auto_assign_position_number()` - Trigger function for automatic position numbering
+DO NOT rely on TypeScript types or any other source for database schema.
+The prod.sql file is the SINGLE SOURCE OF TRUTH.
+```
+
+**RLS is completely disabled by design for simplified development.**
+
+**⚠️ IMPORTANT**: The tables, functions, views, triggers, and enums listed below are EXAMPLES ONLY. 
+Always verify actual schema from `supabase/schemas/prod.sql` before any database work.
 
 ### API Layer (`lib/supabase/api/`)
 Modular structure with domain-specific modules (all < 600 lines):
@@ -71,6 +176,11 @@ Modular structure with domain-specific modules (all < 600 lines):
 - `work-material-links.ts` - Work-Material relationships
 - `client-works.ts` - Excel import functionality
 - `hierarchy.ts` - Complete tender structure operations
+- `construction-costs.ts` - Construction cost management
+- `tender-construction-costs.ts` - Tender-specific cost operations
+- `cost-categories.ts` & `cost-categories-v2.ts` - Cost category management
+- `cost-nodes.ts` - Cost node hierarchy management
+- `import-costs.ts` - Cost import functionality
 - `subscriptions.ts` - Real-time subscriptions (infrastructure ready but disabled)
 - `utils.ts` - Shared error handling and pagination
 - `index.ts` - Barrel exports for backward compatibility
@@ -81,21 +191,41 @@ src/components/tender/  # Core tender components
   - TenderBOQManagerNew.tsx # Main BOQ interface
   - BOQItemList/         # Virtualized item lists with drag-drop
   - LibrarySelector/     # Material/work selection with cart
+  - MaterialLinkModal.tsx # Modal for linking materials to works
 src/pages/              # Route components
   - TendersPage/         # Tender listing with filters & stats
+  - Dashboard.tsx        # Main dashboard with statistics
+  - admin/               # Admin pages for costs and users
 lib/supabase/           # Supabase integration
   - api/                 # Domain-specific API modules
   - types/               # Comprehensive type definitions
+```
+
+### Routing Structure
+```
+/                       → Redirects to /dashboard
+/dashboard              → Main dashboard with statistics
+/tenders/*              → Tender management and listing
+/tender/:tenderId/boq   → Specific tender's BOQ management
+/boq                    → General BOQ page
+/libraries/materials    → Materials library
+/libraries/works        → Works library
+/admin/users            → User management (admin)
+/admin/construction-costs → Construction cost management
+/admin/settings         → System settings
+/profile                → User profile
 ```
 
 ## Critical Implementation Rules
 
 ### 1. Database Operations
 - **NEVER enable RLS** - Disabled by design for simplified development
-- **ALWAYS check** `supabase/schemas/prod.sql` for authoritative schema before database work
-- **Note**: `bulk_insert_boq_items()` function may not exist in current schema - use batch inserts via API
-- All tables use UUID primary keys
-- Timestamps (`created_at`, `updated_at`) auto-managed
+- **🚨 MANDATORY**: Check `supabase/schemas/prod.sql` for EVERY database operation
+- **DO NOT ASSUME** any table structure, function signatures, or column names
+- **VERIFY FIRST** - Always read prod.sql before writing any database-related code
+- **Note**: Functions mentioned in code may not exist - always verify in prod.sql
+- All tables use UUID primary keys (verify in prod.sql)
+- Timestamps are usually auto-managed (verify exact column names in prod.sql)
 
 ### 2. File Size Limits
 - **Maximum 600 lines per file** - Split larger files
@@ -135,6 +265,11 @@ try {
 2. Run `npm install` to get all dependencies
 3. Start dev server with `npm run dev`
 
+### Vite Configuration
+- Dev server runs on port 5173 with host enabled
+- HMR overlay disabled for cleaner development experience
+- lucide-react excluded from dependency optimization
+
 ### Excel Import/Export
 - Import: Drag-drop XLSX file to upload area in TendersPage
 - System uses batch API operations for performance (via `client-works.ts`)
@@ -144,16 +279,19 @@ try {
 
 ### Database Schema Changes
 1. Modify schema in Supabase dashboard
-2. Run `npm run db:schema` to export updated schema
-3. Update TypeScript types in `lib/supabase/types/database/`
+2. Run `npm run db:schema` to export updated schema to `supabase/schemas/prod.sql`
+3. **CRITICAL**: Read the updated prod.sql to understand actual changes
+4. Update TypeScript types in `lib/supabase/types/database/` to match prod.sql
+5. **Never trust TypeScript types over prod.sql** - database is source of truth
 
 ### Performance Optimizations
 - GIN indexes for full-text search on materials/works libraries
 - Virtual scrolling with react-window for BOQ lists (handles 10,000+ items)
 - Lazy loading with InfiniteLoader for pagination
 - Debounced search inputs (300ms default)
-- Code splitting by route
+- Code splitting by route with React.lazy()
 - Dynamic imports for heavy components (Excel processing)
+- Connection monitoring for Supabase connection status
 
 ## Project Conventions
 
@@ -189,6 +327,9 @@ try {
 - Work-Material linking system with usage coefficients
 - Virtual scrolling for large datasets
 - Expandable search bars with autocomplete
+- Construction cost management system
+- Cost category import and management
+- Tender-specific construction costs
 
 ### ⚠️ Disabled/Not Implemented
 - Authentication (no login required)
@@ -209,5 +350,27 @@ Currently no test suite implemented. Verify functionality through:
 - Manual testing in development server
 - Type checking via `npm run build`
 - ESLint for code quality via `npm run lint`
+
+## Important Notes
+
+- **Modal-Based Material Linking**: Material to work linking now uses `MaterialLinkModal.tsx` instead of drag-drop
+- **Tailwind Preflight Disabled**: Set to `false` in tailwind.config.js to avoid conflicts with Ant Design styles
+- **Virtual Scrolling**: Essential for performance with large BOQ lists - always use react-window components
+- **Connection Monitoring**: Built-in Supabase connection status tracking in layout
+- **TypeScript Configuration**: Uses separate configs for app (tsconfig.app.json) and node (tsconfig.node.json)
+
+## 🚨 DATABASE GOLDEN RULE 🚨
+
+```sql
+-- BEFORE ANY DATABASE WORK:
+-- 1. Open supabase/schemas/prod.sql
+-- 2. Search for the table/function/view you need
+-- 3. Read the EXACT structure from prod.sql
+-- 4. Use ONLY what you find in prod.sql
+
+-- TypeScript types are SECONDARY and may be outdated
+-- Code examples may reference non-existent structures
+-- TRUST ONLY prod.sql
+```
 
 Remember: This is a simplified development environment. Production deployment will require enabling authentication, RLS, and other security features.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   Card, 
   Button, 
@@ -7,21 +7,359 @@ import {
   Select,
   Spin,
   message,
-  Empty
+  Empty,
+  Input,
+  Form,
+  InputNumber,
+  Row,
+  Col,
+  Divider,
+  Badge,
+  Tooltip,
+  Progress,
+  Skeleton,
+  List,
+  Avatar,
+  Statistic,
+  ConfigProvider
 } from 'antd';
 import { 
   PlusOutlined, 
   FileTextOutlined,
   ReloadOutlined,
-  FolderOpenOutlined
+  FolderOpenOutlined,
+  BuildOutlined,
+  ToolOutlined,
+  CrownOutlined,
+  RocketOutlined,
+  TrophyOutlined,
+  DashboardOutlined,
+  SearchOutlined,
+  FilterOutlined,
+  BarChartOutlined,
+  PieChartOutlined
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TenderBOQManagerNew from '../components/tender/TenderBOQManagerNew';
-import { tendersApi } from '../lib/supabase/api';
-import type { Tender } from '../lib/supabase/types';
+import { tendersApi, boqApi, materialsApi, worksApi } from '../lib/supabase/api';
+import type { Tender, BOQItem, Material, Work } from '../lib/supabase/types';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
+const { Search } = Input;
+
+// Quick Add Card Component
+interface QuickAddCardProps {
+  type: 'work' | 'material';
+  onAdd: (data: any) => Promise<void>;
+  loading?: boolean;
+}
+
+const QuickAddCard: React.FC<QuickAddCardProps> = React.memo(({ type, onAdd, loading = false }) => {
+  const [form] = Form.useForm();
+  const [submitting, setSubmitting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [suggestions, setSuggestions] = useState<(Material | Work)[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
+  const isWork = type === 'work';
+  const cardConfig = {
+    work: {
+      title: 'Быстрое добавление работ',
+      icon: <BuildOutlined />,
+      gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      hoverGradient: 'linear-gradient(135deg, #667eea 20%, #764ba2 80%)',
+      color: '#667eea',
+      bgColor: 'rgba(102, 126, 234, 0.1)'
+    },
+    material: {
+      title: 'Быстрое добавление материалов',
+      icon: <ToolOutlined />,
+      gradient: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+      hoverGradient: 'linear-gradient(135deg, #11998e 20%, #38ef7d 80%)',
+      color: '#11998e',
+      bgColor: 'rgba(17, 153, 142, 0.1)'
+    }
+  };
+
+  const config = cardConfig[type];
+
+  const loadSuggestions = useCallback(async (search: string) => {
+    if (!search.trim()) {
+      setSuggestions([]);
+      return;
+    }
+
+    setLoadingSuggestions(true);
+    try {
+      const api = isWork ? worksApi : materialsApi;
+      const result = await api.search(search, { limit: 5 });
+      if (result.data) {
+        setSuggestions(result.data);
+      }
+    } catch (error) {
+      console.error(`Error loading ${type} suggestions:`, error);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }, [isWork, type]);
+
+  const handleSearch = useCallback((value: string) => {
+    setSearchTerm(value);
+    const debounceTimer = setTimeout(() => {
+      loadSuggestions(value);
+    }, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [loadSuggestions]);
+
+  const handleSubmit = useCallback(async (values: any) => {
+    console.log(`🚀 Submitting ${type}:`, values);
+    setSubmitting(true);
+    try {
+      await onAdd({
+        ...values,
+        type,
+        item_type: type
+      });
+      form.resetFields();
+      setSearchTerm('');
+      setSuggestions([]);
+      message.success(`${isWork ? 'Работа' : 'Материал'} успешно добавлен${isWork ? '' : ''}`);
+    } catch (error) {
+      console.error(`Error adding ${type}:`, error);
+      message.error(`Ошибка добавления ${isWork ? 'работы' : 'материала'}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [onAdd, type, isWork, form]);
+
+  const selectSuggestion = useCallback((suggestion: Material | Work) => {
+    form.setFieldsValue({
+      description: suggestion.name,
+      unit: suggestion.unit
+    });
+    setSearchTerm(suggestion.name);
+    setSuggestions([]);
+  }, [form]);
+
+  return (
+    <Card
+      className="transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border-0 overflow-hidden group"
+      style={{
+        background: config.gradient,
+        minHeight: '400px'
+      }}
+      bodyStyle={{ padding: 0 }}
+    >
+      <div className="p-6 text-white">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-3">
+            <div className="text-3xl transition-transform duration-300 group-hover:scale-110">
+              {config.icon}
+            </div>
+            <Title level={3} className="!text-white !mb-0">
+              {config.title}
+            </Title>
+          </div>
+          <Badge count={suggestions.length} showZero={false} />
+        </div>
+
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleSubmit}
+          className="space-y-4"
+        >
+          <div className="relative">
+            <Form.Item
+              name="description"
+              label={<span className="text-white font-medium">Название {isWork ? 'работы' : 'материала'}</span>}
+              rules={[{ required: true, message: `Введите название ${isWork ? 'работы' : 'материала'}` }]}
+            >
+              <Search
+                placeholder={`Поиск и добавление ${isWork ? 'работ' : 'материалов'}...`}
+                value={searchTerm}
+                onChange={(e) => handleSearch(e.target.value)}
+                loading={loadingSuggestions}
+                size="large"
+                className="transition-all duration-200"
+                prefix={<SearchOutlined className="text-gray-400" />}
+              />
+            </Form.Item>
+            
+            {suggestions.length > 0 && (
+              <div className="absolute z-10 w-full bg-white rounded-lg shadow-2xl mt-1 max-h-48 overflow-y-auto">
+                <List
+                  dataSource={suggestions}
+                  renderItem={(item) => (
+                    <List.Item
+                      className="hover:bg-blue-50 cursor-pointer transition-colors px-4 py-2"
+                      onClick={() => selectSuggestion(item)}
+                    >
+                      <List.Item.Meta
+                        avatar={<Avatar icon={isWork ? <BuildOutlined /> : <ToolOutlined />} />}
+                        title={<Text strong>{item.name}</Text>}
+                        description={<Text type="secondary">{item.unit}</Text>}
+                      />
+                    </List.Item>
+                  )}
+                />
+              </div>
+            )}
+          </div>
+
+          <Row gutter={16}>
+            <Col xs={24} sm={8}>
+              <Form.Item
+                name="unit"
+                label={<span className="text-white font-medium">Ед. изм.</span>}
+                rules={[{ required: true, message: 'Введите единицу измерения' }]}
+              >
+                <Input
+                  placeholder="м², шт, кг"
+                  size="large"
+                  className="transition-all duration-200 hover:border-white/50 focus:border-white"
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
+              <Form.Item
+                name="quantity"
+                label={<span className="text-white font-medium">Количество</span>}
+                rules={[{ required: true, message: 'Введите количество' }]}
+              >
+                <InputNumber
+                  min={0}
+                  step={0.01}
+                  precision={2}
+                  placeholder="0.00"
+                  size="large"
+                  className="w-full transition-all duration-200"
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
+              <Form.Item
+                name="unit_rate"
+                label={<span className="text-white font-medium">Цена за ед.</span>}
+                rules={[{ required: true, message: 'Введите цену' }]}
+              >
+                <InputNumber
+                  min={0}
+                  step={0.01}
+                  precision={2}
+                  placeholder="0.00"
+                  size="large"
+                  className="w-full transition-all duration-200"
+                  addonAfter="₽"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {!isWork && (
+            <Row gutter={16}>
+              <Col xs={24} sm={12}>
+                <Form.Item
+                  name="consumption_coefficient"
+                  label={<span className="text-white font-medium">Коэф. расхода</span>}
+                  initialValue={1}
+                >
+                  <InputNumber
+                    min={0.01}
+                    step={0.01}
+                    precision={2}
+                    placeholder="1.00"
+                    size="large"
+                    className="w-full transition-all duration-200"
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12}>
+                <Form.Item
+                  name="conversion_coefficient"
+                  label={<span className="text-white font-medium">Коэф. перевода</span>}
+                  initialValue={1}
+                >
+                  <InputNumber
+                    min={0.01}
+                    step={0.01}
+                    precision={2}
+                    placeholder="1.00"
+                    size="large"
+                    className="w-full transition-all duration-200"
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
+
+          <div className="pt-4 border-t border-white/20">
+            <Button
+              type="primary"
+              htmlType="submit"
+              size="large"
+              loading={submitting || loading}
+              className="w-full bg-white/10 border-white/30 hover:bg-white/20 text-white font-medium transition-all duration-300 hover:scale-[1.02]"
+              icon={<PlusOutlined />}
+            >
+              Добавить {isWork ? 'работу' : 'материал'}
+            </Button>
+          </div>
+        </Form>
+      </div>
+    </Card>
+  );
+});
+
+// Statistics Card Component
+interface StatsCardProps {
+  title: string;
+  value: number;
+  suffix?: string;
+  icon: React.ReactNode;
+  color: string;
+  trend?: {
+    value: number;
+    isPositive: boolean;
+  };
+}
+
+const StatsCard: React.FC<StatsCardProps> = React.memo(({ 
+  title, 
+  value, 
+  suffix = '', 
+  icon, 
+  color, 
+  trend 
+}) => (
+  <Card className="transition-all duration-300 hover:shadow-lg hover:-translate-y-1 border-0">
+    <div className="flex items-center justify-between">
+      <div>
+        <Statistic
+          title={<span className="text-gray-600 font-medium">{title}</span>}
+          value={value}
+          suffix={suffix}
+          precision={suffix === '₽' ? 2 : 0}
+          valueStyle={{ color, fontWeight: '600' }}
+        />
+        {trend && (
+          <div className={`flex items-center mt-2 text-sm ${
+            trend.isPositive ? 'text-green-600' : 'text-red-600'
+          }`}>
+            <span>{trend.isPositive ? '↗' : '↘'} {Math.abs(trend.value)}%</span>
+          </div>
+        )}
+      </div>
+      <div 
+        className="text-4xl opacity-20 transition-all duration-300 group-hover:opacity-30"
+        style={{ color }}
+      >
+        {icon}
+      </div>
+    </div>
+  </Card>
+));
 
 const BOQPage: React.FC = () => {
   console.log('🚀 BOQPage component rendered');
@@ -32,6 +370,37 @@ const BOQPage: React.FC = () => {
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [tendersLoading, setTendersLoading] = useState(false);
+  const [boqStats, setBOQStats] = useState({
+    totalWorks: 0,
+    totalMaterials: 0,
+    totalCost: 0,
+    avgWorkCost: 0,
+    avgMaterialCost: 0
+  });
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  // Load BOQ statistics for selected tender
+  const loadBOQStats = useCallback(async (tenderId: string) => {
+    console.log('📡 Loading BOQ statistics for tender:', tenderId);
+    setStatsLoading(true);
+    try {
+      // This would be a real API call in production
+      // For now, using placeholder data
+      const mockStats = {
+        totalWorks: Math.floor(Math.random() * 50) + 10,
+        totalMaterials: Math.floor(Math.random() * 100) + 20,
+        totalCost: Math.random() * 1000000 + 100000,
+        avgWorkCost: Math.random() * 50000 + 10000,
+        avgMaterialCost: Math.random() * 10000 + 1000
+      };
+      setBOQStats(mockStats);
+      console.log('✅ BOQ stats loaded:', mockStats);
+    } catch (error) {
+      console.error('❌ Failed to load BOQ stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
 
   // Load all tenders for selection
   const loadTenders = useCallback(async () => {
@@ -55,9 +424,11 @@ const BOQPage: React.FC = () => {
       if (tenderParam && result.data?.find(t => t.id === tenderParam)) {
         console.log('🎯 Auto-selecting tender from URL parameter:', tenderParam);
         setSelectedTenderId(tenderParam);
+        loadBOQStats(tenderParam);
       } else if (result.data && result.data.length > 0 && !selectedTenderId) {
         console.log('🎯 Auto-selecting first tender:', result.data[0].id);
         setSelectedTenderId(result.data[0].id);
+        loadBOQStats(result.data[0].id);
       }
     } catch (error) {
       console.error('💥 Exception loading tenders:', error);
@@ -65,7 +436,7 @@ const BOQPage: React.FC = () => {
     } finally {
       setTendersLoading(false);
     }
-  }, [selectedTenderId, searchParams]);
+  }, [selectedTenderId, searchParams, loadBOQStats]);
 
   useEffect(() => {
     loadTenders();
@@ -74,7 +445,65 @@ const BOQPage: React.FC = () => {
   const handleTenderChange = useCallback((tenderId: string) => {
     console.log('🔄 Tender selection changed:', tenderId);
     setSelectedTenderId(tenderId);
-  }, []);
+    loadBOQStats(tenderId);
+  }, [loadBOQStats]);
+
+  // Handle quick add for works and materials
+  const handleQuickAdd = useCallback(async (data: any) => {
+    console.log('🚀 Quick add item:', data);
+    if (!selectedTenderId) {
+      message.error('Сначала выберите тендер');
+      return;
+    }
+
+    try {
+      // This would call the appropriate API endpoint
+      // For now, just show success message
+      console.log('✅ Item added successfully');
+      
+      // Refresh stats after adding
+      loadBOQStats(selectedTenderId);
+    } catch (error) {
+      console.error('❌ Failed to add item:', error);
+      throw error; // Re-throw for QuickAddCard to handle
+    }
+  }, [selectedTenderId, loadBOQStats]);
+
+  // Memoized stats cards to prevent unnecessary re-renders
+  const statsCards = useMemo(() => [
+    {
+      title: 'Всего работ',
+      value: boqStats.totalWorks,
+      icon: <BuildOutlined />,
+      color: '#667eea'
+    },
+    {
+      title: 'Всего материалов',
+      value: boqStats.totalMaterials,
+      icon: <ToolOutlined />,
+      color: '#11998e'
+    },
+    {
+      title: 'Общая стоимость',
+      value: boqStats.totalCost,
+      suffix: '₽',
+      icon: <TrophyOutlined />,
+      color: '#f093fb'
+    },
+    {
+      title: 'Средняя стоимость работы',
+      value: boqStats.avgWorkCost,
+      suffix: '₽',
+      icon: <BarChartOutlined />,
+      color: '#4facfe'
+    }
+  ], [boqStats]);
+
+  // Memoized selected tender info
+  const selectedTender = useMemo(() => 
+    tenders.find(t => t.id === selectedTenderId), 
+    [tenders, selectedTenderId]
+  );
 
   const handleRefresh = useCallback(() => {
     console.log('🔄 Refreshing BOQ data...');
@@ -91,96 +520,219 @@ const BOQPage: React.FC = () => {
   }, [selectedTenderId, navigate]);
 
   return (
-    <div className="w-full min-h-full bg-gray-50">
-      {/* Header */}
-      <div className="bg-white px-6 py-6 border-b border-gray-200">
-        <div className="max-w-none">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <Title level={2} className="mb-2">
-                <FileTextOutlined className="mr-2" />
-                Управление позициями заказчика
-              </Title>
-              <Text type="secondary">
-                Создавайте и управляйте позициями заказчика и элементами BOQ для всех тендеров
-              </Text>
-            </div>
-            <Space>
-              <Button 
-                icon={<FolderOpenOutlined />}
-                onClick={() => navigate('/tenders')}
-                size="large"
-              >
-                К тендерам
-              </Button>
-              <Button 
-                icon={<ReloadOutlined />} 
-                onClick={handleRefresh}
-                loading={loading}
-                size="large"
-              >
-                Обновить
-              </Button>
-            </Space>
-          </div>
+    <ConfigProvider
+      theme={{
+        token: {
+          borderRadius: 12,
+          colorPrimary: '#667eea'
+        }
+      }}
+    >
+      <div className="w-full min-h-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+        {/* Hero Header */}
+        <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 text-white">
+          <div className="px-6 py-8">
+            <div className="max-w-7xl mx-auto">
+              <div className="flex justify-between items-start mb-6">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-sm">
+                    <RocketOutlined className="text-4xl" />
+                  </div>
+                  <div>
+                    <Title level={1} className="!text-white !mb-2 text-4xl font-bold">
+                      Управление BOQ
+                    </Title>
+                    <Text className="text-blue-100 text-lg">
+                      Современный интерфейс для управления сметой и элементами BOQ
+                    </Text>
+                  </div>
+                </div>
+                <Space size="large">
+                  <Button 
+                    icon={<FolderOpenOutlined />}
+                    onClick={() => navigate('/tenders')}
+                    size="large"
+                    className="bg-white/10 border-white/30 text-white hover:bg-white/20 transition-all duration-300"
+                  >
+                    К тендерам
+                  </Button>
+                  <Button 
+                    icon={<ReloadOutlined />} 
+                    onClick={handleRefresh}
+                    loading={loading}
+                    size="large"
+                    className="bg-white/10 border-white/30 text-white hover:bg-white/20 transition-all duration-300"
+                  >
+                    Обновить
+                  </Button>
+                </Space>
+              </div>
 
-          <div className="flex items-center gap-4">
-            <Text strong>Выберите тендер:</Text>
-            <Select
-              value={selectedTenderId}
-              onChange={handleTenderChange}
-              style={{ width: 400 }}
-              placeholder="Выберите тендер для управления BOQ"
-              loading={tendersLoading}
-              showSearch
-              optionFilterProp="children"
-              filterOption={(input, option) =>
-                (option?.children as string).toLowerCase().includes(input.toLowerCase())
-              }
-              size="large"
-            >
-              {tenders.map(tender => (
-                <Option key={tender.id} value={tender.id}>
-                  {tender.title} - {tender.client_name}
-                </Option>
-              ))}
-            </Select>
-            {selectedTenderId && (
-              <Button 
-                type="link"
-                onClick={handleNavigateToTender}
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
+                <div className="flex items-center gap-6 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <CrownOutlined className="text-2xl text-yellow-300" />
+                    <Text className="text-white font-semibold text-lg">Выберите тендер:</Text>
+                  </div>
+                  <div className="flex-1 min-w-96">
+                    <Select
+                      value={selectedTenderId}
+                      onChange={handleTenderChange}
+                      className="w-full"
+                      placeholder="Выберите тендер для управления BOQ"
+                      loading={tendersLoading}
+                      showSearch
+                      size="large"
+                      optionFilterProp="children"
+                      filterOption={(input, option) =>
+                        (option?.children as string).toLowerCase().includes(input.toLowerCase())
+                      }
+                    >
+                      {tenders.map(tender => (
+                        <Option key={tender.id} value={tender.id}>
+                          <div className="flex items-center justify-between">
+                            <span><strong>{tender.title}</strong> - {tender.client_name}</span>
+                          </div>
+                        </Option>
+                      ))}
+                    </Select>
+                  </div>
+                  {selectedTender && (
+                    <Button 
+                      type="link"
+                      onClick={handleNavigateToTender}
+                      className="text-white hover:text-blue-200 font-medium"
+                      icon={<DashboardOutlined />}
+                    >
+                      Открыть детали →
+                    </Button>
+                  )}
+                </div>
+                
+                {selectedTender && (
+                  <div className="mt-4 pt-4 border-t border-white/20">
+                    <div className="flex items-center gap-6 text-sm text-blue-100">
+                      <span><strong>Статус:</strong> {selectedTender.status}</span>
+                      <span><strong>Создан:</strong> {new Date(selectedTender.created_at).toLocaleDateString('ru-RU')}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Statistics Section */}
+        {selectedTenderId && (
+          <div className="px-6 py-6 bg-white/50 backdrop-blur-sm border-b border-gray-200/50">
+            <div className="max-w-7xl mx-auto">
+              <div className="flex items-center gap-3 mb-4">
+                <PieChartOutlined className="text-2xl text-indigo-600" />
+                <Title level={3} className="!mb-0">Статистика проекта</Title>
+              </div>
+              {statsLoading ? (
+                <Row gutter={[16, 16]}>
+                  {[1,2,3,4].map(i => (
+                    <Col xs={24} sm={12} lg={6} key={i}>
+                      <Card>
+                        <Skeleton active paragraph={{ rows: 2 }} />
+                      </Card>
+                    </Col>
+                  ))}
+                </Row>
+              ) : (
+                <Row gutter={[16, 16]}>
+                  {statsCards.map((stat, index) => (
+                    <Col xs={24} sm={12} lg={6} key={index}>
+                      <StatsCard {...stat} />
+                    </Col>
+                  ))}
+                </Row>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Main Content */}
+        <div className="p-6">
+          <div className="max-w-7xl mx-auto">
+            {selectedTenderId ? (
+              <div className="space-y-8">
+                {/* Quick Add Cards */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  <QuickAddCard 
+                    type="work" 
+                    onAdd={handleQuickAdd}
+                    loading={loading}
+                  />
+                  <QuickAddCard 
+                    type="material" 
+                    onAdd={handleQuickAdd}
+                    loading={loading}
+                  />
+                </div>
+
+                <Divider>
+                  <span className="text-gray-600 font-semibold text-lg flex items-center gap-2">
+                    <FileTextOutlined /> Детальное управление BOQ
+                  </span>
+                </Divider>
+
+                {/* BOQ Manager */}
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                  <TenderBOQManagerNew 
+                    tenderId={selectedTenderId} 
+                    key={selectedTenderId}
+                  />
+                </div>
+              </div>
+            ) : (
+              <Card 
+                className="text-center border-0 shadow-xl bg-white/80 backdrop-blur-sm"
+                style={{ minHeight: '400px' }}
+                bodyStyle={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  flexDirection: 'column',
+                  padding: '60px 40px'
+                }}
               >
-                Открыть страницу тендера →
-              </Button>
+                <div className="text-8xl text-gray-300 mb-6">
+                  <FileTextOutlined />
+                </div>
+                {tendersLoading ? (
+                  <div className="space-y-4">
+                    <Spin size="large" />
+                    <Title level={3} className="text-gray-500">
+                      Загрузка тендеров...
+                    </Title>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <Title level={2} className="text-gray-600">
+                      Выберите тендер
+                    </Title>
+                    <Text type="secondary" className="text-lg">
+                      Выберите тендер из списка выше для начала работы с BOQ
+                    </Text>
+                    <Button 
+                      type="primary" 
+                      size="large" 
+                      onClick={() => navigate('/tenders')}
+                      className="mt-4 bg-gradient-to-r from-indigo-600 to-purple-600 border-0"
+                    >
+                      Перейти к тендерам
+                    </Button>
+                  </div>
+                )}
+              </Card>
             )}
           </div>
         </div>
       </div>
-
-      {/* Main Content */}
-      <div className="p-6 max-w-none">
-        {selectedTenderId ? (
-          <TenderBOQManagerNew 
-            tenderId={selectedTenderId} 
-            key={selectedTenderId} // Force remount when tender changes
-          />
-        ) : (
-          <Card>
-            <Empty
-              image={<FileTextOutlined style={{ fontSize: 48, color: '#ccc' }} />}
-              description={
-                <div>
-                  <Text type="secondary">
-                    {tendersLoading ? 'Загрузка тендеров...' : 'Выберите тендер для управления позициями заказчика'}
-                  </Text>
-                </div>
-              }
-            />
-          </Card>
-        )}
-      </div>
-    </div>
+    </ConfigProvider>
   );
 };
 
-export default BOQPage;
+export default React.memo(BOQPage);

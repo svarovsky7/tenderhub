@@ -27,7 +27,7 @@ export type { Json } from './base';
 export type { DatabaseTables } from './tables';
 export type { DatabaseViews } from './views';
 export type { DatabaseFunctions } from './functions';
-export type { DatabaseEnums, UserRole, TenderStatus, BOQItemType, ClientPositionStatus, AuditAction } from './enums';
+export type { DatabaseEnums, UserRole, TenderStatus, BOQItemType, ClientPositionStatus, AuditAction, DeliveryPriceType } from './enums';
 
 // Additional helper types for backward compatibility
-export type { UserRole, TenderStatus, BOQItemType, ClientPositionStatus } from './enums';
+export type { UserRole, TenderStatus, BOQItemType, ClientPositionStatus, DeliveryPriceType } from './enums';

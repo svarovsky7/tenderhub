@@ -70,6 +70,12 @@ const AppLayout: React.FC = () => {
           label: <Link to="/libraries/works">Работы</Link>,
           path: '/libraries/works',
         },
+        {
+          key: 'work-materials',
+          icon: null,
+          label: <Link to="/libraries/work-materials">Работы и Материалы</Link>,
+          path: '/libraries/work-materials',
+        },
       ],
     },
     {
@@ -186,6 +192,8 @@ const AppLayout: React.FC = () => {
             breadcrumbItems.push({ title: <span>Материалы</span> });
           } else if (pathSegments[1] === 'works') {
             breadcrumbItems.push({ title: <span>Работы</span> });
+          } else if (pathSegments[1] === 'work-materials') {
+            breadcrumbItems.push({ title: <span>Работы и Материалы</span> });
           }
           break;
         case 'admin':

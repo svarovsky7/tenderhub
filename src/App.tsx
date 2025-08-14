@@ -17,6 +17,7 @@ const UsersPage = React.lazy(() => import('./pages/admin/UsersPage'));
 const SettingsPage = React.lazy(() => import('./pages/admin/SettingsPage'));
 const ConstructionCostsPage = React.lazy(() => import('./pages/admin/ConstructionCostsPage'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
+const WorkMaterialsPage = React.lazy(() => import('./pages/WorkMaterialsPage'));
 
 function App() {
   // Initialize connection monitoring on app start
@@ -78,6 +79,14 @@ function App() {
                 element={
                   <React.Suspense fallback={<div>Загрузка...</div>}>
                     <Works />
+                  </React.Suspense>
+                } 
+              />
+              <Route 
+                path="work-materials" 
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <WorkMaterialsPage />
                   </React.Suspense>
                 } 
               />

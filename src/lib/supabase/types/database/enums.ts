@@ -9,6 +9,7 @@ export type DatabaseEnums = {
   client_position_status: 'active' | 'inactive' | 'completed';
   tender_status: 'draft' | 'active' | 'submitted' | 'awarded' | 'closed';
   user_role: 'Administrator' | 'Engineer' | 'View-only';
+  delivery_price_type: 'included' | 'not_included' | 'amount';
 };
 
 // Helper types for better developer experience and backward compatibility
@@ -17,3 +18,4 @@ export type TenderStatus = DatabaseEnums['tender_status'];
 export type BOQItemType = DatabaseEnums['boq_item_type'];
 export type ClientPositionStatus = DatabaseEnums['client_position_status'];
 export type AuditAction = DatabaseEnums['audit_action'];
+export type DeliveryPriceType = DatabaseEnums['delivery_price_type'];

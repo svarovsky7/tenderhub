@@ -9,7 +9,7 @@ import AutoCompleteSearch from '../common/AutoCompleteSearch';
 import { formatCurrency, formatQuantity, formatUnitRate } from '../../utils/formatters';
 import { calculateMaterialVolume, updateLinkWithCalculatedVolume } from '../../utils/materialCalculations';
 // Components for drag-and-drop removed - using modal approach
-import type { ClientPosition, BOQItem, BOQItemInsert, DeliveryPriceType } from '../../lib/supabase/types';
+import type { ClientPosition, BOQItem, BOQItemInsert } from '../../lib/supabase/types';
 
 interface TenderBOQManagerNewProps {
   tenderId: string;
@@ -62,11 +62,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
   }>({
     description: '',
     quantity: 0,
-    unit_rate: 0,
-    consumption_coefficient: 1,
-    conversion_coefficient: 1,
-    delivery_price_type: 'included',
-    delivery_amount: 0
+    unit_rate: 0
   });
   
   // Conflict resolution modal state
@@ -96,9 +92,9 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     price: '',
     consumptionCoefficient: '',
     conversionCoefficient: '',
-    selectedItemId: null as string | null,
     deliveryPriceType: 'included' as 'included' | 'not_included' | 'amount',
-    deliveryAmount: ''
+    deliveryAmount: '',
+    selectedItemId: null as string | null
   });
   // Remove these states as AutoCompleteSearch handles loading
   // const [materials, setMaterials] = useState<Material[]>([]);
@@ -414,6 +410,8 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       price: '',
       consumptionCoefficient: '',
       conversionCoefficient: '',
+      deliveryPriceType: 'included',
+      deliveryAmount: '',
       selectedItemId: null
     });
   }, [selectedPosition, loadLinksForPosition]);
@@ -429,6 +427,8 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       price: '',
       consumptionCoefficient: '',
       conversionCoefficient: '',
+      deliveryPriceType: 'included',
+      deliveryAmount: '',
       selectedItemId: null
     });
   }, []);
@@ -576,8 +576,10 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
         unit_rate: parseFloat(formData.price),
         consumption_coefficient: formData.type === 'material' && formData.consumptionCoefficient ? parseFloat(formData.consumptionCoefficient) : null,
         conversion_coefficient: formData.type === 'material' && formData.conversionCoefficient ? parseFloat(formData.conversionCoefficient) : null,
-        delivery_price_type: formData.type === 'material' ? formData.deliveryPriceType : null,
-        delivery_amount: formData.type === 'material' && formData.deliveryPriceType === 'amount' && formData.deliveryAmount ? parseFloat(formData.deliveryAmount) : null,
+        delivery_price_type: formData.type === 'material' ? formData.deliveryPriceType : 'included',
+        delivery_amount: formData.type === 'material' && formData.deliveryPriceType === 'amount' 
+          ? parseFloat(formData.deliveryAmount || '0') 
+          : 0,
         material_id: materialId,
         work_id: workId
       };
@@ -696,9 +698,9 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
         price: '',
         consumptionCoefficient: '',
         conversionCoefficient: '',
-        selectedItemId: null,
         deliveryPriceType: 'included',
-        deliveryAmount: ''
+        deliveryAmount: '',
+        selectedItemId: null
       });
 
       // No need to reload positions - updated locally!
@@ -816,26 +818,15 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     if (!updates) {
       console.log('✏️ Opening inline edit for:', item);
       setEditingItem(item);
-      
-      // Initialize form data with all fields for materials
-      if (item.item_type === 'material') {
-        setEditFormData({
-          description: item.description || '',
-          quantity: item.quantity || 1,
-          unit_rate: item.unit_rate || 0,
-          consumption_coefficient: item.consumption_coefficient || 1,
-          conversion_coefficient: item.conversion_coefficient || 1,
-          delivery_price_type: item.delivery_price_type || 'included',
-          delivery_amount: item.delivery_amount || 0
-        });
-      } else {
-        // For works, use simpler form
-        setEditFormData({
-          description: item.description || '',
-          quantity: item.quantity || 0,
-          unit_rate: item.unit_rate || 0
-        });
-      }
+      setEditFormData({
+        description: item.description || '',
+        quantity: item.quantity || 0,
+        unit_rate: item.unit_rate || 0,
+        consumption_coefficient: item.consumption_coefficient || undefined,
+        conversion_coefficient: item.conversion_coefficient || undefined,
+        delivery_price_type: item.delivery_price_type || 'included',
+        delivery_amount: item.delivery_amount || 0
+      });
       return;
     }
     
@@ -943,47 +934,12 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       const updates: Partial<BOQItem> = {
         description: editFormData.description,
         quantity: editFormData.quantity,
-        unit_rate: editFormData.unit_rate
+        unit_rate: editFormData.unit_rate,
+        consumption_coefficient: editFormData.consumption_coefficient,
+        conversion_coefficient: editFormData.conversion_coefficient,
+        delivery_price_type: editFormData.delivery_price_type,
+        delivery_amount: editFormData.delivery_amount
       };
-      
-      // Call the update function with updates
-      await updateSubItem(editingItem, updates);
-      
-      // Close edit modal
-      setEditingItem(null);
-      setEditFormData({
-        description: '',
-        quantity: 0,
-        unit_rate: 0
-      });
-      
-    } catch (error) {
-      console.error('💥 Save edit error:', error);
-      message.error('Ошибка сохранения изменений');
-    }
-  }, [editingItem, editFormData, updateSubItem]);
-
-  // Handle update for BOQ item (materials with all fields)
-  const handleUpdateBOQItem = useCallback(async () => {
-    if (!editingItem) return;
-    
-    console.log('💾 Saving edited BOQ item:', editingItem.id);
-    
-    try {
-      // Prepare updates based on item type
-      const updates: Partial<BOQItem> = {
-        description: editFormData.description,
-        quantity: editFormData.quantity,
-        unit_rate: editFormData.unit_rate
-      };
-      
-      // Add material-specific fields
-      if (editingItem.item_type === 'material') {
-        updates.consumption_coefficient = editFormData.consumption_coefficient || 1;
-        updates.conversion_coefficient = editFormData.conversion_coefficient || 1;
-        updates.delivery_price_type = editFormData.delivery_price_type || 'included';
-        updates.delivery_amount = editFormData.delivery_price_type === 'amount' ? (editFormData.delivery_amount || 0) : null;
-      }
       
       // Call the update function with updates
       await updateSubItem(editingItem, updates);
@@ -994,8 +950,8 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
         description: '',
         quantity: 0,
         unit_rate: 0,
-        consumption_coefficient: 1,
-        conversion_coefficient: 1,
+        consumption_coefficient: undefined,
+        conversion_coefficient: undefined,
         delivery_price_type: 'included',
         delivery_amount: 0
       });
@@ -1061,9 +1017,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
         const linkData = {
           client_position_id: selectedPosition.id,
           work_boq_item_id: targetWorkId,
-          material_boq_item_id: moveModal.materialId,
-          material_quantity_per_work: 1,
-          usage_coefficient: 1
+          material_boq_item_id: moveModal.materialId
         };
         
         console.log('📡 Creating link:', linkData);
@@ -1422,7 +1376,9 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       // Обновляем сам материал
       if (editingLinkData.consumption_coefficient !== undefined || 
           editingLinkData.conversion_coefficient !== undefined ||
-          editingLinkData.unit_rate !== undefined) {
+          editingLinkData.unit_rate !== undefined ||
+          editingLinkData.delivery_price_type !== undefined ||
+          editingLinkData.delivery_amount !== undefined) {
         
         const materialUpdates: any = {};
         if (editingLinkData.consumption_coefficient !== undefined) {
@@ -1433,6 +1389,12 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
         }
         if (editingLinkData.unit_rate !== undefined) {
           materialUpdates.unit_rate = editingLinkData.unit_rate;
+        }
+        if (editingLinkData.delivery_price_type !== undefined) {
+          materialUpdates.delivery_price_type = editingLinkData.delivery_price_type;
+        }
+        if (editingLinkData.delivery_amount !== undefined) {
+          materialUpdates.delivery_amount = editingLinkData.delivery_amount;
         }
         
         const result = await boqItemsApi.update(materialId, materialUpdates);
@@ -1760,6 +1722,15 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                                     <span className="ml-2">К.пер: {link.material_conversion_coefficient}</span>
                                                   )}
                                                   <span className="ml-2">Цена: {formatCurrency(link.material_unit_rate || 0)}/{link.material_unit}</span>
+                                                  {link.material_delivery_price_type === 'included' && (
+                                                    <span className="ml-2 text-green-600" title="Доставка включена в цену">📦✓</span>
+                                                  )}
+                                                  {link.material_delivery_price_type === 'not_included' && (
+                                                    <span className="ml-2 text-gray-500" title="Доставка не включена">📦✗</span>
+                                                  )}
+                                                  {link.material_delivery_price_type === 'amount' && link.material_delivery_amount > 0 && (
+                                                    <span className="ml-2 text-orange-600" title={`Доставка: ${formatCurrency(link.material_delivery_amount)}`}>+Дост: {formatCurrency(link.material_delivery_amount)}</span>
+                                                  )}
                                                 </span>
                                               </div>
                                             <div className="flex items-center gap-2">
@@ -1775,7 +1746,9 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                                       setEditingLinkData({
                                                         consumption_coefficient: link.material_consumption_coefficient,
                                                         conversion_coefficient: link.material_conversion_coefficient,
-                                                        unit_rate: link.material_unit_rate
+                                                        unit_rate: link.material_unit_rate,
+                                                        delivery_price_type: link.material_delivery_price_type || 'included',
+                                                        delivery_amount: link.material_delivery_amount || 0
                                                       });
                                                     }}
                                                     className="text-blue-500 hover:text-blue-700 p-0.5"
@@ -1846,7 +1819,27 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                               )}
                                             </div>
                                           </div>
+                                          {/* Детальная информация о связанном материале */}
+                                          {!isEditing && (
+                                            <div className="flex items-center justify-between text-xs text-gray-500 mt-1 pl-2">
+                                              <div className="flex items-center gap-3">
+                                                <span>Объем: {((subItem.quantity || 0) * (link.material_consumption_coefficient || 1) * (link.material_conversion_coefficient || 1)).toFixed(2)} {link.material_unit}</span>
+                                                {link.material_delivery_price_type === 'amount' && link.material_delivery_amount > 0 && (
+                                                  <span className="text-orange-600">
+                                                    Цена с дост.: {formatCurrency((link.material_unit_rate || 0) + (link.material_delivery_amount || 0))}/{link.material_unit}
+                                                  </span>
+                                                )}
+                                                {link.material_delivery_price_type === 'not_included' && (
+                                                  <span className="text-gray-400 italic">Доставка оплачивается отдельно</span>
+                                                )}
+                                                {link.material_delivery_price_type === 'included' && (
+                                                  <span className="text-green-600">Доставка в цене</span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          )}
                                           {!isEditing ? null : (
+                                            <>
                                             <div className="grid grid-cols-3 gap-2 mt-2">
                                               <div>
                                                 <label className="block text-xs text-gray-600 mb-0.5">К. расхода</label>
@@ -1882,24 +1875,55 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                                 />
                                               </div>
                                             </div>
+                                            <div className="grid grid-cols-2 gap-2 mt-2">
+                                              <div>
+                                                <label className="block text-xs text-gray-600 mb-0.5">Тип доставки</label>
+                                                <select
+                                                  value={editingLinkData.delivery_price_type || 'included'}
+                                                  onChange={(e) => setEditingLinkData({...editingLinkData, delivery_price_type: e.target.value})}
+                                                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                                                >
+                                                  <option value="included">В цене</option>
+                                                  <option value="not_included">Не в цене</option>
+                                                  <option value="amount">Суммой</option>
+                                                </select>
+                                              </div>
+                                              {editingLinkData.delivery_price_type === 'amount' && (
+                                                <div>
+                                                  <label className="block text-xs text-gray-600 mb-0.5">Сумма доставки</label>
+                                                  <InputNumber
+                                                    size="small"
+                                                    value={editingLinkData.delivery_amount}
+                                                    onChange={(value) => setEditingLinkData({...editingLinkData, delivery_amount: value})}
+                                                    min={0}
+                                                    step={0.01}
+                                                    className="w-full text-xs"
+                                                  />
+                                                </div>
+                                              )}
+                                            </div>
+                                            {editingLinkData.delivery_price_type === 'amount' && editingLinkData.delivery_amount > 0 && (
+                                              <div className="mt-2 p-2 bg-yellow-50 rounded text-xs">
+                                                <span className="text-gray-600">Итоговая цена с доставкой: </span>
+                                                <span className="font-semibold text-blue-600">
+                                                  {formatCurrency((editingLinkData.unit_rate || 0) + (editingLinkData.delivery_amount || 0))}/ед
+                                                </span>
+                                              </div>
+                                            )}
+                                            </>
                                           )}
-                                        </div>
                                         </div>
                                         );
                                       })}
                                     </div>
                                   </div>
-                                        )}
-                                      </div>
                                     ) : (
                                       // Несвязанные материалы
-                                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 transition-colors mb-1">
-                                        {editingItem?.id === subItem.id ? (
-                                          // Inline edit form для материалов
-                                          <div className="flex-1 space-y-2 p-2 bg-white border-2 border-blue-300 rounded">
-                                            {/* Название материала */}
+                                      editingItem?.id === subItem.id ? (
+                                        // Inline форма редактирования материала
+                                        <div className="p-3 bg-blue-50 rounded border border-blue-300 mb-2">
+                                          <div className="space-y-2">
                                             <div className="flex items-center gap-2">
-                                              <label className="text-xs text-gray-600 w-24">Название:</label>
                                               <input
                                                 type="text"
                                                 value={editFormData.description}
@@ -1908,158 +1932,181 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                                 placeholder="Название материала"
                                               />
                                             </div>
-                                            
-                                            {/* Цена и единица измерения */}
-                                            <div className="flex items-center gap-2">
-                                              <label className="text-xs text-gray-600 w-24">Цена:</label>
-                                              <input
-                                                type="number"
-                                                value={editFormData.unit_rate}
-                                                onChange={(e) => setEditFormData({...editFormData, unit_rate: parseFloat(e.target.value) || 0})}
-                                                className="w-32 px-2 py-1 text-sm border border-gray-300 rounded"
-                                                placeholder="Цена"
-                                                step="0.01"
-                                              />
-                                              <span className="text-sm">₽/{subItem.unit}</span>
+                                            <div className="grid grid-cols-3 gap-2">
+                                              <div>
+                                                <label className="block text-xs text-gray-600 mb-0.5">Кол-во</label>
+                                                <input
+                                                  type="number"
+                                                  value={editFormData.quantity}
+                                                  onChange={(e) => setEditFormData({...editFormData, quantity: parseFloat(e.target.value) || 0})}
+                                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                                                  placeholder="1"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="block text-xs text-gray-600 mb-0.5">Цена за ед.</label>
+                                                <input
+                                                  type="number"
+                                                  value={editFormData.unit_rate}
+                                                  onChange={(e) => setEditFormData({...editFormData, unit_rate: parseFloat(e.target.value) || 0})}
+                                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                                                  placeholder="0"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="block text-xs text-gray-600 mb-0.5">Ед. изм.</label>
+                                                <span className="text-sm text-gray-700">{subItem.unit}</span>
+                                              </div>
                                             </div>
-                                            
                                             {/* Коэффициенты */}
-                                            <div className="flex items-center gap-2">
-                                              <label className="text-xs text-gray-600 w-24">К. расхода:</label>
-                                              <input
-                                                type="number"
-                                                value={editFormData.consumption_coefficient}
-                                                onChange={(e) => setEditFormData({...editFormData, consumption_coefficient: parseFloat(e.target.value) || 1})}
-                                                className="w-32 px-2 py-1 text-sm border border-gray-300 rounded"
-                                                placeholder="1.0000"
-                                                step="0.0001"
-                                              />
-                                              <label className="text-xs text-gray-600 ml-2">К. перевода:</label>
-                                              <input
-                                                type="number"
-                                                value={editFormData.conversion_coefficient}
-                                                onChange={(e) => setEditFormData({...editFormData, conversion_coefficient: parseFloat(e.target.value) || 1})}
-                                                className="w-32 px-2 py-1 text-sm border border-gray-300 rounded"
-                                                placeholder="1.0000"
-                                                step="0.0001"
-                                              />
+                                            <div className="grid grid-cols-2 gap-2">
+                                              <div>
+                                                <label className="block text-xs text-gray-600 mb-0.5">Коэф. расхода</label>
+                                                <input
+                                                  type="number"
+                                                  step="0.0001"
+                                                  value={editFormData.consumption_coefficient || ''}
+                                                  onChange={(e) => setEditFormData({...editFormData, consumption_coefficient: e.target.value ? parseFloat(e.target.value) : undefined})}
+                                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                                                  placeholder="1.0000"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="block text-xs text-gray-600 mb-0.5">Коэф. перевода</label>
+                                                <input
+                                                  type="number"
+                                                  step="0.0001"
+                                                  value={editFormData.conversion_coefficient || ''}
+                                                  onChange={(e) => setEditFormData({...editFormData, conversion_coefficient: e.target.value ? parseFloat(e.target.value) : undefined})}
+                                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                                                  placeholder="1.0000"
+                                                />
+                                              </div>
                                             </div>
-                                            
-                                            {/* Доставка */}
-                                            <div className="flex items-center gap-2">
-                                              <label className="text-xs text-gray-600 w-24">Доставка:</label>
-                                              <select
-                                                value={editFormData.delivery_price_type}
-                                                onChange={(e) => setEditFormData({...editFormData, delivery_price_type: e.target.value as 'included' | 'not_included' | 'amount'})}
-                                                className="px-2 py-1 text-sm border border-gray-300 rounded"
-                                              >
-                                                <option value="included">В цене</option>
-                                                <option value="not_included">Не в цене</option>
-                                                <option value="amount">Суммой</option>
-                                              </select>
+                                            {/* Поля доставки */}
+                                            <div className="grid grid-cols-2 gap-2">
+                                              <div>
+                                                <label className="block text-xs text-gray-600 mb-0.5">Тип доставки</label>
+                                                <select
+                                                  value={editFormData.delivery_price_type || 'included'}
+                                                  onChange={(e) => setEditFormData({...editFormData, delivery_price_type: e.target.value as any})}
+                                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                                                >
+                                                  <option value="included">В цене</option>
+                                                  <option value="not_included">Не в цене</option>
+                                                  <option value="amount">Суммой</option>
+                                                </select>
+                                              </div>
                                               {editFormData.delivery_price_type === 'amount' && (
-                                                <>
+                                                <div>
+                                                  <label className="block text-xs text-gray-600 mb-0.5">Сумма доставки</label>
                                                   <input
                                                     type="number"
-                                                    value={editFormData.delivery_amount}
-                                                    onChange={(e) => setEditFormData({...editFormData, delivery_amount: parseFloat(e.target.value) || 0})}
-                                                    className="w-32 px-2 py-1 text-sm border border-gray-300 rounded"
-                                                    placeholder="0.00"
                                                     step="0.01"
+                                                    value={editFormData.delivery_amount || ''}
+                                                    onChange={(e) => setEditFormData({...editFormData, delivery_amount: e.target.value ? parseFloat(e.target.value) : 0})}
+                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                                                    placeholder="0.00"
                                                   />
-                                                  <span className="text-sm">₽</span>
-                                                </>
+                                                </div>
                                               )}
                                             </div>
-                                            
-                                            {/* Кнопки сохранения/отмены */}
-                                            <div className="flex justify-end gap-2 pt-2 border-t">
+                                            <div className="flex justify-end gap-2">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleSaveEdit();
+                                                }}
+                                                className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+                                              >
+                                                Сохранить
+                                              </button>
                                               <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   setEditingItem(null);
                                                 }}
-                                                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                                                className="px-3 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
                                               >
                                                 Отмена
                                               </button>
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleUpdateBOQItem();
-                                                }}
-                                                className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-                                              >
-                                                Сохранить
-                                              </button>
                                             </div>
                                           </div>
-                                        ) : (
-                                          <>
-                                            <div className="flex-1">
-                                              <div className="flex items-center gap-2">
-                                                <span className="text-sm font-medium">{subItem.description}</span>
-                                                <span className="text-xs text-gray-500">
-                                                  {subItem.quantity} {subItem.unit}
-                                                </span>
-                                                {subItem.consumption_coefficient && subItem.consumption_coefficient !== 1 && (
-                                                  <span className="text-xs text-gray-500">К.расх: {subItem.consumption_coefficient}</span>
-                                                )}
-                                                {subItem.conversion_coefficient && subItem.conversion_coefficient !== 1 && (
-                                                  <span className="text-xs text-gray-500">К.пер: {subItem.conversion_coefficient}</span>
-                                                )}
-                                              </div>
-                                              <div className="text-xs text-gray-600 mt-1">
-                                                Цена: {formatCurrency(subItem.unit_rate || 0)}/{subItem.unit}
-                                              </div>
-                                            </div>
+                                        </div>
+                                      ) : (
+                                        // Обычное отображение несвязанного материала
+                                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 transition-colors mb-1">
+                                          <div className="flex-1">
                                             <div className="flex items-center gap-2">
-                                              <span className="text-sm font-semibold text-blue-600">
-                                                {formatCurrency(subItem.total_amount || 0)}
+                                              <span className="text-sm font-medium">{subItem.description}</span>
+                                              <span className="text-xs text-gray-500">
+                                                {subItem.quantity} {subItem.unit}
                                               </span>
-                                              <Tooltip title="Привязать к работе">
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openMoveModal(
-                                                      subItem.id,
-                                                      subItem.description || '',
-                                                      null,
-                                                      false
-                                                    );
-                                                  }}
-                                                  className="text-purple-500 hover:text-purple-700 p-1 transition-colors"
-                                                >
-                                                  <LinkOutlined style={{ fontSize: '14px' }} />
-                                                </button>
-                                              </Tooltip>
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  updateSubItem(subItem);
-                                                }}
-                                                className="text-blue-500 hover:text-blue-700 p-1"
-                                              >
-                                                <EditOutlined style={{ fontSize: '14px' }} />
-                                              </button>
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  removeSubItem(position.id, subItem.id);
-                                                }}
-                                                className="text-red-500 hover:text-red-700 p-1"
-                                              >
-                                                <CloseOutlined style={{ fontSize: '14px' }} />
-                                              </button>
+                                              {subItem.consumption_coefficient && subItem.consumption_coefficient !== 1 && (
+                                                <span className="text-xs text-gray-500">К.расх: {subItem.consumption_coefficient}</span>
+                                              )}
+                                              {subItem.conversion_coefficient && subItem.conversion_coefficient !== 1 && (
+                                                <span className="text-xs text-gray-500">К.пер: {subItem.conversion_coefficient}</span>
+                                              )}
+                                              {subItem.delivery_price_type === 'amount' && subItem.delivery_amount && (
+                                                <span className="text-xs text-gray-500">Дост: {formatCurrency(subItem.delivery_amount)}</span>
+                                              )}
                                             </div>
-                                          </>
-                                        )}
-                                      </div>
+                                            <div className="text-xs text-gray-600 mt-1">
+                                              Цена: {formatCurrency(subItem.unit_rate || 0)}/{subItem.unit}
+                                              {subItem.delivery_price_type === 'amount' && subItem.delivery_amount && (
+                                                <span className="ml-2">
+                                                  (с доставкой: {formatCurrency((subItem.unit_rate || 0) + (subItem.delivery_amount || 0))})
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm font-semibold text-blue-600">
+                                              {formatCurrency(subItem.total_amount || 0)}
+                                            </span>
+                                            <Tooltip title="Привязать к работе">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  openMoveModal(
+                                                    subItem.id,
+                                                    subItem.description || '',
+                                                    null,
+                                                    false
+                                                  );
+                                                }}
+                                                className="text-purple-500 hover:text-purple-700 p-1 transition-colors"
+                                              >
+                                                <LinkOutlined style={{ fontSize: '14px' }} />
+                                              </button>
+                                            </Tooltip>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                updateSubItem(subItem);
+                                              }}
+                                              className="text-blue-500 hover:text-blue-700 p-1"
+                                            >
+                                              <EditOutlined style={{ fontSize: '14px' }} />
+                                            </button>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                removeSubItem(position.id, subItem.id);
+                                              }}
+                                              className="text-red-500 hover:text-red-700 p-1"
+                                            >
+                                              <CloseOutlined style={{ fontSize: '14px' }} />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )
                                     )}
                               </div>
                               );
                             })}
-                              </div>
+                          </div>
                         </div>
                       )}
 
@@ -2180,39 +2227,37 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
 
                         {/* Поля доставки для материалов */}
                         {formData.type === 'material' && (
-                          <div className="mt-2">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                                Тип доставки
+                              </label>
+                              <select
+                                value={formData.deliveryPriceType}
+                                onChange={(e) => handleInputChange('deliveryPriceType', e.target.value)}
+                                className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                              >
+                                <option value="included">В цене</option>
+                                <option value="not_included">Не в цене</option>
+                                <option value="amount">Суммой</option>
+                              </select>
+                            </div>
+
+                            {formData.deliveryPriceType === 'amount' && (
                               <div>
                                 <label className="block text-xs font-medium text-gray-600 mb-0.5">
-                                  Цена доставки
+                                  Сумма доставки за единицу
                                 </label>
-                                <select
-                                  value={formData.deliveryPriceType}
-                                  onChange={(e) => handleInputChange('deliveryPriceType', e.target.value)}
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={formData.deliveryAmount}
+                                  onChange={(e) => handleInputChange('deliveryAmount', e.target.value)}
+                                  placeholder="0.00"
                                   className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                >
-                                  <option value="included">В цене</option>
-                                  <option value="not_included">Не в цене</option>
-                                  <option value="amount">Суммой</option>
-                                </select>
+                                />
                               </div>
-
-                              {formData.deliveryPriceType === 'amount' && (
-                                <div>
-                                  <label className="block text-xs font-medium text-gray-600 mb-0.5">
-                                    Сумма доставки (₽)
-                                  </label>
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    value={formData.deliveryAmount}
-                                    onChange={(e) => handleInputChange('deliveryAmount', e.target.value)}
-                                    placeholder="0.00"
-                                    className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                  />
-                                </div>
-                              )}
-                            </div>
+                            )}
                           </div>
                         )}
 
@@ -2221,11 +2266,20 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                           <div className="mt-2 p-2 bg-blue-50 rounded">
                             <div className="flex justify-between items-center text-xs">
                               <span className="font-medium text-blue-900">
-                                {formData.type === 'material' ? 'Цена за единицу:' : 'Стоимость:'}
+                                {formData.type === 'material' 
+                                  ? (formData.deliveryPriceType === 'amount' && formData.deliveryAmount 
+                                    ? 'Цена с доставкой:' 
+                                    : 'Цена за единицу:')
+                                  : 'Стоимость:'}
                               </span>
                               <span className="font-bold text-blue-600">
                                 {formData.type === 'material' 
-                                  ? formatCurrency(parseFloat(formData.price || '0'))
+                                  ? formatCurrency(
+                                      parseFloat(formData.price || '0') + 
+                                      (formData.deliveryPriceType === 'amount' 
+                                        ? parseFloat(formData.deliveryAmount || '0') 
+                                        : 0)
+                                    )
                                   : formatCurrency(parseFloat(formData.quantity || '0') * parseFloat(formData.price || '0'))}
                               </span>
                             </div>

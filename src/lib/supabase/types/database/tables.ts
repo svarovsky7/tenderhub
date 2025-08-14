@@ -27,6 +27,8 @@ export type DatabaseTables = {
       category?: string | null;
       subcategory?: string | null;
       notes?: string | null;
+      delivery_price_type?: 'included' | 'not_included' | 'amount' | null;
+      delivery_amount?: number | null;
       created_at: string;
       updated_at: string;
       imported_at: string | null;
@@ -50,6 +52,8 @@ export type DatabaseTables = {
       category?: string | null;
       subcategory?: string | null;
       notes?: string | null;
+      delivery_price_type?: 'included' | 'not_included' | 'amount' | null;
+      delivery_amount?: number | null;
       imported_at?: string | null;
       created_at?: string;
       updated_at?: string;
@@ -73,6 +77,8 @@ export type DatabaseTables = {
       category?: string | null;
       subcategory?: string | null;
       notes?: string | null;
+      delivery_price_type?: 'included' | 'not_included' | 'amount' | null;
+      delivery_amount?: number | null;
       imported_at?: string | null;
       created_at?: string;
       updated_at?: string;

@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-08-08T05:16:57.091799
+-- Generated: 2025-08-14T17:34:49.266443
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -188,13 +188,11 @@ CREATE TABLE IF NOT EXISTS auth.saml_relay_states (
 COMMENT ON TABLE auth.saml_relay_states IS 'Auth: Contains SAML Relay State information for each Service Provider initiated login.';
 
 -- Table: auth.schema_migrations
--- Description: Auth: Manages updates to the auth system.
 CREATE TABLE IF NOT EXISTS auth.schema_migrations (
     version character varying(255) NOT NULL,
     version character varying(255) NOT NULL,
     version character varying(255) NOT NULL
 );
-COMMENT ON TABLE auth.schema_migrations IS 'Auth: Manages updates to the auth system.';
 
 -- Table: auth.sessions
 -- Description: Auth: Stores session data associated to a user.
@@ -299,7 +297,6 @@ CREATE TABLE IF NOT EXISTS public.boq_items (
     unit text NOT NULL,
     quantity numeric(12,4) NOT NULL,
     unit_rate numeric(12,4) NOT NULL,
-    total_amount numeric(15,2),
     material_id uuid,
     work_id uuid,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -307,6 +304,9 @@ CREATE TABLE IF NOT EXISTS public.boq_items (
     imported_at timestamp with time zone,
     consumption_coefficient numeric(12,4),
     conversion_coefficient numeric(12,4),
+    delivery_price_type USER-DEFINED DEFAULT 'included'::delivery_price_type,
+    delivery_amount numeric(12,2) DEFAULT 0,
+    total_amount numeric(12,2),
     CONSTRAINT boq_items_client_position_id_fkey FOREIGN KEY (client_position_id) REFERENCES public.client_positions(id),
     CONSTRAINT boq_items_material_id_fkey FOREIGN KEY (material_id) REFERENCES public.materials_library(id),
     CONSTRAINT boq_items_pkey PRIMARY KEY (id),
@@ -327,6 +327,9 @@ COMMENT ON COLUMN public.boq_items.sub_number IS 'Sequential sub-number within c
 COMMENT ON COLUMN public.boq_items.sort_order IS 'Порядок сортировки внутри позиции заказчика';
 COMMENT ON COLUMN public.boq_items.consumption_coefficient IS 'Коэффициент расхода материала';
 COMMENT ON COLUMN public.boq_items.conversion_coefficient IS 'Коэффициент перевода единицы измерения материала';
+COMMENT ON COLUMN public.boq_items.delivery_price_type IS 'Тип цены доставки материала: included (в цене), not_included (не в цене), amount (сумма)';
+COMMENT ON COLUMN public.boq_items.delivery_amount IS 'Сумма доставки материала (используется только при delivery_price_type = amount)';
+COMMENT ON COLUMN public.boq_items.total_amount IS 'Общая стоимость элемента BOQ (автоматически рассчитывается с учетом доставки для материалов)';
 
 -- Table: public.client_positions
 -- Description: Позиции заказчика из Excel файла - верхний уровень группировки в BOQ
@@ -360,6 +363,67 @@ COMMENT ON COLUMN public.client_positions.item_no IS 'Номер пункта и
 COMMENT ON COLUMN public.client_positions.work_name IS 'Наименование работ из Excel';
 COMMENT ON COLUMN public.client_positions.manual_volume IS 'Объём работ, заданный вручную';
 
+-- Table: public.cost_categories
+CREATE TABLE IF NOT EXISTS public.cost_categories (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    name text NOT NULL,
+    description text,
+    created_at timestamp with time zone DEFAULT now(),
+    code text,
+    unit text,
+    CONSTRAINT cost_categories_pkey PRIMARY KEY (id)
+);
+
+-- Table: public.cost_nodes
+CREATE TABLE IF NOT EXISTS public.cost_nodes (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    parent_id uuid,
+    kind text NOT NULL,
+    name text NOT NULL,
+    code text,
+    unit_id uuid,
+    location_id uuid,
+    sort_order integer(32) NOT NULL DEFAULT 100,
+    path USER-DEFINED NOT NULL,
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT cost_nodes_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.location(id),
+    CONSTRAINT cost_nodes_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.cost_nodes(id),
+    CONSTRAINT cost_nodes_pkey PRIMARY KEY (id),
+    CONSTRAINT cost_nodes_unit_id_fkey FOREIGN KEY (unit_id) REFERENCES public.units(id),
+    CONSTRAINT uq_cost_nodes_sibling UNIQUE (parent_id),
+    CONSTRAINT uq_cost_nodes_sibling UNIQUE (parent_id),
+    CONSTRAINT uq_cost_nodes_sibling UNIQUE (name),
+    CONSTRAINT uq_cost_nodes_sibling UNIQUE (name)
+);
+
+-- Table: public.detail_cost_categories
+CREATE TABLE IF NOT EXISTS public.detail_cost_categories (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    cost_category_id uuid NOT NULL,
+    location_id uuid NOT NULL,
+    name text NOT NULL,
+    unit_cost numeric(12,2),
+    created_at timestamp with time zone DEFAULT now(),
+    unit text,
+    CONSTRAINT detail_cost_categories_cost_category_id_fkey FOREIGN KEY (cost_category_id) REFERENCES public.cost_categories(id),
+    CONSTRAINT detail_cost_categories_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.location(id),
+    CONSTRAINT detail_cost_categories_pkey PRIMARY KEY (id)
+);
+
+-- Table: public.location
+CREATE TABLE IF NOT EXISTS public.location (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    country text,
+    region text,
+    city text,
+    created_at timestamp with time zone DEFAULT now(),
+    code text,
+    title text,
+    CONSTRAINT location_pkey PRIMARY KEY (id)
+);
+
 -- Table: public.materials_library
 -- Description: Master catalog of materials with pricing
 CREATE TABLE IF NOT EXISTS public.materials_library (
@@ -373,6 +437,27 @@ CREATE TABLE IF NOT EXISTS public.materials_library (
     CONSTRAINT materials_library_pkey PRIMARY KEY (id)
 );
 COMMENT ON TABLE public.materials_library IS 'Master catalog of materials with pricing';
+
+-- Table: public.tender_items
+CREATE TABLE IF NOT EXISTS public.tender_items (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    tender_id uuid NOT NULL,
+    node_id uuid,
+    name_snapshot text NOT NULL,
+    unit_id uuid,
+    location_id uuid,
+    qty numeric(18,3) NOT NULL DEFAULT 0,
+    unit_price numeric(18,2) NOT NULL DEFAULT 0,
+    amount numeric(18,2),
+    note text,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT tender_items_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.location(id),
+    CONSTRAINT tender_items_node_id_fkey FOREIGN KEY (node_id) REFERENCES public.cost_nodes(id),
+    CONSTRAINT tender_items_pkey PRIMARY KEY (id),
+    CONSTRAINT tender_items_tender_id_fkey FOREIGN KEY (tender_id) REFERENCES public.tenders(id),
+    CONSTRAINT tender_items_unit_id_fkey FOREIGN KEY (unit_id) REFERENCES public.units(id)
+);
 
 -- Table: public.tenders
 -- Description: Main tender projects with client details
@@ -390,18 +475,29 @@ CREATE TABLE IF NOT EXISTS public.tenders (
 );
 COMMENT ON TABLE public.tenders IS 'Main tender projects with client details';
 
+-- Table: public.units
+CREATE TABLE IF NOT EXISTS public.units (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    code text NOT NULL,
+    title text NOT NULL,
+    CONSTRAINT units_code_key UNIQUE (code),
+    CONSTRAINT units_pkey PRIMARY KEY (id)
+);
+
 -- Table: public.work_material_links
--- Description: Связи между работами и материалами в позициях ВОРа заказчика
+-- Description: Связи между работами и материалами. Расчет объемов материалов производится через коэффициенты в таблице boq_items
 CREATE TABLE IF NOT EXISTS public.work_material_links (
     id uuid NOT NULL DEFAULT uuid_generate_v4(),
     client_position_id uuid NOT NULL,
     work_boq_item_id uuid NOT NULL,
     material_boq_item_id uuid NOT NULL,
-    material_quantity_per_work numeric(12,4) DEFAULT 1.0000,
-    usage_coefficient numeric(12,4) DEFAULT 1.0000,
     notes text,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    material_quantity_per_work numeric(12,4) DEFAULT 1.0000,
+    usage_coefficient numeric(12,4) DEFAULT 1.0000,
+    delivery_price_type USER-DEFINED DEFAULT 'included'::delivery_price_type,
+    delivery_amount numeric(12,2) DEFAULT 0,
     CONSTRAINT fk_work_material_links_material FOREIGN KEY (material_boq_item_id) REFERENCES public.boq_items(id),
     CONSTRAINT fk_work_material_links_position FOREIGN KEY (client_position_id) REFERENCES public.client_positions(id),
     CONSTRAINT fk_work_material_links_work FOREIGN KEY (work_boq_item_id) REFERENCES public.boq_items(id),
@@ -411,13 +507,15 @@ CREATE TABLE IF NOT EXISTS public.work_material_links (
     CONSTRAINT uq_work_material_link UNIQUE (material_boq_item_id),
     CONSTRAINT work_material_links_pkey PRIMARY KEY (id)
 );
-COMMENT ON TABLE public.work_material_links IS 'Связи между работами и материалами в позициях ВОРа заказчика';
+COMMENT ON TABLE public.work_material_links IS 'Связи между работами и материалами. Расчет объемов материалов производится через коэффициенты в таблице boq_items';
 COMMENT ON COLUMN public.work_material_links.client_position_id IS 'ID позиции заказчика, в которой находятся связываемые работы и материалы';
 COMMENT ON COLUMN public.work_material_links.work_boq_item_id IS 'ID элемента BOQ типа work (работа)';
 COMMENT ON COLUMN public.work_material_links.material_boq_item_id IS 'ID элемента BOQ типа material (материал)';
+COMMENT ON COLUMN public.work_material_links.notes IS 'Примечания к связи работы и материала';
 COMMENT ON COLUMN public.work_material_links.material_quantity_per_work IS 'Количество материала, необходимое на единицу работы';
 COMMENT ON COLUMN public.work_material_links.usage_coefficient IS 'Коэффициент использования материала в работе';
-COMMENT ON COLUMN public.work_material_links.notes IS 'Примечания к связи работы и материала';
+COMMENT ON COLUMN public.work_material_links.delivery_price_type IS 'Тип цены доставки: included (в цене), not_included (не в цене), amount (сумма)';
+COMMENT ON COLUMN public.work_material_links.delivery_amount IS 'Сумма доставки (используется только при delivery_price_type = amount)';
 
 -- Table: public.works_library
 -- Description: Master catalog of work items with labor components
@@ -572,6 +670,7 @@ CREATE TABLE IF NOT EXISTS storage.s3_multipart_uploads_parts (
 );
 
 -- Table: supabase_migrations.schema_migrations
+-- Description: Auth: Manages updates to the auth system.
 CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
     version text NOT NULL,
     version text NOT NULL,
@@ -584,6 +683,7 @@ CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
     name text,
     CONSTRAINT schema_migrations_pkey PRIMARY KEY (version)
 );
+COMMENT ON TABLE supabase_migrations.schema_migrations IS 'Auth: Manages updates to the auth system.';
 
 -- Table: supabase_migrations.seed_files
 CREATE TABLE IF NOT EXISTS supabase_migrations.seed_files (
@@ -625,6 +725,8 @@ CREATE TYPE auth.one_time_token_type AS ENUM ('confirmation_token', 'reauthentic
 CREATE TYPE public.boq_item_type AS ENUM ('work', 'material');
 
 CREATE TYPE public.client_position_status AS ENUM ('active', 'inactive', 'completed');
+
+CREATE TYPE public.delivery_price_type AS ENUM ('included', 'not_included', 'amount');
 
 CREATE TYPE public.tender_status AS ENUM ('draft', 'active', 'submitted', 'awarded', 'closed');
 
@@ -698,6 +800,29 @@ CREATE OR REPLACE VIEW extensions.pg_stat_statements_info AS
     stats_reset
    FROM pg_stat_statements_info() pg_stat_statements_info(dealloc, stats_reset);
 
+-- View: public.vw_cost_categories
+CREATE OR REPLACE VIEW public.vw_cost_categories AS
+ SELECT id,
+    name,
+    sort_order,
+    path,
+    is_active
+   FROM cost_nodes
+  WHERE (kind = 'group'::text);
+
+-- View: public.vw_detail_cost_categories
+CREATE OR REPLACE VIEW public.vw_detail_cost_categories AS
+ SELECT id,
+    parent_id AS category_id,
+    name,
+    unit_id,
+    location_id,
+    sort_order,
+    path,
+    is_active
+   FROM cost_nodes
+  WHERE (kind = 'item'::text);
+
 -- View: public.work_material_links_detailed
 CREATE OR REPLACE VIEW public.work_material_links_detailed AS
  SELECT wml.id,
@@ -706,6 +831,8 @@ CREATE OR REPLACE VIEW public.work_material_links_detailed AS
     wml.material_boq_item_id,
     wml.material_quantity_per_work,
     wml.usage_coefficient,
+    wml.delivery_price_type AS link_delivery_price_type,
+    wml.delivery_amount AS link_delivery_amount,
     wml.notes,
     wml.created_at,
     wml.updated_at,
@@ -726,13 +853,20 @@ CREATE OR REPLACE VIEW public.work_material_links_detailed AS
     m.total_amount AS material_total_amount,
     m.consumption_coefficient AS material_consumption_coefficient,
     m.conversion_coefficient AS material_conversion_coefficient,
-    ((w.quantity * wml.material_quantity_per_work) * wml.usage_coefficient) AS total_material_needed,
-    (((w.quantity * wml.material_quantity_per_work) * wml.usage_coefficient) * m.unit_rate) AS total_material_cost
+    m.delivery_price_type AS material_delivery_price_type,
+    m.delivery_amount AS material_delivery_amount,
+    COALESCE(wml.delivery_price_type, m.delivery_price_type, 'included'::delivery_price_type) AS effective_delivery_type,
+    COALESCE(wml.delivery_amount, m.delivery_amount, (0)::numeric) AS effective_delivery_amount,
+    ((COALESCE(w.quantity, (0)::numeric) * COALESCE(m.consumption_coefficient, (1)::numeric)) * COALESCE(m.conversion_coefficient, (1)::numeric)) AS total_material_needed,
+    (((COALESCE(w.quantity, (0)::numeric) * COALESCE(m.consumption_coefficient, (1)::numeric)) * COALESCE(m.conversion_coefficient, (1)::numeric)) * COALESCE(m.unit_rate, (0)::numeric)) AS total_material_cost,
+        CASE
+            WHEN ((COALESCE(wml.delivery_price_type, m.delivery_price_type) = 'amount'::delivery_price_type) AND (COALESCE(wml.delivery_amount, m.delivery_amount, (0)::numeric) > (0)::numeric)) THEN (((COALESCE(w.quantity, (0)::numeric) * COALESCE(m.consumption_coefficient, (1)::numeric)) * COALESCE(m.conversion_coefficient, (1)::numeric)) * (COALESCE(m.unit_rate, (0)::numeric) + COALESCE(wml.delivery_amount, m.delivery_amount, (0)::numeric)))
+            ELSE (((COALESCE(w.quantity, (0)::numeric) * COALESCE(m.consumption_coefficient, (1)::numeric)) * COALESCE(m.conversion_coefficient, (1)::numeric)) * COALESCE(m.unit_rate, (0)::numeric))
+        END AS calculated_total
    FROM (((work_material_links wml
-     JOIN client_positions cp ON ((wml.client_position_id = cp.id)))
-     JOIN boq_items w ON ((wml.work_boq_item_id = w.id)))
-     JOIN boq_items m ON ((wml.material_boq_item_id = m.id)))
-  WHERE ((w.item_type = 'work'::boq_item_type) AND (m.item_type = 'material'::boq_item_type));
+     LEFT JOIN client_positions cp ON ((wml.client_position_id = cp.id)))
+     LEFT JOIN boq_items w ON ((wml.work_boq_item_id = w.id)))
+     LEFT JOIN boq_items m ON ((wml.material_boq_item_id = m.id)));
 
 -- View: vault.decrypted_secrets
 CREATE OR REPLACE VIEW vault.decrypted_secrets AS
@@ -812,7 +946,7 @@ $function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
+CREATE OR REPLACE FUNCTION extensions.armor(bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -820,7 +954,7 @@ AS '$libdir/pgcrypto', $function$pg_armor$function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea)
+CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -860,7 +994,7 @@ AS '$libdir/pgcrypto', $function$pg_decrypt_iv$function$
 
 
 -- Function: extensions.digest
-CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.digest(text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -868,7 +1002,7 @@ AS '$libdir/pgcrypto', $function$pg_digest$function$
 
 
 -- Function: extensions.digest
-CREATE OR REPLACE FUNCTION extensions.digest(text, text)
+CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1067,7 +1201,7 @@ $function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1075,7 +1209,7 @@ AS '$libdir/pgcrypto', $function$pg_hmac$function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1123,7 +1257,7 @@ AS '$libdir/pgcrypto', $function$pgp_key_id_w$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1131,7 +1265,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1147,14 +1281,6 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text, text)
- RETURNS bytea
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
-
-
--- Function: extensions.pgp_pub_decrypt_bytea
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
  RETURNS bytea
  LANGUAGE c
@@ -1164,6 +1290,14 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 -- Function: extensions.pgp_pub_decrypt_bytea
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
+
+
+-- Function: extensions.pgp_pub_decrypt_bytea
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1187,7 +1321,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1195,7 +1329,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1235,14 +1369,6 @@ AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
- RETURNS bytea
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
-
-
--- Function: extensions.pgp_sym_encrypt
 CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
  RETURNS bytea
  LANGUAGE c
@@ -1250,8 +1376,16 @@ CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
 AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
 
 
+-- Function: extensions.pgp_sym_encrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
+ RETURNS bytea
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
+
+
 -- Function: extensions.pgp_sym_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1259,7 +1393,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1586,6 +1720,265 @@ end;
 $function$
 
 
+-- Function: public._calc_path
+CREATE OR REPLACE FUNCTION public._calc_path(p_parent uuid, p_pos integer)
+ RETURNS ltree
+ LANGUAGE plpgsql
+AS $function$
+declare parent_path ltree;
+begin
+  if p_parent is null then
+    return (_make_label(p_pos))::ltree;
+  end if;
+  select path into parent_path from public.cost_nodes where id = p_parent;
+  if parent_path is null then
+    raise exception 'Parent % not found', p_parent;
+  end if;
+  return parent_path || (_make_label(p_pos))::ltree;
+end $function$
+
+
+-- Function: public._lt_q_regex
+CREATE OR REPLACE FUNCTION public._lt_q_regex(ltree[], lquery[])
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_lt_q_regex$function$
+
+
+-- Function: public._lt_q_rregex
+CREATE OR REPLACE FUNCTION public._lt_q_rregex(lquery[], ltree[])
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_lt_q_rregex$function$
+
+
+-- Function: public._ltq_extract_regex
+CREATE OR REPLACE FUNCTION public._ltq_extract_regex(ltree[], lquery)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltq_extract_regex$function$
+
+
+-- Function: public._ltq_regex
+CREATE OR REPLACE FUNCTION public._ltq_regex(ltree[], lquery)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltq_regex$function$
+
+
+-- Function: public._ltq_rregex
+CREATE OR REPLACE FUNCTION public._ltq_rregex(lquery, ltree[])
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltq_rregex$function$
+
+
+-- Function: public._ltree_compress
+CREATE OR REPLACE FUNCTION public._ltree_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltree_compress$function$
+
+
+-- Function: public._ltree_consistent
+CREATE OR REPLACE FUNCTION public._ltree_consistent(internal, ltree[], smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltree_consistent$function$
+
+
+-- Function: public._ltree_extract_isparent
+CREATE OR REPLACE FUNCTION public._ltree_extract_isparent(ltree[], ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltree_extract_isparent$function$
+
+
+-- Function: public._ltree_extract_risparent
+CREATE OR REPLACE FUNCTION public._ltree_extract_risparent(ltree[], ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltree_extract_risparent$function$
+
+
+-- Function: public._ltree_gist_options
+CREATE OR REPLACE FUNCTION public._ltree_gist_options(internal)
+ RETURNS void
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE
+AS '$libdir/ltree', $function$_ltree_gist_options$function$
+
+
+-- Function: public._ltree_isparent
+CREATE OR REPLACE FUNCTION public._ltree_isparent(ltree[], ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltree_isparent$function$
+
+
+-- Function: public._ltree_penalty
+CREATE OR REPLACE FUNCTION public._ltree_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltree_penalty$function$
+
+
+-- Function: public._ltree_picksplit
+CREATE OR REPLACE FUNCTION public._ltree_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltree_picksplit$function$
+
+
+-- Function: public._ltree_r_isparent
+CREATE OR REPLACE FUNCTION public._ltree_r_isparent(ltree, ltree[])
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltree_r_isparent$function$
+
+
+-- Function: public._ltree_r_risparent
+CREATE OR REPLACE FUNCTION public._ltree_r_risparent(ltree, ltree[])
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltree_r_risparent$function$
+
+
+-- Function: public._ltree_risparent
+CREATE OR REPLACE FUNCTION public._ltree_risparent(ltree[], ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltree_risparent$function$
+
+
+-- Function: public._ltree_same
+CREATE OR REPLACE FUNCTION public._ltree_same(ltree_gist, ltree_gist, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltree_same$function$
+
+
+-- Function: public._ltree_union
+CREATE OR REPLACE FUNCTION public._ltree_union(internal, internal)
+ RETURNS ltree_gist
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltree_union$function$
+
+
+-- Function: public._ltxtq_exec
+CREATE OR REPLACE FUNCTION public._ltxtq_exec(ltree[], ltxtquery)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltxtq_exec$function$
+
+
+-- Function: public._ltxtq_extract_exec
+CREATE OR REPLACE FUNCTION public._ltxtq_extract_exec(ltree[], ltxtquery)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltxtq_extract_exec$function$
+
+
+-- Function: public._ltxtq_rexec
+CREATE OR REPLACE FUNCTION public._ltxtq_rexec(ltxtquery, ltree[])
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_ltxtq_rexec$function$
+
+
+-- Function: public._make_label
+CREATE OR REPLACE FUNCTION public._make_label(pos integer)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+AS $function$
+  select 'n' || lpad(coalesce(pos,0)::text, 4, '0')
+$function$
+
+
+-- Function: public.apply_temp_mappings
+CREATE OR REPLACE FUNCTION public.apply_temp_mappings()
+ RETURNS TABLE(detail_code character varying, location_code character varying, status text, mapping_id uuid)
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_row RECORD;
+    v_detail_id UUID;
+    v_location_id UUID;
+    v_mapping_id UUID;
+    v_status TEXT;
+BEGIN
+    FOR v_row IN 
+        SELECT * FROM public.temp_mapping_fix 
+        WHERE NOT processed
+    LOOP
+        -- Находим detail_id
+        SELECT id INTO v_detail_id
+        FROM public.detail_cost_categories
+        WHERE code = v_row.detail_code
+        LIMIT 1;
+        
+        -- Находим location_id
+        SELECT id INTO v_location_id
+        FROM public.location
+        WHERE code = v_row.location_code
+        OR name = v_row.location_name
+        LIMIT 1;
+        
+        IF v_detail_id IS NOT NULL AND v_location_id IS NOT NULL THEN
+            -- Создаем связь
+            v_mapping_id := create_category_location_mapping(
+                v_detail_id, 
+                v_location_id, 
+                v_row.quantity, 
+                v_row.unit_price
+            );
+            v_status := 'SUCCESS';
+            
+            -- Помечаем как обработанную
+            UPDATE public.temp_mapping_fix 
+            SET processed = true 
+            WHERE detail_code = v_row.detail_code 
+            AND location_code = v_row.location_code;
+        ELSE
+            v_status := CASE 
+                WHEN v_detail_id IS NULL AND v_location_id IS NULL THEN 'BOTH_NOT_FOUND'
+                WHEN v_detail_id IS NULL THEN 'DETAIL_NOT_FOUND'
+                ELSE 'LOCATION_NOT_FOUND'
+            END;
+            v_mapping_id := NULL;
+        END IF;
+        
+        RETURN QUERY SELECT 
+            v_row.detail_code::VARCHAR,
+            v_row.location_code::VARCHAR,
+            v_status,
+            v_mapping_id;
+    END LOOP;
+END;
+$function$
+
+
 -- Function: public.auto_assign_position_number
 CREATE OR REPLACE FUNCTION public.auto_assign_position_number()
  RETURNS trigger
@@ -1598,6 +1991,203 @@ BEGIN
   END IF;
   
   RETURN NEW;
+END;
+$function$
+
+
+-- Function: public.bulk_upsert_category_location_mappings
+-- Description: Массовая вставка/обновление связей категория-локация
+CREATE OR REPLACE FUNCTION public.bulk_upsert_category_location_mappings(p_mappings jsonb)
+ RETURNS TABLE(success_count integer, error_count integer)
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_success_count integer := 0;
+    v_error_count integer := 0;
+    v_mapping jsonb;
+BEGIN
+    -- Перебираем все маппинги из JSON массива
+    FOR v_mapping IN SELECT * FROM jsonb_array_elements(p_mappings)
+    LOOP
+        BEGIN
+            INSERT INTO public.category_location_mapping (
+                detail_category_id,
+                location_id,
+                quantity,
+                unit_price,
+                is_active
+            ) VALUES (
+                (v_mapping->>'detail_category_id')::uuid,
+                (v_mapping->>'location_id')::uuid,
+                COALESCE((v_mapping->>'quantity')::numeric, 0),
+                COALESCE((v_mapping->>'unit_price')::numeric, 0),
+                COALESCE((v_mapping->>'is_active')::boolean, true)
+            )
+            ON CONFLICT (detail_category_id, location_id) 
+            DO UPDATE SET
+                quantity = EXCLUDED.quantity,
+                unit_price = EXCLUDED.unit_price,
+                is_active = EXCLUDED.is_active,
+                updated_at = now();
+            
+            v_success_count := v_success_count + 1;
+        EXCEPTION
+            WHEN OTHERS THEN
+                v_error_count := v_error_count + 1;
+        END;
+    END LOOP;
+    
+    RETURN QUERY SELECT v_success_count, v_error_count;
+END;
+$function$
+
+
+-- Function: public.calculate_boq_item_total
+-- Description: Вспомогательная функция для расчета total_amount с учетом доставки
+CREATE OR REPLACE FUNCTION public.calculate_boq_item_total(p_item_type text, p_quantity numeric, p_unit_rate numeric, p_delivery_price_type delivery_price_type, p_delivery_amount numeric)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+BEGIN
+    IF p_item_type = 'material' THEN
+        IF p_delivery_price_type = 'amount' AND p_delivery_amount IS NOT NULL THEN
+            RETURN COALESCE(p_quantity, 1) * (COALESCE(p_unit_rate, 0) + COALESCE(p_delivery_amount, 0));
+        ELSE
+            RETURN COALESCE(p_quantity, 1) * COALESCE(p_unit_rate, 0);
+        END IF;
+    ELSE
+        RETURN COALESCE(p_quantity, 0) * COALESCE(p_unit_rate, 0);
+    END IF;
+END;
+$function$
+
+
+-- Function: public.calculate_tender_costs
+CREATE OR REPLACE FUNCTION public.calculate_tender_costs(p_tender_id uuid)
+ RETURNS TABLE(total_base numeric, total_with_markup numeric, total_by_category jsonb, total_by_location jsonb, items_count bigint)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    WITH tender_costs AS (
+        SELECT * FROM v_tender_costs
+        WHERE tender_id = p_tender_id
+        AND is_included = true
+    )
+    SELECT 
+        COALESCE(SUM(tc.base_final_price), 0) as total_base,
+        COALESCE(SUM(tc.final_price), 0) as total_with_markup,
+        COALESCE(
+            jsonb_object_agg(
+                tc.category_name,
+                tc.category_total
+            ) FILTER (WHERE tc.category_name IS NOT NULL),
+            '{}'::jsonb
+        ) as total_by_category,
+        COALESCE(
+            jsonb_object_agg(
+                tc.location_name,
+                tc.location_total
+            ) FILTER (WHERE tc.location_name IS NOT NULL),
+            '{}'::jsonb
+        ) as total_by_location,
+        COUNT(*) as items_count
+    FROM (
+        SELECT 
+            category_name,
+            location_name,
+            base_final_price,
+            final_price,
+            SUM(final_price) OVER (PARTITION BY category_name) as category_total,
+            SUM(final_price) OVER (PARTITION BY location_name) as location_total
+        FROM tender_costs
+    ) tc
+    GROUP BY tc.category_name, tc.location_name, tc.base_final_price, 
+             tc.final_price, tc.category_total, tc.location_total;
+END;
+$function$
+
+
+-- Function: public.check_boq_item_delivery_consistency
+CREATE OR REPLACE FUNCTION public.check_boq_item_delivery_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    -- Применяем только к материалам
+    IF NEW.item_type = 'material' THEN
+        -- Если тип доставки не "amount", то обнуляем сумму доставки
+        IF NEW.delivery_price_type != 'amount' THEN
+            NEW.delivery_amount := 0;
+        END IF;
+        
+        -- Если тип доставки "amount" и сумма не указана, устанавливаем 0
+        IF NEW.delivery_price_type = 'amount' AND NEW.delivery_amount IS NULL THEN
+            NEW.delivery_amount := 0;
+        END IF;
+    ELSE
+        -- Для работ обнуляем поля доставки
+        NEW.delivery_price_type := NULL;
+        NEW.delivery_amount := NULL;
+    END IF;
+    
+    RETURN NEW;
+END;
+$function$
+
+
+-- Function: public.check_delivery_consistency_boq
+CREATE OR REPLACE FUNCTION public.check_delivery_consistency_boq()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    -- Проверяем только для материалов
+    IF NEW.item_type = 'material' THEN
+        -- Если тип доставки не "amount", то обнуляем сумму доставки
+        IF NEW.delivery_price_type IS NOT NULL AND NEW.delivery_price_type::text != 'amount' THEN
+            NEW.delivery_amount := 0;
+        END IF;
+        
+        -- Если тип доставки "amount" и сумма не указана, устанавливаем 0
+        IF NEW.delivery_price_type IS NOT NULL AND NEW.delivery_price_type::text = 'amount' AND NEW.delivery_amount IS NULL THEN
+            NEW.delivery_amount := 0;
+        END IF;
+        
+        -- Если тип доставки не указан, устанавливаем по умолчанию
+        IF NEW.delivery_price_type IS NULL THEN
+            NEW.delivery_price_type := 'included'::delivery_price_type;
+            NEW.delivery_amount := 0;
+        END IF;
+    ELSE
+        -- Для работ всегда устанавливаем значения по умолчанию
+        NEW.delivery_price_type := 'included'::delivery_price_type;
+        NEW.delivery_amount := 0;
+    END IF;
+    
+    RETURN NEW;
+END;
+$function$
+
+
+-- Function: public.check_delivery_price_consistency
+CREATE OR REPLACE FUNCTION public.check_delivery_price_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    -- Если тип доставки не "amount", то обнуляем сумму доставки
+    IF NEW.delivery_price_type != 'amount' THEN
+        NEW.delivery_amount := 0;
+    END IF;
+    
+    -- Если тип доставки "amount" и сумма не указана, устанавливаем 0
+    IF NEW.delivery_price_type = 'amount' AND NEW.delivery_amount IS NULL THEN
+        NEW.delivery_amount := 0;
+    END IF;
+    
+    RETURN NEW;
 END;
 $function$
 
@@ -1642,10 +2232,285 @@ END;
 $function$
 
 
+-- Function: public.clear_all_category_location_mappings
+-- Description: Очищает все связи перед новым импортом
+CREATE OR REPLACE FUNCTION public.clear_all_category_location_mappings()
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    -- Удаляем все существующие маппинги
+    DELETE FROM public.category_location_mapping;
+    
+    -- Сбрасываем счетчики если нужно
+    -- PERFORM setval('category_location_mapping_id_seq', 1, false);
+END;
+$function$
+
+
+-- Function: public.cost_nodes_autosort
+CREATE OR REPLACE FUNCTION public.cost_nodes_autosort()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if new.sort_order is null then
+    select coalesce(max(sort_order),0)+10
+      into new.sort_order
+      from public.cost_nodes
+     where parent_id is not distinct from new.parent_id;
+  end if;
+  return new;
+end $function$
+
+
+-- Function: public.cost_nodes_before_ins_upd
+CREATE OR REPLACE FUNCTION public.cost_nodes_before_ins_upd()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.path := public._calc_path(new.parent_id, new.sort_order);
+  return new;
+end $function$
+
+
+-- Function: public.cost_nodes_repath_descendants
+CREATE OR REPLACE FUNCTION public.cost_nodes_repath_descendants()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+declare old_root ltree; new_root ltree;
+begin
+  old_root := old.path;
+  new_root := new.path;
+  if old_root <> new_root then
+    update public.cost_nodes c
+       set path = new_root || subpath(c.path, nlevel(old_root))
+     where c.path <@ old_root
+       and c.id <> new.id;
+  end if;
+  return null;
+end $function$
+
+
+-- Function: public.cost_nodes_set_timestamps
+CREATE OR REPLACE FUNCTION public.cost_nodes_set_timestamps()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at := now();
+  if tg_op = 'INSERT' then new.created_at := now(); end if;
+  return new;
+end $function$
+
+
+-- Function: public.find_location_id
+CREATE OR REPLACE FUNCTION public.find_location_id(p_identifier text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_location_id UUID;
+BEGIN
+    -- Сначала ищем по unique_code
+    SELECT id INTO v_location_id
+    FROM public.location
+    WHERE unique_code = UPPER(p_identifier)
+    AND is_active = true
+    LIMIT 1;
+    
+    -- Если не нашли, ищем по code
+    IF v_location_id IS NULL THEN
+        SELECT id INTO v_location_id
+        FROM public.location
+        WHERE code = UPPER(p_identifier)
+        AND is_active = true
+        LIMIT 1;
+    END IF;
+    
+    -- Если не нашли, ищем по имени
+    IF v_location_id IS NULL THEN
+        SELECT id INTO v_location_id
+        FROM public.location
+        WHERE LOWER(name) = LOWER(p_identifier)
+        AND is_active = true
+        ORDER BY sort_order
+        LIMIT 1;
+    END IF;
+    
+    RETURN v_location_id;
+END;
+$function$
+
+
+-- Function: public.generate_unique_location_code
+CREATE OR REPLACE FUNCTION public.generate_unique_location_code(p_name text, p_type text DEFAULT NULL::text)
+ RETURNS text
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_base_code TEXT;
+    v_unique_code TEXT;
+    v_counter INTEGER := 1;
+BEGIN
+    -- Генерируем базовый код из имени
+    v_base_code := UPPER(REGEXP_REPLACE(p_name, '[^А-Яа-яA-Za-z0-9]', '_', 'g'));
+    
+    -- Если указан тип, добавляем префикс
+    IF p_type IS NOT NULL THEN
+        v_base_code := UPPER(LEFT(p_type, 3)) || '_' || v_base_code;
+    END IF;
+    
+    -- Проверяем уникальность и добавляем номер при необходимости
+    v_unique_code := v_base_code;
+    
+    WHILE EXISTS (SELECT 1 FROM public.location WHERE code = v_unique_code) LOOP
+        v_unique_code := v_base_code || '_' || v_counter;
+        v_counter := v_counter + 1;
+    END LOOP;
+    
+    RETURN v_unique_code;
+END;
+$function$
+
+
+-- Function: public.get_cost_structure_mappings
+CREATE OR REPLACE FUNCTION public.get_cost_structure_mappings(p_category_id uuid DEFAULT NULL::uuid, p_detail_id uuid DEFAULT NULL::uuid, p_location_id uuid DEFAULT NULL::uuid)
+ RETURNS TABLE(mapping_id uuid, category_id uuid, category_name text, detail_id uuid, detail_name text, detail_unit text, location_id uuid, location_name text, quantity numeric, unit_price numeric, total_price numeric)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        clm.id as mapping_id,
+        cc.id as category_id,
+        cc.name as category_name,
+        dcc.id as detail_id,
+        dcc.name as detail_name,
+        dcc.unit as detail_unit,
+        l.id as location_id,
+        l.name as location_name,
+        clm.quantity,
+        clm.unit_price,
+        clm.quantity * clm.unit_price as total_price
+    FROM public.category_location_mapping clm
+    JOIN public.detail_cost_categories dcc ON dcc.id = clm.detail_category_id
+    JOIN public.cost_categories cc ON cc.id = dcc.category_id
+    JOIN public.location l ON l.id = clm.location_id
+    WHERE clm.is_active = true
+    AND (p_category_id IS NULL OR cc.id = p_category_id)
+    AND (p_detail_id IS NULL OR dcc.id = p_detail_id)
+    AND (p_location_id IS NULL OR l.id = p_location_id)
+    ORDER BY cc.sort_order, cc.name, dcc.sort_order, dcc.name, l.sort_order, l.name;
+END;
+$function$
+
+
+-- Function: public.get_location_hierarchy
+CREATE OR REPLACE FUNCTION public.get_location_hierarchy(p_location_id uuid DEFAULT NULL::uuid)
+ RETURNS TABLE(id uuid, code text, name text, parent_id uuid, level integer, path text[], children_count bigint)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    WITH RECURSIVE location_tree AS (
+        -- Базовый случай: корневые локации или конкретная локация
+        SELECT 
+            l.id,
+            l.code,
+            l.name,
+            l.parent_id,
+            l.level,
+            l.path,
+            (SELECT COUNT(*) FROM public.location WHERE parent_id = l.id) as children_count
+        FROM public.location l
+        WHERE 
+            CASE 
+                WHEN p_location_id IS NULL THEN l.parent_id IS NULL
+                ELSE l.id = p_location_id
+            END
+        
+        UNION ALL
+        
+        -- Рекурсивный случай: дочерние локации
+        SELECT 
+            l.id,
+            l.code,
+            l.name,
+            l.parent_id,
+            l.level,
+            l.path,
+            (SELECT COUNT(*) FROM public.location WHERE parent_id = l.id) as children_count
+        FROM public.location l
+        JOIN location_tree lt ON l.parent_id = lt.id
+    )
+    SELECT * FROM location_tree
+    ORDER BY level, sort_order, name;
+END;
+$function$
+
+
+-- Function: public.get_locations_for_detail_category
+-- Description: Получает все локации, связанные с детальной
+  категорией
+CREATE OR REPLACE FUNCTION public.get_locations_for_detail_category(p_detail_category_id uuid)
+ RETURNS TABLE(location_id uuid, location_name text, location_code text, location_description text, sort_order integer)
+ LANGUAGE plpgsql
+AS $function$
+  BEGIN
+      RETURN QUERY
+      SELECT
+          l.id as location_id,
+          l.name as location_name,
+          l.code as location_code,
+          l.description as location_description,
+          l.sort_order
+      FROM public.category_location_mapping clm
+      JOIN public.location l ON l.id = clm.location_id
+      WHERE clm.detail_category_id = p_detail_category_id
+      AND clm.is_active = true
+      AND l.is_active = true
+      ORDER BY l.sort_order, l.name;
+  END;
+  $function$
+
+
+-- Function: public.get_mapping_statistics
+-- Description: Возвращает статистику по связям
+CREATE OR REPLACE FUNCTION public.get_mapping_statistics()
+ RETURNS TABLE(total_categories bigint, total_detail_categories bigint, total_locations bigint, total_mappings bigint, categories_with_details bigint, details_with_locations bigint, avg_locations_per_detail numeric)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        (SELECT COUNT(*) FROM public.cost_categories WHERE is_active = true) as total_categories,
+        (SELECT COUNT(*) FROM public.detail_cost_categories WHERE is_active = true) as total_detail_categories,
+        (SELECT COUNT(*) FROM public.location WHERE is_active = true) as total_locations,
+        (SELECT COUNT(*) FROM public.category_location_mapping WHERE is_active = true) as total_mappings,
+        (SELECT COUNT(DISTINCT category_id) 
+         FROM public.detail_cost_categories 
+         WHERE is_active = true) as categories_with_details,
+        (SELECT COUNT(DISTINCT detail_category_id) 
+         FROM public.category_location_mapping 
+         WHERE is_active = true) as details_with_locations,
+        (SELECT AVG(location_count)::numeric(10,2)
+         FROM (
+             SELECT detail_category_id, COUNT(*) as location_count
+             FROM public.category_location_mapping
+             WHERE is_active = true
+             GROUP BY detail_category_id
+         ) t) as avg_locations_per_detail;
+END;
+$function$
+
+
 -- Function: public.get_materials_for_work
--- Description: Returns materials for work with correct formula: объем × коэф.перевода × коэф.расхода × стоимость
+-- Description: Возвращает материалы для работы с учетом доставки из связи или материала
 CREATE OR REPLACE FUNCTION public.get_materials_for_work(p_work_boq_item_id uuid)
- RETURNS TABLE(link_id uuid, material_id uuid, material_description text, material_unit text, material_quantity numeric, material_unit_rate numeric, quantity_per_work numeric, usage_coefficient numeric, conversion_coefficient numeric, total_needed numeric, total_cost numeric)
+ RETURNS TABLE(link_id uuid, material_id uuid, material_description text, material_unit text, material_quantity numeric, material_unit_rate numeric, quantity_per_work numeric, usage_coefficient numeric, consumption_coefficient numeric, conversion_coefficient numeric, total_needed numeric, total_cost numeric, delivery_price_type text, delivery_amount numeric)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -1657,13 +2522,25 @@ BEGIN
         m.unit AS material_unit,
         m.quantity AS material_quantity,
         m.unit_rate AS material_unit_rate,
-        wml.material_quantity_per_work AS quantity_per_work,
-        wml.usage_coefficient,
-        COALESCE(w.conversion_coefficient, 1) AS conversion_coefficient,
-        -- Corrected formula: объем × коэф.перевода × коэф.расхода
-        (w.quantity * COALESCE(w.conversion_coefficient, 1) * wml.usage_coefficient) AS total_needed,
-        -- Стоимость: объем × коэф.перевода × коэф.расхода × стоимость_за_единицу
-        (w.quantity * COALESCE(w.conversion_coefficient, 1) * wml.usage_coefficient * m.unit_rate) AS total_cost
+        wml.material_quantity_per_work AS quantity_per_work,  -- Возвращаем для совместимости
+        wml.usage_coefficient,  -- Возвращаем для совместимости
+        COALESCE(m.consumption_coefficient, 1) AS consumption_coefficient,
+        COALESCE(m.conversion_coefficient, 1) AS conversion_coefficient,
+        -- Правильная формула: объем работы × коэф.расхода × коэф.перевода
+        (w.quantity * COALESCE(m.consumption_coefficient, 1) * COALESCE(m.conversion_coefficient, 1)) AS total_needed,
+        -- Стоимость с учетом доставки (приоритет: связь > материал)
+        CASE 
+            WHEN COALESCE(wml.delivery_price_type, m.delivery_price_type) = 'amount' 
+                AND COALESCE(wml.delivery_amount, m.delivery_amount, 0) > 0 THEN
+                (w.quantity * COALESCE(m.consumption_coefficient, 1) * COALESCE(m.conversion_coefficient, 1) * 
+                (COALESCE(m.unit_rate, 0) + COALESCE(wml.delivery_amount, m.delivery_amount, 0)))
+            ELSE
+                (w.quantity * COALESCE(m.consumption_coefficient, 1) * COALESCE(m.conversion_coefficient, 1) * 
+                COALESCE(m.unit_rate, 0))
+        END AS total_cost,
+        -- Используем доставку из связи если она указана, иначе из материала
+        COALESCE(wml.delivery_price_type::text, m.delivery_price_type::text, 'included') AS delivery_price_type,
+        COALESCE(wml.delivery_amount, m.delivery_amount, 0) AS delivery_amount
     FROM public.work_material_links wml
     INNER JOIN public.boq_items w ON wml.work_boq_item_id = w.id
     INNER JOIN public.boq_items m ON wml.material_boq_item_id = m.id
@@ -1746,6 +2623,7 @@ $function$
 
 
 -- Function: public.get_works_using_material
+-- Description: Возвращает работы, использующие материал, с расчетом по коэффициентам материала
 CREATE OR REPLACE FUNCTION public.get_works_using_material(p_material_boq_item_id uuid)
  RETURNS TABLE(link_id uuid, work_id uuid, work_description text, work_unit text, work_quantity numeric, work_unit_rate numeric, quantity_per_work numeric, usage_coefficient numeric, total_material_usage numeric)
  LANGUAGE plpgsql
@@ -1759,14 +2637,756 @@ BEGIN
         w.unit AS work_unit,
         w.quantity AS work_quantity,
         w.unit_rate AS work_unit_rate,
-        wml.material_quantity_per_work AS quantity_per_work,
-        wml.usage_coefficient,
-        (w.quantity * wml.material_quantity_per_work * wml.usage_coefficient) AS total_material_usage
+        wml.material_quantity_per_work AS quantity_per_work,  -- Для совместимости
+        wml.usage_coefficient,  -- Для совместимости
+        -- Расчет без material_quantity_per_work и usage_coefficient
+        (w.quantity * COALESCE(m.consumption_coefficient, 1) * COALESCE(m.conversion_coefficient, 1)) AS total_material_usage
     FROM public.work_material_links wml
     INNER JOIN public.boq_items w ON wml.work_boq_item_id = w.id
+    INNER JOIN public.boq_items m ON wml.material_boq_item_id = m.id
     WHERE wml.material_boq_item_id = p_material_boq_item_id;
 END;
 $function$
+
+
+-- Function: public.gin_extract_query_trgm
+CREATE OR REPLACE FUNCTION public.gin_extract_query_trgm(text, internal, smallint, internal, internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gin_extract_query_trgm$function$
+
+
+-- Function: public.gin_extract_value_trgm
+CREATE OR REPLACE FUNCTION public.gin_extract_value_trgm(text, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gin_extract_value_trgm$function$
+
+
+-- Function: public.gin_trgm_consistent
+CREATE OR REPLACE FUNCTION public.gin_trgm_consistent(internal, smallint, text, integer, internal, internal, internal, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gin_trgm_consistent$function$
+
+
+-- Function: public.gin_trgm_triconsistent
+CREATE OR REPLACE FUNCTION public.gin_trgm_triconsistent(internal, smallint, text, integer, internal, internal, internal)
+ RETURNS "char"
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gin_trgm_triconsistent$function$
+
+
+-- Function: public.gtrgm_compress
+CREATE OR REPLACE FUNCTION public.gtrgm_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_compress$function$
+
+
+-- Function: public.gtrgm_consistent
+CREATE OR REPLACE FUNCTION public.gtrgm_consistent(internal, text, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_consistent$function$
+
+
+-- Function: public.gtrgm_decompress
+CREATE OR REPLACE FUNCTION public.gtrgm_decompress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_decompress$function$
+
+
+-- Function: public.gtrgm_distance
+CREATE OR REPLACE FUNCTION public.gtrgm_distance(internal, text, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_distance$function$
+
+
+-- Function: public.gtrgm_in
+CREATE OR REPLACE FUNCTION public.gtrgm_in(cstring)
+ RETURNS gtrgm
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_in$function$
+
+
+-- Function: public.gtrgm_options
+CREATE OR REPLACE FUNCTION public.gtrgm_options(internal)
+ RETURNS void
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE
+AS '$libdir/pg_trgm', $function$gtrgm_options$function$
+
+
+-- Function: public.gtrgm_out
+CREATE OR REPLACE FUNCTION public.gtrgm_out(gtrgm)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_out$function$
+
+
+-- Function: public.gtrgm_penalty
+CREATE OR REPLACE FUNCTION public.gtrgm_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_penalty$function$
+
+
+-- Function: public.gtrgm_picksplit
+CREATE OR REPLACE FUNCTION public.gtrgm_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_picksplit$function$
+
+
+-- Function: public.gtrgm_same
+CREATE OR REPLACE FUNCTION public.gtrgm_same(gtrgm, gtrgm, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_same$function$
+
+
+-- Function: public.gtrgm_union
+CREATE OR REPLACE FUNCTION public.gtrgm_union(internal, internal)
+ RETURNS gtrgm
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_union$function$
+
+
+-- Function: public.hash_ltree
+CREATE OR REPLACE FUNCTION public.hash_ltree(ltree)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$hash_ltree$function$
+
+
+-- Function: public.hash_ltree_extended
+CREATE OR REPLACE FUNCTION public.hash_ltree_extended(ltree, bigint)
+ RETURNS bigint
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$hash_ltree_extended$function$
+
+
+-- Function: public.import_cost_category_row
+-- Description: Импорт одной строки данных категорий затрат
+CREATE OR REPLACE FUNCTION public.import_cost_category_row(p_category_name text, p_category_unit text, p_detail_name text, p_detail_unit text, p_location_name text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_category_id uuid;
+    v_detail_id uuid;
+    v_location_id uuid;
+    v_mapping_id uuid;
+    v_result jsonb;
+BEGIN
+    -- Создаем или получаем категорию
+    v_category_id := public.upsert_cost_category(
+        p_category_name, 
+        CASE WHEN p_category_unit IS NOT NULL 
+             THEN 'Единица измерения: ' || p_category_unit 
+             ELSE NULL 
+        END
+    );
+    
+    -- Создаем или получаем детальную категорию
+    v_detail_id := public.upsert_detail_cost_category(
+        v_category_id,
+        p_detail_name,
+        p_detail_unit
+    );
+    
+    -- Создаем или получаем локацию
+    v_location_id := public.upsert_location(p_location_name);
+    
+    -- Создаем связь
+    v_mapping_id := public.upsert_category_location_mapping(
+        v_detail_id,
+        v_location_id
+    );
+    
+    -- Формируем результат
+    v_result := jsonb_build_object(
+        'success', true,
+        'category_id', v_category_id,
+        'detail_category_id', v_detail_id,
+        'location_id', v_location_id,
+        'mapping_id', v_mapping_id
+    );
+    
+    RETURN v_result;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', SQLERRM
+        );
+END;
+$function$
+
+
+-- Function: public.import_costs_row
+CREATE OR REPLACE FUNCTION public.import_costs_row(p_cat_order integer DEFAULT NULL::integer, p_cat_name text DEFAULT NULL::text, p_cat_unit text DEFAULT NULL::text, p_det_name text DEFAULT NULL::text, p_det_unit text DEFAULT NULL::text, p_loc_name text DEFAULT NULL::text)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_cat_id uuid;
+    v_det_id uuid;
+    v_unit_id uuid;
+    v_det_unit_id uuid;
+    v_loc_id uuid;
+    v_result json;
+BEGIN
+    -- If both category and detail names are null, skip
+    IF p_cat_name IS NULL AND p_det_name IS NULL THEN
+        RETURN json_build_object('status', 'skipped', 'reason', 'empty row');
+    END IF;
+    
+    -- If detail exists but category doesn't, error
+    IF p_det_name IS NOT NULL AND p_cat_name IS NULL THEN
+        RAISE EXCEPTION 'Detail without category: %', p_det_name;
+    END IF;
+    
+    -- Process category
+    IF p_cat_name IS NOT NULL THEN
+        -- Find or create unit for category
+        IF p_cat_unit IS NOT NULL THEN
+            SELECT id INTO v_unit_id
+            FROM units
+            WHERE title = p_cat_unit
+            LIMIT 1;
+            
+            IF v_unit_id IS NULL THEN
+                INSERT INTO units (title, code)
+                VALUES (p_cat_unit, SUBSTRING(p_cat_unit, 1, 10))
+                RETURNING id INTO v_unit_id;
+            END IF;
+        END IF;
+        
+        -- Find existing category
+        SELECT id INTO v_cat_id
+        FROM cost_nodes
+        WHERE name = p_cat_name
+          AND parent_id IS NULL
+          AND kind = 'group'
+        LIMIT 1;
+        
+        -- Create category if doesn't exist
+        IF v_cat_id IS NULL THEN
+            INSERT INTO cost_nodes (
+                parent_id,
+                kind,
+                name,
+                unit_id,
+                sort_order
+            ) VALUES (
+                NULL,
+                'group',
+                p_cat_name,
+                v_unit_id,
+                COALESCE(p_cat_order, 100)
+            )
+            RETURNING id INTO v_cat_id;
+        END IF;
+    END IF;
+    
+    -- Process detail
+    IF p_det_name IS NOT NULL AND v_cat_id IS NOT NULL THEN
+        -- Find or create unit for detail
+        IF p_det_unit IS NOT NULL THEN
+            SELECT id INTO v_det_unit_id
+            FROM units
+            WHERE title = p_det_unit
+            LIMIT 1;
+            
+            IF v_det_unit_id IS NULL THEN
+                INSERT INTO units (title, code)
+                VALUES (p_det_unit, SUBSTRING(p_det_unit, 1, 10))
+                RETURNING id INTO v_det_unit_id;
+            END IF;
+        END IF;
+        
+        -- Find location (don't create new ones) - ИСПРАВЛЕНО: location вместо locations
+        IF p_loc_name IS NOT NULL THEN
+            SELECT id INTO v_loc_id
+            FROM location  -- Исправлено с locations на location
+            WHERE title = p_loc_name
+            LIMIT 1;
+        END IF;
+        
+        -- Always create new detail (allowing duplicates)
+        INSERT INTO cost_nodes (
+            parent_id,
+            kind,
+            name,
+            unit_id,
+            location_id,
+            sort_order
+        ) VALUES (
+            v_cat_id,
+            'item',
+            p_det_name,
+            v_det_unit_id,
+            v_loc_id,
+            100
+        )
+        RETURNING id INTO v_det_id;
+    END IF;
+    
+    -- Return result
+    v_result := json_build_object(
+        'status', 'success',
+        'category_id', v_cat_id,
+        'detail_id', v_det_id,
+        'location_found', v_loc_id IS NOT NULL
+    );
+    
+    RETURN v_result;
+END;
+$function$
+
+
+-- Function: public.index
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_index$function$
+
+
+-- Function: public.index
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_index$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree[])
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lquery_in
+CREATE OR REPLACE FUNCTION public.lquery_in(cstring)
+ RETURNS lquery
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lquery_in$function$
+
+
+-- Function: public.lquery_out
+CREATE OR REPLACE FUNCTION public.lquery_out(lquery)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lquery_out$function$
+
+
+-- Function: public.lquery_recv
+CREATE OR REPLACE FUNCTION public.lquery_recv(internal)
+ RETURNS lquery
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lquery_recv$function$
+
+
+-- Function: public.lquery_send
+CREATE OR REPLACE FUNCTION public.lquery_send(lquery)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lquery_send$function$
+
+
+-- Function: public.lt_q_regex
+CREATE OR REPLACE FUNCTION public.lt_q_regex(ltree, lquery[])
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lt_q_regex$function$
+
+
+-- Function: public.lt_q_rregex
+CREATE OR REPLACE FUNCTION public.lt_q_rregex(lquery[], ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lt_q_rregex$function$
+
+
+-- Function: public.ltq_regex
+CREATE OR REPLACE FUNCTION public.ltq_regex(ltree, lquery)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltq_regex$function$
+
+
+-- Function: public.ltq_rregex
+CREATE OR REPLACE FUNCTION public.ltq_rregex(lquery, ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltq_rregex$function$
+
+
+-- Function: public.ltree2text
+CREATE OR REPLACE FUNCTION public.ltree2text(ltree)
+ RETURNS text
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree2text$function$
+
+
+-- Function: public.ltree_addltree
+CREATE OR REPLACE FUNCTION public.ltree_addltree(ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_addltree$function$
+
+
+-- Function: public.ltree_addtext
+CREATE OR REPLACE FUNCTION public.ltree_addtext(ltree, text)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_addtext$function$
+
+
+-- Function: public.ltree_cmp
+CREATE OR REPLACE FUNCTION public.ltree_cmp(ltree, ltree)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_cmp$function$
+
+
+-- Function: public.ltree_compress
+CREATE OR REPLACE FUNCTION public.ltree_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_compress$function$
+
+
+-- Function: public.ltree_consistent
+CREATE OR REPLACE FUNCTION public.ltree_consistent(internal, ltree, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_consistent$function$
+
+
+-- Function: public.ltree_decompress
+CREATE OR REPLACE FUNCTION public.ltree_decompress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_decompress$function$
+
+
+-- Function: public.ltree_eq
+CREATE OR REPLACE FUNCTION public.ltree_eq(ltree, ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_eq$function$
+
+
+-- Function: public.ltree_ge
+CREATE OR REPLACE FUNCTION public.ltree_ge(ltree, ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_ge$function$
+
+
+-- Function: public.ltree_gist_in
+CREATE OR REPLACE FUNCTION public.ltree_gist_in(cstring)
+ RETURNS ltree_gist
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_gist_in$function$
+
+
+-- Function: public.ltree_gist_options
+CREATE OR REPLACE FUNCTION public.ltree_gist_options(internal)
+ RETURNS void
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE
+AS '$libdir/ltree', $function$ltree_gist_options$function$
+
+
+-- Function: public.ltree_gist_out
+CREATE OR REPLACE FUNCTION public.ltree_gist_out(ltree_gist)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_gist_out$function$
+
+
+-- Function: public.ltree_gt
+CREATE OR REPLACE FUNCTION public.ltree_gt(ltree, ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_gt$function$
+
+
+-- Function: public.ltree_in
+CREATE OR REPLACE FUNCTION public.ltree_in(cstring)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_in$function$
+
+
+-- Function: public.ltree_isparent
+CREATE OR REPLACE FUNCTION public.ltree_isparent(ltree, ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_isparent$function$
+
+
+-- Function: public.ltree_le
+CREATE OR REPLACE FUNCTION public.ltree_le(ltree, ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_le$function$
+
+
+-- Function: public.ltree_lt
+CREATE OR REPLACE FUNCTION public.ltree_lt(ltree, ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_lt$function$
+
+
+-- Function: public.ltree_ne
+CREATE OR REPLACE FUNCTION public.ltree_ne(ltree, ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_ne$function$
+
+
+-- Function: public.ltree_out
+CREATE OR REPLACE FUNCTION public.ltree_out(ltree)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_out$function$
+
+
+-- Function: public.ltree_penalty
+CREATE OR REPLACE FUNCTION public.ltree_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_penalty$function$
+
+
+-- Function: public.ltree_picksplit
+CREATE OR REPLACE FUNCTION public.ltree_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_picksplit$function$
+
+
+-- Function: public.ltree_recv
+CREATE OR REPLACE FUNCTION public.ltree_recv(internal)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_recv$function$
+
+
+-- Function: public.ltree_risparent
+CREATE OR REPLACE FUNCTION public.ltree_risparent(ltree, ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_risparent$function$
+
+
+-- Function: public.ltree_same
+CREATE OR REPLACE FUNCTION public.ltree_same(ltree_gist, ltree_gist, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_same$function$
+
+
+-- Function: public.ltree_send
+CREATE OR REPLACE FUNCTION public.ltree_send(ltree)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_send$function$
+
+
+-- Function: public.ltree_textadd
+CREATE OR REPLACE FUNCTION public.ltree_textadd(text, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_textadd$function$
+
+
+-- Function: public.ltree_union
+CREATE OR REPLACE FUNCTION public.ltree_union(internal, internal)
+ RETURNS ltree_gist
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_union$function$
+
+
+-- Function: public.ltreeparentsel
+CREATE OR REPLACE FUNCTION public.ltreeparentsel(internal, oid, internal, integer)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltreeparentsel$function$
+
+
+-- Function: public.ltxtq_exec
+CREATE OR REPLACE FUNCTION public.ltxtq_exec(ltree, ltxtquery)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltxtq_exec$function$
+
+
+-- Function: public.ltxtq_in
+CREATE OR REPLACE FUNCTION public.ltxtq_in(cstring)
+ RETURNS ltxtquery
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltxtq_in$function$
+
+
+-- Function: public.ltxtq_out
+CREATE OR REPLACE FUNCTION public.ltxtq_out(ltxtquery)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltxtq_out$function$
+
+
+-- Function: public.ltxtq_recv
+CREATE OR REPLACE FUNCTION public.ltxtq_recv(internal)
+ RETURNS ltxtquery
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltxtq_recv$function$
+
+
+-- Function: public.ltxtq_rexec
+CREATE OR REPLACE FUNCTION public.ltxtq_rexec(ltxtquery, ltree)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltxtq_rexec$function$
+
+
+-- Function: public.ltxtq_send
+CREATE OR REPLACE FUNCTION public.ltxtq_send(ltxtquery)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltxtq_send$function$
+
+
+-- Function: public.nlevel
+CREATE OR REPLACE FUNCTION public.nlevel(ltree)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$nlevel$function$
 
 
 -- Function: public.recalculate_client_position_totals
@@ -1850,16 +3470,889 @@ END;
 $function$
 
 
+-- Function: public.rpc_move_material
+-- Description: Moves or copies a material link between works without deleting the original link
+CREATE OR REPLACE FUNCTION public.rpc_move_material(p_source_work uuid, p_target_work uuid, p_material uuid, p_new_index integer DEFAULT 0, p_mode text DEFAULT 'move'::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  v_src_link_id UUID;
+  v_tgt_link_id UUID;
+  v_work_volume NUMERIC;
+  v_src_record RECORD;
+  v_conflict BOOLEAN := FALSE;
+  v_result JSONB;
+  v_client_position_id UUID;
+BEGIN
+  -- Start transaction
+  BEGIN
+    -- Get client_position_id from source work
+    SELECT client_position_id INTO v_client_position_id
+    FROM boq_items
+    WHERE id = p_source_work;
+    
+    -- Lock source link for update
+    SELECT wml.*, w.quantity as work_volume
+    INTO v_src_record
+    FROM work_material_links wml
+    JOIN boq_items w ON w.id = p_target_work
+    WHERE wml.work_boq_item_id = p_source_work 
+      AND wml.material_boq_item_id = p_material
+    FOR UPDATE;
+    
+    IF NOT FOUND THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'Source link not found');
+    END IF;
+    
+    v_src_link_id := v_src_record.id;
+    v_work_volume := COALESCE(v_src_record.work_volume, 0);
+    
+    -- Check for conflict in target work
+    SELECT id INTO v_tgt_link_id
+    FROM work_material_links
+    WHERE work_boq_item_id = p_target_work 
+      AND material_boq_item_id = p_material
+    FOR UPDATE;
+    
+    IF FOUND THEN
+      v_conflict := TRUE;
+    END IF;
+    
+    IF p_mode = 'move' THEN
+      IF NOT v_conflict THEN
+        -- Update work_id and recalculate
+        UPDATE work_material_links
+        SET 
+          work_boq_item_id = p_target_work,
+          updated_at = NOW()
+        WHERE id = v_src_link_id;
+        
+        -- Note: Actual volume recalculation happens via the linked materials
+        -- since we store coefficients on the material BOQ items
+        
+        RETURN jsonb_build_object(
+          'ok', true, 
+          'conflict', false,
+          'link_id', v_src_link_id
+        );
+      ELSE
+        -- Return conflict information
+        RETURN jsonb_build_object(
+          'ok', false,
+          'conflict', true,
+          'src_id', v_src_link_id,
+          'tgt_id', v_tgt_link_id,
+          'material_id', p_material
+        );
+      END IF;
+      
+    ELSIF p_mode = 'copy' THEN
+      IF NOT v_conflict THEN
+        -- Create new link
+        INSERT INTO work_material_links (
+          client_position_id,
+          work_boq_item_id,
+          material_boq_item_id,
+          usage_coefficient,
+          material_quantity_per_work,
+          notes
+        )
+        VALUES (
+          v_client_position_id,
+          p_target_work,
+          p_material,
+          v_src_record.usage_coefficient,
+          v_src_record.material_quantity_per_work,
+          v_src_record.notes
+        )
+        RETURNING id INTO v_tgt_link_id;
+        
+        RETURN jsonb_build_object(
+          'ok', true,
+          'conflict', false,
+          'link_id', v_tgt_link_id
+        );
+      ELSE
+        -- Return conflict information
+        RETURN jsonb_build_object(
+          'ok', false,
+          'conflict', true,
+          'src_id', v_src_link_id,
+          'tgt_id', v_tgt_link_id,
+          'material_id', p_material
+        );
+      END IF;
+    ELSE
+      RETURN jsonb_build_object('ok', false, 'error', 'Invalid mode');
+    END IF;
+    
+  EXCEPTION
+    WHEN OTHERS THEN
+      RETURN jsonb_build_object(
+        'ok', false,
+        'error', SQLERRM
+      );
+  END;
+END;
+$function$
+
+
+-- Function: public.rpc_resolve_conflict
+-- Description: Resolves conflicts when moving materials between works (sum or replace strategy)
+CREATE OR REPLACE FUNCTION public.rpc_resolve_conflict(p_src_id uuid, p_tgt_id uuid, p_target_work uuid, p_strategy text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  v_work_volume NUMERIC;
+  v_src_record RECORD;
+  v_tgt_record RECORD;
+  v_material_item RECORD;
+  v_src_volume_b NUMERIC;
+  v_new_volume NUMERIC;
+  v_new_total NUMERIC;
+BEGIN
+  BEGIN
+    -- Lock both links for update
+    SELECT * INTO v_src_record
+    FROM work_material_links
+    WHERE id = p_src_id
+    FOR UPDATE;
+    
+    SELECT * INTO v_tgt_record
+    FROM work_material_links
+    WHERE id = p_tgt_id
+    FOR UPDATE;
+    
+    IF NOT FOUND THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'Links not found');
+    END IF;
+    
+    -- Get work volume for target work
+    SELECT quantity INTO v_work_volume
+    FROM boq_items
+    WHERE id = p_target_work;
+    
+    v_work_volume := COALESCE(v_work_volume, 0);
+    
+    -- Get material coefficients
+    SELECT 
+      consumption_coefficient,
+      conversion_coefficient,
+      unit_rate
+    INTO v_material_item
+    FROM boq_items
+    WHERE id = v_src_record.material_boq_item_id;
+    
+    -- Calculate source volume for target work
+    v_src_volume_b := v_work_volume * 
+                      COALESCE(v_material_item.consumption_coefficient, 1) * 
+                      COALESCE(v_material_item.conversion_coefficient, 1) *
+                      COALESCE(v_src_record.usage_coefficient, 1);
+    
+    IF p_strategy = 'sum' THEN
+      -- Sum strategy: add volumes
+      -- Get target material volume (already calculated for target work)
+      SELECT 
+        consumption_coefficient,
+        conversion_coefficient,
+        unit_rate
+      INTO v_material_item
+      FROM boq_items
+      WHERE id = v_tgt_record.material_boq_item_id;
+      
+      v_new_volume := (v_work_volume * 
+                       COALESCE(v_material_item.consumption_coefficient, 1) * 
+                       COALESCE(v_material_item.conversion_coefficient, 1) *
+                       COALESCE(v_tgt_record.usage_coefficient, 1)) + v_src_volume_b;
+      
+      -- Note: We don't directly update material volumes here since they're calculated
+      -- from the work volume and coefficients. Instead we'd update usage_coefficient
+      -- to achieve the desired total volume
+      
+      -- Update target link's usage coefficient to achieve the summed volume
+      UPDATE work_material_links
+      SET 
+        usage_coefficient = CASE 
+          WHEN v_work_volume > 0 AND 
+               COALESCE(v_material_item.consumption_coefficient, 1) > 0 AND
+               COALESCE(v_material_item.conversion_coefficient, 1) > 0
+          THEN v_new_volume / (v_work_volume * 
+                              COALESCE(v_material_item.consumption_coefficient, 1) * 
+                              COALESCE(v_material_item.conversion_coefficient, 1))
+          ELSE 1
+        END,
+        updated_at = NOW()
+      WHERE id = p_tgt_id;
+      
+    ELSIF p_strategy = 'replace' THEN
+      -- Replace strategy: use source coefficients
+      UPDATE work_material_links
+      SET 
+        usage_coefficient = v_src_record.usage_coefficient,
+        material_quantity_per_work = v_src_record.material_quantity_per_work,
+        notes = v_src_record.notes,
+        updated_at = NOW()
+      WHERE id = p_tgt_id;
+      
+    ELSE
+      RETURN jsonb_build_object('ok', false, 'error', 'Invalid strategy');
+    END IF;
+    
+    -- Delete source link
+    DELETE FROM work_material_links WHERE id = p_src_id;
+    
+    RETURN jsonb_build_object(
+      'ok', true,
+      'link_id', p_tgt_id
+    );
+    
+  EXCEPTION
+    WHEN OTHERS THEN
+      RETURN jsonb_build_object(
+        'ok', false,
+        'error', SQLERRM
+      );
+  END;
+END;
+$function$
+
+
+-- Function: public.safe_upsert_cost_category
+-- Description: Безопасное создание или обновление категории затрат
+CREATE OR REPLACE FUNCTION public.safe_upsert_cost_category(p_name text, p_description text DEFAULT NULL::text, p_sort_order integer DEFAULT 0)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+  DECLARE
+      v_category_id uuid;
+      v_code text;
+  BEGIN
+      SELECT id INTO v_category_id
+      FROM public.cost_categories
+      WHERE name = p_name
+      LIMIT 1;
+
+      IF v_category_id IS NOT NULL THEN
+          UPDATE public.cost_categories
+          SET description = p_description,
+              sort_order = p_sort_order,
+              updated_at = now()
+          WHERE id = v_category_id;
+          RETURN v_category_id;
+      ELSE
+          v_code := 'CAT-' || extract(epoch from now())::bigint || '-' || substr(md5(random()::text), 0, 9);
+          INSERT INTO public.cost_categories (name, code, description, sort_order)
+          VALUES (p_name, v_code, p_description, p_sort_order)
+          RETURNING id INTO v_category_id;
+          RETURN v_category_id;
+      END IF;
+  END;
+  $function$
+
+
+-- Function: public.safe_upsert_location
+-- Description: Безопасное создание или обновление локации
+CREATE OR REPLACE FUNCTION public.safe_upsert_location(p_name text, p_sort_order integer DEFAULT 0)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+  DECLARE
+      v_location_id uuid;
+      v_code text;
+  BEGIN
+      SELECT id INTO v_location_id
+      FROM public.location
+      WHERE name = p_name
+      LIMIT 1;
+
+      IF v_location_id IS NOT NULL THEN
+          UPDATE public.location
+          SET sort_order = p_sort_order,
+              updated_at = now()
+          WHERE id = v_location_id;
+          RETURN v_location_id;
+      ELSE
+          v_code := 'LOC-' || extract(epoch from now())::bigint || '-' || substr(md5(random()::text), 0, 9);
+          INSERT INTO public.location (name, code, sort_order, level, is_active)
+          VALUES (p_name, v_code, p_sort_order, 0, true)
+          RETURNING id INTO v_location_id;
+          RETURN v_location_id;
+      END IF;
+  END;
+  $function$
+
+
+-- Function: public.safe_upsert_mapping
+CREATE OR REPLACE FUNCTION public.safe_upsert_mapping(p_detail_category_id uuid, p_location_id uuid, p_quantity numeric DEFAULT 1, p_unit_price numeric DEFAULT 0, p_discount_percent numeric DEFAULT 0)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping_id UUID;
+BEGIN
+    -- Проверяем существование детальной категории
+    IF NOT EXISTS (
+        SELECT 1 FROM public.detail_cost_categories 
+        WHERE id = p_detail_category_id
+    ) THEN
+        RAISE EXCEPTION 'Detail category with id % does not exist', p_detail_category_id;
+    END IF;
+    
+    -- Проверяем существование локации
+    IF NOT EXISTS (
+        SELECT 1 FROM public.location 
+        WHERE id = p_location_id
+    ) THEN
+        RAISE EXCEPTION 'Location with id % does not exist', p_location_id;
+    END IF;
+    
+    -- Выполняем UPSERT
+    INSERT INTO public.category_location_mapping (
+        detail_category_id,
+        location_id,
+        quantity,
+        unit_price,
+        discount_percent,
+        is_active,
+        created_at,
+        updated_at
+    ) VALUES (
+        p_detail_category_id,
+        p_location_id,
+        p_quantity,
+        p_unit_price,
+        p_discount_percent,
+        true,
+        NOW(),
+        NOW()
+    )
+    ON CONFLICT (detail_category_id, location_id) 
+    DO UPDATE SET
+        quantity = EXCLUDED.quantity,
+        unit_price = EXCLUDED.unit_price,
+        discount_percent = EXCLUDED.discount_percent,
+        is_active = true,
+        updated_at = NOW()
+    RETURNING id INTO v_mapping_id;
+    
+    RETURN v_mapping_id;
+END;
+$function$
+
+
+-- Function: public.schema_cache_purge
+CREATE OR REPLACE FUNCTION public.schema_cache_purge()
+ RETURNS void
+ LANGUAGE sql
+ SECURITY DEFINER
+AS $function$
+  notify pgrst, 'reload schema';
+$function$
+
+
+-- Function: public.set_limit
+CREATE OR REPLACE FUNCTION public.set_limit(real)
+ RETURNS real
+ LANGUAGE c
+ STRICT
+AS '$libdir/pg_trgm', $function$set_limit$function$
+
+
+-- Function: public.show_limit
+CREATE OR REPLACE FUNCTION public.show_limit()
+ RETURNS real
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$show_limit$function$
+
+
+-- Function: public.show_trgm
+CREATE OR REPLACE FUNCTION public.show_trgm(text)
+ RETURNS text[]
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$show_trgm$function$
+
+
+-- Function: public.similarity
+CREATE OR REPLACE FUNCTION public.similarity(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$similarity$function$
+
+
+-- Function: public.similarity_dist
+CREATE OR REPLACE FUNCTION public.similarity_dist(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$similarity_dist$function$
+
+
+-- Function: public.similarity_op
+CREATE OR REPLACE FUNCTION public.similarity_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$similarity_op$function$
+
+
+-- Function: public.strict_word_similarity
+CREATE OR REPLACE FUNCTION public.strict_word_similarity(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity$function$
+
+
+-- Function: public.strict_word_similarity_commutator_op
+CREATE OR REPLACE FUNCTION public.strict_word_similarity_commutator_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity_commutator_op$function$
+
+
+-- Function: public.strict_word_similarity_dist_commutator_op
+CREATE OR REPLACE FUNCTION public.strict_word_similarity_dist_commutator_op(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity_dist_commutator_op$function$
+
+
+-- Function: public.strict_word_similarity_dist_op
+CREATE OR REPLACE FUNCTION public.strict_word_similarity_dist_op(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity_dist_op$function$
+
+
+-- Function: public.strict_word_similarity_op
+CREATE OR REPLACE FUNCTION public.strict_word_similarity_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity_op$function$
+
+
+-- Function: public.subltree
+CREATE OR REPLACE FUNCTION public.subltree(ltree, integer, integer)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$subltree$function$
+
+
+-- Function: public.subpath
+CREATE OR REPLACE FUNCTION public.subpath(ltree, integer, integer)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$subpath$function$
+
+
+-- Function: public.subpath
+CREATE OR REPLACE FUNCTION public.subpath(ltree, integer)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$subpath$function$
+
+
+-- Function: public.tender_items_defaults
+CREATE OR REPLACE FUNCTION public.tender_items_defaults()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if new.node_id is not null and (new.name_snapshot is null or length(new.name_snapshot)=0) then
+    select n.name, n.unit_id, n.location_id
+      into new.name_snapshot, new.unit_id, new.location_id
+      from public.cost_nodes n
+     where n.id = new.node_id;
+  end if;
+  return new;
+end $function$
+
+
+-- Function: public.tender_totals_tree
+CREATE OR REPLACE FUNCTION public.tender_totals_tree(p_tender_id uuid)
+ RETURNS TABLE(node_id uuid, node_name text, path ltree, kind text, total numeric)
+ LANGUAGE sql
+AS $function$
+  select a.id, a.name, a.path, a.kind,
+         coalesce(sum(ti.amount), 0) as total
+    from public.cost_nodes a
+    left join public.cost_nodes n
+           on n.path <@ a.path
+    left join public.tender_items ti
+           on ti.node_id = n.id
+          and ti.tender_id = p_tender_id
+   group by a.id, a.name, a.path, a.kind
+   order by a.path;
+$function$
+
+
+-- Function: public.text2ltree
+CREATE OR REPLACE FUNCTION public.text2ltree(text)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$text2ltree$function$
+
+
+-- Function: public.update_cost_categories_updated_at
+CREATE OR REPLACE FUNCTION public.update_cost_categories_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+  BEGIN
+      NEW.updated_at = now();
+      RETURN NEW;
+  END;
+  $function$
+
+
+-- Function: public.update_detail_cost_categories_updated_at
+CREATE OR REPLACE FUNCTION public.update_detail_cost_categories_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+  BEGIN
+      NEW.updated_at = now();
+      RETURN NEW;
+  END;
+  $function$
+
+
+-- Function: public.update_location_hierarchy
+CREATE OR REPLACE FUNCTION public.update_location_hierarchy()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+  BEGIN
+      IF NEW.parent_id IS NOT NULL THEN
+          -- Получаем данные родителя
+          SELECT level + 1, array_append(path, NEW.parent_id)
+          INTO NEW.level, NEW.path
+          FROM location
+          WHERE id = NEW.parent_id;
+      ELSE
+          -- Корневая локация
+          NEW.level = 0;
+          NEW.path = '{}';
+      END IF;
+
+      RETURN NEW;
+  END;
+  $function$
+
+
+-- Function: public.update_location_path
+CREATE OR REPLACE FUNCTION public.update_location_path()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    parent_path text[];
+    parent_level integer;
+BEGIN
+    IF NEW.parent_id IS NULL THEN
+        NEW.path = ARRAY[NEW.id::text];
+        NEW.level = 0;
+    ELSE
+        SELECT path, level INTO parent_path, parent_level
+        FROM public.location
+        WHERE id = NEW.parent_id;
+        
+        NEW.path = parent_path || NEW.id::text;
+        NEW.level = parent_level + 1;
+    END IF;
+    
+    RETURN NEW;
+END;
+$function$
+
+
+-- Function: public.update_location_updated_at
+CREATE OR REPLACE FUNCTION public.update_location_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+  BEGIN
+      NEW.updated_at = now();
+      RETURN NEW;
+  END;
+  $function$
+
+
+-- Function: public.update_tender_cost_calculations
+CREATE OR REPLACE FUNCTION public.update_tender_cost_calculations()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_base_quantity numeric(15,3);
+    v_base_price numeric(15,2);
+BEGIN
+    -- Получаем базовые значения из category_location_mapping
+    SELECT quantity, final_price 
+    INTO v_base_quantity, v_base_price
+    FROM public.category_location_mapping
+    WHERE id = NEW.category_location_id;
+    
+    -- Вычисляем и обновляем поля
+    NEW.base_quantity = v_base_quantity;
+    NEW.base_price = v_base_price;
+    NEW.final_quantity = v_base_quantity * NEW.quantity_multiplier;
+    NEW.final_price = (v_base_price * NEW.quantity_multiplier + NEW.price_adjustment) * 
+                      (1 + COALESCE(NEW.markup_percent, 0) / 100);
+    
+    RETURN NEW;
+END;
+$function$
+
+
 -- Function: public.update_updated_at_column
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
  RETURNS trigger
  LANGUAGE plpgsql
 AS $function$
+  BEGIN
+      NEW.updated_at = now();
+      RETURN NEW;
+  END;
+  $function$
+
+
+-- Function: public.upsert_cost_category
+-- Description: Безопасное создание или обновление категории затрат
+CREATE OR REPLACE FUNCTION public.upsert_cost_category(p_name text, p_description text DEFAULT NULL::text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_id uuid;
+    v_code text;
 BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
+    -- Пытаемся найти существующую категорию
+    SELECT id INTO v_id
+    FROM public.cost_categories
+    WHERE LOWER(TRIM(name)) = LOWER(TRIM(p_name));
+    
+    IF v_id IS NOT NULL THEN
+        -- Обновляем описание если оно предоставлено
+        IF p_description IS NOT NULL THEN
+            UPDATE public.cost_categories
+            SET description = p_description,
+                updated_at = now()
+            WHERE id = v_id;
+        END IF;
+        RETURN v_id;
+    END IF;
+    
+    -- Создаем новую категорию
+    v_code := 'CAT-' || extract(epoch from now())::bigint || '-' || md5(random()::text)::text;
+    
+    INSERT INTO public.cost_categories (code, name, description)
+    VALUES (v_code, TRIM(p_name), p_description)
+    RETURNING id INTO v_id;
+    
+    RETURN v_id;
 END;
 $function$
+
+
+-- Function: public.upsert_detail_cost_category
+-- Description: Безопасное создание или обновление детальной категории
+CREATE OR REPLACE FUNCTION public.upsert_detail_cost_category(p_category_id uuid, p_name text, p_unit text, p_base_price numeric DEFAULT 0)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_id uuid;
+    v_code text;
+BEGIN
+    -- Пытаемся найти существующую детальную категорию
+    SELECT id INTO v_id
+    FROM public.detail_cost_categories
+    WHERE category_id = p_category_id
+    AND LOWER(TRIM(name)) = LOWER(TRIM(p_name));
+    
+    IF v_id IS NOT NULL THEN
+        -- Обновляем единицу измерения и цену
+        UPDATE public.detail_cost_categories
+        SET unit = p_unit,
+            base_price = COALESCE(p_base_price, base_price),
+            updated_at = now()
+        WHERE id = v_id;
+        RETURN v_id;
+    END IF;
+    
+    -- Создаем новую детальную категорию
+    v_code := 'DETAIL-' || extract(epoch from now())::bigint || '-' || md5(random()::text)::text;
+    
+    INSERT INTO public.detail_cost_categories (category_id, code, name, unit, base_price)
+    VALUES (p_category_id, v_code, TRIM(p_name), p_unit, COALESCE(p_base_price, 0))
+    RETURNING id INTO v_id;
+    
+    RETURN v_id;
+END;
+$function$
+
+
+-- Function: public.upsert_location
+CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_description text DEFAULT NULL::text, p_parent_id uuid DEFAULT NULL::uuid, p_location_type text DEFAULT 'other'::text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_location_id UUID;
+    v_unique_code TEXT;
+    v_next_sort_order INTEGER;
+BEGIN
+    -- Проверяем, существует ли локация с таким именем
+    SELECT id INTO v_location_id
+    FROM public.location
+    WHERE name = p_name
+    AND is_active = true
+    LIMIT 1;
+    
+    IF v_location_id IS NOT NULL THEN
+        -- Обновляем существующую
+        UPDATE public.location
+        SET 
+            description = COALESCE(p_description, description),
+            parent_id = COALESCE(p_parent_id, parent_id),
+            location_type = p_location_type,
+            updated_at = NOW()
+        WHERE id = v_location_id;
+    ELSE
+        -- Генерируем уникальный код
+        v_unique_code := generate_unique_location_code(p_name, p_location_type);
+        
+        -- Получаем следующий sort_order
+        SELECT COALESCE(MAX(sort_order), 0) + 10 INTO v_next_sort_order
+        FROM public.location
+        WHERE is_active = true;
+        
+        -- Создаем новую локацию
+        INSERT INTO public.location (
+            code,
+            unique_code,
+            name,
+            description,
+            parent_id,
+            location_type,
+            level,
+            sort_order,
+            is_active,
+            created_at,
+            updated_at
+        ) VALUES (
+            v_unique_code, -- используем уникальный код как основной
+            v_unique_code,
+            p_name,
+            p_description,
+            p_parent_id,
+            p_location_type,
+            CASE WHEN p_parent_id IS NULL THEN 1 ELSE 2 END,
+            v_next_sort_order,
+            true,
+            NOW(),
+            NOW()
+        ) RETURNING id INTO v_location_id;
+    END IF;
+    
+    RETURN v_location_id;
+END;
+$function$
+
+
+-- Function: public.upsert_location
+-- Description: Безопасное создание или обновление локации
+CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_id uuid;
+    v_code text;
+BEGIN
+    -- Пытаемся найти существующую локацию
+    SELECT id INTO v_id
+    FROM public.location
+    WHERE LOWER(TRIM(name)) = LOWER(TRIM(p_name))
+    AND (parent_id IS NULL AND p_parent_id IS NULL OR parent_id = p_parent_id);
+    
+    IF v_id IS NOT NULL THEN
+        -- Обновляем описание если оно предоставлено
+        IF p_description IS NOT NULL THEN
+            UPDATE public.location
+            SET description = p_description,
+                updated_at = now()
+            WHERE id = v_id;
+        END IF;
+        RETURN v_id;
+    END IF;
+    
+    -- Создаем новую локацию
+    v_code := 'LOC-' || extract(epoch from now())::bigint || '-' || md5(random()::text)::text;
+    
+    INSERT INTO public.location (code, name, parent_id, description)
+    VALUES (v_code, TRIM(p_name), p_parent_id, p_description)
+    RETURNING id INTO v_id;
+    
+    RETURN v_id;
+END;
+$function$
+
+
+-- Function: public.word_similarity
+CREATE OR REPLACE FUNCTION public.word_similarity(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity$function$
+
+
+-- Function: public.word_similarity_commutator_op
+CREATE OR REPLACE FUNCTION public.word_similarity_commutator_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity_commutator_op$function$
+
+
+-- Function: public.word_similarity_dist_commutator_op
+CREATE OR REPLACE FUNCTION public.word_similarity_dist_commutator_op(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity_dist_commutator_op$function$
+
+
+-- Function: public.word_similarity_dist_op
+CREATE OR REPLACE FUNCTION public.word_similarity_dist_op(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity_dist_op$function$
+
+
+-- Function: public.word_similarity_op
+CREATE OR REPLACE FUNCTION public.word_similarity_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity_op$function$
 
 
 -- Function: realtime.apply_rls
@@ -3066,12 +5559,6 @@ CREATE OR REPLACE FUNCTION storage.search_v2(prefix text, bucket_name text, limi
  RETURNS TABLE(key text, name text, id uuid, updated_at timestamp with time zone, created_at timestamp with time zone, metadata jsonb)
  LANGUAGE plpgsql
  STABLE
-    code text,
-    unit text,
-    unit text,
-create unique index if not exists cost_categories_code_idx on public.cost_categories(code);
-create unique index if not exists location_city_idx on public.location(city);
-
 AS $function$
 BEGIN
     RETURN query EXECUTE
@@ -3216,29 +5703,35 @@ $function$
 -- Trigger: recalculate_totals_on_boq_change on public.boq_items
 CREATE TRIGGER recalculate_totals_on_boq_change AFTER INSERT OR DELETE OR UPDATE ON public.boq_items FOR EACH ROW EXECUTE FUNCTION recalculate_client_position_totals()
 
--- Trigger: update_boq_items_updated_at on public.boq_items
-CREATE TRIGGER update_boq_items_updated_at BEFORE UPDATE ON public.boq_items FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+-- Trigger: trigger_check_boq_delivery on public.boq_items
+CREATE TRIGGER trigger_check_boq_delivery BEFORE INSERT OR UPDATE ON public.boq_items FOR EACH ROW EXECUTE FUNCTION check_boq_item_delivery_consistency()
+
+-- Trigger: trigger_check_delivery_consistency_boq on public.boq_items
+CREATE TRIGGER trigger_check_delivery_consistency_boq BEFORE INSERT OR UPDATE ON public.boq_items FOR EACH ROW EXECUTE FUNCTION check_delivery_consistency_boq()
 
 -- Trigger: auto_assign_position_number_trigger on public.client_positions
 CREATE TRIGGER auto_assign_position_number_trigger BEFORE INSERT ON public.client_positions FOR EACH ROW EXECUTE FUNCTION auto_assign_position_number()
 
--- Trigger: update_client_positions_updated_at on public.client_positions
-CREATE TRIGGER update_client_positions_updated_at BEFORE UPDATE ON public.client_positions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+-- Trigger: tr_cost_nodes_autosort on public.cost_nodes
+CREATE TRIGGER tr_cost_nodes_autosort BEFORE INSERT OR UPDATE OF parent_id, sort_order ON public.cost_nodes FOR EACH ROW EXECUTE FUNCTION cost_nodes_autosort()
 
--- Trigger: update_materials_library_updated_at on public.materials_library
-CREATE TRIGGER update_materials_library_updated_at BEFORE UPDATE ON public.materials_library FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+-- Trigger: tr_cost_nodes_repath on public.cost_nodes
+CREATE TRIGGER tr_cost_nodes_repath AFTER UPDATE OF parent_id, sort_order ON public.cost_nodes FOR EACH ROW EXECUTE FUNCTION cost_nodes_repath_descendants()
 
--- Trigger: update_tenders_updated_at on public.tenders
-CREATE TRIGGER update_tenders_updated_at BEFORE UPDATE ON public.tenders FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+-- Trigger: tr_cost_nodes_set_path on public.cost_nodes
+CREATE TRIGGER tr_cost_nodes_set_path BEFORE INSERT OR UPDATE OF parent_id, sort_order ON public.cost_nodes FOR EACH ROW EXECUTE FUNCTION cost_nodes_before_ins_upd()
+
+-- Trigger: tr_cost_nodes_ts on public.cost_nodes
+CREATE TRIGGER tr_cost_nodes_ts BEFORE INSERT OR UPDATE ON public.cost_nodes FOR EACH ROW EXECUTE FUNCTION cost_nodes_set_timestamps()
+
+-- Trigger: tr_tender_items_defaults on public.tender_items
+CREATE TRIGGER tr_tender_items_defaults BEFORE INSERT ON public.tender_items FOR EACH ROW EXECUTE FUNCTION tender_items_defaults()
 
 -- Trigger: check_work_material_types_trigger on public.work_material_links
 CREATE TRIGGER check_work_material_types_trigger BEFORE INSERT OR UPDATE ON public.work_material_links FOR EACH ROW EXECUTE FUNCTION check_work_material_types()
 
--- Trigger: update_work_material_links_updated_at on public.work_material_links
-CREATE TRIGGER update_work_material_links_updated_at BEFORE UPDATE ON public.work_material_links FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
-
--- Trigger: update_works_library_updated_at on public.works_library
-CREATE TRIGGER update_works_library_updated_at BEFORE UPDATE ON public.works_library FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+-- Trigger: trigger_check_delivery_price on public.work_material_links
+CREATE TRIGGER trigger_check_delivery_price BEFORE INSERT OR UPDATE ON public.work_material_links FOR EACH ROW EXECUTE FUNCTION check_delivery_price_consistency()
 
 -- Trigger: tr_check_filters on realtime.subscription
 CREATE TRIGGER tr_check_filters BEFORE INSERT OR UPDATE ON realtime.subscription FOR EACH ROW EXECUTE FUNCTION realtime.subscription_check_filters()
@@ -3293,46 +5786,7 @@ CREATE INDEX identities_user_id_idx ON auth.identities USING btree (user_id);
 -- Index on auth.mfa_amr_claims
 CREATE UNIQUE INDEX amr_id_pk ON auth.mfa_amr_claims USING btree (id);
 
-CREATE UNIQUE INDEX secrets_name_idx ON vault.secrets USING btree (name) WHERE (name IS NOT NULL);
-
--- Construction Cost Tables
-create table if not exists public.cost_categories (
-    id uuid primary key default gen_random_uuid(),
-    name text not null,
-    description text,
-    created_at timestamptz default now()
-);
-
-create table if not exists public.location (
-    id uuid primary key default gen_random_uuid(),
-    country text,
-    region text,
-    city text,
-    created_at timestamptz default now()
-);
-
-create table if not exists public.detail_cost_categories (
-    id uuid primary key default gen_random_uuid(),
-    cost_category_id uuid not null references public.cost_categories(id) on delete cascade,
-    location_id uuid not null references public.location(id) on delete cascade,
-    name text not null,
-    unit_cost numeric(12,2),
-    created_at timestamptz default now()
-);
-
-create index if not exists detail_cost_categories_cost_category_id_idx on public.detail_cost_categories(cost_category_id);
-create index if not exists detail_cost_categories_location_id_idx on public.detail_cost_categories(location_id);
-
--- Function: public.schema_cache_purge
--- Description: Reloads PostgREST schema cache after DDL changes
-CREATE OR REPLACE FUNCTION public.schema_cache_purge()
-RETURNS void
-LANGUAGE sql
-SECURITY DEFINER
-AS $function$
-  NOTIFY pgrst, 'reload schema';
-$function$;
-
+-- Index on auth.mfa_challenges
 CREATE INDEX mfa_challenge_created_at_idx ON auth.mfa_challenges USING btree (created_at DESC);
 
 -- Index on auth.mfa_factors
@@ -3444,7 +5898,16 @@ CREATE UNIQUE INDEX users_phone_key ON auth.users USING btree (phone);
 CREATE INDEX idx_boq_items_client_position_id ON public.boq_items USING btree (client_position_id);
 
 -- Index on public.boq_items
+CREATE INDEX idx_boq_items_delivery_price_type ON public.boq_items USING btree (delivery_price_type) WHERE (item_type = 'material'::boq_item_type);
+
+-- Index on public.boq_items
+CREATE INDEX idx_boq_items_delivery_type ON public.boq_items USING btree (delivery_price_type) WHERE (item_type = 'material'::boq_item_type);
+
+-- Index on public.boq_items
 CREATE INDEX idx_boq_items_item_type ON public.boq_items USING btree (item_type);
+
+-- Index on public.boq_items
+CREATE INDEX idx_boq_items_material_delivery ON public.boq_items USING btree (item_type, delivery_price_type, delivery_amount) WHERE (item_type = 'material'::boq_item_type);
 
 -- Index on public.boq_items
 CREATE INDEX idx_boq_items_material_id ON public.boq_items USING btree (material_id) WHERE (material_id IS NOT NULL);
@@ -3457,6 +5920,9 @@ CREATE INDEX idx_boq_items_tender_id ON public.boq_items USING btree (tender_id)
 
 -- Index on public.boq_items
 CREATE INDEX idx_boq_items_tender_id_item_type ON public.boq_items USING btree (tender_id, item_type);
+
+-- Index on public.boq_items
+CREATE INDEX idx_boq_items_total_amount ON public.boq_items USING btree (total_amount) WHERE (total_amount > (0)::numeric);
 
 -- Index on public.boq_items
 CREATE INDEX idx_boq_items_work_id ON public.boq_items USING btree (work_id) WHERE (work_id IS NOT NULL);
@@ -3488,11 +5954,62 @@ CREATE INDEX idx_client_positions_work_name ON public.client_positions USING gin
 -- Index on public.client_positions
 CREATE UNIQUE INDEX uq_client_positions_position_tender ON public.client_positions USING btree (tender_id, position_number);
 
+-- Index on public.cost_categories
+CREATE UNIQUE INDEX cost_categories_code_idx ON public.cost_categories USING btree (code);
+
+-- Index on public.cost_categories
+CREATE INDEX idx_cost_categories_name ON public.cost_categories USING btree (name);
+
+-- Index on public.cost_nodes
+CREATE INDEX ix_cost_nodes_parent_sort ON public.cost_nodes USING btree (parent_id, sort_order);
+
+-- Index on public.cost_nodes
+CREATE INDEX ix_cost_nodes_path_gist ON public.cost_nodes USING gist (path);
+
+-- Index on public.cost_nodes
+CREATE INDEX ix_cost_nodes_search_gin ON public.cost_nodes USING gin (to_tsvector('russian'::regconfig, ((COALESCE(name, ''::text) || ' '::text) || COALESCE(code, ''::text))));
+
+-- Index on public.cost_nodes
+CREATE UNIQUE INDEX uq_cost_nodes_sibling ON public.cost_nodes USING btree (parent_id, name);
+
+-- Index on public.detail_cost_categories
+CREATE INDEX detail_cost_categories_cost_category_id_idx ON public.detail_cost_categories USING btree (cost_category_id);
+
+-- Index on public.detail_cost_categories
+CREATE INDEX detail_cost_categories_location_id_idx ON public.detail_cost_categories USING btree (location_id);
+
+-- Index on public.detail_cost_categories
+CREATE INDEX idx_detail_cost_categories_category_id ON public.detail_cost_categories USING btree (cost_category_id);
+
+-- Index on public.detail_cost_categories
+CREATE INDEX idx_detail_cost_categories_location_id ON public.detail_cost_categories USING btree (location_id);
+
+-- Index on public.detail_cost_categories
+CREATE INDEX idx_detail_cost_categories_name ON public.detail_cost_categories USING btree (name);
+
+-- Index on public.location
+CREATE INDEX idx_location_city ON public.location USING btree (city);
+
+-- Index on public.location
+CREATE INDEX idx_location_country ON public.location USING btree (country);
+
+-- Index on public.location
+CREATE UNIQUE INDEX ix_location_code_unique ON public.location USING btree (code);
+
+-- Index on public.location
+CREATE UNIQUE INDEX location_city_idx ON public.location USING btree (city);
+
 -- Index on public.materials_library
 CREATE INDEX idx_materials_library_category ON public.materials_library USING btree (category);
 
 -- Index on public.materials_library
 CREATE INDEX idx_materials_library_name ON public.materials_library USING btree (name);
+
+-- Index on public.tender_items
+CREATE INDEX ix_tender_items_node ON public.tender_items USING btree (node_id);
+
+-- Index on public.tender_items
+CREATE INDEX ix_tender_items_tender ON public.tender_items USING btree (tender_id);
 
 -- Index on public.tenders
 CREATE INDEX idx_tenders_created_at ON public.tenders USING btree (created_at DESC);
@@ -3502,6 +6019,9 @@ CREATE INDEX idx_tenders_tender_number ON public.tenders USING btree (tender_num
 
 -- Index on public.tenders
 CREATE UNIQUE INDEX tenders_tender_number_key ON public.tenders USING btree (tender_number);
+
+-- Index on public.units
+CREATE UNIQUE INDEX units_code_key ON public.units USING btree (code);
 
 -- Index on public.work_material_links
 CREATE INDEX idx_work_material_links_material ON public.work_material_links USING btree (material_boq_item_id);
@@ -3559,3 +6079,502 @@ CREATE INDEX idx_multipart_uploads_list ON storage.s3_multipart_uploads USING bt
 
 -- Index on vault.secrets
 CREATE UNIQUE INDEX secrets_name_idx ON vault.secrets USING btree (name) WHERE (name IS NOT NULL);
+
+
+-- ============================================
+-- ROLES AND PRIVILEGES
+-- ============================================
+
+-- Role: anon
+CREATE ROLE anon;
+-- Members of role anon:
+-- - authenticator
+-- - postgres (WITH ADMIN OPTION)
+-- Database privileges for anon:
+-- GRANT CONNECT, TEMP ON DATABASE postgres TO anon;
+-- Schema privileges for anon:
+-- GRANT USAGE ON SCHEMA auth TO anon;
+-- GRANT USAGE ON SCHEMA extensions TO anon;
+-- GRANT USAGE ON SCHEMA graphql TO anon;
+-- GRANT USAGE ON SCHEMA graphql_public TO anon;
+-- GRANT USAGE ON SCHEMA public TO anon;
+-- GRANT USAGE ON SCHEMA realtime TO anon;
+-- GRANT USAGE ON SCHEMA storage TO anon;
+
+-- Role: authenticated
+CREATE ROLE authenticated;
+-- Members of role authenticated:
+-- - authenticator
+-- - postgres (WITH ADMIN OPTION)
+-- Database privileges for authenticated:
+-- GRANT CONNECT, TEMP ON DATABASE postgres TO authenticated;
+-- Schema privileges for authenticated:
+-- GRANT USAGE ON SCHEMA auth TO authenticated;
+-- GRANT USAGE ON SCHEMA extensions TO authenticated;
+-- GRANT USAGE ON SCHEMA graphql TO authenticated;
+-- GRANT USAGE ON SCHEMA graphql_public TO authenticated;
+-- GRANT USAGE ON SCHEMA public TO authenticated;
+-- GRANT USAGE ON SCHEMA realtime TO authenticated;
+-- GRANT USAGE ON SCHEMA storage TO authenticated;
+
+-- Role: authenticator
+CREATE ROLE authenticator WITH LOGIN NOINHERIT;
+GRANT anon TO authenticator;
+GRANT authenticated TO authenticator;
+GRANT service_role TO authenticator;
+-- Members of role authenticator:
+-- - postgres (WITH ADMIN OPTION)
+-- - supabase_storage_admin
+-- Database privileges for authenticator:
+-- GRANT CONNECT, TEMP ON DATABASE postgres TO authenticator;
+-- Schema privileges for authenticator:
+-- GRANT USAGE ON SCHEMA public TO authenticator;
+
+-- Role: dashboard_user
+CREATE ROLE dashboard_user WITH CREATEDB CREATEROLE REPLICATION;
+-- Database privileges for dashboard_user:
+-- GRANT CONNECT, CREATE, TEMP ON DATABASE postgres TO dashboard_user;
+-- Schema privileges for dashboard_user:
+-- GRANT CREATE, USAGE ON SCHEMA auth TO dashboard_user;
+-- GRANT CREATE, USAGE ON SCHEMA extensions TO dashboard_user;
+-- GRANT USAGE ON SCHEMA public TO dashboard_user;
+-- GRANT CREATE, USAGE ON SCHEMA storage TO dashboard_user;
+
+-- Role: postgres
+CREATE ROLE postgres WITH CREATEDB CREATEROLE LOGIN REPLICATION BYPASSRLS;
+GRANT anon TO postgres WITH ADMIN OPTION;
+GRANT authenticated TO postgres WITH ADMIN OPTION;
+GRANT authenticator TO postgres WITH ADMIN OPTION;
+GRANT pg_create_subscription TO postgres;
+GRANT pg_monitor TO postgres WITH ADMIN OPTION;
+GRANT pg_read_all_data TO postgres WITH ADMIN OPTION;
+GRANT pg_signal_backend TO postgres WITH ADMIN OPTION;
+GRANT service_role TO postgres WITH ADMIN OPTION;
+GRANT supabase_realtime_admin TO postgres;
+-- Database privileges for postgres:
+-- GRANT CONNECT, CREATE, TEMP ON DATABASE postgres TO postgres;
+-- Schema privileges for postgres:
+-- GRANT USAGE ON SCHEMA auth TO postgres;
+-- GRANT CREATE, USAGE ON SCHEMA extensions TO postgres;
+-- GRANT USAGE ON SCHEMA graphql TO postgres;
+-- GRANT USAGE ON SCHEMA graphql_public TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_0 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_1 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_10 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_11 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_12 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_13 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_14 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_15 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_16 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_17 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_18 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_2 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_21 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_22 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_23 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_24 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_25 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_26 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_27 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_28 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_29 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_3 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_30 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_31 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_32 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_33 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_34 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_35 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_36 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_38 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_39 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_40 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_41 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_42 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_43 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_44 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_45 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_46 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_47 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_48 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_49 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_5 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_50 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_51 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_52 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_53 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_54 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_55 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_56 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_57 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_58 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_59 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_7 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_8 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_9 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_0 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_1 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_10 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_11 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_12 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_13 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_14 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_15 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_16 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_17 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_18 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_2 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_21 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_22 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_23 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_24 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_25 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_26 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_27 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_28 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_29 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_3 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_30 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_31 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_32 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_33 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_34 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_35 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_36 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_38 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_39 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_40 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_41 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_42 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_43 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_44 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_45 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_46 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_47 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_48 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_49 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_5 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_50 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_51 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_52 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_53 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_54 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_55 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_56 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_57 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_58 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_59 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_7 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_8 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_9 TO postgres;
+-- GRANT USAGE ON SCHEMA pgbouncer TO postgres;
+-- GRANT CREATE, USAGE ON SCHEMA public TO postgres;
+-- GRANT CREATE, USAGE ON SCHEMA realtime TO postgres;
+-- GRANT USAGE ON SCHEMA storage TO postgres;
+-- GRANT CREATE, USAGE ON SCHEMA supabase_migrations TO postgres;
+-- GRANT USAGE ON SCHEMA vault TO postgres;
+
+-- Role: service_role
+CREATE ROLE service_role WITH BYPASSRLS;
+-- Members of role service_role:
+-- - authenticator
+-- - postgres (WITH ADMIN OPTION)
+-- Database privileges for service_role:
+-- GRANT CONNECT, TEMP ON DATABASE postgres TO service_role;
+-- Schema privileges for service_role:
+-- GRANT USAGE ON SCHEMA auth TO service_role;
+-- GRANT USAGE ON SCHEMA extensions TO service_role;
+-- GRANT USAGE ON SCHEMA graphql TO service_role;
+-- GRANT USAGE ON SCHEMA graphql_public TO service_role;
+-- GRANT USAGE ON SCHEMA public TO service_role;
+-- GRANT USAGE ON SCHEMA realtime TO service_role;
+-- GRANT USAGE ON SCHEMA storage TO service_role;
+-- GRANT USAGE ON SCHEMA vault TO service_role;
+
+-- Role: supabase_admin
+CREATE ROLE supabase_admin WITH SUPERUSER CREATEDB CREATEROLE LOGIN REPLICATION BYPASSRLS;
+-- Database privileges for supabase_admin:
+-- GRANT CONNECT, CREATE, TEMP ON DATABASE postgres TO supabase_admin;
+-- Schema privileges for supabase_admin:
+-- GRANT CREATE, USAGE ON SCHEMA auth TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA extensions TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA graphql TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA graphql_public TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_0 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_1 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_10 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_11 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_12 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_13 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_14 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_15 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_16 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_17 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_18 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_2 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_21 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_22 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_23 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_24 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_25 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_26 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_27 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_28 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_29 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_3 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_30 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_31 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_32 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_33 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_34 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_35 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_36 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_38 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_39 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_40 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_41 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_42 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_43 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_44 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_45 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_46 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_47 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_48 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_49 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_5 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_50 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_51 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_52 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_53 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_54 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_55 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_56 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_57 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_58 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_59 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_7 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_8 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_9 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_0 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_1 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_10 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_11 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_12 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_13 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_14 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_15 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_16 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_17 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_18 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_2 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_21 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_22 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_23 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_24 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_25 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_26 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_27 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_28 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_29 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_3 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_30 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_31 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_32 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_33 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_34 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_35 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_36 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_38 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_39 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_40 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_41 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_42 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_43 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_44 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_45 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_46 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_47 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_48 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_49 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_5 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_50 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_51 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_52 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_53 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_54 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_55 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_56 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_57 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_58 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_59 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_7 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_8 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_9 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pgbouncer TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA public TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA realtime TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA storage TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA supabase_migrations TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA vault TO supabase_admin;
+
+-- Role: supabase_auth_admin
+CREATE ROLE supabase_auth_admin WITH CREATEROLE LOGIN NOINHERIT;
+-- Database privileges for supabase_auth_admin:
+-- GRANT CONNECT, TEMP ON DATABASE postgres TO supabase_auth_admin;
+-- Schema privileges for supabase_auth_admin:
+-- GRANT CREATE, USAGE ON SCHEMA auth TO supabase_auth_admin;
+-- GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
+
+-- Role: supabase_read_only_user
+CREATE ROLE supabase_read_only_user WITH LOGIN BYPASSRLS;
+GRANT pg_read_all_data TO supabase_read_only_user;
+-- Database privileges for supabase_read_only_user:
+-- GRANT CONNECT, TEMP ON DATABASE postgres TO supabase_read_only_user;
+-- Schema privileges for supabase_read_only_user:
+-- GRANT USAGE ON SCHEMA auth TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA extensions TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA graphql TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA graphql_public TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_0 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_1 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_10 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_11 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_12 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_13 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_14 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_15 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_16 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_17 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_18 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_2 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_21 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_22 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_23 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_24 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_25 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_26 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_27 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_28 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_29 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_3 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_30 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_31 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_32 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_33 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_34 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_35 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_36 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_38 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_39 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_40 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_41 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_42 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_43 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_44 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_45 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_46 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_47 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_48 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_49 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_5 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_50 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_51 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_52 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_53 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_54 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_55 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_56 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_57 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_58 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_59 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_7 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_8 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_9 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_0 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_1 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_10 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_11 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_12 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_13 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_14 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_15 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_16 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_17 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_18 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_2 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_21 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_22 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_23 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_24 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_25 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_26 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_27 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_28 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_29 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_3 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_30 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_31 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_32 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_33 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_34 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_35 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_36 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_38 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_39 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_40 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_41 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_42 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_43 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_44 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_45 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_46 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_47 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_48 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_49 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_5 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_50 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_51 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_52 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_53 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_54 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_55 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_56 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_57 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_58 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_59 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_7 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_8 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_9 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pgbouncer TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA public TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA realtime TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA storage TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA supabase_migrations TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA vault TO supabase_read_only_user;
+
+-- Role: supabase_realtime_admin
+CREATE ROLE supabase_realtime_admin WITH NOINHERIT;
+-- Members of role supabase_realtime_admin:
+-- - postgres
+-- Database privileges for supabase_realtime_admin:
+-- GRANT CONNECT, TEMP ON DATABASE postgres TO supabase_realtime_admin;
+-- Schema privileges for supabase_realtime_admin:
+-- GRANT USAGE ON SCHEMA public TO supabase_realtime_admin;
+-- GRANT CREATE, USAGE ON SCHEMA realtime TO supabase_realtime_admin;
+
+-- Role: supabase_replication_admin
+CREATE ROLE supabase_replication_admin WITH LOGIN REPLICATION;
+-- Database privileges for supabase_replication_admin:
+-- GRANT CONNECT, TEMP ON DATABASE postgres TO supabase_replication_admin;
+-- Schema privileges for supabase_replication_admin:
+-- GRANT USAGE ON SCHEMA public TO supabase_replication_admin;
+
+-- Role: supabase_storage_admin
+CREATE ROLE supabase_storage_admin WITH CREATEROLE LOGIN NOINHERIT;
+GRANT authenticator TO supabase_storage_admin;
+-- Database privileges for supabase_storage_admin:
+-- GRANT CONNECT, TEMP ON DATABASE postgres TO supabase_storage_admin;
+-- Schema privileges for supabase_storage_admin:
+-- GRANT USAGE ON SCHEMA public TO supabase_storage_admin;
+-- GRANT CREATE, USAGE ON SCHEMA storage TO supabase_storage_admin;
