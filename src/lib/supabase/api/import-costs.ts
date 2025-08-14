@@ -62,14 +62,14 @@ export async function importConstructionCosts(rows: ImportRow[]): Promise<Import
   });
   
   locations.forEach(l => {
-    // Создаем ключ из всех полей для поиска
     const keys = [];
     if (l.country) keys.push(l.country);
     if (l.region) keys.push(l.region);
     if (l.city) keys.push(l.city);
     const locationKey = keys.join(', ');
     if (locationKey) locationMap.set(locationKey, l.id);
-    // Также добавляем по отдельным полям
+    
+    // Также создаем ключи для поиска по отдельным полям
     if (l.country) locationMap.set(l.country, l.id);
     if (l.city) locationMap.set(l.city, l.id);
   });
@@ -353,47 +353,34 @@ async function processDetail(
   const detailName = row.detailName!.trim();
   const detailNameWithUnit = detailName + (row.detailUnit ? ` (${row.detailUnit})` : '');
   
-  // Проверяем, существует ли уже такая деталь
-  const existingDetail = details.find(d => 
-    d.name === detailNameWithUnit && 
-    d.cost_category_id === categoryId
-  );
-  
-  console.log(`🔍 Checking for existing detail:`, {
-    detailNameWithUnit,
-    existingDetail: !!existingDetail,
-    totalExistingDetails: details.length
-  });
-  
-  if (!existingDetail) {
-    console.log(`🔍 Processing NEW detail: ${detailName} for category: ${categoryName}`);
+  // Обрабатываем локализацию сначала, чтобы получить location_id
+  let locationId = null;
+  if (row.locationName && row.locationName.trim()) {
+    const locationName = row.locationName.trim();
     
-    // Обрабатываем локализацию
-    let locationId = null;
-    if (row.locationName && row.locationName.trim()) {
-      const locationName = row.locationName.trim();
-      locationId = locationMap.get(locationName);
-      
-      if (!locationId) {
-        console.log(`📍 Creating location: ${locationName}`);
-        
-        // Пытаемся разобрать строку локализации
-        const locationParts = locationName.split(',').map(s => s.trim());
-        const locationData: any = {};
-        
-        if (locationParts.length === 1) {
-          // Если одна часть - считаем это страной
-          locationData.country = locationParts[0];
-        } else if (locationParts.length === 2) {
-          // Если две части - город и страна
-          locationData.city = locationParts[0];
-          locationData.country = locationParts[1];
-        } else if (locationParts.length >= 3) {
-          // Если три части - город, регион, страна
-          locationData.city = locationParts[0];
-          locationData.region = locationParts[1];
-          locationData.country = locationParts[2];
-        }
+    // Пытаемся разобрать строку локализации
+    const locationParts = locationName.split(',').map(s => s.trim());
+    const locationData: any = {};
+    
+    if (locationParts.length === 1) {
+      // Если одна часть - считаем это страной
+      locationData.country = locationParts[0];
+    } else if (locationParts.length === 2) {
+      // Если две части - город и страна
+      locationData.city = locationParts[0];
+      locationData.country = locationParts[1];
+    } else if (locationParts.length >= 3) {
+      // Если три части - город, регион, страна
+      locationData.city = locationParts[0];
+      locationData.region = locationParts[1];
+      locationData.country = locationParts[2];
+    }
+    
+    // Ищем существующую локализацию
+    locationId = locationMap.get(locationName);
+    
+    if (!locationId) {
+      console.log(`📍 Creating new location: ${locationName}`);
         
         const insertResult = await supabase
           .from('location')
@@ -406,7 +393,7 @@ async function processDetail(
           const selectResult = await supabase
             .from('location')
             .select('*')
-            .or(`country.eq.${locationData.country || 'null'},city.eq.${locationData.city || 'null'}`)
+            .or(`country.eq.${locationData.country || null},city.eq.${locationData.city || null}`)
             .limit(1);
           
           if (selectResult.data && selectResult.data.length > 0) {
@@ -424,46 +411,63 @@ async function processDetail(
         } else {
           console.error(`❌ Error creating location:`, locError);
         }
-      } else {
-        console.log(`📍 Using existing location: ${locationName}`);
-      }
+    } else {
+      console.log(`📍 Using existing location: ${locationName} (ID: ${locationId})`);
     }
+  }
+  
+  // Если location_id не найден - создаем дефолтную локализацию
+  if (!locationId) {
+    let defaultLocation = locations.find(l => l.country === 'Не указано');
     
-    // Если location_id не найден - создаем дефолтную локализацию
-    if (!locationId) {
-      let defaultLocation = locations.find(l => l.country === 'Не указано');
-      
-      if (!defaultLocation) {
-        const insertResult = await supabase
+    if (!defaultLocation) {
+      const insertResult = await supabase
+        .from('location')
+        .insert({
+          country: 'Не указано'
+        });
+        
+      let newLoc = null;
+      if (!insertResult.error) {
+        const selectResult = await supabase
           .from('location')
-          .insert({
-            country: 'Не указано'
-          });
-          
-        let newLoc = null;
-        if (!insertResult.error) {
-          const selectResult = await supabase
-            .from('location')
-            .select('*')
-            .eq('country', 'Не указано')
-            .limit(1);
-          
-          if (selectResult.data && selectResult.data.length > 0) {
-            newLoc = selectResult.data[0];
-          }
+          .select('*')
+          .eq('country', 'Не указано')
+          .limit(1);
+        
+        if (selectResult.data && selectResult.data.length > 0) {
+          newLoc = selectResult.data[0];
         }
-          
-        if (newLoc) {
-          defaultLocation = newLoc;
-          locations.push(newLoc);
-          locationMap.set('Не указано', newLoc.id);
-          locationId = newLoc.id;
-          console.log(`✅ Created default location`);
-        }
-      } else {
-        locationId = defaultLocation.id;
       }
+        
+      if (newLoc) {
+        defaultLocation = newLoc;
+        locations.push(newLoc);
+        locationMap.set('Не указано', newLoc.id);
+        locationId = newLoc.id;
+        console.log(`✅ Created default location`);
+      }
+    } else {
+      locationId = defaultLocation.id;
     }
+  }
+
+  // Проверяем, существует ли уже деталь с таким же именем, категорией И локализацией
+  const existingDetail = details.find(d => 
+    d.name === detailNameWithUnit && 
+    d.cost_category_id === categoryId &&
+    d.location_id === locationId
+  );
+  
+  console.log(`🔍 Checking for existing detail:`, {
+    detailNameWithUnit,
+    locationId,
+    existingDetail: !!existingDetail,
+    totalExistingDetails: details.length
+  });
+  
+  if (!existingDetail) {
+    console.log(`🔍 Processing NEW detail: ${detailName} for category: ${categoryName}`);
     
     // Создаем детальную категорию
     console.log(`📦 Creating detail: ${detailNameWithUnit} for category ${categoryName} (ID: ${categoryId})`);
@@ -516,7 +520,7 @@ async function processDetail(
       console.log(`✅ Created detail: ${detailNameWithUnit}`);
     }
   } else {
-    console.log(`⏭️ Detail already exists: ${detailNameWithUnit}`);
+    console.log(`⏭️ Detail already exists: ${detailNameWithUnit} with location ID: ${locationId}`);
     result.success++;
   }
 }
