@@ -19,6 +19,10 @@ export type ClientPositionUpdate = Database['public']['Tables']['client_position
 export interface BOQItemWithLibrary extends BOQItem {
   material?: Material;
   work_item?: WorkItem;
+  work_link?: any; // Link to work if this is a material
+  linked_materials?: any[]; // Materials linked to this work
+  consumption_coefficient?: number; // Коэффициент расхода материала
+  conversion_coefficient?: number; // Коэффициент перевода единиц
 }
 
 export interface BOQItemWithPosition extends BOQItemWithLibrary {

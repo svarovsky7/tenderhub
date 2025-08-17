@@ -2,8 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**⚠️ IMPORTANT: This file must always be kept synchronized with `AGENTS.md`. Any changes to CLAUDE.md should be immediately replicated to AGENTS.md to ensure consistency.**
-
 ## Available Agents
 
 Claude Code can leverage specialized agents for complex tasks. Use them proactively when the task matches their expertise:
@@ -118,6 +116,11 @@ npm run preview      # Preview production build
 npm run lint         # Run ESLint checks
 npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 ```
+
+### Testing Commands
+- Type checking: `npm run build` (includes TypeScript type checking)
+- ESLint: `npm run lint` (includes React hooks and refresh rules)
+- No test suite currently implemented - verify through manual testing
 
 ## Environment Configuration
 
@@ -265,9 +268,10 @@ try {
 2. Run `npm install` to get all dependencies
 3. Start dev server with `npm run dev`
 
-### Vite Configuration
+### Vite Configuration (vite.config.ts)
 - Dev server runs on port 5173 with host enabled
 - HMR overlay disabled for cleaner development experience
+- HMR timeout set to 5000ms
 - lucide-react excluded from dependency optimization
 
 ### Excel Import/Export
@@ -357,7 +361,8 @@ Currently no test suite implemented. Verify functionality through:
 - **Tailwind Preflight Disabled**: Set to `false` in tailwind.config.js to avoid conflicts with Ant Design styles
 - **Virtual Scrolling**: Essential for performance with large BOQ lists - always use react-window components
 - **Connection Monitoring**: Built-in Supabase connection status tracking in layout
-- **TypeScript Configuration**: Uses separate configs for app (tsconfig.app.json) and node (tsconfig.node.json)
+- **TypeScript Configuration**: Uses project references with separate configs for app (tsconfig.app.json) and node (tsconfig.node.json)
+- **ESLint Configuration**: Uses typescript-eslint with React hooks and refresh plugins
 
 ## 🚨 DATABASE GOLDEN RULE 🚨
 
@@ -372,5 +377,11 @@ Currently no test suite implemented. Verify functionality through:
 -- Code examples may reference non-existent structures
 -- TRUST ONLY prod.sql
 ```
+
+## IDE Integration
+
+- **WebStorm Integration**: Project is set up for WebStorm development with IDE-specific configurations
+- **Git Status**: Main branch is `main`, use for all pull requests
+- **Code Style**: Follow existing patterns and conventions in neighboring files
 
 Remember: This is a simplified development environment. Production deployment will require enabling authentication, RLS, and other security features.

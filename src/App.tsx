@@ -11,6 +11,7 @@ import './App.css';
 const TendersPage = React.lazy(() => import('./pages/TendersPage'));
 const TenderBoq = React.lazy(() => import('./pages/TenderBoq'));
 const BOQPage = React.lazy(() => import('./pages/BOQPage'));
+const BOQPageSimplified = React.lazy(() => import('./pages/BOQPageSimplified'));
 const Materials = React.lazy(() => import('./pages/Materials'));
 const Works = React.lazy(() => import('./pages/Works'));
 const UsersPage = React.lazy(() => import('./pages/admin/UsersPage'));
@@ -49,6 +50,14 @@ function App() {
             {/* BOQ Management */}
             <Route 
               path="boq" 
+              element={
+                <React.Suspense fallback={<div>Загрузка...</div>}>
+                  <BOQPageSimplified />
+                </React.Suspense>
+              } 
+            />
+            <Route 
+              path="boq-classic" 
               element={
                 <React.Suspense fallback={<div>Загрузка...</div>}>
                   <BOQPage />
