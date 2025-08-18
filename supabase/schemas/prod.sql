@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-08-18T14:25:32.530167
+-- Generated: 2025-08-18T17:30:50.256308
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -308,7 +308,9 @@ CREATE TABLE IF NOT EXISTS public.boq_items (
     delivery_price_type USER-DEFINED DEFAULT 'included'::delivery_price_type,
     delivery_amount numeric(12,2) DEFAULT 0,
     total_amount numeric(12,2),
+    cost_node_id uuid,
     CONSTRAINT boq_items_client_position_id_fkey FOREIGN KEY (client_position_id) REFERENCES public.client_positions(id),
+    CONSTRAINT boq_items_cost_node_id_fkey FOREIGN KEY (cost_node_id) REFERENCES public.cost_nodes(id),
     CONSTRAINT boq_items_material_id_fkey FOREIGN KEY (material_id) REFERENCES public.materials_library(id),
     CONSTRAINT boq_items_pkey PRIMARY KEY (id),
     CONSTRAINT boq_items_tender_id_fkey FOREIGN KEY (tender_id) REFERENCES public.tenders(id),
@@ -332,6 +334,7 @@ COMMENT ON COLUMN public.boq_items.conversion_coefficient IS 'Коэффицие
 COMMENT ON COLUMN public.boq_items.delivery_price_type IS 'Тип цены доставки материала: included (в цене), not_included (не в цене), amount (сумма)';
 COMMENT ON COLUMN public.boq_items.delivery_amount IS 'Сумма доставки материала (используется только при delivery_price_type = amount)';
 COMMENT ON COLUMN public.boq_items.total_amount IS 'Общая стоимость элемента BOQ (автоматически рассчитывается с учетом доставки для материалов)';
+COMMENT ON COLUMN public.boq_items.cost_node_id IS 'Reference to cost category from cost_nodes hierarchy';
 
 -- Table: public.client_positions
 -- Description: Позиции заказчика из Excel файла - верхний уровень группировки в BOQ
@@ -942,7 +945,7 @@ $function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
+CREATE OR REPLACE FUNCTION extensions.armor(bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -950,7 +953,7 @@ AS '$libdir/pgcrypto', $function$pg_armor$function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea)
+CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -990,7 +993,7 @@ AS '$libdir/pgcrypto', $function$pg_decrypt_iv$function$
 
 
 -- Function: extensions.digest
-CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.digest(text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -998,7 +1001,7 @@ AS '$libdir/pgcrypto', $function$pg_digest$function$
 
 
 -- Function: extensions.digest
-CREATE OR REPLACE FUNCTION extensions.digest(text, text)
+CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1197,7 +1200,7 @@ $function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1205,7 +1208,7 @@ AS '$libdir/pgcrypto', $function$pg_hmac$function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1253,14 +1256,6 @@ AS '$libdir/pgcrypto', $function$pgp_key_id_w$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
- RETURNS text
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
-
-
--- Function: extensions.pgp_pub_decrypt
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
  RETURNS text
  LANGUAGE c
@@ -1270,6 +1265,14 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 -- Function: extensions.pgp_pub_decrypt
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
+ RETURNS text
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
+
+
+-- Function: extensions.pgp_pub_decrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1365,7 +1368,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1373,7 +1376,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
 
 
 -- Function: extensions.pgp_sym_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -2325,6 +2328,102 @@ begin
 end $function$
 
 
+-- Function: public.debug_cost_nodes
+CREATE OR REPLACE FUNCTION public.debug_cost_nodes(p_category_name text DEFAULT NULL::text, p_limit integer DEFAULT 10)
+ RETURNS TABLE(node_id uuid, parent_id uuid, kind text, name text, location_id uuid, category_name text, location_country text, location_title text, location_code text)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        cn.id,
+        cn.parent_id,
+        cn.kind,
+        cn.name,
+        cn.location_id,
+        cp.name as category_name,
+        l.country as location_country,  -- Use country field
+        l.title as location_title,
+        l.code as location_code
+    FROM public.cost_nodes cn
+    LEFT JOIN public.cost_nodes cp ON cp.id = cn.parent_id
+    LEFT JOIN public.location l ON l.id = cn.location_id
+    WHERE (p_category_name IS NULL OR cp.name ILIKE '%' || p_category_name || '%')
+    ORDER BY cn.path
+    LIMIT p_limit;
+END;
+$function$
+
+
+-- Function: public.find_cost_node_by_combination
+CREATE OR REPLACE FUNCTION public.find_cost_node_by_combination(p_category_id uuid, p_detail_id uuid, p_location_id uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_cost_node_id UUID;
+    v_debug TEXT;
+BEGIN
+    -- Debug logging
+    RAISE NOTICE 'Searching for cost_node with: category=%, detail=%, location=%', 
+        p_category_id, p_detail_id, p_location_id;
+    
+    -- Since we inserted detail_cost_categories records with their own IDs into cost_nodes,
+    -- we should search by the detail_id directly
+    SELECT cn.id INTO v_cost_node_id
+    FROM public.cost_nodes cn
+    WHERE cn.id = p_detail_id  -- The detail_id IS the cost_node id
+      AND cn.parent_id = p_category_id
+      AND cn.location_id = p_location_id
+      AND cn.kind = 'item';
+    
+    IF v_cost_node_id IS NOT NULL THEN
+        RAISE NOTICE 'Found cost_node by exact match: %', v_cost_node_id;
+        RETURN v_cost_node_id;
+    END IF;
+    
+    -- If not found by exact match, try to find just by ID
+    -- (since detail_id should be unique)
+    SELECT cn.id INTO v_cost_node_id
+    FROM public.cost_nodes cn
+    WHERE cn.id = p_detail_id
+      AND cn.kind = 'item';
+    
+    IF v_cost_node_id IS NOT NULL THEN
+        RAISE NOTICE 'Found cost_node by detail_id only: %', v_cost_node_id;
+        RETURN v_cost_node_id;
+    END IF;
+    
+    -- If still not found, check if this detail exists in detail_cost_categories
+    SELECT dcc.id INTO v_cost_node_id
+    FROM public.detail_cost_categories dcc
+    WHERE dcc.id = p_detail_id
+      AND dcc.cost_category_id = p_category_id
+      AND dcc.location_id = p_location_id;
+    
+    IF v_cost_node_id IS NOT NULL THEN
+        RAISE NOTICE 'Found in detail_cost_categories, returning: %', v_cost_node_id;
+        -- The detail exists, return its ID
+        -- (it should have been inserted into cost_nodes, but return it anyway)
+        RETURN v_cost_node_id;
+    END IF;
+    
+    -- Last resort - just return the detail_id if it exists at all
+    SELECT dcc.id INTO v_cost_node_id
+    FROM public.detail_cost_categories dcc
+    WHERE dcc.id = p_detail_id;
+    
+    IF v_cost_node_id IS NOT NULL THEN
+        RAISE NOTICE 'Found detail_cost_category, returning its ID: %', v_cost_node_id;
+        RETURN v_cost_node_id;
+    END IF;
+    
+    RAISE NOTICE 'No matching cost_node found, returning NULL';
+    RETURN NULL;
+END;
+$function$
+
+
 -- Function: public.find_location_id
 CREATE OR REPLACE FUNCTION public.find_location_id(p_identifier text)
  RETURNS uuid
@@ -2364,6 +2463,75 @@ END;
 $function$
 
 
+-- Function: public.find_or_create_cost_node
+CREATE OR REPLACE FUNCTION public.find_or_create_cost_node(p_category_id uuid, p_detail_name text, p_location_id uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_cost_node_id UUID;
+    v_detail_id UUID;
+BEGIN
+    -- First try to find in cost_nodes
+    SELECT cn.id INTO v_cost_node_id
+    FROM public.cost_nodes cn
+    WHERE cn.parent_id = p_category_id
+      AND cn.location_id = p_location_id
+      AND cn.name ILIKE '%' || p_detail_name || '%'
+      AND cn.kind = 'item'
+    LIMIT 1;
+    
+    IF v_cost_node_id IS NOT NULL THEN
+        RETURN v_cost_node_id;
+    END IF;
+    
+    -- Try to find in detail_cost_categories
+    SELECT dcc.id INTO v_detail_id
+    FROM public.detail_cost_categories dcc
+    WHERE dcc.cost_category_id = p_category_id
+      AND dcc.location_id = p_location_id
+      AND dcc.name ILIKE '%' || p_detail_name || '%'
+    LIMIT 1;
+    
+    IF v_detail_id IS NOT NULL THEN
+        -- Try to create in cost_nodes
+        BEGIN
+            INSERT INTO public.cost_nodes (
+                id,
+                parent_id,
+                kind,
+                name,
+                location_id,
+                sort_order,
+                path,
+                is_active
+            )
+            SELECT 
+                dcc.id,
+                dcc.cost_category_id,
+                'item'::text,
+                dcc.name || ' (' || COALESCE(l.city, l.name, 'ID:' || SUBSTRING(dcc.location_id::text FROM 1 FOR 8)) || ')',
+                dcc.location_id,
+                1000,
+                REPLACE(dcc.id::text, '-', '_')::ltree,
+                true
+            FROM public.detail_cost_categories dcc
+            LEFT JOIN public.location l ON l.id = dcc.location_id
+            WHERE dcc.id = v_detail_id
+            ON CONFLICT (id) DO NOTHING;
+        EXCEPTION
+            WHEN OTHERS THEN
+                NULL; -- Ignore errors
+        END;
+        RETURN v_detail_id;
+    END IF;
+    
+    -- If nothing found, return NULL
+    RETURN NULL;
+END;
+$function$
+
+
 -- Function: public.generate_unique_location_code
 CREATE OR REPLACE FUNCTION public.generate_unique_location_code(p_name text, p_type text DEFAULT NULL::text)
  RETURNS text
@@ -2391,6 +2559,95 @@ BEGIN
     END LOOP;
     
     RETURN v_unique_code;
+END;
+$function$
+
+
+-- Function: public.get_cost_categories
+CREATE OR REPLACE FUNCTION public.get_cost_categories()
+ RETURNS TABLE(id uuid, name text, code text, description text)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        cc.id,
+        cc.name,
+        cc.code,
+        cc.description
+    FROM public.cost_categories cc
+    ORDER BY cc.name;
+END;
+$function$
+
+
+-- Function: public.get_cost_node_display
+CREATE OR REPLACE FUNCTION public.get_cost_node_display(p_cost_node_id uuid)
+ RETURNS text
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_display TEXT;
+    v_category_name TEXT;
+    v_detail_name TEXT;
+    v_location_name TEXT;
+BEGIN
+    -- Try to get from cost_nodes first
+    SELECT 
+        cp.name,
+        cn.name,
+        COALESCE(
+            NULLIF(l.country, ''),  -- Use country field first
+            NULLIF(l.city, ''),
+            NULLIF(l.title, ''),
+            NULLIF(l.code, ''),
+            ''
+        )
+    INTO v_category_name, v_detail_name, v_location_name
+    FROM public.cost_nodes cn
+    LEFT JOIN public.cost_nodes cp ON cp.id = cn.parent_id
+    LEFT JOIN public.location l ON l.id = cn.location_id
+    WHERE cn.id = p_cost_node_id;
+    
+    IF v_category_name IS NOT NULL THEN
+        -- Clean up the detail name if it has location info appended
+        v_detail_name := REGEXP_REPLACE(v_detail_name, ' \(.*\)$', '');
+        
+        IF v_location_name != '' THEN
+            v_display := v_category_name || ' → ' || v_detail_name || ' → ' || v_location_name;
+        ELSE
+            v_display := v_category_name || ' → ' || v_detail_name;
+        END IF;
+        RETURN v_display;
+    END IF;
+    
+    -- If not found in cost_nodes, try detail_cost_categories
+    SELECT 
+        cc.name,
+        dcc.name,
+        COALESCE(
+            NULLIF(l.country, ''),  -- Use country field first
+            NULLIF(l.city, ''),
+            NULLIF(l.title, ''),
+            NULLIF(l.code, ''),
+            ''
+        )
+    INTO v_category_name, v_detail_name, v_location_name
+    FROM public.detail_cost_categories dcc
+    LEFT JOIN public.cost_categories cc ON cc.id = dcc.cost_category_id
+    LEFT JOIN public.location l ON l.id = dcc.location_id
+    WHERE dcc.id = p_cost_node_id;
+    
+    IF v_category_name IS NOT NULL THEN
+        IF v_location_name != '' THEN
+            v_display := v_category_name || ' → ' || v_detail_name || ' → ' || v_location_name;
+        ELSE
+            v_display := v_category_name || ' → ' || v_detail_name;
+        END IF;
+        RETURN v_display;
+    END IF;
+    
+    RETURN NULL;
 END;
 $function$
 
@@ -2423,6 +2680,38 @@ BEGIN
     AND (p_detail_id IS NULL OR dcc.id = p_detail_id)
     AND (p_location_id IS NULL OR l.id = p_location_id)
     ORDER BY cc.sort_order, cc.name, dcc.sort_order, dcc.name, l.sort_order, l.name;
+END;
+$function$
+
+
+-- Function: public.get_details_by_category
+CREATE OR REPLACE FUNCTION public.get_details_by_category(p_category_id uuid)
+ RETURNS TABLE(id uuid, name text, unit text, unit_cost numeric, location_id uuid, location_name text, has_single_location boolean)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    WITH detail_locations AS (
+        SELECT 
+            dcc.id,
+            dcc.name,
+            NULL::TEXT as unit,
+            dcc.unit_cost,
+            dcc.location_id,
+            COALESCE(
+                NULLIF(l.country, ''),  -- Use country field first
+                NULLIF(l.city, ''),
+                NULLIF(l.title, ''),
+                NULLIF(l.code, ''),
+                'Локация ' || SUBSTRING(l.id::text FROM 1 FOR 8)
+            ) as location_name,
+            COUNT(*) OVER (PARTITION BY dcc.name) = 1 as has_single_location
+        FROM public.detail_cost_categories dcc
+        LEFT JOIN public.location l ON l.id = dcc.location_id
+        WHERE dcc.cost_category_id = p_category_id
+    )
+    SELECT * FROM detail_locations
+    ORDER BY name, location_name;
 END;
 $function$
 
@@ -2467,6 +2756,33 @@ BEGIN
     )
     SELECT * FROM location_tree
     ORDER BY level, sort_order, name;
+END;
+$function$
+
+
+-- Function: public.get_locations_by_detail
+CREATE OR REPLACE FUNCTION public.get_locations_by_detail(p_category_id uuid, p_detail_name text)
+ RETURNS TABLE(detail_id uuid, location_id uuid, location_name text, unit_cost numeric)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        dcc.id as detail_id,
+        dcc.location_id,
+        COALESCE(
+            NULLIF(l.country, ''),  -- Use country field first
+            NULLIF(l.city, ''),
+            NULLIF(l.title, ''),
+            NULLIF(l.code, ''),
+            'Локация ' || SUBSTRING(l.id::text FROM 1 FOR 8)
+        ) as location_name,
+        dcc.unit_cost
+    FROM public.detail_cost_categories dcc
+    LEFT JOIN public.location l ON l.id = dcc.location_id
+    WHERE dcc.cost_category_id = p_category_id
+      AND dcc.name = p_detail_name
+    ORDER BY location_name;
 END;
 $function$
 
@@ -2982,23 +3298,7 @@ AS '$libdir/ltree', $function$ltree_index$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree[])
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$_lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -3014,7 +3314,7 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -3022,7 +3322,7 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -3039,6 +3339,22 @@ AS '$libdir/ltree', $function$lca$function$
 
 -- Function: public.lca
 CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree[])
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -3953,7 +4269,7 @@ AS '$libdir/ltree', $function$subltree$function$
 
 
 -- Function: public.subpath
-CREATE OR REPLACE FUNCTION public.subpath(ltree, integer, integer)
+CREATE OR REPLACE FUNCTION public.subpath(ltree, integer)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -3961,7 +4277,7 @@ AS '$libdir/ltree', $function$subpath$function$
 
 
 -- Function: public.subpath
-CREATE OR REPLACE FUNCTION public.subpath(ltree, integer)
+CREATE OR REPLACE FUNCTION public.subpath(ltree, integer, integer)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -3999,6 +4315,24 @@ AS $function$
           and ti.tender_id = p_tender_id
    group by a.id, a.name, a.path, a.kind
    order by a.path;
+$function$
+
+
+-- Function: public.test_cost_node_finder
+CREATE OR REPLACE FUNCTION public.test_cost_node_finder()
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_cost_node_id UUID;
+BEGIN
+    -- Just return the first cost_node we can find
+    SELECT id INTO v_cost_node_id
+    FROM public.cost_nodes
+    LIMIT 1;
+    
+    RETURN v_cost_node_id;
+END;
 $function$
 
 
@@ -4211,45 +4545,6 @@ $function$
 
 
 -- Function: public.upsert_location
--- Description: Безопасное создание или обновление локации
-CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text)
- RETURNS uuid
- LANGUAGE plpgsql
-AS $function$
-DECLARE
-    v_id uuid;
-    v_code text;
-BEGIN
-    -- Пытаемся найти существующую локацию
-    SELECT id INTO v_id
-    FROM public.location
-    WHERE LOWER(TRIM(name)) = LOWER(TRIM(p_name))
-    AND (parent_id IS NULL AND p_parent_id IS NULL OR parent_id = p_parent_id);
-    
-    IF v_id IS NOT NULL THEN
-        -- Обновляем описание если оно предоставлено
-        IF p_description IS NOT NULL THEN
-            UPDATE public.location
-            SET description = p_description,
-                updated_at = now()
-            WHERE id = v_id;
-        END IF;
-        RETURN v_id;
-    END IF;
-    
-    -- Создаем новую локацию
-    v_code := 'LOC-' || extract(epoch from now())::bigint || '-' || md5(random()::text)::text;
-    
-    INSERT INTO public.location (code, name, parent_id, description)
-    VALUES (v_code, TRIM(p_name), p_parent_id, p_description)
-    RETURNING id INTO v_id;
-    
-    RETURN v_id;
-END;
-$function$
-
-
--- Function: public.upsert_location
 CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_description text DEFAULT NULL::text, p_parent_id uuid DEFAULT NULL::uuid, p_location_type text DEFAULT 'other'::text)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -4313,6 +4608,45 @@ BEGIN
     END IF;
     
     RETURN v_location_id;
+END;
+$function$
+
+
+-- Function: public.upsert_location
+-- Description: Безопасное создание или обновление локации
+CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_id uuid;
+    v_code text;
+BEGIN
+    -- Пытаемся найти существующую локацию
+    SELECT id INTO v_id
+    FROM public.location
+    WHERE LOWER(TRIM(name)) = LOWER(TRIM(p_name))
+    AND (parent_id IS NULL AND p_parent_id IS NULL OR parent_id = p_parent_id);
+    
+    IF v_id IS NOT NULL THEN
+        -- Обновляем описание если оно предоставлено
+        IF p_description IS NOT NULL THEN
+            UPDATE public.location
+            SET description = p_description,
+                updated_at = now()
+            WHERE id = v_id;
+        END IF;
+        RETURN v_id;
+    END IF;
+    
+    -- Создаем новую локацию
+    v_code := 'LOC-' || extract(epoch from now())::bigint || '-' || md5(random()::text)::text;
+    
+    INSERT INTO public.location (code, name, parent_id, description)
+    VALUES (v_code, TRIM(p_name), p_parent_id, p_description)
+    RETURNING id INTO v_id;
+    
+    RETURN v_id;
 END;
 $function$
 
@@ -5901,6 +6235,9 @@ CREATE UNIQUE INDEX users_phone_key ON auth.users USING btree (phone);
 
 -- Index on public.boq_items
 CREATE INDEX idx_boq_items_client_position_id ON public.boq_items USING btree (client_position_id);
+
+-- Index on public.boq_items
+CREATE INDEX idx_boq_items_cost_node_id ON public.boq_items USING btree (cost_node_id);
 
 -- Index on public.boq_items
 CREATE INDEX idx_boq_items_delivery_price_type ON public.boq_items USING btree (delivery_price_type) WHERE (item_type = 'material'::boq_item_type);

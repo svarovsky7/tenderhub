@@ -840,7 +840,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       title: 'Наименование',
       dataIndex: 'description',
       key: 'description',
-      width: '30%',
+      width: '35%',
       minWidth: 180,
       ellipsis: { showTitle: false },
       render: (text, record) => {
@@ -1043,8 +1043,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       title: 'Категория затрат',
       dataIndex: 'cost_node_display',
       key: 'cost_node_display',
-      width: '25%',
+      width: '20%',
       minWidth: 200,
+      align: 'center',
       render: (text, record) => {
         if (record.cost_node_display) {
           // Разбиваем строку на части для более компактного отображения
@@ -1052,7 +1053,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           if (parts.length === 3) {
             return (
               <Tooltip title={record.cost_node_display} placement="left">
-                <div className="py-1">
+                <div className="py-1 text-center">
                   <div className="text-[10px] text-gray-500 font-medium leading-tight">
                     {parts[0]}
                   </div>
@@ -1069,13 +1070,13 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           // Если формат не стандартный, показываем как есть
           return (
             <Tooltip title={record.cost_node_display} placement="left">
-              <div className="text-[11px] text-gray-600 leading-relaxed py-1">
+              <div className="text-[11px] text-gray-600 leading-relaxed py-1 text-center">
                 {record.cost_node_display.replace(/ → /g, ' / ')}
               </div>
             </Tooltip>
           );
         }
-        return <div className="text-xs text-gray-400">—</div>;
+        return <div className="text-xs text-gray-400 text-center">—</div>;
       }
     },
     {
