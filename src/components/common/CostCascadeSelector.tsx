@@ -1,19 +1,24 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Select, Spin, message, Tag, Space, Empty } from 'antd';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Select, Spin, message, Tag, Space, Empty, Input, Switch, Divider } from 'antd';
 import { 
   EnvironmentOutlined, 
   FolderOutlined, 
   FileTextOutlined,
-  ArrowRightOutlined 
+  ArrowRightOutlined,
+  SearchOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons';
 import {
   getCostCategories,
   getDetailsByCategory,
   findCostNodeByCombination,
   getCostNodeDisplay,
+  searchCostNodes,
   type CostCategory,
-  type CostDetail
+  type CostDetail,
+  type CostNodeSearchResult
 } from '../../lib/supabase/api/cost-nodes';
+import { debounce } from 'lodash';
 
 interface CostCascadeSelectorProps {
   value?: string | null;
@@ -22,6 +27,7 @@ interface CostCascadeSelectorProps {
   disabled?: boolean;
   style?: React.CSSProperties;
   className?: string;
+  allowSearch?: boolean; // Enable search mode
 }
 
 interface SelectionState {
@@ -38,7 +44,8 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
   placeholder = 'Выберите категорию затрат',
   disabled = false,
   style,
-  className
+  className,
+  allowSearch = true
 }) => {
   console.log('🚀 [CostCascadeSelector] Rendering with value:', value);
 
@@ -48,6 +55,12 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
   const [categories, setCategories] = useState<CostCategory[]>([]);
   const [details, setDetails] = useState<CostDetail[]>([]);
   const [displayValue, setDisplayValue] = useState<string>('');
+  
+  // Search mode state
+  const [searchMode, setSearchMode] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<CostNodeSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   
   const [selection, setSelection] = useState<SelectionState>({
     category: null,
@@ -65,11 +78,7 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
   // Load display value for existing value
   useEffect(() => {
     if (value && value !== 'fallback') {
-      // Only load if we don't already have the display value for this ID
-      const needsLoad = !displayValue || !displayValue.includes('→');
-      if (needsLoad) {
-        loadDisplayValue(value);
-      }
+      loadDisplayValue(value);
     } else if (!value) {
       setDisplayValue('');
     }
@@ -273,25 +282,179 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
     });
     setDetails([]);
     setDisplayValue('');
+    setSearchTerm('');
+    setSearchResults([]);
     
     if (onChange) {
       onChange(null, '');
     }
   };
+  
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    debounce(async (term: string) => {
+      if (term.trim().length < 2) {
+        setSearchResults([]);
+        return;
+      }
+      
+      console.log('🔍 [CostCascadeSelector] Searching for:', term);
+      setSearchLoading(true);
+      
+      try {
+        const { data, error } = await searchCostNodes(term, 30);
+        
+        if (error) {
+          console.error('❌ [CostCascadeSelector] Search error:', error);
+          message.error('Ошибка поиска');
+          return;
+        }
+        
+        setSearchResults(data || []);
+        console.log('✅ [CostCascadeSelector] Search results:', data?.length);
+      } catch (err) {
+        console.error('❌ [CostCascadeSelector] Search exception:', err);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300),
+    []
+  );
+  
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+    debouncedSearch(term);
+  };
+  
+  // Handle search result selection
+  const handleSearchResultSelect = (result: CostNodeSearchResult) => {
+    console.log('🚀 [CostCascadeSelector] Selected search result:', result);
+    
+    setDisplayValue(result.display_name);
+    setSearchTerm('');
+    setSearchResults([]);
+    setIsOpen(false);
+    
+    if (onChange) {
+      onChange(result.cost_node_id, result.display_name);
+    }
+    
+    message.success('Категория затрат выбрана');
+  };
 
   const renderDropdown = () => {
-    if (loading) {
+    // Mode switcher if search is allowed
+    const modeSwitcher = allowSearch ? (
+      <div style={{ 
+        padding: '8px 12px',
+        borderBottom: '1px solid #f0f0f0',
+        backgroundColor: '#fafafa',
+        position: 'sticky',
+        top: 0,
+        zIndex: 2
+      }}>
+        <Space>
+          <Switch
+            size="small"
+            checked={searchMode}
+            onChange={(checked) => {
+              setSearchMode(checked);
+              setSearchTerm('');
+              setSearchResults([]);
+            }}
+            checkedChildren={<SearchOutlined />}
+            unCheckedChildren={<AppstoreOutlined />}
+          />
+          <span style={{ fontSize: '12px', color: '#666' }}>
+            {searchMode ? 'Режим поиска' : 'Каскадный выбор'}
+          </span>
+        </Space>
+      </div>
+    ) : null;
+    
+    if (loading && !searchMode) {
       return (
-        <div style={{ padding: '20px', textAlign: 'center' }}>
-          <Spin size="small" />
-        </div>
+        <>
+          {modeSwitcher}
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            <Spin size="small" />
+          </div>
+        </>
+      );
+    }
+    
+    // Search mode
+    if (searchMode) {
+      return (
+        <>
+          {modeSwitcher}
+          <div style={{ padding: '8px' }}>
+            <Input
+              autoFocus
+              placeholder="Введите для поиска (мин. 2 символа)"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              prefix={<SearchOutlined />}
+              style={{ marginBottom: '8px' }}
+            />
+            
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              {searchLoading ? (
+                <div style={{ padding: '20px', textAlign: 'center' }}>
+                  <Spin size="small" />
+                </div>
+              ) : searchResults.length > 0 ? (
+                searchResults.map((result) => (
+                  <div
+                    key={result.cost_node_id}
+                    className="cost-selector-item"
+                    onClick={() => handleSearchResultSelect(result)}
+                    style={{
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s',
+                      borderBottom: '1px solid #f5f5f5'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#f0f0f0';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <div style={{ fontSize: '13px', color: '#262626' }}>
+                      {result.detail_name}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#8c8c8c', marginTop: '2px' }}>
+                      {result.category_name} → {result.location_name}
+                    </div>
+                  </div>
+                ))
+              ) : searchTerm.length >= 2 ? (
+                <Empty 
+                  description="Ничего не найдено" 
+                  style={{ padding: '20px' }}
+                />
+              ) : (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#8c8c8c', fontSize: '12px' }}>
+                  Введите минимум 2 символа для поиска
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       );
     }
 
+    // Cascade mode
     if (step === 'category') {
       return (
-        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-          {categories.length > 0 ? (
+        <>
+          {modeSwitcher}
+          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            {categories.length > 0 ? (
             categories.map(category => (
               <div
                 key={category.id}
@@ -324,7 +487,8 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
               style={{ padding: '20px' }}
             />
           )}
-        </div>
+          </div>
+        </>
       );
     }
 

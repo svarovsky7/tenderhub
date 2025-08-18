@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-08-18T17:30:50.256308
+-- Generated: 2025-08-18T18:06:25.864812
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -3298,6 +3298,14 @@ AS '$libdir/ltree', $function$ltree_index$function$
 
 
 -- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
 CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
@@ -3322,11 +3330,11 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree[])
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
+AS '$libdir/ltree', $function$_lca$function$
 
 
 -- Function: public.lca
@@ -3338,19 +3346,11 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree[])
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$_lca$function$
 
 
 -- Function: public.lca
@@ -4172,6 +4172,105 @@ AS $function$
 $function$
 
 
+-- Function: public.search_cost_nodes
+-- Description: Поиск категорий затрат по частичному совпадению в названиях категорий, детализации и локаций.
+  Возвращает cost_node_id (или detail_id как fallback), полное отображаемое имя и компоненты пути.
+CREATE OR REPLACE FUNCTION public.search_cost_nodes(p_search_term text, p_limit integer DEFAULT 50)
+ RETURNS TABLE(cost_node_id uuid, display_name text, category_name text, detail_name text, location_name text, category_id uuid, detail_id uuid, location_id uuid)
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
+  BEGIN
+      -- Нормализуем поисковый запрос
+      p_search_term := LOWER(TRIM(p_search_term));
+
+      -- Если поисковый запрос пустой, возвращаем пустой результат
+      IF p_search_term = '' OR p_search_term IS NULL THEN
+          RETURN;
+      END IF;
+
+      RETURN QUERY
+      WITH search_results AS (
+          SELECT DISTINCT
+              -- Используем detail_id как fallback если cost_node не найден
+              COALESCE(cn.id, dcc.id) as node_id,
+              cc.name as cat_name,
+              dcc.name as det_name,
+              COALESCE(
+                  NULLIF(l.country, ''),
+                  NULLIF(l.city, ''),
+                  NULLIF(l.title, ''),
+                  NULLIF(l.code, ''),
+                  'Локация ' || SUBSTRING(l.id::text FROM 1 FOR 8)
+              ) as loc_name,
+              cc.id as cat_id,
+              dcc.id as det_id,
+              l.id as loc_id,
+              -- Рассчитываем релевантность для сортировки
+              CASE
+                  -- Точное совпадение в детализации
+                  WHEN LOWER(dcc.name) = p_search_term THEN 1
+                  -- Начинается с поискового запроса в детализации
+                  WHEN LOWER(dcc.name) LIKE p_search_term || '%' THEN 2
+                  -- Точное совпадение в категории
+                  WHEN LOWER(cc.name) = p_search_term THEN 3
+                  -- Начинается с поискового запроса в категории
+                  WHEN LOWER(cc.name) LIKE p_search_term || '%' THEN 4
+                  -- Содержит в детализации
+                  WHEN LOWER(dcc.name) LIKE '%' || p_search_term || '%' THEN 5
+                  -- Содержит в категории
+                  WHEN LOWER(cc.name) LIKE '%' || p_search_term || '%' THEN 6
+                  -- Содержит в локации
+                  WHEN LOWER(COALESCE(l.country, l.city, l.title, l.code, '')) LIKE '%' || p_search_term || '%' THEN      
+  7
+                  ELSE 8
+              END as relevance
+          FROM
+              public.detail_cost_categories dcc
+          INNER JOIN
+              public.cost_categories cc ON cc.id = dcc.cost_category_id
+          LEFT JOIN
+              public.location l ON l.id = dcc.location_id
+          LEFT JOIN
+              public.cost_nodes cn ON cn.parent_id = cc.id
+                  AND cn.name = dcc.name || CASE
+                      WHEN l.country IS NOT NULL THEN ' (' || l.country || ')'
+                      WHEN l.city IS NOT NULL THEN ' (' || l.city || ')'
+                      WHEN l.title IS NOT NULL THEN ' (' || l.title || ')'
+                      ELSE ' (ID: ' || SUBSTRING(dcc.id::text FROM 1 FOR 8) || ')'
+                  END
+          WHERE
+              -- Поиск по всем полям
+              LOWER(cc.name) LIKE '%' || p_search_term || '%'
+              OR LOWER(dcc.name) LIKE '%' || p_search_term || '%'
+              OR LOWER(COALESCE(l.country, '')) LIKE '%' || p_search_term || '%'
+              OR LOWER(COALESCE(l.city, '')) LIKE '%' || p_search_term || '%'
+              OR LOWER(COALESCE(l.title, '')) LIKE '%' || p_search_term || '%'
+              OR LOWER(COALESCE(l.code, '')) LIKE '%' || p_search_term || '%'
+              -- Также ищем по коду категории если есть
+              OR LOWER(COALESCE(cc.code, '')) LIKE '%' || p_search_term || '%'
+      )
+      SELECT
+          node_id as cost_node_id,
+          cat_name || ' → ' || det_name || ' → ' || loc_name as display_name,
+          cat_name as category_name,
+          det_name as detail_name,
+          loc_name as location_name,
+          cat_id as category_id,
+          det_id as detail_id,
+          loc_id as location_id
+      FROM
+          search_results
+      ORDER BY
+          relevance,
+          cat_name,
+          det_name,
+          loc_name
+      LIMIT p_limit;
+  END;
+  $function$
+
+
 -- Function: public.set_limit
 CREATE OR REPLACE FUNCTION public.set_limit(real)
  RETURNS real
@@ -4545,6 +4644,45 @@ $function$
 
 
 -- Function: public.upsert_location
+-- Description: Безопасное создание или обновление локации
+CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_id uuid;
+    v_code text;
+BEGIN
+    -- Пытаемся найти существующую локацию
+    SELECT id INTO v_id
+    FROM public.location
+    WHERE LOWER(TRIM(name)) = LOWER(TRIM(p_name))
+    AND (parent_id IS NULL AND p_parent_id IS NULL OR parent_id = p_parent_id);
+    
+    IF v_id IS NOT NULL THEN
+        -- Обновляем описание если оно предоставлено
+        IF p_description IS NOT NULL THEN
+            UPDATE public.location
+            SET description = p_description,
+                updated_at = now()
+            WHERE id = v_id;
+        END IF;
+        RETURN v_id;
+    END IF;
+    
+    -- Создаем новую локацию
+    v_code := 'LOC-' || extract(epoch from now())::bigint || '-' || md5(random()::text)::text;
+    
+    INSERT INTO public.location (code, name, parent_id, description)
+    VALUES (v_code, TRIM(p_name), p_parent_id, p_description)
+    RETURNING id INTO v_id;
+    
+    RETURN v_id;
+END;
+$function$
+
+
+-- Function: public.upsert_location
 CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_description text DEFAULT NULL::text, p_parent_id uuid DEFAULT NULL::uuid, p_location_type text DEFAULT 'other'::text)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -4608,45 +4746,6 @@ BEGIN
     END IF;
     
     RETURN v_location_id;
-END;
-$function$
-
-
--- Function: public.upsert_location
--- Description: Безопасное создание или обновление локации
-CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text)
- RETURNS uuid
- LANGUAGE plpgsql
-AS $function$
-DECLARE
-    v_id uuid;
-    v_code text;
-BEGIN
-    -- Пытаемся найти существующую локацию
-    SELECT id INTO v_id
-    FROM public.location
-    WHERE LOWER(TRIM(name)) = LOWER(TRIM(p_name))
-    AND (parent_id IS NULL AND p_parent_id IS NULL OR parent_id = p_parent_id);
-    
-    IF v_id IS NOT NULL THEN
-        -- Обновляем описание если оно предоставлено
-        IF p_description IS NOT NULL THEN
-            UPDATE public.location
-            SET description = p_description,
-                updated_at = now()
-            WHERE id = v_id;
-        END IF;
-        RETURN v_id;
-    END IF;
-    
-    -- Создаем новую локацию
-    v_code := 'LOC-' || extract(epoch from now())::bigint || '-' || md5(random()::text)::text;
-    
-    INSERT INTO public.location (code, name, parent_id, description)
-    VALUES (v_code, TRIM(p_name), p_parent_id, p_description)
-    RETURNING id INTO v_id;
-    
-    RETURN v_id;
 END;
 $function$
 

@@ -480,6 +480,56 @@ export async function getCostNodeDisplay(costNodeId: string): Promise<{ data: st
   }
 }
 
+/**
+ * Search result type for cost nodes
+ */
+export interface CostNodeSearchResult {
+  cost_node_id: string;
+  display_name: string;
+  category_name: string;
+  detail_name: string;
+  location_name: string;
+  category_id: string;
+  detail_id: string;
+  location_id: string;
+}
+
+/**
+ * Search cost nodes by partial text match
+ * Searches in category names, detail names, and location names
+ */
+export async function searchCostNodes(
+  searchTerm: string,
+  limit: number = 50
+): Promise<{ data: CostNodeSearchResult[] | null; error: any }> {
+  console.log('🚀 [searchCostNodes] Searching for:', searchTerm);
+  
+  // Don't search if term is too short
+  if (!searchTerm || searchTerm.trim().length < 2) {
+    console.log('⚠️ [searchCostNodes] Search term too short');
+    return { data: [], error: null };
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .rpc('search_cost_nodes', { 
+        p_search_term: searchTerm.trim(),
+        p_limit: limit 
+      });
+    
+    if (error) {
+      console.error('❌ [searchCostNodes] Error:', error);
+      return { data: null, error };
+    }
+    
+    console.log('✅ [searchCostNodes] Found:', data?.length || 0, 'results');
+    return { data: data || [], error: null };
+  } catch (err) {
+    console.error('❌ [searchCostNodes] Exception:', err);
+    return { data: null, error: err };
+  }
+}
+
 // Импорт данных из Excel
 export async function importCostNodesFromExcel(data: any[]): Promise<{ 
   success: number; 
