@@ -6,6 +6,7 @@ import { clientPositionsApi, boqItemsApi, boqApi } from '../../lib/supabase/api'
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import { supabase } from '../../lib/supabase/client';
 import AutoCompleteSearch from '../common/AutoCompleteSearch';
+import { CostCascadeSelector } from '../common';
 import { formatCurrency, formatQuantity, formatUnitRate } from '../../utils/formatters';
 import { calculateMaterialVolume, updateLinkWithCalculatedVolume } from '../../utils/materialCalculations';
 // Components for drag-and-drop removed - using modal approach
@@ -59,6 +60,8 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     conversion_coefficient?: number;
     delivery_price_type?: 'included' | 'not_included' | 'amount';
     delivery_amount?: number;
+    cost_node_id?: string | null;
+    cost_node_display?: string | null;
   }>({
     description: '',
     quantity: 0,
@@ -98,7 +101,9 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     conversionCoefficient: '',
     selectedItemId: null as string | null,
     deliveryPriceType: 'included' as 'included' | 'not_included' | 'amount',
-    deliveryAmount: ''
+    deliveryAmount: '',
+    cost_node_id: null as string | null,
+    cost_node_display: null as string | null
   });
   // Remove these states as AutoCompleteSearch handles loading
   // const [materials, setMaterials] = useState<Material[]>([]);
@@ -579,7 +584,8 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
         delivery_price_type: formData.type === 'material' ? formData.deliveryPriceType : null,
         delivery_amount: formData.type === 'material' && formData.deliveryPriceType === 'amount' && formData.deliveryAmount ? parseFloat(formData.deliveryAmount) : null,
         material_id: materialId,
-        work_id: workId
+        work_id: workId,
+        cost_node_id: formData.cost_node_id
       };
 
       console.log('📡 Creating BOQ item:', newItemData);
@@ -698,7 +704,9 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
         conversionCoefficient: '',
         selectedItemId: null,
         deliveryPriceType: 'included',
-        deliveryAmount: ''
+        deliveryAmount: '',
+        cost_node_id: null,
+        cost_node_display: null
       });
 
       // No need to reload positions - updated locally!
@@ -826,14 +834,18 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
           consumption_coefficient: item.consumption_coefficient || 1,
           conversion_coefficient: item.conversion_coefficient || 1,
           delivery_price_type: item.delivery_price_type || 'included',
-          delivery_amount: item.delivery_amount || 0
+          delivery_amount: item.delivery_amount || 0,
+          cost_node_id: (item as any).cost_node_id || null,
+          cost_node_display: (item as any).cost_node_display || null
         });
       } else {
         // For works, use simpler form
         setEditFormData({
           description: item.description || '',
           quantity: item.quantity || 0,
-          unit_rate: item.unit_rate || 0
+          unit_rate: item.unit_rate || 0,
+          cost_node_id: (item as any).cost_node_id || null,
+          cost_node_display: (item as any).cost_node_display || null
         });
       }
       return;
@@ -974,8 +986,9 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       const updates: Partial<BOQItem> = {
         description: editFormData.description,
         quantity: editFormData.quantity,
-        unit_rate: editFormData.unit_rate
-      };
+        unit_rate: editFormData.unit_rate,
+        cost_node_id: editFormData.cost_node_id
+      } as any;
       
       // Add material-specific fields
       if (editingItem.item_type === 'material') {
@@ -1684,6 +1697,23 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                                   ✕
                                                 </button>
                                               </div>
+                                              <div className="flex items-center gap-2">
+                                                <label className="text-xs text-gray-600">Затраты:</label>
+                                                <div className="flex-1">
+                                                  <CostCascadeSelector
+                                                    value={editFormData.cost_node_id}
+                                                    onChange={(costNodeId, displayValue) => {
+                                                      setEditFormData({
+                                                        ...editFormData,
+                                                        cost_node_id: costNodeId,
+                                                        cost_node_display: displayValue
+                                                      });
+                                                    }}
+                                                    placeholder="Выберите категорию затрат"
+                                                    style={{ fontSize: '12px' }}
+                                                  />
+                                                </div>
+                                              </div>
                                             </div>
                                           ) : (
                                             // Normal display
@@ -1943,6 +1973,25 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                               />
                                             </div>
                                             
+                                            {/* Категория затрат */}
+                                            <div className="flex items-center gap-2">
+                                              <label className="text-xs text-gray-600 w-24">Затраты:</label>
+                                              <div className="flex-1">
+                                                <CostCascadeSelector
+                                                  value={editFormData.cost_node_id}
+                                                  onChange={(costNodeId, displayValue) => {
+                                                    setEditFormData({
+                                                      ...editFormData,
+                                                      cost_node_id: costNodeId,
+                                                      cost_node_display: displayValue
+                                                    });
+                                                  }}
+                                                  placeholder="Выберите категорию затрат"
+                                                  style={{ fontSize: '12px' }}
+                                                />
+                                              </div>
+                                            </div>
+                                            
                                             {/* Доставка */}
                                             <div className="flex items-center gap-2">
                                               <label className="text-xs text-gray-600 w-24">Доставка:</label>
@@ -2009,6 +2058,11 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                               </div>
                                               <div className="text-xs text-gray-600 mt-1">
                                                 Цена: {formatCurrency(subItem.unit_rate || 0)}/{subItem.unit}
+                                                {(subItem as any).cost_node_display && (
+                                                  <span className="ml-2 text-xs text-purple-600">
+                                                    Затраты: {(subItem as any).cost_node_display}
+                                                  </span>
+                                                )}
                                               </div>
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -2175,6 +2229,26 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                             </div>
                           </div>
                         )}
+
+                        {/* Поле выбора категории затрат */}
+                        <div className="mt-2">
+                          <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                            Категория затрат
+                          </label>
+                          <CostCascadeSelector
+                            value={formData.cost_node_id}
+                            onChange={(costNodeId, displayValue) => {
+                              setFormData(prev => ({
+                                ...prev,
+                                cost_node_id: costNodeId,
+                                cost_node_display: displayValue
+                              }));
+                              console.log('🚀 Cost category selected in BOQ form:', { costNodeId, displayValue });
+                            }}
+                            placeholder="Выберите категорию затрат"
+                            style={{ fontSize: '12px' }}
+                          />
+                        </div>
 
                         {/* Поля доставки для материалов */}
                         {formData.type === 'material' && (

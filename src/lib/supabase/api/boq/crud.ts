@@ -35,9 +35,21 @@ export const boqCrudApi = {
         };
       }
 
+      // Load cost_node_display if cost_node_id exists
+      let itemWithCostDisplay = data;
+      if (data?.cost_node_id) {
+        try {
+          const { data: displayName } = await supabase
+            .rpc('get_cost_node_display', { p_cost_node_id: data.cost_node_id });
+          itemWithCostDisplay = { ...data, cost_node_display: displayName };
+        } catch (err) {
+          console.error('❌ Failed to get cost_node_display for:', data.cost_node_id);
+        }
+      }
+
       console.log('✅ BOQ item retrieved successfully');
       return {
-        data,
+        data: itemWithCostDisplay,
         message: 'BOQ item loaded successfully',
       };
     } catch (error) {

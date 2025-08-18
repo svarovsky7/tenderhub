@@ -284,6 +284,202 @@ function buildTree(nodes: CostNode[]): CostNode[] {
   return rootNodes;
 }
 
+// Функции для каскадного выбора затрат
+
+export interface CostCategory {
+  id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+}
+
+export interface CostDetail {
+  id: string;
+  name: string;
+  unit: string | null;
+  unit_cost: number | null;
+  location_id: string;
+  location_name: string;
+  has_single_location: boolean;
+  locations?: Array<{
+    id: string;
+    name: string;
+    detail_id: string;
+    unit_cost: number | null;
+  }>;
+}
+
+export interface CostLocation {
+  detail_id: string;
+  location_id: string;
+  location_name: string;
+  unit_cost: number | null;
+}
+
+/**
+ * Get all cost categories for cascade selector
+ */
+export async function getCostCategories(): Promise<{ data: CostCategory[] | null; error: any }> {
+  console.log('🚀 [getCostCategories] Loading cost categories');
+  
+  try {
+    const { data, error } = await supabase
+      .rpc('get_cost_categories');
+    
+    if (error) {
+      console.error('❌ [getCostCategories] Error:', error);
+      return { data: null, error };
+    }
+    
+    console.log('✅ [getCostCategories] Success:', data?.length || 0, 'categories');
+    return { data, error: null };
+  } catch (err) {
+    console.error('❌ [getCostCategories] Exception:', err);
+    return { data: null, error: err };
+  }
+}
+
+/**
+ * Get details by category ID for cascade selector
+ */
+export async function getDetailsByCategory(categoryId: string): Promise<{ data: CostDetail[] | null; error: any }> {
+  console.log('🚀 [getDetailsByCategory] Loading details for category:', categoryId);
+  
+  try {
+    const { data, error } = await supabase
+      .rpc('get_details_by_category', { p_category_id: categoryId });
+    
+    if (error) {
+      console.error('❌ [getDetailsByCategory] Error:', error);
+      return { data: null, error };
+    }
+    
+    // Group details by name for easier processing
+    const groupedData = data?.reduce((acc: any[], item: any) => {
+      const existing = acc.find((d: any) => d.name === item.name);
+      if (!existing) {
+        acc.push({
+          ...item,
+          locations: [{ 
+            id: item.location_id, 
+            name: item.location_name,
+            detail_id: item.id,
+            unit_cost: item.unit_cost
+          }]
+        });
+      } else {
+        existing.locations.push({ 
+          id: item.location_id, 
+          name: item.location_name,
+          detail_id: item.id,
+          unit_cost: item.unit_cost
+        });
+        existing.has_single_location = false;
+      }
+      return acc;
+    }, []);
+    
+    console.log('✅ [getDetailsByCategory] Success:', groupedData?.length || 0, 'unique details');
+    return { data: groupedData, error: null };
+  } catch (err) {
+    console.error('❌ [getDetailsByCategory] Exception:', err);
+    return { data: null, error: err };
+  }
+}
+
+/**
+ * Get locations by detail name and category for cascade selector
+ */
+export async function getLocationsByDetail(
+  categoryId: string, 
+  detailName: string
+): Promise<{ data: CostLocation[] | null; error: any }> {
+  console.log('🚀 [getLocationsByDetail] Loading locations for:', { categoryId, detailName });
+  
+  try {
+    const { data, error } = await supabase
+      .rpc('get_locations_by_detail', { 
+        p_category_id: categoryId,
+        p_detail_name: detailName 
+      });
+    
+    if (error) {
+      console.error('❌ [getLocationsByDetail] Error:', error);
+      return { data: null, error };
+    }
+    
+    console.log('✅ [getLocationsByDetail] Success:', data?.length || 0, 'locations');
+    return { data, error: null };
+  } catch (err) {
+    console.error('❌ [getLocationsByDetail] Exception:', err);
+    return { data: null, error: err };
+  }
+}
+
+/**
+ * Find cost_node_id by combination of category, detail and location
+ */
+export async function findCostNodeByCombination(
+  categoryId: string,
+  detailId: string,
+  locationId: string
+): Promise<{ data: string | null; error: any }> {
+  console.log('🚀 [findCostNodeByCombination] Finding cost node for:', { categoryId, detailId, locationId });
+  
+  try {
+    const { data, error } = await supabase
+      .rpc('find_cost_node_by_combination', {
+        p_category_id: categoryId,
+        p_detail_id: detailId,
+        p_location_id: locationId
+      });
+    
+    if (error) {
+      console.error('❌ [findCostNodeByCombination] Error:', error);
+      // If the RPC function fails, return the detail_id as fallback
+      console.log('⚠️ Using detail_id as fallback due to error');
+      return { data: detailId, error: null };
+    }
+    
+    // If no data returned, use detail_id as fallback
+    if (!data) {
+      console.log('⚠️ No cost node found, using detail_id as fallback:', detailId);
+      return { data: detailId, error: null };
+    }
+    
+    console.log('✅ [findCostNodeByCombination] Success:', data);
+    return { data, error: null };
+  } catch (err) {
+    console.error('❌ [findCostNodeByCombination] Exception:', err);
+    // Return detail_id as fallback on any error
+    console.log('⚠️ Using detail_id as fallback due to exception');
+    return { data: detailId, error: null };
+  }
+}
+
+/**
+ * Get display name for a cost node
+ */
+export async function getCostNodeDisplay(costNodeId: string): Promise<{ data: string | null; error: any }> {
+  console.log('🚀 [getCostNodeDisplay] Getting display name for:', costNodeId);
+  
+  try {
+    const { data, error } = await supabase
+      .rpc('get_cost_node_display', { p_cost_node_id: costNodeId });
+    
+    if (error) {
+      console.error('❌ [getCostNodeDisplay] Error:', error);
+      return { data: null, error };
+    }
+    
+    console.log('✅ [getCostNodeDisplay] Success:', data);
+    return { data, error: null };
+  } catch (err) {
+    console.error('❌ [getCostNodeDisplay] Exception:', err);
+    return { data: null, error: err };
+  }
+}
+
 // Импорт данных из Excel
 export async function importCostNodesFromExcel(data: any[]): Promise<{ 
   success: number; 

@@ -188,9 +188,26 @@ export const boqQueryApi = {
 
       const { page = 1, limit = 20 } = pagination;
       
+      // Load cost_node_display for each item with cost_node_id
+      const itemsWithCostDisplay = await Promise.all(
+        (data || []).map(async (item) => {
+          if (item.cost_node_id) {
+            try {
+              const { data: displayName } = await supabase
+                .rpc('get_cost_node_display', { p_cost_node_id: item.cost_node_id });
+              return { ...item, cost_node_display: displayName };
+            } catch (err) {
+              console.error('❌ Failed to get cost_node_display for:', item.cost_node_id);
+              return item;
+            }
+          }
+          return item;
+        })
+      );
+      
       console.log('✅ Position BOQ items retrieved successfully');
       return {
-        data: data || [],
+        data: itemsWithCostDisplay,
         pagination: {
           page,
           limit,
@@ -229,9 +246,26 @@ export const boqQueryApi = {
         };
       }
 
+      // Load cost_node_display for each item with cost_node_id
+      const itemsWithCostDisplay = await Promise.all(
+        (data || []).map(async (item) => {
+          if (item.cost_node_id) {
+            try {
+              const { data: displayName } = await supabase
+                .rpc('get_cost_node_display', { p_cost_node_id: item.cost_node_id });
+              return { ...item, cost_node_display: displayName };
+            } catch (err) {
+              console.error('❌ Failed to get cost_node_display for:', item.cost_node_id);
+              return item;
+            }
+          }
+          return item;
+        })
+      );
+
       console.log('✅ Tender BOQ items retrieved successfully');
       return {
-        data: data || [],
+        data: itemsWithCostDisplay,
         message: 'BOQ items loaded successfully',
       };
     } catch (error) {
@@ -265,9 +299,26 @@ export const boqQueryApi = {
         };
       }
 
+      // Load cost_node_display for each item with cost_node_id
+      const itemsWithCostDisplay = await Promise.all(
+        (data || []).map(async (item) => {
+          if (item.cost_node_id) {
+            try {
+              const { data: displayName } = await supabase
+                .rpc('get_cost_node_display', { p_cost_node_id: item.cost_node_id });
+              return { ...item, cost_node_display: displayName };
+            } catch (err) {
+              console.error('❌ Failed to get cost_node_display for:', item.cost_node_id);
+              return item;
+            }
+          }
+          return item;
+        })
+      );
+
       console.log('✅ Position BOQ items retrieved successfully');
       return {
-        data: data || [],
+        data: itemsWithCostDisplay,
         message: 'BOQ items loaded successfully',
       };
     } catch (error) {
@@ -296,7 +347,8 @@ export const boqQueryApi = {
         .select(`
           *,
           material:materials_library(*),
-          work_item:works_library(*)
+          work_item:works_library(*),
+          cost_node_id
         `)
         .eq('client_position_id', clientPositionId)
         .eq('item_type', 'work')
@@ -317,6 +369,18 @@ export const boqQueryApi = {
       
       for (const workItem of workItems || []) {
         console.log('🔗 Processing work item:', workItem.id);
+        
+        // Load cost_node_display for work item if it has cost_node_id
+        let workItemWithCostDisplay = workItem;
+        if (workItem.cost_node_id) {
+          try {
+            const { data: displayName } = await supabase
+              .rpc('get_cost_node_display', { p_cost_node_id: workItem.cost_node_id });
+            workItemWithCostDisplay = { ...workItem, cost_node_display: displayName };
+          } catch (err) {
+            console.error('❌ Failed to get cost_node_display for work:', workItem.cost_node_id);
+          }
+        }
         
         // Get linked materials using the database function
         const { data: linkedMaterials, error: materialsError } = await supabase
@@ -347,9 +411,21 @@ export const boqQueryApi = {
             .single();
 
           if (!matError && materialItem) {
+            // Load cost_node_display for material item
+            let materialWithCostDisplay = materialItem;
+            if (materialItem.cost_node_id) {
+              try {
+                const { data: displayName } = await supabase
+                  .rpc('get_cost_node_display', { p_cost_node_id: materialItem.cost_node_id });
+                materialWithCostDisplay = { ...materialItem, cost_node_display: displayName };
+              } catch (err) {
+                console.error('❌ Failed to get cost_node_display for material:', materialItem.cost_node_id);
+              }
+            }
+            
             linkedMaterialsWithDetails.push({
               link_id: linkedMat.link_id,
-              material_item: materialItem,
+              material_item: materialWithCostDisplay,
               conversion_coefficient: linkedMat.conversion_coefficient || 1,
               calculated_quantity: linkedMat.total_needed || 0,
               calculated_total: linkedMat.total_cost || 0
@@ -359,7 +435,7 @@ export const boqQueryApi = {
 
         // Add work item with linked materials
         hierarchicalItems.push({
-          ...workItem,
+          ...workItemWithCostDisplay,
           linked_materials: linkedMaterialsWithDetails
         });
 
@@ -418,7 +494,25 @@ export const boqQueryApi = {
         console.error('⚠️ Failed to fetch standalone materials:', standaloneError);
       } else if (standaloneMaterials) {
         console.log(`📦 Found ${standaloneMaterials.length} standalone materials`);
-        hierarchicalItems.push(...standaloneMaterials.map(mat => ({ ...mat })));
+        
+        // Load cost_node_display for standalone materials
+        const standaloneWithCostDisplay = await Promise.all(
+          standaloneMaterials.map(async (mat) => {
+            if (mat.cost_node_id) {
+              try {
+                const { data: displayName } = await supabase
+                  .rpc('get_cost_node_display', { p_cost_node_id: mat.cost_node_id });
+                return { ...mat, cost_node_display: displayName };
+              } catch (err) {
+                console.error('❌ Failed to get cost_node_display for standalone material:', mat.cost_node_id);
+                return mat;
+              }
+            }
+            return mat;
+          })
+        );
+        
+        hierarchicalItems.push(...standaloneWithCostDisplay);
       }
 
       console.log('✅ Hierarchical BOQ items constructed:', hierarchicalItems.length);

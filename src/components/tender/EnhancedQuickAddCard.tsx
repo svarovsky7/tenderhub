@@ -24,6 +24,7 @@ import {
 import { materialsApi, worksApi } from '../../lib/supabase/api';
 import type { Material, Work } from '../../lib/supabase/types';
 import EnhancedAutocomplete from './EnhancedAutocomplete';
+import { CostCascadeSelector } from '../common';
 import styles from '../../styles/EnhancedQuickAddCard.module.css';
 
 const { Title } = Typography;
@@ -41,6 +42,8 @@ interface FormValues {
   unit_rate: number;
   consumption_coefficient?: number;
   conversion_coefficient?: number;
+  cost_node_id?: string | null;
+  cost_node_display?: string;
 }
 
 interface SubmissionState {
@@ -177,7 +180,9 @@ const EnhancedQuickAddCard: React.FC<EnhancedQuickAddCardProps> = React.memo(({
       await onAdd({
         ...values,
         type,
-        item_type: type
+        item_type: type,
+        cost_node_id: values.cost_node_id || null,
+        cost_node_display: values.cost_node_display || null
       });
 
       // Success state
@@ -360,6 +365,26 @@ const EnhancedQuickAddCard: React.FC<EnhancedQuickAddCardProps> = React.memo(({
                   size="large"
                   className={`${styles.input} ${styles.numberInput}`}
                   addonAfter="₽"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* Cost Category Selector */}
+          <Row gutter={16}>
+            <Col xs={24}>
+              <Form.Item
+                name="cost_node_id"
+                label={<span className={styles.label}>Категория затрат</span>}
+                className={styles.formItem}
+              >
+                <CostCascadeSelector
+                  placeholder="Выберите категорию затрат"
+                  onChange={(costNodeId, displayValue) => {
+                    form.setFieldValue('cost_node_id', costNodeId);
+                    form.setFieldValue('cost_node_display', displayValue);
+                    console.log('🚀 Cost category selected:', { costNodeId, displayValue });
+                  }}
                 />
               </Form.Item>
             </Col>

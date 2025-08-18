@@ -39,6 +39,7 @@ import { boqApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import MaterialLinkingModal from './MaterialLinkingModal';
 import GroupedBOQDisplay from './GroupedBOQDisplay';
+import { CostCascadeSelector } from '../common';
 import type { 
   BOQItemWithLibrary,
   BOQItemInsert
@@ -63,6 +64,8 @@ interface QuickAddRowData {
   work_id?: string;
   consumption_coefficient?: number;
   conversion_coefficient?: number;
+  cost_node_id?: string;
+  cost_node_display?: string;
 }
 
 const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps> = ({
@@ -311,6 +314,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         item_number: `${positionNumber}.${nextSubNumber}`,
         sub_number: nextSubNumber,
         sort_order: nextSubNumber,
+        // Add cost node if provided
+        ...(values.cost_node_id && { cost_node_id: values.cost_node_id }),
         // Add coefficients for materials and sub-materials
         ...((values.type === 'material' || values.type === 'sub_material') && {
           consumption_coefficient: values.consumption_coefficient || 1,
@@ -532,7 +537,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       unit_rate: item.unit_rate,
       work_id: linkedWork?.id || undefined,
       consumption_coefficient: consumptionCoef,
-      conversion_coefficient: conversionCoef
+      conversion_coefficient: conversionCoef,
+      cost_node_id: item.cost_node_id || null
     });
   }, [editForm, position.boq_items, localWorks]);
 
@@ -593,7 +599,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         quantity: finalQuantity,  // Use calculated quantity
         unit_rate: values.unit_rate,
         consumption_coefficient: values.consumption_coefficient || 1,
-        conversion_coefficient: values.conversion_coefficient || 1
+        conversion_coefficient: values.conversion_coefficient || 1,
+        cost_node_id: values.cost_node_id || null
       };
       
       const result = await boqApi.update(editingMaterialId, updateData);
@@ -762,12 +769,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   // Start editing work inline
   const handleEditWork = useCallback((item: BOQItemWithLibrary) => {
     console.log('✏️ Starting inline edit for work:', item.id);
+    console.log('🎯 Work cost_node_id:', item.cost_node_id);
     setEditingWorkId(item.id);
     workEditForm.setFieldsValue({
       description: item.description,
       unit: item.unit,
       quantity: item.quantity,
-      unit_rate: item.unit_rate
+      unit_rate: item.unit_rate,
+      cost_node_id: item.cost_node_id || null
     });
   }, [workEditForm]);
 
@@ -831,8 +840,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       title: 'Наименование',
       dataIndex: 'description',
       key: 'description',
-      width: '40%',
-      minWidth: 200,
+      width: '30%',
+      minWidth: 180,
       ellipsis: { showTitle: false },
       render: (text, record) => {
         // Find if material/sub-material is linked to a work
@@ -1031,6 +1040,45 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       }
     },
     {
+      title: 'Категория затрат',
+      dataIndex: 'cost_node_display',
+      key: 'cost_node_display',
+      width: '25%',
+      minWidth: 200,
+      render: (text, record) => {
+        if (record.cost_node_display) {
+          // Разбиваем строку на части для более компактного отображения
+          const parts = record.cost_node_display.split(' → ');
+          if (parts.length === 3) {
+            return (
+              <Tooltip title={record.cost_node_display} placement="left">
+                <div className="py-1">
+                  <div className="text-[10px] text-gray-500 font-medium leading-tight">
+                    {parts[0]}
+                  </div>
+                  <div className="text-[11px] text-gray-700 font-medium leading-tight mt-0.5">
+                    {parts[1]}
+                  </div>
+                  <div className="text-[10px] text-gray-500 leading-tight mt-0.5">
+                    📍 {parts[2]}
+                  </div>
+                </div>
+              </Tooltip>
+            );
+          }
+          // Если формат не стандартный, показываем как есть
+          return (
+            <Tooltip title={record.cost_node_display} placement="left">
+              <div className="text-[11px] text-gray-600 leading-relaxed py-1">
+                {record.cost_node_display.replace(/ → /g, ' / ')}
+              </div>
+            </Tooltip>
+          );
+        }
+        return <div className="text-xs text-gray-400">—</div>;
+      }
+    },
+    {
       title: '',
       key: 'actions',
       width: '8%',
@@ -1179,6 +1227,21 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 />
               </Form.Item>
             </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Form.Item
+                name="cost_node_id"
+                className="mb-0"
+              >
+                <CostCascadeSelector
+                  value={workEditForm.getFieldValue('cost_node_id')}
+                  placeholder="Категория затрат"
+                  onChange={(value, display) => {
+                    workEditForm.setFieldValue('cost_node_id', value);
+                    workEditForm.setFieldValue('cost_node_display', display);
+                  }}
+                />
+              </Form.Item>
+            </Col>
             <Col xs={12} sm={4} md={3}>
               <Text strong className="text-green-600">
                 {((workEditForm.getFieldValue('quantity') || 0) * 
@@ -1305,6 +1368,24 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   })} ₽
                 </Text>
               </div>
+            </Col>
+          </Row>
+          {/* Second row for cost category */}
+          <Row gutter={[12, 8]} className="w-full mt-2">
+            <Col xs={24} sm={12} md={10} lg={8}>
+              <Form.Item
+                name="cost_node_id"
+                className="mb-0"
+              >
+                <CostCascadeSelector
+                  value={editForm.getFieldValue('cost_node_id')}
+                  placeholder="Категория затрат"
+                  onChange={(value, display) => {
+                    editForm.setFieldValue('cost_node_id', value);
+                    editForm.setFieldValue('cost_node_display', display);
+                  }}
+                />
+              </Form.Item>
             </Col>
             <Col xs={24} sm={8} md={6} lg={3}>
               <Space size="small" className="flex justify-end">
@@ -1494,7 +1575,24 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             />
           </Form.Item>
         </Col>
-        <Col xs={24} sm={12} md={6} lg={6}>
+        <Col xs={24} sm={12} md={6} lg={5}>
+          <Form.Item
+            name="cost_node_id"
+            className="mb-0"
+            label={<Text strong>Категория затрат</Text>}
+          >
+            <CostCascadeSelector
+              value={quickAddForm.getFieldValue('cost_node_id')}
+              placeholder="Выберите категорию"
+              style={{ width: '100%' }}
+              onChange={(value, display) => {
+                quickAddForm.setFieldValue('cost_node_id', value);
+                quickAddForm.setFieldValue('cost_node_display', display);
+              }}
+            />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={12} md={6} lg={4}>
           <Form.Item label={<Text strong>Действия</Text>} className="mb-0">
             <Space className="w-full" size="small">
               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} size="small">
@@ -1868,7 +1966,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   pagination={false}
                   size="small"
                   scroll={{ y: 400 }}
-                  className="custom-table"
+                  className="custom-table boq-items-table"
                   rowClassName={(record) => {
                     switch(record.item_type) {
                       case 'work':
