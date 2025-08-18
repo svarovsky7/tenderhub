@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Card,
   Typography,
@@ -55,7 +55,7 @@ interface ClientPositionCardStreamlinedProps {
 }
 
 interface QuickAddRowData {
-  type: 'work' | 'material';
+  type: 'work' | 'material' | 'sub_work' | 'sub_material';
   description: string;
   unit: string;
   quantity: number;
@@ -92,21 +92,109 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
   // Computed properties
   const totalItems = position.boq_items?.length || 0;
-  const materialsCount = position.boq_items?.filter(item => item.item_type === 'material').length || 0;
-  const worksCount = position.boq_items?.filter(item => item.item_type === 'work').length || 0;
+  const materialsCount = position.boq_items?.filter(item => item.item_type === 'material' || item.item_type === 'sub_material').length || 0;
+  const worksCount = position.boq_items?.filter(item => item.item_type === 'work' || item.item_type === 'sub_work').length || 0;
   const totalCost = position.total_position_cost || 0;
   const [localWorks, setLocalWorks] = useState<BOQItemWithLibrary[]>([]);
   
-  // Update local works when position changes
-  useEffect(() => {
-    const updatedWorks = position.boq_items?.filter(item => item.item_type === 'work') || [];
-    setLocalWorks(updatedWorks);
-    console.log('🔧 Updated available works for linking:', updatedWorks.length, updatedWorks.map(w => ({ id: w.id, desc: w.description })));
+  // Create stable dependency for position items
+  const positionItemsKey = useMemo(() => {
+    if (!position.boq_items) return '';
+    return position.boq_items.map(item => `${item.id}-${item.item_type}`).sort().join(',');
   }, [position.boq_items]);
+  
+  // Update local works when position changes (include both work and sub_work)
+  useEffect(() => {
+    if (!position.boq_items) {
+      setLocalWorks([]);
+      return;
+    }
+    
+    const updatedWorks = position.boq_items.filter(item => 
+      item.item_type === 'work' || item.item_type === 'sub_work'
+    ) || [];
+    
+    // Use functional update to prevent infinite loops
+    setLocalWorks(prevWorks => {
+      // Only update if the works list actually changed
+      const prevIds = prevWorks.map(w => w.id).sort().join(',');
+      const newIds = updatedWorks.map(w => w.id).sort().join(',');
+      
+      if (prevIds !== newIds) {
+        console.log('🔧 Updated available works for linking:', updatedWorks.length, updatedWorks.map(w => ({ id: w.id, desc: w.description })));
+        return updatedWorks;
+      }
+      return prevWorks;
+    });
+  }, [positionItemsKey]);
   
   const works = localWorks;
   console.log('🔧 Current works for linking:', works.length, works.map(w => ({ id: w.id, desc: w.description })));
 
+  // Sort BOQ items: works first, then their linked materials, then unlinked materials
+  const sortedBOQItems = useMemo(() => {
+    if (!position.boq_items || position.boq_items.length === 0) {
+      return [];
+    }
+
+    console.log('🔄 Sorting BOQ items for table view');
+    const items = [...position.boq_items];
+    const sortedItems: BOQItemWithLibrary[] = [];
+    
+    // Get all works and sub-works sorted by sub_number
+    const works = items
+      .filter(item => item.item_type === 'work' || item.item_type === 'sub_work')
+      .sort((a, b) => (a.sub_number || 0) - (b.sub_number || 0));
+    
+    // Process each work/sub-work and its linked materials/sub-materials
+    works.forEach(work => {
+      // Add the work/sub-work
+      sortedItems.push(work);
+      
+      // Find and add all materials/sub-materials linked to this work
+      const linkedMaterials = items.filter(item => {
+        if (item.item_type !== 'material' && item.item_type !== 'sub_material') {
+          return false;
+        }
+        
+        // Check if material/sub-material is linked to this work/sub-work
+        if (work.item_type === 'work') {
+          // Regular work - check work_boq_item_id
+          return item.work_link?.work_boq_item_id === work.id;
+        } else if (work.item_type === 'sub_work') {
+          // Sub-work - check sub_work_boq_item_id
+          return item.work_link?.sub_work_boq_item_id === work.id;
+        }
+        
+        return false;
+      }).sort((a, b) => (a.sub_number || 0) - (b.sub_number || 0));
+      
+      sortedItems.push(...linkedMaterials);
+    });
+    
+    // Add unlinked materials and sub-materials at the end
+    const unlinkedMaterials = items.filter(item => 
+      (item.item_type === 'material' || item.item_type === 'sub_material') && 
+      !item.work_link
+    ).sort((a, b) => (a.sub_number || 0) - (b.sub_number || 0));
+    
+    sortedItems.push(...unlinkedMaterials);
+    
+    console.log('✅ Sorted items:', {
+      total: sortedItems.length,
+      works: works.length,
+      linked: sortedItems.filter(i => (i.item_type === 'material' || i.item_type === 'sub_material') && i.work_link).length,
+      unlinked: unlinkedMaterials.length,
+      subMaterials: sortedItems.filter(i => i.item_type === 'sub_material').map(i => ({
+        desc: i.description,
+        hasLink: !!i.work_link,
+        workId: i.work_link?.work_boq_item_id,
+        subWorkId: i.work_link?.sub_work_boq_item_id
+      }))
+    });
+    
+    return sortedItems;
+  }, [position.boq_items]);
 
   // Delete BOQ item
   const handleDeleteItem = useCallback(async (itemId: string) => {
@@ -180,13 +268,13 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
       let finalQuantity = values.quantity;
       
-      // For materials, set default quantity if not linked to work
-      if (values.type === 'material' && !values.work_id) {
+      // For materials and sub-materials, set default quantity if not linked to work
+      if ((values.type === 'material' || values.type === 'sub_material') && !values.work_id) {
         finalQuantity = 1; // Default quantity for unlinked materials
       }
       
-      // If it's a material linked to work, calculate quantity based on work volume
-      if (values.type === 'material' && values.work_id) {
+      // If it's a material/sub-material linked to work, calculate quantity based on work volume
+      if ((values.type === 'material' || values.type === 'sub_material') && values.work_id) {
         const work = works.find(w => w.id === values.work_id);
         if (work && work.quantity) {
           // Calculate material quantity: work_quantity * consumption * conversion
@@ -215,16 +303,16 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       const newItem: BOQItemInsert = {
         tender_id: tenderId,
         client_position_id: position.id,
-        item_type: values.type,
-        description: values.description,
+        item_type: values.type,  // Use actual type directly
+        description: values.description,  // Use description without prefix
         unit: values.unit,
         quantity: finalQuantity,  // Use calculated quantity
         unit_rate: values.unit_rate,
         item_number: `${positionNumber}.${nextSubNumber}`,
         sub_number: nextSubNumber,
         sort_order: nextSubNumber,
-        // Add coefficients for materials
-        ...(values.type === 'material' && {
+        // Add coefficients for materials and sub-materials
+        ...((values.type === 'material' || values.type === 'sub_material') && {
           consumption_coefficient: values.consumption_coefficient || 1,
           conversion_coefficient: values.conversion_coefficient || 1
         })
@@ -239,20 +327,39 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         throw new Error(result.error);
       }
 
-      // If it's a material and a work is selected, create link
-      if (values.type === 'material' && values.work_id && result.data) {
+      // If it's a material/sub-material and a work is selected, create link
+      if ((values.type === 'material' || values.type === 'sub_material') && values.work_id && result.data) {
         console.log('🔍 Attempting to create work-material link...');
         console.log('🔍 Material created with data:', result.data);
         console.log('🔍 Material ID:', result.data.id);
         console.log('🔍 Work selected with ID:', values.work_id);
         
-        const linkData = {
+        // Get the work item to check its type
+        const workItem = works.find(w => w.id === values.work_id);
+        const isSubWork = workItem?.item_type === 'sub_work';
+        const isSubMaterial = values.type === 'sub_material';
+        
+        // Build link data based on types
+        const linkData: any = {
           client_position_id: position.id,
-          work_boq_item_id: values.work_id,
-          material_boq_item_id: result.data.id,
           material_quantity_per_work: values.consumption_coefficient || 1,
           usage_coefficient: values.conversion_coefficient || 1
         };
+        
+        // Set appropriate fields based on types
+        if (isSubWork && isSubMaterial) {
+          linkData.sub_work_boq_item_id = values.work_id;
+          linkData.sub_material_boq_item_id = result.data.id;
+        } else if (isSubWork && !isSubMaterial) {
+          linkData.sub_work_boq_item_id = values.work_id;
+          linkData.material_boq_item_id = result.data.id;
+        } else if (!isSubWork && isSubMaterial) {
+          linkData.work_boq_item_id = values.work_id;
+          linkData.sub_material_boq_item_id = result.data.id;
+        } else {
+          linkData.work_boq_item_id = values.work_id;
+          linkData.material_boq_item_id = result.data.id;
+        }
         
         console.log('🔗 Creating work-material link with data:', linkData);
         const linkResult = await workMaterialLinksApi.createLink(linkData);
@@ -285,15 +392,22 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       console.log('✅ Item added successfully');
       
       // Show appropriate success message
-      if (values.type === 'material' && values.work_id) {
+      if ((values.type === 'material' || values.type === 'sub_material') && values.work_id) {
         const linkedWork = works.find(w => w.id === values.work_id);
-        message.success(`Материал добавлен и связан с работой: ${linkedWork?.description || values.work_id}`);
+        const itemType = values.type === 'sub_material' ? 'Суб-материал' : 'Материал';
+        message.success(`${itemType} добавлен и связан с работой: ${linkedWork?.description || values.work_id}`);
       } else {
-        message.success(`${values.type === 'work' ? 'Работа' : 'Материал'} добавлен`);
+        const typeNames = {
+          'work': 'Работа',
+          'material': 'Материал',
+          'sub_work': 'Суб-работа',
+          'sub_material': 'Суб-материал'
+        };
+        message.success(`${typeNames[values.type]} добавлен`);
       }
       
-      // Update local works list if we just added a work
-      if (values.type === 'work' && result.data) {
+      // Update local works list if we just added a work or sub-work
+      if ((values.type === 'work' || values.type === 'sub_work') && result.data) {
         const newWork: BOQItemWithLibrary = {
           ...result.data,
           item_type: 'work',
@@ -307,8 +421,10 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       // Force refresh of works list for any new item to ensure UI is up to date
       // This is needed because onUpdate is async and the parent might not update immediately
       setTimeout(() => {
-        const currentWorks = position.boq_items?.filter(item => item.item_type === 'work') || [];
-        if (values.type === 'work' && result.data) {
+        const currentWorks = position.boq_items?.filter(item => 
+          item.item_type === 'work' || item.item_type === 'sub_work'
+        ) || [];
+        if ((values.type === 'work' || values.type === 'sub_work') && result.data) {
           // Ensure the new work is in the list
           const workExists = currentWorks.some(w => w.id === result.data.id);
           if (!workExists) {
@@ -362,7 +478,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     console.log('🔗 Work link data:', item.work_link);
     
     // Force refresh works list before editing to ensure we have the latest data
-    const currentWorks = position.boq_items?.filter(boqItem => boqItem.item_type === 'work') || [];
+    const currentWorks = position.boq_items?.filter(boqItem => 
+      boqItem.item_type === 'work' || boqItem.item_type === 'sub_work'
+    ) || [];
     if (currentWorks.length !== localWorks.length) {
       console.log('🔄 Updating works list before edit:', currentWorks.length, 'works');
       setLocalWorks(currentWorks);
@@ -372,9 +490,17 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     
     // Get work_link information if exists
     const workLink = item.work_link;
-    const linkedWork = workLink ? position.boq_items?.find(boqItem => 
-      boqItem.id === workLink.work_boq_item_id && boqItem.item_type === 'work'
-    ) : undefined;
+    const linkedWork = workLink ? position.boq_items?.find(boqItem => {
+      // Check if this item is linked via work_boq_item_id (for regular work) 
+      // or sub_work_boq_item_id (for sub_work)
+      if (workLink.work_boq_item_id && boqItem.id === workLink.work_boq_item_id && boqItem.item_type === 'work') {
+        return true;
+      }
+      if (workLink.sub_work_boq_item_id && boqItem.id === workLink.sub_work_boq_item_id && boqItem.item_type === 'sub_work') {
+        return true;
+      }
+      return false;
+    }) : undefined;
     
     // Get coefficients from BOQ item itself (primary source)
     // Fall back to work_link values if BOQ item doesn't have them
@@ -414,7 +540,15 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const handleSaveInlineEdit = useCallback(async (values: any) => {
     if (!editingMaterialId) return;
     
+    // Get the item being edited to check its type
+    const editingItem = position.boq_items?.find(item => item.id === editingMaterialId);
+    if (!editingItem) {
+      console.error('❌ Could not find item being edited');
+      return;
+    }
+    
     console.log('💾 Saving inline material edits:', values);
+    console.log('🔍 Item type being edited:', editingItem.item_type);
     console.log('🔍 Coefficients to save:', {
       consumption: values.consumption_coefficient,
       conversion: values.conversion_coefficient,
@@ -470,10 +604,11 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       // Handle work linking if changed - get links for this position
       const positionLinks = await workMaterialLinksApi.getLinksByPosition(position.id);
       const existingLink = !positionLinks.error && positionLinks.data?.find(
-        link => link.material_boq_item_id === editingMaterialId
+        link => link.material_boq_item_id === editingMaterialId || 
+                link.sub_material_boq_item_id === editingMaterialId
       );
       const hasExistingLink = !!existingLink;
-      const existingWorkId = existingLink?.work_boq_item_id || null;
+      const existingWorkId = existingLink?.work_boq_item_id || existingLink?.sub_work_boq_item_id || null;
       
       console.log('🔗 Existing link info:', {
         hasLink: hasExistingLink,
@@ -492,13 +627,49 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         
         // Create new link if work_id is provided
         if (values.work_id) {
-          const linkData = {
+          // Get the work item to check its type
+          const workItem = works.find(w => w.id === values.work_id);
+          const isSubWork = workItem?.item_type === 'sub_work';
+          const isSubMaterial = editingItem.item_type === 'sub_material';
+          
+          console.log('🔍 Link type detection:', {
+            workId: values.work_id,
+            workType: workItem?.item_type,
+            isSubWork,
+            materialId: editingMaterialId,
+            materialType: editingItem.item_type,
+            isSubMaterial
+          });
+          
+          // Build link data based on types
+          const linkData: any = {
             client_position_id: position.id,
-            work_boq_item_id: values.work_id,
-            material_boq_item_id: editingMaterialId,
             material_quantity_per_work: values.consumption_coefficient || 1,
             usage_coefficient: values.conversion_coefficient || 1
           };
+          
+          // Set appropriate fields based on types
+          if (isSubWork && isSubMaterial) {
+            // Both are sub-types
+            console.log('📎 Linking sub_work to sub_material');
+            linkData.sub_work_boq_item_id = values.work_id;
+            linkData.sub_material_boq_item_id = editingMaterialId;
+          } else if (isSubWork && !isSubMaterial) {
+            // Sub-work with regular material
+            console.log('📎 Linking sub_work to material');
+            linkData.sub_work_boq_item_id = values.work_id;
+            linkData.material_boq_item_id = editingMaterialId;
+          } else if (!isSubWork && isSubMaterial) {
+            // Regular work with sub-material
+            console.log('📎 Linking work to sub_material');
+            linkData.work_boq_item_id = values.work_id;
+            linkData.sub_material_boq_item_id = editingMaterialId;
+          } else {
+            // Both are regular types
+            console.log('📎 Linking work to material');
+            linkData.work_boq_item_id = values.work_id;
+            linkData.material_boq_item_id = editingMaterialId;
+          }
           
           console.log('🔗 Creating new link with data:', linkData);
           const linkResult = await workMaterialLinksApi.createLink(linkData);
@@ -634,52 +805,62 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
   // Optimized table columns with improved responsive widths and no horizontal scroll
   const columns: ColumnsType<BOQItemWithLibrary> = [
-    {
-      title: '№',
-      dataIndex: 'item_number',
-      key: 'item_number',
-      width: '5%',
-      minWidth: 60,
-      render: (text) => <Text className="font-mono text-xs whitespace-nowrap">{text}</Text>
-    },
+    // Removed № column as requested
     {
       title: 'Тип',
       dataIndex: 'item_type',
       key: 'item_type', 
-      width: '8%',
-      minWidth: 80,
-      render: (type) => (
-        <div className="whitespace-nowrap">
-          {type === 'work' ? 
-            <Tag icon={<BuildOutlined />} color="green" className="text-xs">Работа</Tag> : 
-            <Tag icon={<ToolOutlined />} color="blue" className="text-xs">Материал</Tag>
-          }
-        </div>
-      )
+      width: '10%',
+      minWidth: 90,
+      render: (type) => {
+        switch(type) {
+          case 'work':
+            return <Tag icon={<BuildOutlined />} color="green" className="text-xs">Работа</Tag>;
+          case 'sub_work':
+            return <Tag icon={<BuildOutlined />} color="purple" className="text-xs">Суб-раб</Tag>;
+          case 'material':
+            return <Tag icon={<ToolOutlined />} color="blue" className="text-xs">Материал</Tag>;
+          case 'sub_material':
+            return <Tag icon={<ToolOutlined />} color="green" className="text-xs">Суб-мат</Tag>;
+          default:
+            return <Tag className="text-xs">{type}</Tag>;
+        }
+      }
     },
     {
       title: 'Наименование',
       dataIndex: 'description',
       key: 'description',
-      width: '35%',
+      width: '40%',
       minWidth: 200,
       ellipsis: { showTitle: false },
       render: (text, record) => {
-        // Find if material is linked to a work
+        // Find if material/sub-material is linked to a work
         let linkedWork = null;
-        if (record.item_type === 'material' && record.work_link) {
-          linkedWork = position.boq_items?.find(item => 
-            item.id === record.work_link.work_boq_item_id && item.item_type === 'work'
-          );
+        if ((record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link) {
+          // Check both work_boq_item_id and sub_work_boq_item_id
+          linkedWork = position.boq_items?.find(item => {
+            if (record.work_link.work_boq_item_id && item.id === record.work_link.work_boq_item_id && item.item_type === 'work') {
+              return true;
+            }
+            if (record.work_link.sub_work_boq_item_id && item.id === record.work_link.sub_work_boq_item_id && item.item_type === 'sub_work') {
+              return true;
+            }
+            return false;
+          });
         }
+        
+        // Add visual indentation for linked materials and sub-materials
+        const isLinkedMaterial = (record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link;
         
         return (
           <Tooltip title={text} placement="topLeft">
-            <div>
+            <div className={isLinkedMaterial ? 'pl-6' : ''}>
               <div className="py-1 text-sm">{text}</div>
-              {record.item_type === 'material' && linkedWork && (
-                <div className="text-xs text-orange-600 mt-1 truncate">
-                  → {linkedWork.description}
+              {isLinkedMaterial && linkedWork && (
+                <div className="text-xs text-gray-500 mt-1 truncate">
+                  <LinkOutlined className="mr-1" />
+                  {linkedWork.description}
                 </div>
               )}
             </div>
@@ -698,7 +879,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       minWidth: 55,
       align: 'center',
       render: (_, record) => {
-        if (record.item_type === 'material') {
+        if (record.item_type === 'material' || record.item_type === 'sub_material') {
           // Get coefficient from BOQ item first, then from work_link
           const coef = record.consumption_coefficient || 
                       record.work_link?.material_quantity_per_work || 1;
@@ -722,7 +903,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       minWidth: 55,
       align: 'center',
       render: (_, record) => {
-        if (record.item_type === 'material') {
+        if (record.item_type === 'material' || record.item_type === 'sub_material') {
           // Get coefficient from BOQ item first, then from work_link
           const coef = record.conversion_coefficient || 
                       record.work_link?.usage_coefficient || 1;
@@ -857,8 +1038,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       render: (_, record) => (
         <div className="whitespace-nowrap">
           <Space size="small">
-            {record.item_type === 'material' && (
-              <Tooltip title="Редактировать материал / Связать с работой">
+            {(record.item_type === 'material' || record.item_type === 'sub_material') && (
+              <Tooltip title={record.item_type === 'sub_material' ? "Редактировать суб-материал / Связать с работой" : "Редактировать материал / Связать с работой"}>
                 <Button
                   type="text"
                   size="small"
@@ -868,8 +1049,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 />
               </Tooltip>
             )}
-            {record.item_type === 'work' && (
-              <Tooltip title="Редактировать работу">
+            {(record.item_type === 'work' || record.item_type === 'sub_work') && (
+              <Tooltip title={record.item_type === 'sub_work' ? "Редактировать суб-работу" : "Редактировать работу"}>
                 <Button
                   type="text"
                   size="small"
@@ -946,7 +1127,11 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               <Text className="font-mono text-xs">{item.item_number}</Text>
             </Col>
             <Col xs={3} sm={2}>
-              <Tag icon={<BuildOutlined />} color="green">Работа</Tag>
+              {item.item_type === 'sub_work' ? (
+                <Tag icon={<BuildOutlined />} color="volcano">Суб-раб</Tag>
+              ) : (
+                <Tag icon={<BuildOutlined />} color="green">Работа</Tag>
+              )}
             </Col>
             <Col xs={24} sm={8} md={6}>
               <Form.Item
@@ -1043,7 +1228,11 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             </Col>
             <Col xs={24} sm={3} md={3} lg={2}>
               <div className="flex items-center h-8">
-                <Tag icon={<ToolOutlined />} color="blue">Материал</Tag>
+                {item.item_type === 'sub_material' ? (
+                  <Tag icon={<ToolOutlined />} color="purple">Суб-мат</Tag>
+                ) : (
+                  <Tag icon={<ToolOutlined />} color="blue">Материал</Tag>
+                )}
               </div>
             </Col>
             <Col xs={24} sm={8} md={6} lg={6}>
@@ -1153,7 +1342,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   >
                     {works.map(work => (
                       <Select.Option key={work.id} value={work.id}>
-                        {work.description} (Объем: {work.quantity} {work.unit})
+                        {work.item_type === 'sub_work' ? '[СУБ] ' : ''}{work.description} (Объем: {work.quantity} {work.unit})
                       </Select.Option>
                     ))}
                   </Select>
@@ -1229,6 +1418,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             <Select className="w-full" size="small">
               <Select.Option value="work">Работа</Select.Option>
               <Select.Option value="material">Материал</Select.Option>
+              <Select.Option value="sub_work">Суб-раб</Select.Option>
+              <Select.Option value="sub_material">Суб-мат</Select.Option>
             </Select>
           </Form.Item>
         </Col>
@@ -1246,7 +1437,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           prevValues.type !== currentValues.type
         }>
           {({ getFieldValue }) => 
-            getFieldValue('type') === 'work' ? (
+            (getFieldValue('type') === 'work' || getFieldValue('type') === 'sub_work') ? (
               <Col xs={12} sm={6} md={3} lg={3}>
                 <Form.Item
                   name="quantity"
@@ -1324,10 +1515,10 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         </Col>
       </Row>
       
-      {/* Additional fields for materials - work linking */}
+      {/* Additional fields for materials and sub-materials - work linking */}
       <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}>
         {({ getFieldValue }) =>
-          getFieldValue('type') === 'material' && works.length > 0 && (
+          (getFieldValue('type') === 'material' || getFieldValue('type') === 'sub_material') && works.length > 0 && (
             <Row gutter={[12, 8]} className="w-full mt-3 pt-3 border-t border-blue-200">
               <Col xs={24} sm={12} md={10} lg={8}>
                 <Form.Item
@@ -1361,7 +1552,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   >
                     {works.map(work => (
                       <Select.Option key={work.id} value={work.id}>
-                        {work.description} (Объем: {work.quantity} {work.unit})
+                        {work.item_type === 'sub_work' ? '[СУБ] ' : ''}{work.description} (Объем: {work.quantity} {work.unit})
                       </Select.Option>
                     ))}
                   </Select>
@@ -1672,26 +1863,40 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                   <Table
                   columns={columns}
-                  dataSource={position.boq_items || []}
+                  dataSource={sortedBOQItems}
                   rowKey="id"
                   pagination={false}
                   size="small"
                   scroll={{ y: 400 }}
                   className="custom-table"
+                  rowClassName={(record) => {
+                    switch(record.item_type) {
+                      case 'work':
+                        return 'bg-orange-50 font-medium';
+                      case 'sub_work':
+                        return 'bg-purple-100 font-medium';
+                      case 'material':
+                        return record.work_link ? 'bg-blue-100' : 'bg-blue-100/60';
+                      case 'sub_material':
+                        return 'bg-green-100/80';
+                      default:
+                        return '';
+                    }
+                  }}
                 components={{
                   body: {
                     row: ({ children, ...props }: any) => {
                       const record = props['data-row-key'] ? 
-                        position.boq_items?.find(item => item.id === props['data-row-key']) : 
+                        sortedBOQItems.find(item => item.id === props['data-row-key']) : 
                         null;
                       
-                      // If this is the material being edited, show the edit form
-                      if (record && editingMaterialId === record.id && record.item_type === 'material') {
+                      // If this is the material or sub-material being edited, show the edit form
+                      if (record && editingMaterialId === record.id && (record.item_type === 'material' || record.item_type === 'sub_material')) {
                         return <MaterialEditRow item={record} />;
                       }
                       
-                      // If this is the work being edited, show the edit form
-                      if (record && editingWorkId === record.id && record.item_type === 'work') {
+                      // If this is the work or sub-work being edited, show the edit form
+                      if (record && editingWorkId === record.id && (record.item_type === 'work' || record.item_type === 'sub_work')) {
                         return <WorkEditRow item={record} />;
                       }
                       

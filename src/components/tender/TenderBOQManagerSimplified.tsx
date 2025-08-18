@@ -63,8 +63,8 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
 
     positionsList.forEach(position => {
       const items = position.boq_items || [];
-      stats.works += items.filter(item => item.item_type === 'work').length;
-      stats.materials += items.filter(item => item.item_type === 'material').length;
+      stats.works += items.filter(item => item.item_type === 'work' || item.item_type === 'sub_work').length;
+      stats.materials += items.filter(item => item.item_type === 'material' || item.item_type === 'sub_material').length;
       stats.total += position.total_materials_cost + position.total_works_cost;
     });
 
@@ -97,10 +97,12 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
           
           // Process items to add link information
           const processedItems = items.map(item => {
-            if (item.item_type === 'material' && links && links.length > 0) {
+            if ((item.item_type === 'material' || item.item_type === 'sub_material') && links && links.length > 0) {
               // Find ALL works this material is linked to (material can be linked to multiple works)
               const materialLinks = links.filter(l => {
+                // Check both regular material and sub_material fields
                 return l.material_boq_item_id === item.id || 
+                       l.sub_material_boq_item_id === item.id ||
                        (l.material && l.material.id === item.id);
               });
               
@@ -117,15 +119,21 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
                   // Keep single link for backward compatibility
                   work_link: materialLinks[0] ? {
                     ...materialLinks[0],
+                    work_boq_item_id: materialLinks[0].work_boq_item_id,
+                    sub_work_boq_item_id: materialLinks[0].sub_work_boq_item_id,
+                    material_boq_item_id: materialLinks[0].material_boq_item_id,
+                    sub_material_boq_item_id: materialLinks[0].sub_material_boq_item_id,
                     material_quantity_per_work: materialLinks[0].material_quantity_per_work || materialLinks[0].material_consumption_coefficient || 1,
                     usage_coefficient: materialLinks[0].usage_coefficient || materialLinks[0].material_conversion_coefficient || 1
                   } : undefined
                 };
               }
-            } else if (item.item_type === 'work' && links && links.length > 0) {
+            } else if ((item.item_type === 'work' || item.item_type === 'sub_work') && links && links.length > 0) {
               // Find materials linked to this work
               const workLinks = links.filter(l => {
+                // Check both regular work and sub_work fields
                 return l.work_boq_item_id === item.id || 
+                       l.sub_work_boq_item_id === item.id ||
                        (l.work && l.work.id === item.id);
               });
               if (workLinks.length > 0) {

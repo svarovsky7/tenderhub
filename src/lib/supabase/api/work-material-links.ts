@@ -5,8 +5,10 @@ import type { Database } from '../types/database';
 export interface WorkMaterialLink {
   id?: string;
   client_position_id: string;
-  work_boq_item_id: string;
-  material_boq_item_id: string;
+  work_boq_item_id?: string;
+  material_boq_item_id?: string;
+  sub_work_boq_item_id?: string;
+  sub_material_boq_item_id?: string;
   material_quantity_per_work?: number;  // Не используется в расчетах, всегда 1
   usage_coefficient?: number;  // Не используется в расчетах, всегда 1
   delivery_price_type?: 'included' | 'not_included' | 'amount';
@@ -46,8 +48,10 @@ export const workMaterialLinksApi = {
           client_position_id: link.client_position_id,
           work_boq_item_id: link.work_boq_item_id,
           material_boq_item_id: link.material_boq_item_id,
-          material_quantity_per_work: 1,  // Всегда 1, не используется в расчетах
-          usage_coefficient: 1,  // Всегда 1, не используется в расчетах
+          sub_work_boq_item_id: link.sub_work_boq_item_id,
+          sub_material_boq_item_id: link.sub_material_boq_item_id,
+          material_quantity_per_work: link.material_quantity_per_work || 1,  // Всегда 1, не используется в расчетах
+          usage_coefficient: link.usage_coefficient || 1,  // Всегда 1, не используется в расчетах
           delivery_price_type: link.delivery_price_type || 'included',
           delivery_amount: link.delivery_amount || 0,
           notes: link.notes
@@ -59,6 +63,7 @@ export const workMaterialLinksApi = {
 
       if (error) {
         console.error('❌ Failed to create link:', error);
+        console.error('❌ Full error details:', JSON.stringify(error, null, 2));
         return { error: error.message };
       }
 

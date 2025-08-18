@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-08-18T10:36:22.535162
+-- Generated: 2025-08-18T14:02:21.693056
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -234,6 +234,7 @@ CREATE TABLE IF NOT EXISTS auth.sso_providers (
     resource_id text,
     created_at timestamp with time zone,
     updated_at timestamp with time zone,
+    disabled boolean,
     CONSTRAINT sso_providers_pkey PRIMARY KEY (id)
 );
 COMMENT ON TABLE auth.sso_providers IS 'Auth: Manages SSO identity provider information; see saml_providers for SAML.';
@@ -325,6 +326,7 @@ COMMENT ON TABLE public.boq_items IS 'Bill of Quantities line items for each ten
 COMMENT ON COLUMN public.boq_items.item_number IS 'Полный номер позиции в формате "X.Y" где X - номер позиции заказчика, Y - подномер';
 COMMENT ON COLUMN public.boq_items.sub_number IS 'Sequential sub-number within client position (auto-assigned via get_next_sub_number)';
 COMMENT ON COLUMN public.boq_items.sort_order IS 'Порядок сортировки внутри позиции заказчика';
+COMMENT ON COLUMN public.boq_items.item_type IS 'Type of BOQ item: work, material, sub_work (subcontract work), sub_material (subcontract material)';
 COMMENT ON COLUMN public.boq_items.consumption_coefficient IS 'Коэффициент расхода материала';
 COMMENT ON COLUMN public.boq_items.conversion_coefficient IS 'Коэффициент перевода единицы измерения материала';
 COMMENT ON COLUMN public.boq_items.delivery_price_type IS 'Тип цены доставки материала: included (в цене), not_included (не в цене), amount (сумма)';
@@ -489,8 +491,8 @@ CREATE TABLE IF NOT EXISTS public.units (
 CREATE TABLE IF NOT EXISTS public.work_material_links (
     id uuid NOT NULL DEFAULT uuid_generate_v4(),
     client_position_id uuid NOT NULL,
-    work_boq_item_id uuid NOT NULL,
-    material_boq_item_id uuid NOT NULL,
+    work_boq_item_id uuid,
+    material_boq_item_id uuid,
     notes text,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -498,8 +500,12 @@ CREATE TABLE IF NOT EXISTS public.work_material_links (
     delivery_amount numeric(12,2) DEFAULT 0,
     material_quantity_per_work numeric(12,4) DEFAULT 1.0000,
     usage_coefficient numeric(12,4) DEFAULT 1.0000,
+    sub_work_boq_item_id uuid,
+    sub_material_boq_item_id uuid,
     CONSTRAINT fk_work_material_links_material FOREIGN KEY (material_boq_item_id) REFERENCES public.boq_items(id),
     CONSTRAINT fk_work_material_links_position FOREIGN KEY (client_position_id) REFERENCES public.client_positions(id),
+    CONSTRAINT fk_work_material_links_sub_material FOREIGN KEY (sub_material_boq_item_id) REFERENCES public.boq_items(id),
+    CONSTRAINT fk_work_material_links_sub_work FOREIGN KEY (sub_work_boq_item_id) REFERENCES public.boq_items(id),
     CONSTRAINT fk_work_material_links_work FOREIGN KEY (work_boq_item_id) REFERENCES public.boq_items(id),
     CONSTRAINT uq_work_material_pair UNIQUE (work_boq_item_id),
     CONSTRAINT uq_work_material_pair UNIQUE (work_boq_item_id),
@@ -514,6 +520,8 @@ COMMENT ON COLUMN public.work_material_links.material_boq_item_id IS 'ID эле�
 COMMENT ON COLUMN public.work_material_links.notes IS 'Примечания к связи работы и материала';
 COMMENT ON COLUMN public.work_material_links.delivery_price_type IS 'Тип цены доставки: included (в цене), not_included (не в цене), amount (сумма)';
 COMMENT ON COLUMN public.work_material_links.delivery_amount IS 'Сумма доставки (используется только при delivery_price_type = amount)';
+COMMENT ON COLUMN public.work_material_links.sub_work_boq_item_id IS 'Reference to sub-work type BOQ item';
+COMMENT ON COLUMN public.work_material_links.sub_material_boq_item_id IS 'Reference to sub-material type BOQ item';
 
 -- Table: public.works_library
 -- Description: Master catalog of work items with labor components
@@ -720,7 +728,7 @@ CREATE TYPE auth.factor_type AS ENUM ('totp', 'webauthn', 'phone');
 
 CREATE TYPE auth.one_time_token_type AS ENUM ('confirmation_token', 'reauthentication_token', 'recovery_token', 'email_change_token_new', 'email_change_token_current', 'phone_change_token');
 
-CREATE TYPE public.boq_item_type AS ENUM ('work', 'material');
+CREATE TYPE public.boq_item_type AS ENUM ('work', 'material', 'sub_work', 'sub_material');
 
 CREATE TYPE public.client_position_status AS ENUM ('active', 'inactive', 'completed');
 
@@ -827,28 +835,34 @@ CREATE OR REPLACE VIEW public.work_material_links_detailed AS
     wml.client_position_id,
     wml.work_boq_item_id,
     wml.material_boq_item_id,
+    wml.sub_work_boq_item_id,
+    wml.sub_material_boq_item_id,
     wml.delivery_price_type,
     wml.delivery_amount,
     wml.notes,
     wml.created_at,
     wml.updated_at,
-    w.description AS work_description,
-    w.unit AS work_unit,
-    w.quantity AS work_quantity,
-    w.unit_rate AS work_unit_rate,
-    m.description AS material_description,
-    m.unit AS material_unit,
-    m.quantity AS material_quantity,
-    m.unit_rate AS material_unit_rate,
-    m.consumption_coefficient AS material_consumption_coefficient,
-    m.conversion_coefficient AS material_conversion_coefficient,
-    m.delivery_price_type AS material_delivery_price_type,
-    m.delivery_amount AS material_delivery_amount,
-    ((w.quantity * COALESCE(m.consumption_coefficient, (1)::numeric)) * COALESCE(m.conversion_coefficient, (1)::numeric)) AS total_material_needed,
-    (((w.quantity * COALESCE(m.consumption_coefficient, (1)::numeric)) * COALESCE(m.conversion_coefficient, (1)::numeric)) * COALESCE(m.unit_rate, (0)::numeric)) AS total_material_cost
-   FROM ((work_material_links wml
-     LEFT JOIN boq_items w ON ((wml.work_boq_item_id = w.id)))
-     LEFT JOIN boq_items m ON ((wml.material_boq_item_id = m.id)));
+    wml.material_quantity_per_work,
+    wml.usage_coefficient,
+    COALESCE(w.description, sw.description) AS work_description,
+    COALESCE(w.unit, sw.unit) AS work_unit,
+    COALESCE(w.quantity, sw.quantity) AS work_quantity,
+    COALESCE(w.unit_rate, sw.unit_rate) AS work_unit_rate,
+    COALESCE(m.description, sm.description) AS material_description,
+    COALESCE(m.unit, sm.unit) AS material_unit,
+    COALESCE(m.quantity, sm.quantity) AS material_quantity,
+    COALESCE(m.unit_rate, sm.unit_rate) AS material_unit_rate,
+    COALESCE(m.consumption_coefficient, sm.consumption_coefficient) AS material_consumption_coefficient,
+    COALESCE(m.conversion_coefficient, sm.conversion_coefficient) AS material_conversion_coefficient,
+    COALESCE(m.delivery_price_type, sm.delivery_price_type) AS material_delivery_price_type,
+    COALESCE(m.delivery_amount, sm.delivery_amount) AS material_delivery_amount,
+    ((COALESCE(w.quantity, sw.quantity, (0)::numeric) * COALESCE(COALESCE(m.consumption_coefficient, sm.consumption_coefficient), (1)::numeric)) * COALESCE(COALESCE(m.conversion_coefficient, sm.conversion_coefficient), (1)::numeric)) AS total_material_needed,
+    (((COALESCE(w.quantity, sw.quantity, (0)::numeric) * COALESCE(COALESCE(m.consumption_coefficient, sm.consumption_coefficient), (1)::numeric)) * COALESCE(COALESCE(m.conversion_coefficient, sm.conversion_coefficient), (1)::numeric)) * COALESCE(COALESCE(m.unit_rate, sm.unit_rate), (0)::numeric)) AS total_material_cost
+   FROM ((((work_material_links wml
+     LEFT JOIN boq_items w ON (((wml.work_boq_item_id = w.id) AND (w.item_type = 'work'::boq_item_type))))
+     LEFT JOIN boq_items sw ON (((wml.sub_work_boq_item_id = sw.id) AND (sw.item_type = 'sub_work'::boq_item_type))))
+     LEFT JOIN boq_items m ON (((wml.material_boq_item_id = m.id) AND (m.item_type = 'material'::boq_item_type))))
+     LEFT JOIN boq_items sm ON (((wml.sub_material_boq_item_id = sm.id) AND (sm.item_type = 'sub_material'::boq_item_type))));
 
 -- View: vault.decrypted_secrets
 CREATE OR REPLACE VIEW vault.decrypted_secrets AS
@@ -928,7 +942,7 @@ $function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea)
+CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -936,7 +950,7 @@ AS '$libdir/pgcrypto', $function$pg_armor$function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
+CREATE OR REPLACE FUNCTION extensions.armor(bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1239,6 +1253,14 @@ AS '$libdir/pgcrypto', $function$pgp_key_id_w$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
+ RETURNS text
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
+
+
+-- Function: extensions.pgp_pub_decrypt
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
  RETURNS text
  LANGUAGE c
@@ -1252,22 +1274,6 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
-
-
--- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
- RETURNS text
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
-
-
--- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
- RETURNS bytea
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_decrypt_bytea
@@ -1286,8 +1292,16 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text, 
 AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
+-- Function: extensions.pgp_pub_decrypt_bytea
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
+
+
 -- Function: extensions.pgp_pub_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1295,7 +1309,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -2097,23 +2111,7 @@ CREATE OR REPLACE FUNCTION public.check_boq_item_delivery_consistency()
  LANGUAGE plpgsql
 AS $function$
 BEGIN
-    -- Применяем только к материалам
-    IF NEW.item_type = 'material' THEN
-        -- Если тип доставки не "amount", то обнуляем сумму доставки
-        IF NEW.delivery_price_type != 'amount' THEN
-            NEW.delivery_amount := 0;
-        END IF;
-        
-        -- Если тип доставки "amount" и сумма не указана, устанавливаем 0
-        IF NEW.delivery_price_type = 'amount' AND NEW.delivery_amount IS NULL THEN
-            NEW.delivery_amount := 0;
-        END IF;
-    ELSE
-        -- Для работ обнуляем поля доставки
-        NEW.delivery_price_type := NULL;
-        NEW.delivery_amount := NULL;
-    END IF;
-    
+    -- Allow all item types including sub_work and sub_material
     RETURN NEW;
 END;
 $function$
@@ -2125,29 +2123,7 @@ CREATE OR REPLACE FUNCTION public.check_delivery_consistency_boq()
  LANGUAGE plpgsql
 AS $function$
 BEGIN
-    -- Проверяем только для материалов
-    IF NEW.item_type = 'material' THEN
-        -- Если тип доставки не "amount", то обнуляем сумму доставки
-        IF NEW.delivery_price_type IS NOT NULL AND NEW.delivery_price_type::text != 'amount' THEN
-            NEW.delivery_amount := 0;
-        END IF;
-        
-        -- Если тип доставки "amount" и сумма не указана, устанавливаем 0
-        IF NEW.delivery_price_type IS NOT NULL AND NEW.delivery_price_type::text = 'amount' AND NEW.delivery_amount IS NULL THEN
-            NEW.delivery_amount := 0;
-        END IF;
-        
-        -- Если тип доставки не указан, устанавливаем по умолчанию
-        IF NEW.delivery_price_type IS NULL THEN
-            NEW.delivery_price_type := 'included'::delivery_price_type;
-            NEW.delivery_amount := 0;
-        END IF;
-    ELSE
-        -- Для работ всегда устанавливаем значения по умолчанию
-        NEW.delivery_price_type := 'included'::delivery_price_type;
-        NEW.delivery_amount := 0;
-    END IF;
-    
+    -- Allow all item types including sub_work and sub_material
     RETURN NEW;
 END;
 $function$
@@ -2180,34 +2156,95 @@ CREATE OR REPLACE FUNCTION public.check_work_material_types()
  LANGUAGE plpgsql
 AS $function$
 BEGIN
-    -- Проверяем, что work_boq_item_id действительно указывает на работу
-    IF NOT EXISTS (
-        SELECT 1 FROM public.boq_items 
-        WHERE id = NEW.work_boq_item_id 
-        AND item_type = 'work'
-    ) THEN
-        RAISE EXCEPTION 'work_boq_item_id must reference a BOQ item with type "work"';
+    -- Check work_boq_item_id if it's not null
+    IF NEW.work_boq_item_id IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM public.boq_items 
+            WHERE id = NEW.work_boq_item_id 
+            AND item_type = 'work'
+        ) THEN
+            RAISE EXCEPTION 'work_boq_item_id must reference a BOQ item with type "work"';
+        END IF;
     END IF;
     
-    -- Проверяем, что material_boq_item_id действительно указывает на материал
-    IF NOT EXISTS (
-        SELECT 1 FROM public.boq_items 
-        WHERE id = NEW.material_boq_item_id 
-        AND item_type = 'material'
-    ) THEN
-        RAISE EXCEPTION 'material_boq_item_id must reference a BOQ item with type "material"';
+    -- Check sub_work_boq_item_id if it's not null
+    IF NEW.sub_work_boq_item_id IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM public.boq_items 
+            WHERE id = NEW.sub_work_boq_item_id 
+            AND item_type = 'sub_work'
+        ) THEN
+            RAISE EXCEPTION 'sub_work_boq_item_id must reference a BOQ item with type "sub_work"';
+        END IF;
     END IF;
     
-    -- Проверяем, что оба элемента принадлежат одной позиции
-    IF NOT EXISTS (
-        SELECT 1 FROM public.boq_items w, public.boq_items m
-        WHERE w.id = NEW.work_boq_item_id 
-        AND m.id = NEW.material_boq_item_id
-        AND w.client_position_id = NEW.client_position_id
-        AND m.client_position_id = NEW.client_position_id
-    ) THEN
-        RAISE EXCEPTION 'Both work and material must belong to the specified client position';
+    -- Check material_boq_item_id if it's not null
+    IF NEW.material_boq_item_id IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM public.boq_items 
+            WHERE id = NEW.material_boq_item_id 
+            AND item_type = 'material'
+        ) THEN
+            RAISE EXCEPTION 'material_boq_item_id must reference a BOQ item with type "material"';
+        END IF;
     END IF;
+    
+    -- Check sub_material_boq_item_id if it's not null
+    IF NEW.sub_material_boq_item_id IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM public.boq_items 
+            WHERE id = NEW.sub_material_boq_item_id 
+            AND item_type = 'sub_material'
+        ) THEN
+            RAISE EXCEPTION 'sub_material_boq_item_id must reference a BOQ item with type "sub_material"';
+        END IF;
+    END IF;
+    
+    -- Ensure at least one valid pair is set
+    IF NOT (
+        (NEW.work_boq_item_id IS NOT NULL AND NEW.material_boq_item_id IS NOT NULL) OR
+        (NEW.work_boq_item_id IS NOT NULL AND NEW.sub_material_boq_item_id IS NOT NULL) OR
+        (NEW.sub_work_boq_item_id IS NOT NULL AND NEW.material_boq_item_id IS NOT NULL) OR
+        (NEW.sub_work_boq_item_id IS NOT NULL AND NEW.sub_material_boq_item_id IS NOT NULL)
+    ) THEN
+        RAISE EXCEPTION 'Must have at least one valid work-material pair';
+    END IF;
+    
+    -- Check that all items belong to the same position
+    -- This check is more complex now with multiple possible combinations
+    DECLARE
+        work_position_id uuid;
+        material_position_id uuid;
+    BEGIN
+        -- Get work position ID (from either work or sub_work)
+        IF NEW.work_boq_item_id IS NOT NULL THEN
+            SELECT client_position_id INTO work_position_id 
+            FROM public.boq_items 
+            WHERE id = NEW.work_boq_item_id;
+        ELSIF NEW.sub_work_boq_item_id IS NOT NULL THEN
+            SELECT client_position_id INTO work_position_id 
+            FROM public.boq_items 
+            WHERE id = NEW.sub_work_boq_item_id;
+        END IF;
+        
+        -- Get material position ID (from either material or sub_material)
+        IF NEW.material_boq_item_id IS NOT NULL THEN
+            SELECT client_position_id INTO material_position_id 
+            FROM public.boq_items 
+            WHERE id = NEW.material_boq_item_id;
+        ELSIF NEW.sub_material_boq_item_id IS NOT NULL THEN
+            SELECT client_position_id INTO material_position_id 
+            FROM public.boq_items 
+            WHERE id = NEW.sub_material_boq_item_id;
+        END IF;
+        
+        -- Check that both belong to the same position as specified
+        IF work_position_id != NEW.client_position_id OR 
+           material_position_id != NEW.client_position_id OR
+           work_position_id != material_position_id THEN
+            RAISE EXCEPTION 'All linked items must belong to the same client position';
+        END IF;
+    END;
     
     RETURN NEW;
 END;
@@ -2929,7 +2966,7 @@ $function$
 
 
 -- Function: public.index
-CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
  RETURNS integer
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -2937,7 +2974,7 @@ AS '$libdir/ltree', $function$ltree_index$function$
 
 
 -- Function: public.index
-CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
  RETURNS integer
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -3374,15 +3411,17 @@ BEGIN
         RETURN COALESCE(NEW, OLD);
     END IF;
     
-    -- Recalculate material costs
+    -- Recalculate material costs (including sub_material)
     SELECT COALESCE(SUM(total_amount), 0) INTO materials_total
     FROM public.boq_items 
-    WHERE client_position_id = position_id AND item_type = 'material';
+    WHERE client_position_id = position_id 
+    AND item_type IN ('material', 'sub_material');
     
-    -- Recalculate work costs
+    -- Recalculate work costs (including sub_work)
     SELECT COALESCE(SUM(total_amount), 0) INTO works_total
     FROM public.boq_items 
-    WHERE client_position_id = position_id AND item_type = 'work';
+    WHERE client_position_id = position_id 
+    AND item_type IN ('work', 'sub_work');
     
     -- Update client position totals
     UPDATE public.client_positions 
@@ -5827,6 +5866,9 @@ CREATE INDEX sso_domains_sso_provider_id_idx ON auth.sso_domains USING btree (ss
 -- Index on auth.sso_providers
 CREATE UNIQUE INDEX sso_providers_resource_id_idx ON auth.sso_providers USING btree (lower(resource_id));
 
+-- Index on auth.sso_providers
+CREATE INDEX sso_providers_resource_id_pattern_idx ON auth.sso_providers USING btree (resource_id text_pattern_ops);
+
 -- Index on auth.users
 CREATE UNIQUE INDEX confirmation_token_idx ON auth.users USING btree (confirmation_token) WHERE ((confirmation_token)::text !~ '^[0-9 ]*$'::text);
 
@@ -6002,6 +6044,12 @@ CREATE INDEX idx_work_material_links_material ON public.work_material_links USIN
 CREATE INDEX idx_work_material_links_position ON public.work_material_links USING btree (client_position_id);
 
 -- Index on public.work_material_links
+CREATE INDEX idx_work_material_links_sub_material ON public.work_material_links USING btree (sub_material_boq_item_id);
+
+-- Index on public.work_material_links
+CREATE INDEX idx_work_material_links_sub_work ON public.work_material_links USING btree (sub_work_boq_item_id);
+
+-- Index on public.work_material_links
 CREATE INDEX idx_work_material_links_work ON public.work_material_links USING btree (work_boq_item_id);
 
 -- Index on public.work_material_links
@@ -6142,6 +6190,7 @@ GRANT supabase_realtime_admin TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_17 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_18 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_2 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_20 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_21 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_22 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_23 TO postgres;
@@ -6161,6 +6210,7 @@ GRANT supabase_realtime_admin TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_36 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_38 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_39 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_4 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_40 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_41 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_42 TO postgres;
@@ -6197,6 +6247,7 @@ GRANT supabase_realtime_admin TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_17 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_18 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_2 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_20 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_21 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_22 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_23 TO postgres;
@@ -6216,6 +6267,7 @@ GRANT supabase_realtime_admin TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_36 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_38 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_39 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_4 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_40 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_41 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_42 TO postgres;
@@ -6285,6 +6337,7 @@ CREATE ROLE supabase_admin WITH SUPERUSER CREATEDB CREATEROLE LOGIN REPLICATION 
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_17 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_18 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_2 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_20 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_21 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_22 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_23 TO supabase_admin;
@@ -6304,6 +6357,7 @@ CREATE ROLE supabase_admin WITH SUPERUSER CREATEDB CREATEROLE LOGIN REPLICATION 
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_36 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_38 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_39 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_4 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_40 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_41 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_42 TO supabase_admin;
@@ -6340,6 +6394,7 @@ CREATE ROLE supabase_admin WITH SUPERUSER CREATEDB CREATEROLE LOGIN REPLICATION 
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_17 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_18 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_2 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_20 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_21 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_22 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_23 TO supabase_admin;
@@ -6359,6 +6414,7 @@ CREATE ROLE supabase_admin WITH SUPERUSER CREATEDB CREATEROLE LOGIN REPLICATION 
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_36 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_38 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_39 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_4 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_40 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_41 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_42 TO supabase_admin;
@@ -6420,6 +6476,7 @@ GRANT pg_read_all_data TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_17 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_18 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_2 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_20 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_21 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_22 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_23 TO supabase_read_only_user;
@@ -6439,6 +6496,7 @@ GRANT pg_read_all_data TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_36 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_38 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_39 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_4 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_40 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_41 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_42 TO supabase_read_only_user;
@@ -6475,6 +6533,7 @@ GRANT pg_read_all_data TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_17 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_18 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_2 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_20 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_21 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_22 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_23 TO supabase_read_only_user;
@@ -6494,6 +6553,7 @@ GRANT pg_read_all_data TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_36 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_38 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_39 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_4 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_40 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_41 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_42 TO supabase_read_only_user;

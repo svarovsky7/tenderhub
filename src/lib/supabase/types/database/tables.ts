@@ -14,7 +14,7 @@ export type DatabaseTables = {
       item_number: string;
       sub_number: number;
       sort_order: number;
-      item_type: 'work' | 'material';
+      item_type: 'work' | 'material' | 'sub_work' | 'sub_material';
       description: string;
       unit: string;
       quantity: number;
@@ -40,7 +40,7 @@ export type DatabaseTables = {
       item_number?: string;
       sub_number?: number;
       sort_order?: number;
-      item_type: 'work' | 'material';
+      item_type: 'work' | 'material' | 'sub_work' | 'sub_material';
       description: string;
       unit: string;
       quantity: number;
@@ -65,7 +65,7 @@ export type DatabaseTables = {
       item_number?: string;
       sub_number?: number;
       sort_order?: number;
-      item_type?: 'work' | 'material';
+      item_type?: 'work' | 'material' | 'sub_work' | 'sub_material';
       description?: string;
       unit?: string;
       quantity?: number;
@@ -433,6 +433,8 @@ export type DatabaseTables = {
       client_position_id: string;
       work_boq_item_id: string;
       material_boq_item_id: string;
+      sub_work_boq_item_id: string | null;
+      sub_material_boq_item_id: string | null;
       notes: string | null;
       created_at: string;
       updated_at: string;
@@ -440,8 +442,10 @@ export type DatabaseTables = {
     Insert: {
       id?: string;
       client_position_id: string;
-      work_boq_item_id: string;
-      material_boq_item_id: string;
+      work_boq_item_id?: string;
+      material_boq_item_id?: string;
+      sub_work_boq_item_id?: string | null;
+      sub_material_boq_item_id?: string | null;
       notes?: string | null;
       created_at?: string;
       updated_at?: string;
@@ -451,6 +455,8 @@ export type DatabaseTables = {
       client_position_id?: string;
       work_boq_item_id?: string;
       material_boq_item_id?: string;
+      sub_work_boq_item_id?: string | null;
+      sub_material_boq_item_id?: string | null;
       notes?: string | null;
       created_at?: string;
       updated_at?: string;
