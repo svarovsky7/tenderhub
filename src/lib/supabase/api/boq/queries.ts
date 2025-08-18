@@ -16,8 +16,6 @@ export interface BOQItemWithLinkedMaterials extends BOQItemWithLibrary {
   linked_materials?: Array<{
     link_id: string;
     material_item: BOQItemWithLibrary;
-    material_quantity_per_work: number;
-    usage_coefficient: number;
     conversion_coefficient: number;
     calculated_quantity: number;
     calculated_total: number;
@@ -352,8 +350,6 @@ export const boqQueryApi = {
             linkedMaterialsWithDetails.push({
               link_id: linkedMat.link_id,
               material_item: materialItem,
-              material_quantity_per_work: linkedMat.quantity_per_work || 0,
-              usage_coefficient: linkedMat.usage_coefficient || 1,
               conversion_coefficient: linkedMat.conversion_coefficient || 1,
               calculated_quantity: linkedMat.total_needed || 0,
               calculated_total: linkedMat.total_cost || 0
@@ -378,8 +374,6 @@ export const boqQueryApi = {
               parent_work_id: workItem.id,
               link_data: {
                 link_id: linkedMat.link_id,
-                material_quantity_per_work: linkedMat.material_quantity_per_work,
-                usage_coefficient: linkedMat.usage_coefficient,
                 conversion_coefficient: linkedMat.conversion_coefficient,
                 calculated_quantity: linkedMat.calculated_quantity,
                 calculated_total: linkedMat.calculated_total

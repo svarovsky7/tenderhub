@@ -57,8 +57,6 @@ export type DatabaseFunctions = {
       material_unit: string;
       material_quantity: number;
       material_unit_rate: number;
-      quantity_per_work: number;
-      usage_coefficient: number;
       total_needed: number;
       total_cost: number;
     }>;
@@ -74,8 +72,6 @@ export type DatabaseFunctions = {
       work_unit: string;
       work_quantity: number;
       work_unit_rate: number;
-      quantity_per_work: number;
-      usage_coefficient: number;
       total_material_usage: number;
     }>;
   };

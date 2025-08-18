@@ -40,8 +40,6 @@ interface WorkMaterialLink {
   id: string;
   work_id: string;
   material_id: string;
-  material_quantity_per_work: number;
-  usage_coefficient: number;
   delivery_price_type: 'included' | 'not_included' | 'amount';
   delivery_amount: number;
   notes?: string;
@@ -66,8 +64,6 @@ const WorkMaterialsPage: React.FC = () => {
   const [newLink, setNewLink] = useState({
     work_id: '',
     material_id: '',
-    material_quantity_per_work: 1,
-    usage_coefficient: 1,
     delivery_price_type: 'included' as const,
     delivery_amount: 0,
     notes: ''

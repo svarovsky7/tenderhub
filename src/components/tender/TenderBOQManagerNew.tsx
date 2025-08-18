@@ -1061,9 +1061,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
         const linkData = {
           client_position_id: selectedPosition.id,
           work_boq_item_id: targetWorkId,
-          material_boq_item_id: moveModal.materialId,
-          material_quantity_per_work: 1,
-          usage_coefficient: 1
+          material_boq_item_id: moveModal.materialId
         };
         
         console.log('📡 Creating link:', linkData);

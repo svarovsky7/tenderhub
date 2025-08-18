@@ -46,8 +46,8 @@ export const workMaterialLinksApi = {
           client_position_id: link.client_position_id,
           work_boq_item_id: link.work_boq_item_id,
           material_boq_item_id: link.material_boq_item_id,
-          material_quantity_per_work: link.material_quantity_per_work || 1,
-          usage_coefficient: link.usage_coefficient || 1,
+          material_quantity_per_work: 1,  // Всегда 1, не используется в расчетах
+          usage_coefficient: 1,  // Всегда 1, не используется в расчетах
           delivery_price_type: link.delivery_price_type || 'included',
           delivery_amount: link.delivery_amount || 0,
           notes: link.notes
@@ -66,49 +66,6 @@ export const workMaterialLinksApi = {
       return { data };
     } catch (error) {
       console.error('💥 Exception in createLink:', error);
-      return { error: error instanceof Error ? error.message : 'Unknown error' };
-    }
-  },
-
-  /**
-   * Создать связь (алиас для createLink)
-   */
-  async create(link: WorkMaterialLink) {
-    return this.createLink(link);
-  },
-
-  /**
-   * Обновить связь между работой и материалом
-   */
-  async update(linkId: string, updates: Partial<WorkMaterialLink>) {
-    console.log('🚀 Updating work-material link:', linkId, updates);
-    
-    try {
-      const { data, error } = await supabase
-        .from('work_material_links')
-        .update({
-          material_quantity_per_work: updates.material_quantity_per_work,
-          usage_coefficient: updates.usage_coefficient,
-          delivery_price_type: updates.delivery_price_type,
-          delivery_amount: updates.delivery_amount,
-          notes: updates.notes,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', linkId)
-        .select()
-        .single();
-
-      console.log('📦 Update link result:', { data, error });
-
-      if (error) {
-        console.error('❌ Failed to update link:', error);
-        return { error: error.message };
-      }
-
-      console.log('✅ Work-material link updated successfully');
-      return { data };
-    } catch (error) {
-      console.error('💥 Exception in update:', error);
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   },
@@ -341,33 +298,6 @@ export const workMaterialLinksApi = {
   },
 
   /**
-   * Получить связи по ID материала
-   */
-  async getByMaterialId(materialBoqItemId: string) {
-    console.log('🚀 Getting links for material:', materialBoqItemId);
-    
-    try {
-      const { data, error } = await supabase
-        .from('work_material_links')
-        .select('*')
-        .eq('material_boq_item_id', materialBoqItemId);
-
-      console.log('📦 Links fetched:', { count: data?.length, error });
-
-      if (error) {
-        console.error('❌ Failed to fetch links:', error);
-        return { error: error.message };
-      }
-
-      console.log('✅ Links retrieved successfully');
-      return { data };
-    } catch (error) {
-      console.error('💥 Exception in getByMaterialId:', error);
-      return { error: error instanceof Error ? error.message : 'Unknown error' };
-    }
-  },
-
-  /**
    * Удалить связь
    */
   async deleteLink(linkId: string) {
@@ -392,13 +322,6 @@ export const workMaterialLinksApi = {
       console.error('💥 Exception in deleteLink:', error);
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
-  },
-
-  /**
-   * Удалить связь (алиас для deleteLink)
-   */
-  async delete(linkId: string) {
-    return this.deleteLink(linkId);
   },
 
   /**

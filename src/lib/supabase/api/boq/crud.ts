@@ -225,22 +225,27 @@ export const boqCrudApi = {
       // If insert was successful but data is null, fetch the created item
       if (!data) {
         console.log('⚠️ Insert successful but no data returned, fetching created item...');
-        const { data: createdItem, error: fetchError } = await supabase
+        const { data: createdItems, error: fetchError } = await supabase
           .from('boq_items')
           .select('*')
           .eq('tender_id', itemToInsert.tender_id)
           .eq('client_position_id', itemToInsert.client_position_id)
-          .eq('sub_number', itemToInsert.sub_number)
-          .single();
+          .eq('sub_number', itemToInsert.sub_number);
         
-        if (fetchError || !createdItem) {
+        console.log('📦 Fetched items:', createdItems);
+        console.log('📦 Fetch error:', fetchError);
+        
+        if (fetchError || !createdItems || createdItems.length === 0) {
           console.error('❌ Failed to fetch created item:', fetchError);
           return {
             error: 'Item created but could not retrieve details',
           };
         }
         
-        console.log('✅ BOQ item created and fetched successfully:', createdItem.id);
+        // Take the first item from array
+        const createdItem = createdItems[0];
+        console.log('✅ BOQ item created and fetched successfully:', createdItem);
+        console.log('📦 Created item ID:', createdItem?.id);
         return {
           data: createdItem,
           message: 'BOQ item created successfully',

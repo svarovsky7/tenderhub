@@ -82,7 +82,7 @@ export const workMaterialsManagementApi = {
           
           const materials = (links || []).map(link => {
             const materialBoq = link.material_boq as any;
-            const quantity = (workItem.quantity || 0) * (link.material_quantity_per_work || 1) * (link.usage_coefficient || 1);
+            const quantity = (workItem.quantity || 0);
             const unitCost = materialBoq?.unit_rate || 0;
             const totalCost = quantity * unitCost;
             
@@ -200,8 +200,6 @@ export const workMaterialsManagementApi = {
           client_position_id: params.clientPositionId,
           work_boq_item_id: workBoqItemId,
           material_boq_item_id: materialBoq.id,
-          material_quantity_per_work: params.materialQuantityPerWork,
-          usage_coefficient: params.usageCoefficient || 1,
           delivery_price_type: params.deliveryPriceType || 'included',
           delivery_amount: params.deliveryAmount || 0,
           notes: params.notes
@@ -373,8 +371,6 @@ export const workMaterialsManagementApi = {
             client_position_id: targetClientPositionId,
             work_boq_item_id: newWorkBoq.id,
             material_boq_item_id: newMaterialBoq.id,
-            material_quantity_per_work: link.material_quantity_per_work,
-            usage_coefficient: link.usage_coefficient,
             delivery_price_type: link.delivery_price_type,
             delivery_amount: link.delivery_amount,
             notes: link.notes

@@ -122,8 +122,6 @@ const MaterialLinkModal: React.FC<MaterialLinkModalProps> = ({
         client_position_id: positionId,
         work_boq_item_id: workItem.id,
         material_boq_item_id: materialItem.id,
-        material_quantity_per_work: 1.0,  // Всегда 1, не используется в расчетах
-        usage_coefficient: 1.0,  // Всегда 1, не используется в расчетах
         notes: values.notes
       };
 

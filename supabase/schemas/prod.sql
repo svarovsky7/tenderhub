@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-08-14T17:34:49.266443
+-- Generated: 2025-08-18T10:36:22.535162
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -485,7 +485,7 @@ CREATE TABLE IF NOT EXISTS public.units (
 );
 
 -- Table: public.work_material_links
--- Description: Связи между работами и материалами. Расчет объемов материалов производится через коэффициенты в таблице boq_items
+-- Description: Связи между работами и материалами. Одна работа может быть связана с множеством материалов, один материал может быть связан с множеством работ. Уникальна пара (work_boq_item_id, material_boq_item_id).
 CREATE TABLE IF NOT EXISTS public.work_material_links (
     id uuid NOT NULL DEFAULT uuid_generate_v4(),
     client_position_id uuid NOT NULL,
@@ -494,26 +494,24 @@ CREATE TABLE IF NOT EXISTS public.work_material_links (
     notes text,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
-    material_quantity_per_work numeric(12,4) DEFAULT 1.0000,
-    usage_coefficient numeric(12,4) DEFAULT 1.0000,
     delivery_price_type USER-DEFINED DEFAULT 'included'::delivery_price_type,
     delivery_amount numeric(12,2) DEFAULT 0,
+    material_quantity_per_work numeric(12,4) DEFAULT 1.0000,
+    usage_coefficient numeric(12,4) DEFAULT 1.0000,
     CONSTRAINT fk_work_material_links_material FOREIGN KEY (material_boq_item_id) REFERENCES public.boq_items(id),
     CONSTRAINT fk_work_material_links_position FOREIGN KEY (client_position_id) REFERENCES public.client_positions(id),
     CONSTRAINT fk_work_material_links_work FOREIGN KEY (work_boq_item_id) REFERENCES public.boq_items(id),
-    CONSTRAINT uq_work_material_link UNIQUE (work_boq_item_id),
-    CONSTRAINT uq_work_material_link UNIQUE (work_boq_item_id),
-    CONSTRAINT uq_work_material_link UNIQUE (material_boq_item_id),
-    CONSTRAINT uq_work_material_link UNIQUE (material_boq_item_id),
+    CONSTRAINT uq_work_material_pair UNIQUE (work_boq_item_id),
+    CONSTRAINT uq_work_material_pair UNIQUE (work_boq_item_id),
+    CONSTRAINT uq_work_material_pair UNIQUE (material_boq_item_id),
+    CONSTRAINT uq_work_material_pair UNIQUE (material_boq_item_id),
     CONSTRAINT work_material_links_pkey PRIMARY KEY (id)
 );
-COMMENT ON TABLE public.work_material_links IS 'Связи между работами и материалами. Расчет объемов материалов производится через коэффициенты в таблице boq_items';
+COMMENT ON TABLE public.work_material_links IS 'Связи между работами и материалами. Одна работа может быть связана с множеством материалов, один материал может быть связан с множеством работ. Уникальна пара (work_boq_item_id, material_boq_item_id).';
 COMMENT ON COLUMN public.work_material_links.client_position_id IS 'ID позиции заказчика, в которой находятся связываемые работы и материалы';
 COMMENT ON COLUMN public.work_material_links.work_boq_item_id IS 'ID элемента BOQ типа work (работа)';
 COMMENT ON COLUMN public.work_material_links.material_boq_item_id IS 'ID элемента BOQ типа material (материал)';
 COMMENT ON COLUMN public.work_material_links.notes IS 'Примечания к связи работы и материала';
-COMMENT ON COLUMN public.work_material_links.material_quantity_per_work IS 'Количество материала, необходимое на единицу работы';
-COMMENT ON COLUMN public.work_material_links.usage_coefficient IS 'Коэффициент использования материала в работе';
 COMMENT ON COLUMN public.work_material_links.delivery_price_type IS 'Тип цены доставки: included (в цене), not_included (не в цене), amount (сумма)';
 COMMENT ON COLUMN public.work_material_links.delivery_amount IS 'Сумма доставки (используется только при delivery_price_type = amount)';
 
@@ -829,42 +827,26 @@ CREATE OR REPLACE VIEW public.work_material_links_detailed AS
     wml.client_position_id,
     wml.work_boq_item_id,
     wml.material_boq_item_id,
-    wml.material_quantity_per_work,
-    wml.usage_coefficient,
-    wml.delivery_price_type AS link_delivery_price_type,
-    wml.delivery_amount AS link_delivery_amount,
+    wml.delivery_price_type,
+    wml.delivery_amount,
     wml.notes,
     wml.created_at,
     wml.updated_at,
-    cp.position_number,
-    cp.work_name AS position_name,
-    cp.tender_id,
-    w.item_number AS work_item_number,
     w.description AS work_description,
     w.unit AS work_unit,
     w.quantity AS work_quantity,
     w.unit_rate AS work_unit_rate,
-    w.total_amount AS work_total_amount,
-    m.item_number AS material_item_number,
     m.description AS material_description,
     m.unit AS material_unit,
     m.quantity AS material_quantity,
     m.unit_rate AS material_unit_rate,
-    m.total_amount AS material_total_amount,
     m.consumption_coefficient AS material_consumption_coefficient,
     m.conversion_coefficient AS material_conversion_coefficient,
     m.delivery_price_type AS material_delivery_price_type,
     m.delivery_amount AS material_delivery_amount,
-    COALESCE(wml.delivery_price_type, m.delivery_price_type, 'included'::delivery_price_type) AS effective_delivery_type,
-    COALESCE(wml.delivery_amount, m.delivery_amount, (0)::numeric) AS effective_delivery_amount,
-    ((COALESCE(w.quantity, (0)::numeric) * COALESCE(m.consumption_coefficient, (1)::numeric)) * COALESCE(m.conversion_coefficient, (1)::numeric)) AS total_material_needed,
-    (((COALESCE(w.quantity, (0)::numeric) * COALESCE(m.consumption_coefficient, (1)::numeric)) * COALESCE(m.conversion_coefficient, (1)::numeric)) * COALESCE(m.unit_rate, (0)::numeric)) AS total_material_cost,
-        CASE
-            WHEN ((COALESCE(wml.delivery_price_type, m.delivery_price_type) = 'amount'::delivery_price_type) AND (COALESCE(wml.delivery_amount, m.delivery_amount, (0)::numeric) > (0)::numeric)) THEN (((COALESCE(w.quantity, (0)::numeric) * COALESCE(m.consumption_coefficient, (1)::numeric)) * COALESCE(m.conversion_coefficient, (1)::numeric)) * (COALESCE(m.unit_rate, (0)::numeric) + COALESCE(wml.delivery_amount, m.delivery_amount, (0)::numeric)))
-            ELSE (((COALESCE(w.quantity, (0)::numeric) * COALESCE(m.consumption_coefficient, (1)::numeric)) * COALESCE(m.conversion_coefficient, (1)::numeric)) * COALESCE(m.unit_rate, (0)::numeric))
-        END AS calculated_total
-   FROM (((work_material_links wml
-     LEFT JOIN client_positions cp ON ((wml.client_position_id = cp.id)))
+    ((w.quantity * COALESCE(m.consumption_coefficient, (1)::numeric)) * COALESCE(m.conversion_coefficient, (1)::numeric)) AS total_material_needed,
+    (((w.quantity * COALESCE(m.consumption_coefficient, (1)::numeric)) * COALESCE(m.conversion_coefficient, (1)::numeric)) * COALESCE(m.unit_rate, (0)::numeric)) AS total_material_cost
+   FROM ((work_material_links wml
      LEFT JOIN boq_items w ON ((wml.work_boq_item_id = w.id)))
      LEFT JOIN boq_items m ON ((wml.material_boq_item_id = m.id)));
 
@@ -994,7 +976,7 @@ AS '$libdir/pgcrypto', $function$pg_decrypt_iv$function$
 
 
 -- Function: extensions.digest
-CREATE OR REPLACE FUNCTION extensions.digest(text, text)
+CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1002,7 +984,7 @@ AS '$libdir/pgcrypto', $function$pg_digest$function$
 
 
 -- Function: extensions.digest
-CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.digest(text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1042,19 +1024,19 @@ AS '$libdir/pgcrypto', $function$pg_random_uuid$function$
 
 
 -- Function: extensions.gen_salt
-CREATE OR REPLACE FUNCTION extensions.gen_salt(text, integer)
- RETURNS text
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pg_gen_salt_rounds$function$
-
-
--- Function: extensions.gen_salt
 CREATE OR REPLACE FUNCTION extensions.gen_salt(text)
  RETURNS text
  LANGUAGE c
  PARALLEL SAFE STRICT
 AS '$libdir/pgcrypto', $function$pg_gen_salt$function$
+
+
+-- Function: extensions.gen_salt
+CREATE OR REPLACE FUNCTION extensions.gen_salt(text, integer)
+ RETURNS text
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_gen_salt_rounds$function$
 
 
 -- Function: extensions.grant_pg_cron_access
@@ -1257,6 +1239,14 @@ AS '$libdir/pgcrypto', $function$pgp_key_id_w$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
+ RETURNS text
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
+
+
+-- Function: extensions.pgp_pub_decrypt
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
  RETURNS text
  LANGUAGE c
@@ -1266,14 +1256,6 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 -- Function: extensions.pgp_pub_decrypt
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
- RETURNS text
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
-
-
--- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1305,14 +1287,6 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
- RETURNS bytea
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
-
-
--- Function: extensions.pgp_pub_encrypt
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
  RETURNS bytea
  LANGUAGE c
@@ -1320,8 +1294,16 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
 AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
 
 
+-- Function: extensions.pgp_pub_encrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
+ RETURNS bytea
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
+
+
 -- Function: extensions.pgp_pub_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1329,7 +1311,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1353,7 +1335,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_text$function$
 
 
 -- Function: extensions.pgp_sym_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt_bytea(bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt_bytea(bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1361,7 +1343,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt_bytea(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt_bytea(bytea, text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -2508,45 +2490,29 @@ $function$
 
 
 -- Function: public.get_materials_for_work
--- Description: Возвращает материалы для работы с учетом доставки из связи или материала
 CREATE OR REPLACE FUNCTION public.get_materials_for_work(p_work_boq_item_id uuid)
- RETURNS TABLE(link_id uuid, material_id uuid, material_description text, material_unit text, material_quantity numeric, material_unit_rate numeric, quantity_per_work numeric, usage_coefficient numeric, consumption_coefficient numeric, conversion_coefficient numeric, total_needed numeric, total_cost numeric, delivery_price_type text, delivery_amount numeric)
+ RETURNS TABLE(link_id uuid, material_id uuid, material_description text, material_unit text, material_quantity numeric, material_unit_rate numeric, total_needed numeric, total_cost numeric)
  LANGUAGE plpgsql
 AS $function$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        wml.id AS link_id,
-        m.id AS material_id,
-        m.description AS material_description,
-        m.unit AS material_unit,
-        m.quantity AS material_quantity,
-        m.unit_rate AS material_unit_rate,
-        wml.material_quantity_per_work AS quantity_per_work,  -- Возвращаем для совместимости
-        wml.usage_coefficient,  -- Возвращаем для совместимости
-        COALESCE(m.consumption_coefficient, 1) AS consumption_coefficient,
-        COALESCE(m.conversion_coefficient, 1) AS conversion_coefficient,
-        -- Правильная формула: объем работы × коэф.расхода × коэф.перевода
-        (w.quantity * COALESCE(m.consumption_coefficient, 1) * COALESCE(m.conversion_coefficient, 1)) AS total_needed,
-        -- Стоимость с учетом доставки (приоритет: связь > материал)
-        CASE 
-            WHEN COALESCE(wml.delivery_price_type, m.delivery_price_type) = 'amount' 
-                AND COALESCE(wml.delivery_amount, m.delivery_amount, 0) > 0 THEN
-                (w.quantity * COALESCE(m.consumption_coefficient, 1) * COALESCE(m.conversion_coefficient, 1) * 
-                (COALESCE(m.unit_rate, 0) + COALESCE(wml.delivery_amount, m.delivery_amount, 0)))
-            ELSE
-                (w.quantity * COALESCE(m.consumption_coefficient, 1) * COALESCE(m.conversion_coefficient, 1) * 
-                COALESCE(m.unit_rate, 0))
-        END AS total_cost,
-        -- Используем доставку из связи если она указана, иначе из материала
-        COALESCE(wml.delivery_price_type::text, m.delivery_price_type::text, 'included') AS delivery_price_type,
-        COALESCE(wml.delivery_amount, m.delivery_amount, 0) AS delivery_amount
-    FROM public.work_material_links wml
-    INNER JOIN public.boq_items w ON wml.work_boq_item_id = w.id
-    INNER JOIN public.boq_items m ON wml.material_boq_item_id = m.id
-    WHERE wml.work_boq_item_id = p_work_boq_item_id;
-END;
-$function$
+  BEGIN
+      RETURN QUERY
+      SELECT
+          wml.id AS link_id,
+          m.id AS material_id,
+          m.description AS material_description,
+          m.unit AS material_unit,
+          m.quantity AS material_quantity,
+          m.unit_rate AS material_unit_rate,
+          (w.quantity * COALESCE(m.consumption_coefficient, 1) *
+  COALESCE(m.conversion_coefficient, 1)) AS total_needed,
+          (w.quantity * COALESCE(m.consumption_coefficient, 1) *
+  COALESCE(m.conversion_coefficient, 1) * COALESCE(m.unit_rate, 0)) AS total_cost
+      FROM work_material_links wml
+      JOIN boq_items w ON wml.work_boq_item_id = w.id
+      JOIN boq_items m ON wml.material_boq_item_id = m.id
+      WHERE wml.work_boq_item_id = p_work_boq_item_id;
+  END;
+  $function$
 
 
 -- Function: public.get_next_client_position_number
@@ -2623,30 +2589,27 @@ $function$
 
 
 -- Function: public.get_works_using_material
--- Description: Возвращает работы, использующие материал, с расчетом по коэффициентам материала
 CREATE OR REPLACE FUNCTION public.get_works_using_material(p_material_boq_item_id uuid)
- RETURNS TABLE(link_id uuid, work_id uuid, work_description text, work_unit text, work_quantity numeric, work_unit_rate numeric, quantity_per_work numeric, usage_coefficient numeric, total_material_usage numeric)
+ RETURNS TABLE(link_id uuid, work_id uuid, work_description text, work_unit text, work_quantity numeric, work_unit_rate numeric, total_material_usage numeric)
  LANGUAGE plpgsql
 AS $function$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        wml.id AS link_id,
-        w.id AS work_id,
-        w.description AS work_description,
-        w.unit AS work_unit,
-        w.quantity AS work_quantity,
-        w.unit_rate AS work_unit_rate,
-        wml.material_quantity_per_work AS quantity_per_work,  -- Для совместимости
-        wml.usage_coefficient,  -- Для совместимости
-        -- Расчет без material_quantity_per_work и usage_coefficient
-        (w.quantity * COALESCE(m.consumption_coefficient, 1) * COALESCE(m.conversion_coefficient, 1)) AS total_material_usage
-    FROM public.work_material_links wml
-    INNER JOIN public.boq_items w ON wml.work_boq_item_id = w.id
-    INNER JOIN public.boq_items m ON wml.material_boq_item_id = m.id
-    WHERE wml.material_boq_item_id = p_material_boq_item_id;
-END;
-$function$
+  BEGIN
+      RETURN QUERY
+      SELECT
+          wml.id AS link_id,
+          w.id AS work_id,
+          w.description AS work_description,
+          w.unit AS work_unit,
+          w.quantity AS work_quantity,
+          w.unit_rate AS work_unit_rate,
+          (w.quantity * COALESCE(m.consumption_coefficient, 1) *
+  COALESCE(m.conversion_coefficient, 1)) AS total_material_usage
+      FROM work_material_links wml
+      JOIN boq_items w ON wml.work_boq_item_id = w.id
+      JOIN boq_items m ON wml.material_boq_item_id = m.id
+      WHERE wml.material_boq_item_id = p_material_boq_item_id;
+  END;
+  $function$
 
 
 -- Function: public.gin_extract_query_trgm
@@ -2966,14 +2929,6 @@ $function$
 
 
 -- Function: public.index
-CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
- RETURNS integer
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$ltree_index$function$
-
-
--- Function: public.index
 CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
  RETURNS integer
  LANGUAGE c
@@ -2981,32 +2936,24 @@ CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
 AS '$libdir/ltree', $function$ltree_index$function$
 
 
+-- Function: public.index
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$ltree_index$function$
+
+
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree[])
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
+AS '$libdir/ltree', $function$_lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -3022,7 +2969,7 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -3030,15 +2977,31 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree[])
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$_lca$function$
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
 CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4209,6 +4172,45 @@ $function$
 
 
 -- Function: public.upsert_location
+-- Description: Безопасное создание или обновление локации
+CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_id uuid;
+    v_code text;
+BEGIN
+    -- Пытаемся найти существующую локацию
+    SELECT id INTO v_id
+    FROM public.location
+    WHERE LOWER(TRIM(name)) = LOWER(TRIM(p_name))
+    AND (parent_id IS NULL AND p_parent_id IS NULL OR parent_id = p_parent_id);
+    
+    IF v_id IS NOT NULL THEN
+        -- Обновляем описание если оно предоставлено
+        IF p_description IS NOT NULL THEN
+            UPDATE public.location
+            SET description = p_description,
+                updated_at = now()
+            WHERE id = v_id;
+        END IF;
+        RETURN v_id;
+    END IF;
+    
+    -- Создаем новую локацию
+    v_code := 'LOC-' || extract(epoch from now())::bigint || '-' || md5(random()::text)::text;
+    
+    INSERT INTO public.location (code, name, parent_id, description)
+    VALUES (v_code, TRIM(p_name), p_parent_id, p_description)
+    RETURNING id INTO v_id;
+    
+    RETURN v_id;
+END;
+$function$
+
+
+-- Function: public.upsert_location
 CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_description text DEFAULT NULL::text, p_parent_id uuid DEFAULT NULL::uuid, p_location_type text DEFAULT 'other'::text)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -4272,45 +4274,6 @@ BEGIN
     END IF;
     
     RETURN v_location_id;
-END;
-$function$
-
-
--- Function: public.upsert_location
--- Description: Безопасное создание или обновление локации
-CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text)
- RETURNS uuid
- LANGUAGE plpgsql
-AS $function$
-DECLARE
-    v_id uuid;
-    v_code text;
-BEGIN
-    -- Пытаемся найти существующую локацию
-    SELECT id INTO v_id
-    FROM public.location
-    WHERE LOWER(TRIM(name)) = LOWER(TRIM(p_name))
-    AND (parent_id IS NULL AND p_parent_id IS NULL OR parent_id = p_parent_id);
-    
-    IF v_id IS NOT NULL THEN
-        -- Обновляем описание если оно предоставлено
-        IF p_description IS NOT NULL THEN
-            UPDATE public.location
-            SET description = p_description,
-                updated_at = now()
-            WHERE id = v_id;
-        END IF;
-        RETURN v_id;
-    END IF;
-    
-    -- Создаем новую локацию
-    v_code := 'LOC-' || extract(epoch from now())::bigint || '-' || md5(random()::text)::text;
-    
-    INSERT INTO public.location (code, name, parent_id, description)
-    VALUES (v_code, TRIM(p_name), p_parent_id, p_description)
-    RETURNING id INTO v_id;
-    
-    RETURN v_id;
 END;
 $function$
 
@@ -6024,6 +5987,15 @@ CREATE UNIQUE INDEX tenders_tender_number_key ON public.tenders USING btree (ten
 CREATE UNIQUE INDEX units_code_key ON public.units USING btree (code);
 
 -- Index on public.work_material_links
+CREATE INDEX idx_wml_material ON public.work_material_links USING btree (material_boq_item_id);
+
+-- Index on public.work_material_links
+CREATE INDEX idx_wml_position ON public.work_material_links USING btree (client_position_id);
+
+-- Index on public.work_material_links
+CREATE INDEX idx_wml_work ON public.work_material_links USING btree (work_boq_item_id);
+
+-- Index on public.work_material_links
 CREATE INDEX idx_work_material_links_material ON public.work_material_links USING btree (material_boq_item_id);
 
 -- Index on public.work_material_links
@@ -6033,7 +6005,7 @@ CREATE INDEX idx_work_material_links_position ON public.work_material_links USIN
 CREATE INDEX idx_work_material_links_work ON public.work_material_links USING btree (work_boq_item_id);
 
 -- Index on public.work_material_links
-CREATE UNIQUE INDEX uq_work_material_link ON public.work_material_links USING btree (work_boq_item_id, material_boq_item_id);
+CREATE UNIQUE INDEX uq_work_material_pair ON public.work_material_links USING btree (work_boq_item_id, material_boq_item_id);
 
 -- Index on public.works_library
 CREATE INDEX idx_works_library_name ON public.works_library USING btree (name);

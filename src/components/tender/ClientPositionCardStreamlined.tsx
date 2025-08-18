@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Card,
   Typography,
@@ -95,8 +95,17 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const materialsCount = position.boq_items?.filter(item => item.item_type === 'material').length || 0;
   const worksCount = position.boq_items?.filter(item => item.item_type === 'work').length || 0;
   const totalCost = position.total_position_cost || 0;
-  const works = position.boq_items?.filter(item => item.item_type === 'work') || [];
-  console.log('🔧 Available works for linking:', works.length, works.map(w => ({ id: w.id, desc: w.description })));
+  const [localWorks, setLocalWorks] = useState<BOQItemWithLibrary[]>([]);
+  
+  // Update local works when position changes
+  useEffect(() => {
+    const updatedWorks = position.boq_items?.filter(item => item.item_type === 'work') || [];
+    setLocalWorks(updatedWorks);
+    console.log('🔧 Updated available works for linking:', updatedWorks.length, updatedWorks.map(w => ({ id: w.id, desc: w.description })));
+  }, [position.boq_items]);
+  
+  const works = localWorks;
+  console.log('🔧 Current works for linking:', works.length, works.map(w => ({ id: w.id, desc: w.description })));
 
 
   // Delete BOQ item
@@ -171,6 +180,11 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
       let finalQuantity = values.quantity;
       
+      // For materials, set default quantity if not linked to work
+      if (values.type === 'material' && !values.work_id) {
+        finalQuantity = 1; // Default quantity for unlinked materials
+      }
+      
       // If it's a material linked to work, calculate quantity based on work volume
       if (values.type === 'material' && values.work_id) {
         const work = works.find(w => w.id === values.work_id);
@@ -217,6 +231,10 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       };
 
       const result = await boqApi.create(newItem);
+      console.log('📦 BOQ create result:', result);
+      console.log('📦 BOQ result.data:', result.data);
+      console.log('📦 BOQ result.data type:', typeof result.data);
+      
       if (result.error) {
         throw new Error(result.error);
       }
@@ -224,7 +242,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       // If it's a material and a work is selected, create link
       if (values.type === 'material' && values.work_id && result.data) {
         console.log('🔍 Attempting to create work-material link...');
-        console.log('🔍 Material created with ID:', result.data.id);
+        console.log('🔍 Material created with data:', result.data);
+        console.log('🔍 Material ID:', result.data.id);
         console.log('🔍 Work selected with ID:', values.work_id);
         
         const linkData = {
@@ -236,7 +255,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         };
         
         console.log('🔗 Creating work-material link with data:', linkData);
-        const linkResult = await workMaterialLinksApi.create(linkData);
+        const linkResult = await workMaterialLinksApi.createLink(linkData);
         
         if (linkResult.error) {
           console.error('❌ Failed to create work-material link:', linkResult.error);
@@ -273,6 +292,42 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         message.success(`${values.type === 'work' ? 'Работа' : 'Материал'} добавлен`);
       }
       
+      // Update local works list if we just added a work
+      if (values.type === 'work' && result.data) {
+        const newWork: BOQItemWithLibrary = {
+          ...result.data,
+          item_type: 'work',
+          library_item: undefined,
+          work_link: undefined
+        };
+        setLocalWorks(prev => [...prev, newWork]);
+        console.log('🔄 Added work to local list:', newWork.description);
+      }
+      
+      // Force refresh of works list for any new item to ensure UI is up to date
+      // This is needed because onUpdate is async and the parent might not update immediately
+      setTimeout(() => {
+        const currentWorks = position.boq_items?.filter(item => item.item_type === 'work') || [];
+        if (values.type === 'work' && result.data) {
+          // Ensure the new work is in the list
+          const workExists = currentWorks.some(w => w.id === result.data.id);
+          if (!workExists) {
+            const newWork: BOQItemWithLibrary = {
+              ...result.data,
+              item_type: 'work',
+              library_item: undefined,
+              work_link: undefined
+            };
+            setLocalWorks([...currentWorks, newWork]);
+          } else {
+            setLocalWorks(currentWorks);
+          }
+        } else {
+          setLocalWorks(currentWorks);
+        }
+        console.log('🔄 Force refreshed works list');
+      }, 100);
+      
       quickAddForm.resetFields();
       setQuickAddMode(false);
       onUpdate();
@@ -305,6 +360,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     console.log('✏️ Starting inline edit for material:', item.id);
     console.log('🔍 Material data:', item);
     console.log('🔗 Work link data:', item.work_link);
+    
+    // Force refresh works list before editing to ensure we have the latest data
+    const currentWorks = position.boq_items?.filter(boqItem => boqItem.item_type === 'work') || [];
+    if (currentWorks.length !== localWorks.length) {
+      console.log('🔄 Updating works list before edit:', currentWorks.length, 'works');
+      setLocalWorks(currentWorks);
+    }
+    
     setEditingMaterialId(item.id);
     
     // Get work_link information if exists
@@ -345,7 +408,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       consumption_coefficient: consumptionCoef,
       conversion_coefficient: conversionCoef
     });
-  }, [editForm, position.boq_items]);
+  }, [editForm, position.boq_items, localWorks]);
 
   // Save inline edited material
   const handleSaveInlineEdit = useCallback(async (values: any) => {
@@ -404,10 +467,13 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         throw new Error(result.error);
       }
       
-      // Handle work linking if changed
-      const existingLinks = await workMaterialLinksApi.getByMaterialId(editingMaterialId);
-      const hasExistingLink = !existingLinks.error && existingLinks.data?.length > 0;
-      const existingWorkId = hasExistingLink ? existingLinks.data[0].work_boq_item_id : null;
+      // Handle work linking if changed - get links for this position
+      const positionLinks = await workMaterialLinksApi.getLinksByPosition(position.id);
+      const existingLink = !positionLinks.error && positionLinks.data?.find(
+        link => link.material_boq_item_id === editingMaterialId
+      );
+      const hasExistingLink = !!existingLink;
+      const existingWorkId = existingLink?.work_boq_item_id || null;
       
       console.log('🔗 Existing link info:', {
         hasLink: hasExistingLink,
@@ -419,8 +485,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       // Check if we need to update, create, or delete link
       if (values.work_id !== existingWorkId) {
         // Remove old link if exists
-        if (hasExistingLink) {
-          await workMaterialLinksApi.delete(existingLinks.data[0].id);
+        if (hasExistingLink && existingLink?.id) {
+          await workMaterialLinksApi.deleteLink(existingLink.id);
           console.log('🔗 Removed old link');
         }
         
@@ -435,14 +501,13 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           };
           
           console.log('🔗 Creating new link with data:', linkData);
-          const linkResult = await workMaterialLinksApi.create(linkData);
+          const linkResult = await workMaterialLinksApi.createLink(linkData);
           console.log('✅ Material linked to work', linkResult);
         } else {
           console.log('✅ Material unlinked from work');
         }
-      } else if (values.work_id && hasExistingLink) {
+      } else if (values.work_id && hasExistingLink && existingLink) {
         // Update existing link with new coefficients ALWAYS
-        const existingLink = existingLinks.data[0];
         const oldConsumption = existingLink.material_quantity_per_work || 1;
         const oldConversion = existingLink.usage_coefficient || 1;
         const newConsumption = values.consumption_coefficient || 1;
@@ -480,7 +545,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         console.log('✅ BOQ item coefficients updated successfully:', coeffUpdateResult.data);
         
         // Also update link to keep consistency (if the link table has these columns)
-        await workMaterialLinksApi.update(existingLink.id, {
+        await workMaterialLinksApi.updateLink(existingLink.id, {
           material_quantity_per_work: newConsumption,
           usage_coefficient: newConversion
         });
@@ -1177,30 +1242,30 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             <Input placeholder="Наименование" size="small" />
           </Form.Item>
         </Col>
-        <Col xs={12} sm={6} md={3} lg={3}>
-          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
-            prevValues.type !== currentValues.type || 
-            prevValues.work_id !== currentValues.work_id
-          }>
-            {({ getFieldValue }) => (
-              <Form.Item
-                name="quantity"
-                className="mb-0"
-                label={<Text strong>Кол-во</Text>}
-                rules={[{ required: true, message: 'Кол-во' }]}
-              >
-                <InputNumber 
-                  placeholder="Кол-во" 
-                  min={0}
-                  precision={2}
-                  className="w-full"
-                  size="small"
-                  disabled={getFieldValue('type') === 'material' && !!getFieldValue('work_id')}
-                />
-              </Form.Item>
-            )}
-          </Form.Item>
-        </Col>
+        <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
+          prevValues.type !== currentValues.type
+        }>
+          {({ getFieldValue }) => 
+            getFieldValue('type') === 'work' ? (
+              <Col xs={12} sm={6} md={3} lg={3}>
+                <Form.Item
+                  name="quantity"
+                  className="mb-0"
+                  label={<Text strong>Кол-во</Text>}
+                  rules={[{ required: true, message: 'Кол-во' }]}
+                >
+                  <InputNumber 
+                    placeholder="Кол-во" 
+                    min={0}
+                    precision={2}
+                    className="w-full"
+                    size="small"
+                  />
+                </Form.Item>
+              </Col>
+            ) : null
+          }
+        </Form.Item>
         <Col xs={12} sm={6} md={3} lg={2}>
           <Form.Item
             name="unit"

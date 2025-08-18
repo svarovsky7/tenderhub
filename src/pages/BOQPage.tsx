@@ -41,6 +41,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TenderBOQManagerNew from '../components/tender/TenderBOQManagerNew';
+import EnhancedQuickAddCard from '../components/tender/EnhancedQuickAddCard';
 import { tendersApi, boqApi, materialsApi, worksApi } from '../lib/supabase/api';
 import type { Tender, BOQItem, Material, Work } from '../lib/supabase/types';
 
@@ -48,269 +49,7 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 const { Search } = Input;
 
-// Quick Add Card Component
-interface QuickAddCardProps {
-  type: 'work' | 'material';
-  onAdd: (data: any) => Promise<void>;
-  loading?: boolean;
-}
-
-const QuickAddCard: React.FC<QuickAddCardProps> = React.memo(({ type, onAdd, loading = false }) => {
-  const [form] = Form.useForm();
-  const [submitting, setSubmitting] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [suggestions, setSuggestions] = useState<(Material | Work)[]>([]);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-
-  const isWork = type === 'work';
-  const cardConfig = {
-    work: {
-      title: 'Быстрое добавление работ',
-      icon: <BuildOutlined />,
-      gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      hoverGradient: 'linear-gradient(135deg, #667eea 20%, #764ba2 80%)',
-      color: '#667eea',
-      bgColor: 'rgba(102, 126, 234, 0.1)'
-    },
-    material: {
-      title: 'Быстрое добавление материалов',
-      icon: <ToolOutlined />,
-      gradient: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
-      hoverGradient: 'linear-gradient(135deg, #11998e 20%, #38ef7d 80%)',
-      color: '#11998e',
-      bgColor: 'rgba(17, 153, 142, 0.1)'
-    }
-  };
-
-  const config = cardConfig[type];
-
-  const loadSuggestions = useCallback(async (search: string) => {
-    if (!search.trim()) {
-      setSuggestions([]);
-      return;
-    }
-
-    setLoadingSuggestions(true);
-    try {
-      const api = isWork ? worksApi : materialsApi;
-      const result = await api.search(search, { limit: 5 });
-      if (result.data) {
-        setSuggestions(result.data);
-      }
-    } catch (error) {
-      console.error(`Error loading ${type} suggestions:`, error);
-    } finally {
-      setLoadingSuggestions(false);
-    }
-  }, [isWork, type]);
-
-  const handleSearch = useCallback((value: string) => {
-    setSearchTerm(value);
-    const debounceTimer = setTimeout(() => {
-      loadSuggestions(value);
-    }, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [loadSuggestions]);
-
-  const handleSubmit = useCallback(async (values: any) => {
-    console.log(`🚀 Submitting ${type}:`, values);
-    setSubmitting(true);
-    try {
-      await onAdd({
-        ...values,
-        type,
-        item_type: type
-      });
-      form.resetFields();
-      setSearchTerm('');
-      setSuggestions([]);
-      message.success(`${isWork ? 'Работа' : 'Материал'} успешно добавлен${isWork ? '' : ''}`);
-    } catch (error) {
-      console.error(`Error adding ${type}:`, error);
-      message.error(`Ошибка добавления ${isWork ? 'работы' : 'материала'}`);
-    } finally {
-      setSubmitting(false);
-    }
-  }, [onAdd, type, isWork, form]);
-
-  const selectSuggestion = useCallback((suggestion: Material | Work) => {
-    form.setFieldsValue({
-      description: suggestion.name,
-      unit: suggestion.unit
-    });
-    setSearchTerm(suggestion.name);
-    setSuggestions([]);
-  }, [form]);
-
-  return (
-    <Card
-      className="transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border-0 overflow-hidden group"
-      style={{
-        background: config.gradient,
-        minHeight: '400px'
-      }}
-      bodyStyle={{ padding: 0 }}
-    >
-      <div className="p-6 text-white">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-3">
-            <div className="text-3xl transition-transform duration-300 group-hover:scale-110">
-              {config.icon}
-            </div>
-            <Title level={3} className="!text-white !mb-0">
-              {config.title}
-            </Title>
-          </div>
-          <Badge count={suggestions.length} showZero={false} />
-        </div>
-
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmit}
-          className="space-y-4"
-        >
-          <div className="relative">
-            <Form.Item
-              name="description"
-              label={<span className="text-white font-medium">Название {isWork ? 'работы' : 'материала'}</span>}
-              rules={[{ required: true, message: `Введите название ${isWork ? 'работы' : 'материала'}` }]}
-            >
-              <Search
-                placeholder={`Поиск и добавление ${isWork ? 'работ' : 'материалов'}...`}
-                value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
-                loading={loadingSuggestions}
-                size="large"
-                className="transition-all duration-200"
-                prefix={<SearchOutlined className="text-gray-400" />}
-              />
-            </Form.Item>
-            
-            {suggestions.length > 0 && (
-              <div className="absolute z-10 w-full bg-white rounded-lg shadow-2xl mt-1 max-h-48 overflow-y-auto">
-                <List
-                  dataSource={suggestions}
-                  renderItem={(item) => (
-                    <List.Item
-                      className="hover:bg-blue-50 cursor-pointer transition-colors px-4 py-2"
-                      onClick={() => selectSuggestion(item)}
-                    >
-                      <List.Item.Meta
-                        avatar={<Avatar icon={isWork ? <BuildOutlined /> : <ToolOutlined />} />}
-                        title={<Text strong>{item.name}</Text>}
-                        description={<Text type="secondary">{item.unit}</Text>}
-                      />
-                    </List.Item>
-                  )}
-                />
-              </div>
-            )}
-          </div>
-
-          <Row gutter={16}>
-            <Col xs={24} sm={8}>
-              <Form.Item
-                name="unit"
-                label={<span className="text-white font-medium">Ед. изм.</span>}
-                rules={[{ required: true, message: 'Введите единицу измерения' }]}
-              >
-                <Input
-                  placeholder="м², шт, кг"
-                  size="large"
-                  className="transition-all duration-200 hover:border-white/50 focus:border-white"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={8}>
-              <Form.Item
-                name="quantity"
-                label={<span className="text-white font-medium">Количество</span>}
-                rules={[{ required: true, message: 'Введите количество' }]}
-              >
-                <InputNumber
-                  min={0}
-                  step={0.01}
-                  precision={2}
-                  placeholder="0.00"
-                  size="large"
-                  className="w-full transition-all duration-200"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={8}>
-              <Form.Item
-                name="unit_rate"
-                label={<span className="text-white font-medium">Цена за ед.</span>}
-                rules={[{ required: true, message: 'Введите цену' }]}
-              >
-                <InputNumber
-                  min={0}
-                  step={0.01}
-                  precision={2}
-                  placeholder="0.00"
-                  size="large"
-                  className="w-full transition-all duration-200"
-                  addonAfter="₽"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          {!isWork && (
-            <Row gutter={16}>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="consumption_coefficient"
-                  label={<span className="text-white font-medium">Коэф. расхода</span>}
-                  initialValue={1}
-                >
-                  <InputNumber
-                    min={0.01}
-                    step={0.01}
-                    precision={2}
-                    placeholder="1.00"
-                    size="large"
-                    className="w-full transition-all duration-200"
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="conversion_coefficient"
-                  label={<span className="text-white font-medium">Коэф. перевода</span>}
-                  initialValue={1}
-                >
-                  <InputNumber
-                    min={0.01}
-                    step={0.01}
-                    precision={2}
-                    placeholder="1.00"
-                    size="large"
-                    className="w-full transition-all duration-200"
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-          )}
-
-          <div className="pt-4 border-t border-white/20">
-            <Button
-              type="primary"
-              htmlType="submit"
-              size="large"
-              loading={submitting || loading}
-              className="w-full bg-white/10 border-white/30 hover:bg-white/20 text-white font-medium transition-all duration-300 hover:scale-[1.02]"
-              icon={<PlusOutlined />}
-            >
-              Добавить {isWork ? 'работу' : 'материал'}
-            </Button>
-          </div>
-        </Form>
-      </div>
-    </Card>
-  );
-});
+// Enhanced Quick Add Cards are now implemented in separate components
 
 // Statistics Card Component
 interface StatsCardProps {
@@ -658,14 +397,14 @@ const BOQPage: React.FC = () => {
           <div className="max-w-7xl mx-auto">
             {selectedTenderId ? (
               <div className="space-y-8">
-                {/* Quick Add Cards */}
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  <QuickAddCard 
+                {/* Enhanced Quick Add Cards */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                  <EnhancedQuickAddCard 
                     type="work" 
                     onAdd={handleQuickAdd}
                     loading={loading}
                   />
-                  <QuickAddCard 
+                  <EnhancedQuickAddCard 
                     type="material" 
                     onAdd={handleQuickAdd}
                     loading={loading}

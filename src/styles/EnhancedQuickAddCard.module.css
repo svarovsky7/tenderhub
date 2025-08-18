@@ -1,0 +1,446 @@
+/* Enhanced Quick Add Card Styles */
+
+.cardContainer {
+  position: relative;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 20px 40px rgba(102, 126, 234, 0.15);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cardContainer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  transition: opacity 0.3s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cardContainer:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 30px 60px rgba(102, 126, 234, 0.25);
+}
+
+.cardContainer:hover::before {
+  opacity: 1;
+}
+
+.materialCard {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  box-shadow: 0 20px 40px rgba(17, 153, 142, 0.15);
+}
+
+.materialCard:hover {
+  box-shadow: 0 30px 60px rgba(17, 153, 142, 0.25);
+}
+
+.glassMorphism {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+}
+
+.cardContent {
+  padding: 32px;
+  position: relative;
+  z-index: 2;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  position: relative;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.iconContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.iconContainer:hover {
+  transform: scale(1.1) rotate(5deg);
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.icon {
+  font-size: 28px;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.title {
+  color: white !important;
+  font-weight: 700 !important;
+  font-size: 24px !important;
+  margin: 0 !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.badge {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.formContainer {
+  position: relative;
+}
+
+.searchContainer {
+  position: relative;
+  margin-bottom: 24px;
+}
+
+.searchInput {
+  transition: all 0.3s ease !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+.searchInput:hover {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.searchInput:focus,
+.searchInput:focus-within {
+  background: white !important;
+  border-color: rgba(255, 255, 255, 0.8) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
+}
+
+.suggestionsContainer {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(20px);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.suggestionItem {
+  padding: 16px 20px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.suggestionItem:hover {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  transform: translateX(4px);
+}
+
+.suggestionItem:last-child {
+  border-bottom: none;
+}
+
+.suggestionAvatar {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%) !important;
+  border: 2px solid rgba(102, 126, 234, 0.3) !important;
+}
+
+.materialSuggestionAvatar {
+  background: linear-gradient(135deg, rgba(17, 153, 142, 0.2) 0%, rgba(56, 239, 125, 0.2) 100%) !important;
+  border: 2px solid rgba(17, 153, 142, 0.3) !important;
+}
+
+.formItem {
+  margin-bottom: 20px !important;
+}
+
+.label {
+  color: white !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  margin-bottom: 8px !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.input {
+  transition: all 0.3s ease !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+.input:hover {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.input:focus {
+  background: white !important;
+  border-color: rgba(255, 255, 255, 0.8) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.numberInput {
+  width: 100% !important;
+}
+
+.submitSection {
+  padding-top: 24px;
+  border-top: 2px solid rgba(255, 255, 255, 0.2);
+  margin-top: 24px;
+}
+
+.submitButton {
+  width: 100% !important;
+  height: 56px !important;
+  border-radius: 16px !important;
+  font-weight: 600 !important;
+  font-size: 16px !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  color: white !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  backdrop-filter: blur(10px) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.submitButton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.submitButton:hover {
+  background: rgba(255, 255, 255, 0.25) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  transform: translateY(-2px) scale(1.02) !important;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2) !important;
+}
+
+.submitButton:hover::before {
+  left: 100%;
+}
+
+.submitButton:active {
+  transform: translateY(0) scale(0.98) !important;
+}
+
+.loadingButton {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  cursor: not-allowed !important;
+}
+
+.successAnimation {
+  animation: successPulse 0.6s ease-out;
+}
+
+@keyframes successPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(56, 239, 125, 0.7);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px rgba(56, 239, 125, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(56, 239, 125, 0);
+  }
+}
+
+.progressContainer {
+  margin: 16px 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.progressContainer.visible {
+  opacity: 1;
+}
+
+.customProgress {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+}
+
+.floatingElements {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.floatingElement {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  animation: float 6s ease-in-out infinite;
+}
+
+.floatingElement:nth-child(1) {
+  width: 60px;
+  height: 60px;
+  top: 10%;
+  left: 85%;
+  animation-delay: 0s;
+}
+
+.floatingElement:nth-child(2) {
+  width: 40px;
+  height: 40px;
+  top: 70%;
+  left: 10%;
+  animation-delay: 2s;
+}
+
+.floatingElement:nth-child(3) {
+  width: 30px;
+  height: 30px;
+  top: 30%;
+  left: 5%;
+  animation-delay: 4s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0.1;
+  }
+  50% {
+    transform: translateY(-20px) rotate(180deg);
+    opacity: 0.3;
+  }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .cardContent {
+    padding: 24px;
+  }
+  
+  .header {
+    margin-bottom: 24px;
+  }
+  
+  .iconContainer {
+    width: 56px;
+    height: 56px;
+  }
+  
+  .icon {
+    font-size: 24px;
+  }
+  
+  .title {
+    font-size: 20px !important;
+  }
+  
+  .submitButton {
+    height: 48px !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .cardContainer {
+    border: 3px solid white;
+  }
+  
+  .input {
+    background: white !important;
+    border-color: #333 !important;
+    color: #333 !important;
+  }
+  
+  .label {
+    text-shadow: none !important;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .cardContainer,
+  .iconContainer,
+  .searchInput,
+  .input,
+  .submitButton {
+    transition: none !important;
+    animation: none !important;
+  }
+  
+  .cardContainer:hover {
+    transform: none !important;
+  }
+  
+  .floatingElement {
+    animation: none !important;
+  }
+}
