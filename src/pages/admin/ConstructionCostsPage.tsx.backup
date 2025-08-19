@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Key } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Layout,
   Tree,
@@ -59,7 +59,6 @@ import { importConstructionCosts, type ImportRow } from '../../lib/supabase/api/
 import { 
   getCategoriesWithDetails, 
   getLocations,
-  createLocation,
   deleteCategory,
   deleteDetail,
   deleteLocation,
@@ -91,8 +90,6 @@ const ConstructionCostsPage: React.FC = () => {
   const [editingKey, setEditingKey] = useState<string>('');
   const [editedData, setEditedData] = useState<any[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
-  const [expandedRowKeys, setExpandedRowKeys] = useState<Key[]>([]);
-  const [combinedData, setCombinedData] = useState<any[]>([]);
   
   // Модальные окна
   const [isImportModalVisible, setIsImportModalVisible] = useState(false);
@@ -106,21 +103,6 @@ const ConstructionCostsPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
-
-  // Обновление объединенных данных при изменении категорий
-  useEffect(() => {
-    if (categories.length > 0) {
-      const data = getCombinedData();
-      setCombinedData(data);
-      
-      // Устанавливаем развернутыми все категории по умолчанию
-      const defaultExpandedKeys: Key[] = data
-        .filter(record => record.type === 'category')
-        .map(record => record.key);
-      
-      setExpandedRowKeys(defaultExpandedKeys);
-    }
-  }, [categories]);
 
   // Загрузка дерева категорий и деталей
   const loadData = async () => {
@@ -194,12 +176,7 @@ const ConstructionCostsPage: React.FC = () => {
               title: (
                 <Space>
                   <FileOutlined />
-                  <span>
-                    {detailName}
-                    {detailGroup[0].unit && (
-                      <span style={{ color: '#666' }}> ({detailGroup[0].unit})</span>
-                    )}
-                  </span>
+                  <span>{detailName}</span>
                   {uniqueLocations.length > 0 && (
                     <Space size={4}>
                       <GlobalOutlined style={{ color: '#52c41a' }} />
@@ -238,12 +215,7 @@ const ConstructionCostsPage: React.FC = () => {
             title: (
               <Space>
                 <FolderOutlined />
-                <span style={{ fontWeight: 'bold' }}>
-                  {category.name}
-                  {category.unit && (
-                    <span style={{ fontWeight: 'normal', color: '#666' }}> ({category.unit})</span>
-                  )}
-                </span>
+                <span style={{ fontWeight: 'bold' }}>{category.name}</span>
                 <span style={{ fontSize: '12px', color: '#999' }}>
                   ({detailNodes.length} вид{detailNodes.length === 1 ? '' : detailNodes.length < 5 ? 'а' : 'ов'} затрат)
                 </span>
@@ -282,22 +254,10 @@ const ConstructionCostsPage: React.FC = () => {
   };
 
   // Функции для редактирования
-  const isEditing = (record: any) => {
-    // Для локализаций используем составной ключ
-    if (record.type === 'location' && record.detailRecordId) {
-      return editingKey === `${record.detailRecordId}-${record.id || 'new'}`;
-    }
-    return editingKey === String(record.id);
-  };
 
   const edit = (record: any) => {
     form.setFieldsValue({ ...record });
-    // Для локализаций используем составной ключ
-    if (record.type === 'location' && record.detailRecordId) {
-      setEditingKey(`${record.detailRecordId}-${record.id || 'new'}`);
-    } else {
-      setEditingKey(String(record.id));
-    }
+    setEditingKey(record.id);
   };
 
   const cancel = () => {
@@ -341,86 +301,12 @@ const ConstructionCostsPage: React.FC = () => {
         if (parts[1]) locationData.region = parts[1];
         if (parts[2]) locationData.city = parts[2];
         
-        // Сначала проверяем, существует ли уже такая локализация
-        const locationString = [locationData.country, locationData.region, locationData.city]
-          .filter(Boolean).join(', ');
+        const { error } = await supabase
+          .from('location')
+          .update(locationData)
+          .eq('id', record.id);
         
-        // Проверяем, изменилась ли локализация
-        const currentLocationString = [record.country, record.region, record.city]
-          .filter(Boolean).join(', ');
-        
-        if (locationString !== currentLocationString) {
-          // Ищем существующую локализацию с такими же данными
-          const { data: existingLocation, error: searchError } = await supabase
-            .from('location')
-            .select('id')
-            .eq('country', locationData.country || null)
-            .eq('region', locationData.region || null) 
-            .eq('city', locationData.city || null)
-            .maybeSingle();
-          
-          if (searchError && searchError.code !== 'PGRST116') {
-            throw searchError;
-          }
-          
-          let locationId = record.id;
-          
-          if (existingLocation) {
-            // Используем существующую локализацию
-            locationId = existingLocation.id;
-            console.log('✅ [save] Using existing location:', locationId);
-          } else {
-            // Создаем новую локализацию
-            const { data: newLocation, error: createError } = await createLocation(
-              locationData.country, 
-              locationData.region, 
-              locationData.city
-            );
-            
-            if (createError || !newLocation) {
-              throw createError || new Error('Failed to create location');
-            }
-            
-            locationId = newLocation.id;
-            console.log('✅ [save] Created new location:', locationId);
-            message.success('Создана новая локализация');
-          }
-          
-          // Обновляем связи detail_cost_categories с новой локализацией
-          if (locationId !== record.id) {
-            const { error: updateError } = await supabase
-              .from('detail_cost_categories')
-              .update({ location_id: locationId })
-              .eq('id', record.detailRecordId);
-              
-            if (updateError) throw updateError;
-            
-            // Если старая локализация больше не используется, удаляем её
-            const { data: usageCheck, error: usageError } = await supabase
-              .from('detail_cost_categories')
-              .select('id')
-              .eq('location_id', record.id)
-              .limit(1);
-              
-            if (usageError) throw usageError;
-            
-            if (!usageCheck || usageCheck.length === 0) {
-              const { error: deleteError } = await deleteLocation(record.id);
-              if (deleteError) {
-                console.warn('⚠️ Failed to delete unused location:', deleteError);
-              }
-            }
-          }
-        } else {
-          // Локализация не изменилась, просто обновляем её
-          const { error } = await supabase
-            .from('location')
-            .update(locationData)
-            .eq('id', record.id);
-          
-          if (error) throw error;
-        }
-        
+        if (error) throw error;
         message.success('Локализация обновлена');
       }
 
@@ -480,75 +366,41 @@ const ConstructionCostsPage: React.FC = () => {
         children: [] as any[]
       };
       
-      // Группируем детали по названию и единицам измерения
-      const detailGroups = new Map<string, any[]>();
+      // Добавляем детали как дочерние элементы
       categoryDetails.forEach((detail: any) => {
-        const groupKey = `${detail.name}_${detail.unit || ''}`;
-        if (!detailGroups.has(groupKey)) {
-          detailGroups.set(groupKey, []);
-        }
-        detailGroups.get(groupKey)!.push(detail);
-      });
-      
-      // Создаем узлы для сгруппированных деталей
-      detailGroups.forEach((detailGroup, groupKey) => {
-        const firstDetail = detailGroup[0];
         const detailNode = {
-          key: `detail-group-${firstDetail.id}`,
-          id: firstDetail.id,
+          key: `detail-${detail.id}`,
+          id: detail.id,
           type: 'detail',
           level: 2,
-          name: firstDetail.name,
+          name: detail.name,
           description: '-',
-          unit: firstDetail.unit || '-',
+          unit: detail.unit || '-',
           location: '-',
           categoryName: category.name,
-          detailName: firstDetail.name,
+          detailName: detail.name,
           parentId: category.id,
           children: [] as any[]
         };
         
-        // Добавляем локализации для этой детали
-        detailGroup.forEach((detail: any) => {
-          if (detail.location) {
-            const locationNode = {
-              key: `loc-${detail.id}-${detail.location.id}`,
-              id: detail.location.id,
-              detailRecordId: detail.id, // ID записи в detail_cost_categories
-              type: 'location',
-              level: 3,
-              name: [detail.location.country, detail.location.region, detail.location.city]
-                .filter(Boolean).join(', ') || 'Без локализации',
-              description: '-',
-              unit: detail.unit || '-',
-              location: detail.location,
-              categoryName: category.name,
-              detailName: firstDetail.name,
-              parentDetailId: firstDetail.id,
-              parentCategoryId: category.id
-            };
-            detailNode.children.push(locationNode);
-          }
-        });
-        
-        // Если нет локализаций, добавляем пустую запись
-        if (detailNode.children.length === 0) {
-          const emptyLocationNode = {
-            key: `loc-empty-${firstDetail.id}`,
-            id: null,
-            detailRecordId: firstDetail.id,
+        // Если есть локализация, добавляем её как дочерний элемент
+        if (detail.location) {
+          const locationNode = {
+            key: `loc-${detail.id}-${detail.location.id}`,
+            id: detail.location.id,
             type: 'location',
             level: 3,
-            name: 'Без локализации',
+            name: [detail.location.country, detail.location.region, detail.location.city]
+              .filter(Boolean).join(', ') || 'Без локализации',
             description: '-',
-            unit: firstDetail.unit || '-',
-            location: null,
+            unit: detail.unit || '-',
+            location: detail.location,
             categoryName: category.name,
-            detailName: firstDetail.name,
-            parentDetailId: firstDetail.id,
+            detailName: detail.name,
+            parentDetailId: detail.id,
             parentCategoryId: category.id
           };
-          detailNode.children.push(emptyLocationNode);
+          detailNode.children.push(locationNode);
         }
         
         categoryNode.children.push(detailNode);
@@ -926,15 +778,10 @@ const ConstructionCostsPage: React.FC = () => {
           .action-btn {
             border-radius: 8px;
             font-weight: 500;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
           }
           .action-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 16px rgba(0,0,0,0.2) !important;
-          }
-          .action-btn:active {
-            transform: translateY(0);
+            transform: translateY(-1px);
           }
           
           /* Модальные окна */
@@ -977,12 +824,8 @@ const ConstructionCostsPage: React.FC = () => {
                 <div className="action-buttons">
                   <Button
                     className="action-btn"
-                    style={{ 
-                      background: 'rgba(255, 255, 255, 0.95)',
-                      color: '#52c41a',
-                      borderColor: 'rgba(255, 255, 255, 0.3)',
-                      fontWeight: 600
-                    }}
+                    type="primary"
+                    ghost
                     icon={<ReloadOutlined />}
                     onClick={loadData}
                     loading={loading}
@@ -992,12 +835,8 @@ const ConstructionCostsPage: React.FC = () => {
                   </Button>
                   <Button
                     className="action-btn"
-                    style={{ 
-                      background: 'rgba(255, 255, 255, 0.95)',
-                      color: '#faad14',
-                      borderColor: 'rgba(255, 255, 255, 0.3)',
-                      fontWeight: 600
-                    }}
+                    type="primary"
+                    ghost
                     icon={<DownloadOutlined />}
                     onClick={handleExportExcel}
                     disabled={categories.length === 0}
@@ -1007,13 +846,8 @@ const ConstructionCostsPage: React.FC = () => {
                   </Button>
                   <Button
                     className="action-btn"
-                    style={{ 
-                      background: '#ffd93d',
-                      color: '#333',
-                      borderColor: '#ffd93d',
-                      fontWeight: 600,
-                      boxShadow: '0 2px 8px rgba(255, 217, 61, 0.4)'
-                    }}
+                    type="primary"
+                    ghost
                     icon={<UploadOutlined />}
                     onClick={() => setIsImportModalVisible(true)}
                     size="large"
@@ -1029,12 +863,8 @@ const ConstructionCostsPage: React.FC = () => {
                   >
                     <Button
                       className="action-btn"
-                      style={{ 
-                        background: 'rgba(255, 77, 79, 0.1)',
-                        color: '#ff4d4f',
-                        borderColor: 'rgba(255, 77, 79, 0.3)',
-                        fontWeight: 600
-                      }}
+                      danger
+                      ghost
                       icon={<ClearOutlined />}
                       disabled={categories.length === 0}
                       size="large"
@@ -1184,7 +1014,7 @@ const ConstructionCostsPage: React.FC = () => {
                         </Col>
                         <Col span={24}>
                           <EditableTable
-                            dataSource={combinedData}
+                            dataSource={getCombinedData()}
                             loading={loading}
                             editingKey={editingKey}
                             form={form}
@@ -1192,8 +1022,6 @@ const ConstructionCostsPage: React.FC = () => {
                             onSave={save}
                             onCancel={cancel}
                             onDelete={handleDelete}
-                            expandedRowKeys={expandedRowKeys}
-                            onExpandedRowsChange={setExpandedRowKeys}
                           />
                         </Col>
                       </Row>
@@ -1213,7 +1041,7 @@ const ConstructionCostsPage: React.FC = () => {
                       />
                     </Card>
                   </TabPane> */
-                },
+                  
                 {
                   key: '3',
                   label: (

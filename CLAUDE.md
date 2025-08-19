@@ -59,8 +59,13 @@ Modular domain-specific modules (all < 600 lines):
 - `tenders.ts` - Tender lifecycle management
 - `materials.ts` & `works.ts` - Library management
 - `work-material-links.ts` - Work-Material relationships
-- `client-works.ts` - Excel import (target: 5000 rows in ≤30s)
-- `construction-costs.ts` - Cost management
+- `client-works.ts` & `client-positions.ts` - Excel import (target: 5000 rows in ≤30s)
+- Cost management modules:
+  - `construction-costs.ts` - Main cost operations
+  - `cost-categories.ts` & `cost-categories-v2.ts` - Category management
+  - `cost-structure.ts` & `cost-structure-fixed.ts` - Cost structures
+  - `tender-construction-costs.ts` - Tender-specific costs
+  - `import-costs.ts` - Cost data import
 - Real-time subscriptions ready but disabled
 
 ### Component Organization
@@ -189,8 +194,8 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 ## Important Notes
 
 - **Material Linking**: Uses `MaterialLinkModal.tsx`, not drag-drop
-- **TypeScript**: Strict mode with project references
-- **ESLint**: Uses flat config with React hooks/refresh plugins
+- **TypeScript**: Strict mode with project references (tsconfig.app.json, tsconfig.node.json)
+- **ESLint**: Flat config with React hooks/refresh plugins (note: check eslint.config.js line 6)
 - **Connection Monitoring**: Built-in Supabase status tracking
 - **Excel Import**: Batch operations via `client-works.ts`
 

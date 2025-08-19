@@ -505,7 +505,30 @@ export const ConstructionCostsPage: React.FC = () => {
         }}
         footer={
           <Space style={{ float: 'right' }}>
-            <Button onClick={() => setDrawerVisible(false)}>Отмена</Button>
+            <Button 
+              onClick={() => {
+                setDrawerVisible(false);
+                setSelectedCost(null);
+                form.resetFields();
+              }}
+            >
+              Отмена
+            </Button>
+            {selectedCost && (
+              <Button 
+                onClick={() => {
+                  // Сбросить форму к исходным значениям выбранной записи
+                  form.setFieldsValue({
+                    ...selectedCost,
+                    price_date: selectedCost.price_date ? dayjs(selectedCost.price_date) : undefined,
+                    tags: selectedCost.tags || []
+                  });
+                  message.info('Изменения отменены');
+                }}
+              >
+                Сбросить изменения
+              </Button>
+            )}
             <Button 
               type="primary" 
               onClick={() => form.submit()}

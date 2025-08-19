@@ -112,7 +112,8 @@ export async function importConstructionCosts(rows: ImportRow[]): Promise<Import
         .from('cost_categories')
         .insert({
           name: 'Общие затраты',
-          description: 'Категория для импортированных затрат'
+          description: 'Категория для импортированных затрат',
+          unit: null
         });
       
       let newCategory = null;
@@ -197,7 +198,8 @@ export async function importConstructionCosts(rows: ImportRow[]): Promise<Import
               .from('cost_categories')
               .insert({
                 name: currentCategoryName,
-                description: row.categoryUnit ? `Единица измерения: ${row.categoryUnit}` : null
+                unit: row.categoryUnit || null,
+                description: null
               });
             
             console.log(`📦 Insert result:`, insertResult);
@@ -279,7 +281,8 @@ export async function importConstructionCosts(rows: ImportRow[]): Promise<Import
                 .from('cost_categories')
                 .insert({
                   name: 'Общие затраты',
-                  description: 'Категория для импортированных затрат'
+                  description: 'Категория для импортированных затрат',
+                  unit: null
                 });
               
               let newCategory = null;
@@ -351,7 +354,7 @@ async function processDetail(
   });
   
   const detailName = row.detailName!.trim();
-  const detailNameWithUnit = detailName + (row.detailUnit ? ` (${row.detailUnit})` : '');
+  const detailUnit = row.detailUnit ? row.detailUnit.trim() : null;
   
   // Обрабатываем локализацию сначала, чтобы получить location_id
   let locationId = null;
@@ -454,13 +457,14 @@ async function processDetail(
 
   // Проверяем, существует ли уже деталь с таким же именем, категорией И локализацией
   const existingDetail = details.find(d => 
-    d.name === detailNameWithUnit && 
+    d.name === detailName && 
     d.cost_category_id === categoryId &&
     d.location_id === locationId
   );
   
   console.log(`🔍 Checking for existing detail:`, {
-    detailNameWithUnit,
+    detailName,
+    detailUnit,
     locationId,
     existingDetail: !!existingDetail,
     totalExistingDetails: details.length
@@ -470,11 +474,12 @@ async function processDetail(
     console.log(`🔍 Processing NEW detail: ${detailName} for category: ${categoryName}`);
     
     // Создаем детальную категорию
-    console.log(`📦 Creating detail: ${detailNameWithUnit} for category ${categoryName} (ID: ${categoryId})`);
+    console.log(`📦 Creating detail: ${detailName} for category ${categoryName} (ID: ${categoryId})`);
     
     console.log(`📝 Inserting detail with data:`, {
       cost_category_id: categoryId,
-      name: detailNameWithUnit,
+      name: detailName,
+      unit: detailUnit,
       location_id: locationId,
       unit_cost: null
     });
@@ -483,7 +488,8 @@ async function processDetail(
       .from('detail_cost_categories')
       .insert({
         cost_category_id: categoryId,
-        name: detailNameWithUnit,
+        name: detailName,
+        unit: detailUnit,
         location_id: locationId,
         unit_cost: null
       });
@@ -498,7 +504,7 @@ async function processDetail(
         .from('detail_cost_categories')
         .select('*')
         .eq('cost_category_id', categoryId)
-        .eq('name', detailNameWithUnit)
+        .eq('name', detailName)
         .limit(1);
       
       console.log(`📦 Detail select result:`, selectResult);
@@ -511,16 +517,16 @@ async function processDetail(
       
     if (detError) {
       console.error(`❌ Error creating detail:`, detError);
-      result.errors.push(`Строка ${rowIndex + 1}: Не удалось создать деталь ${detailNameWithUnit}: ${detError.message}`);
+      result.errors.push(`Строка ${rowIndex + 1}: Не удалось создать деталь ${detailName}: ${detError.message}`);
       result.failed++;
     } else if (newDetail) {
       details.push(newDetail);
       result.detailsCreated++;
       result.success++;
-      console.log(`✅ Created detail: ${detailNameWithUnit}`);
+      console.log(`✅ Created detail: ${detailName} with unit: ${detailUnit}`);
     }
   } else {
-    console.log(`⏭️ Detail already exists: ${detailNameWithUnit} with location ID: ${locationId}`);
+    console.log(`⏭️ Detail already exists: ${detailName} with location ID: ${locationId}`);
     result.success++;
   }
 }
