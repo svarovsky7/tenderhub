@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { AutoComplete, Button, Form, InputNumber, Select, Space, Tooltip, message } from 'antd';
+import { AutoComplete, Button, Form, Select, Space, Tooltip, message } from 'antd';
 import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { DecimalInput } from '../common';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -244,7 +245,7 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
           name="quantity"
           control={control}
           render={({ field }) => (
-            <InputNumber
+            <DecimalInput
               {...field}
               min={0}
               precision={3}
@@ -263,7 +264,7 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
           name="unit_rate"
           control={control}
           render={({ field }) => (
-            <InputNumber
+            <DecimalInput
               {...field}
               min={0}
               precision={2}
@@ -281,9 +282,9 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
               name="consumption_coefficient"
               control={control}
               render={({ field }) => (
-                <InputNumber
+                <DecimalInput
                   {...field}
-                  min={0}
+                  min={1}
                   precision={4}
                   placeholder="Коэф. расхода"
                   style={{ width: 130 }}
@@ -297,7 +298,7 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
               name="conversion_coefficient"
               control={control}
               render={({ field }) => (
-                <InputNumber
+                <DecimalInput
                   {...field}
                   min={0}
                   precision={4}
@@ -311,7 +312,7 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
       )}
 
       <Form.Item>
-        <InputNumber
+        <DecimalInput
           value={(quantity || 0) * (unitRate || 0)}
           precision={2}
           disabled

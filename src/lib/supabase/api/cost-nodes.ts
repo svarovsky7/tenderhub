@@ -505,7 +505,7 @@ export async function searchCostNodes(
   console.log('🚀 [searchCostNodes] Searching for:', searchTerm);
   
   // Don't search if term is too short
-  if (!searchTerm || searchTerm.trim().length < 2) {
+  if (!searchTerm || searchTerm.trim().length < 1) {
     console.log('⚠️ [searchCostNodes] Search term too short');
     return { data: [], error: null };
   }

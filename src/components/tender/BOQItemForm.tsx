@@ -8,13 +8,14 @@ import {
   message,
   Row,
   Col,
-  InputNumber,
   Radio,
   Divider
 } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { boqItemsApi, materialsApi, worksApi } from '../../lib/supabase/api';
 import type { BOQItem, Material, WorkItem } from '../../lib/supabase/types';
+import { DecimalInput } from '../common';
+import { InputNumber } from 'antd';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -276,7 +277,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
                 { type: 'number', min: 0.0001, message: 'Количество должно быть больше 0' }
               ]}
             >
-              <InputNumber
+              <DecimalInput
                 min={0.0001}
                 precision={4}
                 placeholder="0.0000"
@@ -294,7 +295,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
                 { type: 'number', min: 0, message: 'Цена не может быть отрицательной' }
               ]}
             >
-              <InputNumber
+              <DecimalInput
                 min={0}
                 precision={2}
                 placeholder="0.00"
@@ -308,7 +309,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
             <Form.Item
               label="Общая стоимость"
             >
-              <InputNumber
+              <DecimalInput
                 value={(Form.useWatch('quantity', form) || 0) * (Form.useWatch('unit_rate', form) || 0)}
                 precision={2}
                 addonAfter="₽"
@@ -326,9 +327,12 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
                 name="consumption_coefficient"
                 label="Коэффициент расхода материала"
                 tooltip="Коэффициент расхода материала на единицу работ"
+                rules={[
+                  { type: 'number', min: 1, message: 'Значение коэфф. расхода не может быть менее 1,00' }
+                ]}
               >
-                <InputNumber
-                  min={0}
+                <DecimalInput
+                  min={1}
                   precision={4}
                   placeholder="1.0000"
                   className="w-full"
@@ -342,7 +346,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
                 label="Коэффициент перевода единицы измерения"
                 tooltip="Коэффициент для перевода единиц измерения"
               >
-                <InputNumber
+                <DecimalInput
                   min={0}
                   precision={4}
                   placeholder="1.0000"
@@ -390,8 +394,9 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
           label="Порядок сортировки"
           initialValue={0}
         >
-          <InputNumber
+          <DecimalInput
             min={0}
+            precision={0}
             placeholder="0"
             className="w-full"
           />

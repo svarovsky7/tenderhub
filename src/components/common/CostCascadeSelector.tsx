@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Select, Spin, message, Tag, Space, Empty, Input, Switch, Divider } from 'antd';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Dropdown, Spin, message, Tag, Space, Empty, Input, Divider } from 'antd';
 import { 
   EnvironmentOutlined, 
   FolderOutlined, 
   FileTextOutlined,
   ArrowRightOutlined,
   SearchOutlined,
-  AppstoreOutlined
+  CloseCircleFilled
 } from '@ant-design/icons';
 import {
   getCostCategories,
@@ -27,7 +27,6 @@ interface CostCascadeSelectorProps {
   disabled?: boolean;
   style?: React.CSSProperties;
   className?: string;
-  allowSearch?: boolean; // Enable search mode
 }
 
 interface SelectionState {
@@ -44,8 +43,7 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
   placeholder = 'Выберите категорию затрат',
   disabled = false,
   style,
-  className,
-  allowSearch = true
+  className
 }) => {
   console.log('🚀 [CostCascadeSelector] Rendering with value:', value);
 
@@ -55,12 +53,17 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
   const [categories, setCategories] = useState<CostCategory[]>([]);
   const [details, setDetails] = useState<CostDetail[]>([]);
   const [displayValue, setDisplayValue] = useState<string>('');
+  const [inputValue, setInputValue] = useState<string>('');
   
-  // Search mode state
-  const [searchMode, setSearchMode] = useState(false);
+  // Search state
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<CostNodeSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  
+  // Refs for handling blur
+  const inputRef = useRef<any>(null);
+  const dropdownRef = useRef<any>(null);
+  const blurTimeoutRef = useRef<NodeJS.Timeout>();
   
   const [selection, setSelection] = useState<SelectionState>({
     category: null,
@@ -81,8 +84,16 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
       loadDisplayValue(value);
     } else if (!value) {
       setDisplayValue('');
+      setInputValue('');
     }
   }, [value]);
+  
+  // Sync input value with display value when not searching
+  useEffect(() => {
+    if (!searchTerm && displayValue) {
+      setInputValue(displayValue);
+    }
+  }, [displayValue, searchTerm]);
 
   const loadCategories = async () => {
     console.log('🚀 [CostCascadeSelector] Loading categories');
@@ -248,7 +259,13 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
       }));
       
       setDisplayValue(newDisplayValue);
+      setInputValue(newDisplayValue);
       setIsOpen(false);
+      
+      // Clear blur timeout
+      if (blurTimeoutRef.current) {
+        clearTimeout(blurTimeoutRef.current);
+      }
       
       // Call onChange with the final ID (real or fallback) and display value
       if (onChange) {
@@ -282,6 +299,7 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
     });
     setDetails([]);
     setDisplayValue('');
+    setInputValue('');
     setSearchTerm('');
     setSearchResults([]);
     
@@ -293,7 +311,7 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
   // Debounced search function
   const debouncedSearch = useCallback(
     debounce(async (term: string) => {
-      if (term.trim().length < 2) {
+      if (term.trim().length < 1) {
         setSearchResults([]);
         return;
       }
@@ -317,22 +335,63 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
       } finally {
         setSearchLoading(false);
       }
-    }, 300),
+    }, 200),
     []
   );
   
-  // Handle search input change
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const term = e.target.value;
-    setSearchTerm(term);
-    debouncedSearch(term);
+  // Handle input change
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInputValue(value);
+    setSearchTerm(value);
+    
+    if (value) {
+      debouncedSearch(value);
+      if (!isOpen) {
+        setIsOpen(true);
+      }
+    } else {
+      setSearchResults([]);
+      setSearchTerm('');
+      // Reset to display value if exists
+      if (displayValue) {
+        setInputValue(displayValue);
+      }
+    }
+  };
+  
+  // Handle input focus
+  const handleInputFocus = () => {
+    setIsOpen(true);
+    // Clear blur timeout if exists
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+    }
+  };
+  
+  // Handle input blur
+  const handleInputBlur = () => {
+    // Delay closing to allow clicking on dropdown items
+    blurTimeoutRef.current = setTimeout(() => {
+      setIsOpen(false);
+      // Reset input to display value if no search
+      if (!searchTerm && displayValue) {
+        setInputValue(displayValue);
+      }
+    }, 200);
   };
   
   // Handle search result selection
   const handleSearchResultSelect = (result: CostNodeSearchResult) => {
     console.log('🚀 [CostCascadeSelector] Selected search result:', result);
     
+    // Clear blur timeout to prevent closing
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+    }
+    
     setDisplayValue(result.display_name);
+    setInputValue(result.display_name);
     setSearchTerm('');
     setSearchResults([]);
     setIsOpen(false);
@@ -345,115 +404,64 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
   };
 
   const renderDropdown = () => {
-    // Mode switcher if search is allowed
-    const modeSwitcher = allowSearch ? (
-      <div style={{ 
-        padding: '8px 12px',
-        borderBottom: '1px solid #f0f0f0',
-        backgroundColor: '#fafafa',
-        position: 'sticky',
-        top: 0,
-        zIndex: 2
-      }}>
-        <Space>
-          <Switch
-            size="small"
-            checked={searchMode}
-            onChange={(checked) => {
-              setSearchMode(checked);
-              setSearchTerm('');
-              setSearchResults([]);
-            }}
-            checkedChildren={<SearchOutlined />}
-            unCheckedChildren={<AppstoreOutlined />}
-          />
-          <span style={{ fontSize: '12px', color: '#666' }}>
-            {searchMode ? 'Режим поиска' : 'Каскадный выбор'}
-          </span>
-        </Space>
-      </div>
-    ) : null;
-    
-    if (loading && !searchMode) {
+    // If searching (has text input)
+    if (searchTerm.trim().length >= 1) {
       return (
-        <>
-          {modeSwitcher}
-          <div style={{ padding: '20px', textAlign: 'center' }}>
-            <Spin size="small" />
-          </div>
-        </>
+        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+          {searchLoading ? (
+            <div style={{ padding: '20px', textAlign: 'center' }}>
+              <Spin size="small" />
+            </div>
+          ) : searchResults.length > 0 ? (
+            searchResults.map((result) => (
+              <div
+                key={result.cost_node_id}
+                className="cost-selector-item"
+                onClick={() => handleSearchResultSelect(result)}
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s',
+                  borderBottom: '1px solid #f5f5f5'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f0f0f0';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                <div style={{ fontSize: '13px', color: '#262626' }}>
+                  {result.detail_name}
+                </div>
+                <div style={{ fontSize: '11px', color: '#8c8c8c', marginTop: '2px' }}>
+                  {result.category_name} → {result.location_name}
+                </div>
+              </div>
+            ))
+          ) : (
+            <Empty 
+              description="Ничего не найдено" 
+              style={{ padding: '20px' }}
+            />
+          )}
+        </div>
       );
     }
     
-    // Search mode
-    if (searchMode) {
+    // Loading state
+    if (loading) {
       return (
-        <>
-          {modeSwitcher}
-          <div style={{ padding: '8px' }}>
-            <Input
-              autoFocus
-              placeholder="Введите для поиска (мин. 2 символа)"
-              value={searchTerm}
-              onChange={handleSearchChange}
-              prefix={<SearchOutlined />}
-              style={{ marginBottom: '8px' }}
-            />
-            
-            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-              {searchLoading ? (
-                <div style={{ padding: '20px', textAlign: 'center' }}>
-                  <Spin size="small" />
-                </div>
-              ) : searchResults.length > 0 ? (
-                searchResults.map((result) => (
-                  <div
-                    key={result.cost_node_id}
-                    className="cost-selector-item"
-                    onClick={() => handleSearchResultSelect(result)}
-                    style={{
-                      padding: '8px 12px',
-                      cursor: 'pointer',
-                      transition: 'background-color 0.2s',
-                      borderBottom: '1px solid #f5f5f5'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#f0f0f0';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  >
-                    <div style={{ fontSize: '13px', color: '#262626' }}>
-                      {result.detail_name}
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#8c8c8c', marginTop: '2px' }}>
-                      {result.category_name} → {result.location_name}
-                    </div>
-                  </div>
-                ))
-              ) : searchTerm.length >= 2 ? (
-                <Empty 
-                  description="Ничего не найдено" 
-                  style={{ padding: '20px' }}
-                />
-              ) : (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#8c8c8c', fontSize: '12px' }}>
-                  Введите минимум 2 символа для поиска
-                </div>
-              )}
-            </div>
-          </div>
-        </>
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <Spin size="small" />
+        </div>
       );
     }
 
     // Cascade mode
     if (step === 'category') {
       return (
-        <>
-          {modeSwitcher}
-          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
             {categories.length > 0 ? (
             categories.map(category => (
               <div
@@ -488,30 +496,29 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
             />
           )}
           </div>
-        </>
       );
     }
 
     if (step === 'detail') {
       return (
         <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-          <div
-            style={{
-              padding: '8px 12px',
-              backgroundColor: '#fafafa',
-              borderBottom: '1px solid #f0f0f0',
-              position: 'sticky',
-              top: 0,
-              zIndex: 1
-            }}
-          >
-            <Space>
-              <a onClick={() => setStep('category')}>← Назад</a>
-              <span style={{ color: '#8c8c8c' }}>
-                {selection.category?.name}
-              </span>
-            </Space>
-          </div>
+            <div
+              style={{
+                padding: '8px 12px',
+                backgroundColor: '#fafafa',
+                borderBottom: '1px solid #f0f0f0',
+                position: 'sticky',
+                top: 0,
+                zIndex: 1
+              }}
+            >
+              <Space>
+                <a onClick={() => setStep('category')}>← Назад</a>
+                <span style={{ color: '#8c8c8c' }}>
+                  {selection.category?.name}
+                </span>
+              </Space>
+            </div>
           
           {details.length > 0 ? (
             details.map((detail, index) => (
@@ -564,23 +571,23 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
       
       return (
         <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-          <div
-            style={{
-              padding: '8px 12px',
-              backgroundColor: '#fafafa',
-              borderBottom: '1px solid #f0f0f0',
-              position: 'sticky',
-              top: 0,
-              zIndex: 1
-            }}
-          >
-            <Space>
-              <a onClick={() => setStep('detail')}>← Назад</a>
-              <span style={{ color: '#8c8c8c' }}>
-                {selection.category?.name} → {selection.detail?.name}
-              </span>
-            </Space>
-          </div>
+            <div
+              style={{
+                padding: '8px 12px',
+                backgroundColor: '#fafafa',
+                borderBottom: '1px solid #f0f0f0',
+                position: 'sticky',
+                top: 0,
+                zIndex: 1
+              }}
+            >
+              <Space>
+                <a onClick={() => setStep('detail')}>← Назад</a>
+                <span style={{ color: '#8c8c8c' }}>
+                  {selection.category?.name} → {selection.detail?.name}
+                </span>
+              </Space>
+            </div>
           
           {locations.length > 0 ? (
             locations.map((location, index) => (
@@ -625,19 +632,53 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
   };
 
   return (
-    <Select
-      value={displayValue || undefined}
-      placeholder={placeholder}
-      disabled={disabled}
-      style={{ width: '100%', ...style }}
-      className={className}
+    <Dropdown
       open={isOpen}
-      onDropdownVisibleChange={setIsOpen}
-      allowClear={true}
-      onClear={handleReset}
-      dropdownRender={() => renderDropdown()}
-      dropdownStyle={{ padding: 0 }}
-    />
+      trigger={[]}
+      placement="bottomLeft"
+      getPopupContainer={(trigger) => trigger.parentElement || document.body}
+      overlay={
+        <div 
+          style={{ 
+            backgroundColor: 'white',
+            border: '1px solid #d9d9d9',
+            borderRadius: '8px',
+            boxShadow: '0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05)',
+            minWidth: '300px'
+          }}
+          onMouseDown={(e) => {
+            // Prevent blur when clicking inside dropdown
+            e.preventDefault();
+          }}
+        >
+          {renderDropdown()}
+        </div>
+      }
+    >
+      <Input
+        ref={inputRef}
+        value={inputValue}
+        onChange={handleInputChange}
+        onFocus={handleInputFocus}
+        onBlur={handleInputBlur}
+        placeholder={placeholder}
+        disabled={disabled}
+        style={{ width: '100%', ...style }}
+        className={className}
+        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+        suffix={
+          inputValue && !disabled ? (
+            <CloseCircleFilled
+              style={{ color: '#bfbfbf', cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReset();
+              }}
+            />
+          ) : null
+        }
+      />
+    </Dropdown>
   );
 };
 

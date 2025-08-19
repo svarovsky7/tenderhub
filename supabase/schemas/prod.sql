@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-08-18T18:06:25.864812
+-- Generated: 2025-08-19T10:27:58.785518
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 

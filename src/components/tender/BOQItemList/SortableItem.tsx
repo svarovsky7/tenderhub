@@ -4,7 +4,6 @@ import {
   Button,
   Tag,
   Input,
-  InputNumber,
   Dropdown,
   Space,
   Card
@@ -26,6 +25,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { MenuProps } from 'antd';
 import type { SortableItemProps } from './types';
+import { DecimalInput } from '../../common';
 
 const { Text } = Typography;
 
@@ -245,12 +245,12 @@ const SortableItem: React.FC<SortableItemProps> = ({
                 <div>
                   {isEditing && editingItem?.field === 'quantity' ? (
                     <div className="space-y-2">
-                      <InputNumber
+                      <DecimalInput
                         value={editingItem.value as number}
                         onChange={handleEditInputChange}
                         onPressEnter={handleSaveEdit}
                         min={0}
-                        step={0.01}
+                        precision={3}
                         style={{ width: '100%' }}
                         autoFocus
                       />
@@ -293,15 +293,14 @@ const SortableItem: React.FC<SortableItemProps> = ({
                 <div>
                   {isEditing && editingItem?.field === 'unit_rate' ? (
                     <div className="space-y-2">
-                      <InputNumber
+                      <DecimalInput
                         value={editingItem.value as number}
                         onChange={handleEditInputChange}
                         onPressEnter={handleSaveEdit}
                         min={0}
-                        step={0.01}
+                        precision={2}
                         style={{ width: '100%' }}
-                        formatter={(value) => `${value} ₽`}
-                        parser={(value) => parseFloat(value!.replace(' ₽', '').replace(',', '.')) || 0}
+                        addonAfter="₽"
                         autoFocus
                       />
                       <Space>

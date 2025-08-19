@@ -19,6 +19,7 @@ const SettingsPage = React.lazy(() => import('./pages/admin/SettingsPage'));
 const ConstructionCostsPage = React.lazy(() => import('./pages/admin/ConstructionCostsPage'));
 const CostSelectorTest = React.lazy(() => import('./pages/admin/CostSelectorTest'));
 const TestCostSearch = React.lazy(() => import('./pages/admin/TestCostSearch'));
+const TestCostSearchAuto = React.lazy(() => import('./pages/admin/TestCostSearchAuto'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 const WorkMaterialsPage = React.lazy(() => import('./pages/WorkMaterialsPage'));
 
@@ -134,6 +135,14 @@ function App() {
                 element={
                   <React.Suspense fallback={<div>Загрузка...</div>}>
                     <TestCostSearch />
+                  </React.Suspense>
+                }
+              />
+              <Route
+                path="cost-search-auto"
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <TestCostSearchAuto />
                   </React.Suspense>
                 }
               />

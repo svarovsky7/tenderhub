@@ -12,7 +12,6 @@ import {
   Space,
   Empty,
   Table,
-  InputNumber,
   Tooltip,
   Popconfirm,
   Row,
@@ -39,7 +38,7 @@ import { boqApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import MaterialLinkingModal from './MaterialLinkingModal';
 import GroupedBOQDisplay from './GroupedBOQDisplay';
-import { CostCascadeSelector } from '../common';
+import { CostCascadeSelector, DecimalInput } from '../common';
 import type { 
   BOQItemWithLibrary,
   BOQItemInsert
@@ -879,30 +878,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     },
     {
       title: (
-        <Tooltip title="Коэффициент расхода материала на единицу работы">
-          <span className="cursor-help text-xs">К.расх</span>
-        </Tooltip>
-      ),
-      key: 'consumption_coef',
-      width: '6%',
-      minWidth: 55,
-      align: 'center',
-      render: (_, record) => {
-        if (record.item_type === 'material' || record.item_type === 'sub_material') {
-          // Get coefficient from BOQ item first, then from work_link
-          const coef = record.consumption_coefficient || 
-                      record.work_link?.material_quantity_per_work || 1;
-          return (
-            <div className={`text-center py-1 font-medium text-sm ${coef !== 1 ? 'text-orange-600' : 'text-gray-400'}`}>
-              {coef}
-            </div>
-          );
-        }
-        return <div className="text-center text-gray-300 text-sm">—</div>;
-      }
-    },
-    {
-      title: (
         <Tooltip title="Коэффициент перевода единиц измерения">
           <span className="cursor-help text-xs">К.пер</span>
         </Tooltip>
@@ -926,6 +901,30 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       }
     },
     {
+      title: (
+        <Tooltip title="Коэффициент расхода материала на единицу работы">
+          <span className="cursor-help text-xs">К.расх</span>
+        </Tooltip>
+      ),
+      key: 'consumption_coef',
+      width: '6%',
+      minWidth: 55,
+      align: 'center',
+      render: (_, record) => {
+        if (record.item_type === 'material' || record.item_type === 'sub_material') {
+          // Get coefficient from BOQ item first, then from work_link
+          const coef = record.consumption_coefficient || 
+                      record.work_link?.material_quantity_per_work || 1;
+          return (
+            <div className={`text-center py-1 font-medium text-sm ${coef !== 1 ? 'text-orange-600' : 'text-gray-400'}`}>
+              {coef}
+            </div>
+          );
+        }
+        return <div className="text-center text-gray-300 text-sm">—</div>;
+      }
+    },
+    {
       title: 'Кол-во',
       dataIndex: 'quantity',
       key: 'quantity',
@@ -933,11 +932,23 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       minWidth: 90,
       align: 'right',
       render: (value, record) => {
-        // For materials linked to works, show calculated quantity
-        if (record.item_type === 'material' && record.work_link) {
-          const work = position.boq_items?.find(item => 
-            item.id === record.work_link.work_boq_item_id && item.item_type === 'work'
-          );
+        // For materials linked to works (including sub-materials linked to sub-works)
+        if ((record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link) {
+          // For regular materials, check work_boq_item_id
+          // For sub-materials, check sub_work_boq_item_id
+          const work = position.boq_items?.find(item => {
+            if (record.work_link.work_boq_item_id && 
+                item.id === record.work_link.work_boq_item_id && 
+                item.item_type === 'work') {
+              return true;
+            }
+            if (record.work_link.sub_work_boq_item_id && 
+                item.id === record.work_link.sub_work_boq_item_id && 
+                item.item_type === 'sub_work') {
+              return true;
+            }
+            return false;
+          });
           
           if (work) {
             // Get coefficients from BOQ item first, then from work_link
@@ -1197,7 +1208,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 className="mb-0"
                 rules={[{ required: true, message: 'Кол-во' }]}
               >
-                <InputNumber 
+                <DecimalInput 
                   placeholder="Кол-во" 
                   min={0}
                   precision={2}
@@ -1220,7 +1231,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 className="mb-0"
                 rules={[{ required: true, message: 'Цена' }]}
               >
-                <InputNumber 
+                <DecimalInput 
                   placeholder="Цена" 
                   min={0}
                   precision={2}
@@ -1314,7 +1325,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 className="mb-0"
                 rules={[{ required: true, message: 'Кол-во' }]}
               >
-                <InputNumber 
+                <DecimalInput 
                   placeholder="Кол-во" 
                   min={0}
                   precision={2}
@@ -1339,7 +1350,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 className="mb-0"
                 rules={[{ required: true, message: 'Цена' }]}
               >
-                <InputNumber 
+                <DecimalInput 
                   placeholder="Цена" 
                   min={0}
                   precision={2}
@@ -1435,16 +1446,18 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   name="consumption_coefficient"
                   className="mb-0"
                   label={<Text strong>Коэф. расхода</Text>}
+                  rules={[
+                    { type: 'number', min: 1, message: 'Значение коэфф. расхода не может быть менее 1,00' }
+                  ]}
                 >
-                  <InputNumber 
-                    min={0.01}
+                  <DecimalInput 
+                    min={1}
                     max={9999}
-                    step={0.1}
-                    precision={2} 
+                    precision={4} 
                     className="w-full"
                     size="small"
                     onChange={handleCoefficientChange}
-                    placeholder="1.00"
+                    placeholder="1.0000"
                   />
                 </Form.Item>
               </Col>
@@ -1454,15 +1467,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   className="mb-0"
                   label={<Text strong>Коэф. перевода</Text>}
                 >
-                  <InputNumber 
+                  <DecimalInput 
                     min={0.01}
                     max={9999}
-                    step={0.1}
-                    precision={2} 
+                    precision={4} 
                     className="w-full"
                     size="small"
                     onChange={handleCoefficientChange}
-                    placeholder="1.00"
+                    placeholder="1.0000"
                   />
                 </Form.Item>
               </Col>
@@ -1527,10 +1539,10 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   label={<Text strong>Кол-во</Text>}
                   rules={[{ required: true, message: 'Кол-во' }]}
                 >
-                  <InputNumber 
+                  <DecimalInput 
                     placeholder="Кол-во" 
                     min={0}
-                    precision={2}
+                    precision={4}
                     className="w-full"
                     size="small"
                   />
@@ -1556,7 +1568,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             label={<Text strong>Цена</Text>}
             rules={[{ required: true, message: 'Цена' }]}
           >
-            <InputNumber 
+            <DecimalInput 
               placeholder="Цена" 
               min={0}
               precision={2}
@@ -1663,11 +1675,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   className="mb-0"
                   label={<Text strong>Коэф. расхода</Text>}
                   initialValue={1}
+                  rules={[
+                    { type: 'number', min: 1, message: 'Значение коэфф. расхода не может быть менее 1,00' }
+                  ]}
                 >
-                  <InputNumber 
-                    min={0.01}
+                  <DecimalInput 
+                    min={1}
                     max={9999}
-                    precision={2} 
+                    precision={4} 
                     className="w-full"
                     size="small"
                     onChange={() => {
@@ -1699,10 +1714,10 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   label={<Text strong>Коэф. перевода</Text>}
                   initialValue={1}
                 >
-                  <InputNumber 
+                  <DecimalInput 
                     min={0.01}
                     max={9999}
-                    precision={2} 
+                    precision={4} 
                     className="w-full"
                     size="small"
                     onChange={() => {

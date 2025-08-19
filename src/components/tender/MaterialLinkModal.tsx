@@ -3,7 +3,6 @@ import {
   Modal,
   Form,
   Select,
-  InputNumber,
   Input,
   Button,
   Space,
@@ -19,6 +18,7 @@ import {
   DollarOutlined,
   InfoCircleOutlined 
 } from '@ant-design/icons';
+import { DecimalInput } from '../common';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import type { WorkMaterialLink } from '../../lib/supabase/api/work-material-links';
 import { boqItemsApi } from '../../lib/supabase/api/boq/items';
@@ -271,7 +271,7 @@ const MaterialLinkModal: React.FC<MaterialLinkModalProps> = ({
                     ]}
                     tooltip="Фиксированная сумма доставки для всего объема материала"
                   >
-                    <InputNumber
+                    <DecimalInput
                       min={0}
                       precision={2}
                       placeholder="0.00"
