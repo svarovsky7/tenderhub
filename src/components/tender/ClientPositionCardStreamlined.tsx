@@ -31,7 +31,8 @@ import {
   ClearOutlined,
   FormOutlined,
   TableOutlined,
-  GroupOutlined
+  GroupOutlined,
+  QuestionCircleOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { boqApi } from '../../lib/supabase/api';
@@ -270,9 +271,19 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
       let finalQuantity = values.quantity;
       
-      // For materials and sub-materials, set default quantity if not linked to work
+      // For unlinked materials and sub-materials, apply coefficients to user-entered quantity
       if ((values.type === 'material' || values.type === 'sub_material') && !values.work_id) {
-        finalQuantity = 1; // Default quantity for unlinked materials
+        // Use the quantity entered by user and apply coefficients
+        const consumptionCoef = values.consumption_coefficient || 1;
+        const conversionCoef = values.conversion_coefficient || 1;
+        finalQuantity = (values.quantity || 1) * consumptionCoef * conversionCoef;
+        
+        console.log('📊 Calculated unlinked material quantity:', {
+          userQuantity: values.quantity,
+          consumption: consumptionCoef,
+          conversion: conversionCoef,
+          result: finalQuantity
+        });
       }
       
       // If it's a material/sub-material linked to work, calculate quantity based on work volume
@@ -575,6 +586,29 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           
           console.log('📊 Calculated material quantity:', {
             workQuantity: work.quantity,
+            consumption: consumptionCoef,
+            conversion: conversionCoef,
+            result: finalQuantity
+          });
+          
+          // Check for numeric overflow
+          const MAX_NUMERIC_VALUE = 99999999.9999;
+          if (finalQuantity > MAX_NUMERIC_VALUE) {
+            console.error('⚠️ Calculated quantity exceeds database limits:', finalQuantity);
+            message.error(`Ошибка: расчетное количество слишком большое (${finalQuantity.toLocaleString('ru-RU')}). Максимум: ${MAX_NUMERIC_VALUE.toLocaleString('ru-RU')}. Уменьшите коэффициенты.`);
+            setLoading(false);
+            return;
+          }
+        }
+      } else {
+        // For unlinked materials and sub-materials, apply coefficients to user-entered quantity
+        if (editingItem.item_type === 'material' || editingItem.item_type === 'sub_material') {
+          const consumptionCoef = values.consumption_coefficient || 1;
+          const conversionCoef = values.conversion_coefficient || 1;
+          finalQuantity = (values.quantity || 1) * consumptionCoef * conversionCoef;
+          
+          console.log('📊 Calculated unlinked material quantity in edit:', {
+            userQuantity: values.quantity,
             consumption: consumptionCoef,
             conversion: conversionCoef,
             result: finalQuantity
@@ -964,6 +998,33 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 <div className="text-right py-1">
                   <div className="font-medium text-blue-600 text-sm">
                     {calculatedQuantity.toLocaleString('ru-RU', {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 3
+                    })}
+                  </div>
+                </div>
+              </Tooltip>
+            );
+          }
+        }
+        
+        // For unlinked materials and sub-materials, show tooltip with calculation formula
+        if ((record.item_type === 'material' || record.item_type === 'sub_material') && !record.work_link) {
+          const consumptionCoef = record.consumption_coefficient || 1;
+          const conversionCoef = record.conversion_coefficient || 1;
+          
+          // Check if coefficients are applied (not default 1)
+          const hasCoefficients = consumptionCoef !== 1 || conversionCoef !== 1;
+          
+          if (hasCoefficients) {
+            // Calculate base quantity before coefficients
+            const baseQuantity = value / (consumptionCoef * conversionCoef);
+            
+            return (
+              <Tooltip title={`${baseQuantity.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} × ${consumptionCoef} × ${conversionCoef}`}>
+                <div className="text-right py-1">
+                  <div className="font-medium text-green-600 text-sm">
+                    {value?.toLocaleString('ru-RU', {
                       minimumFractionDigits: 0,
                       maximumFractionDigits: 3
                     })}
@@ -1381,25 +1442,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 </Text>
               </div>
             </Col>
-          </Row>
-          {/* Second row for cost category */}
-          <Row gutter={[12, 8]} className="w-full mt-2">
-            <Col xs={24} sm={12} md={10} lg={8}>
-              <Form.Item
-                name="cost_node_id"
-                className="mb-0"
-              >
-                <CostCascadeSelector
-                  value={editForm.getFieldValue('cost_node_id')}
-                  placeholder="Категория затрат"
-                  onChange={(value, display) => {
-                    editForm.setFieldValue('cost_node_id', value);
-                    editForm.setFieldValue('cost_node_display', display);
-                  }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={8} md={6} lg={3}>
+            <Col xs={12} sm={6} md={4} lg={3}>
               <Space size="small" className="flex justify-end">
                 <Button type="primary" htmlType="submit" icon={<SaveOutlined />} size="small">
                   Сохранить
@@ -1412,6 +1455,24 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   Отмена
                 </Button>
               </Space>
+            </Col>
+          </Row>
+          {/* Second row for cost category */}
+          <Row gutter={[12, 8]} className="w-full mt-2">
+            <Col xs={24} sm={16} md={14} lg={12}>
+              <Form.Item
+                name="cost_node_id"
+                className="mb-2"
+              >
+                <CostCascadeSelector
+                  value={editForm.getFieldValue('cost_node_id')}
+                  placeholder="Категория затрат"
+                  onChange={(value, display) => {
+                    editForm.setFieldValue('cost_node_id', value);
+                    editForm.setFieldValue('cost_node_display', display);
+                  }}
+                />
+              </Form.Item>
             </Col>
           </Row>
           
@@ -1445,10 +1506,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 <Form.Item
                   name="consumption_coefficient"
                   className="mb-0"
-                  label={<Text strong>Коэф. расхода</Text>}
-                  rules={[
-                    { type: 'number', min: 1, message: 'Значение коэфф. расхода не может быть менее 1,00' }
-                  ]}
+                  label={
+                    <Space size={4}>
+                      <Text strong>Коэф. расхода</Text>
+                      <Tooltip title="Значение коэфф. расхода не может быть менее 1,00. При вводе значения менее 1 оно будет автоматически заменено на 1">
+                        <QuestionCircleOutlined style={{ color: '#8c8c8c', fontSize: '12px' }} />
+                      </Tooltip>
+                    </Space>
+                  }
                 >
                   <DecimalInput 
                     min={1}
@@ -1462,20 +1527,33 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 </Form.Item>
               </Col>
               <Col xs={12} sm={6} md={7} lg={4}>
-                <Form.Item
-                  name="conversion_coefficient"
-                  className="mb-0"
-                  label={<Text strong>Коэф. перевода</Text>}
-                >
-                  <DecimalInput 
-                    min={0.01}
-                    max={9999}
-                    precision={4} 
-                    className="w-full"
-                    size="small"
-                    onChange={handleCoefficientChange}
-                    placeholder="1.0000"
-                  />
+                <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
+                  prevValues.work_id !== currentValues.work_id
+                }>
+                  {({ getFieldValue }) => (
+                    <Form.Item
+                      name="conversion_coefficient"
+                      className="mb-0"
+                      label={
+                        <Tooltip title={!getFieldValue('work_id') ? 'Доступно только при привязке к работе' : 'Коэффициент перевода единиц измерения'}>
+                          <Text strong className={!getFieldValue('work_id') ? 'text-gray-400' : ''}>
+                            Коэф. перевода
+                          </Text>
+                        </Tooltip>
+                      }
+                    >
+                      <DecimalInput 
+                        min={0.01}
+                        max={9999}
+                        precision={4} 
+                        className="w-full"
+                        size="small"
+                        disabled={!getFieldValue('work_id')}
+                        onChange={handleCoefficientChange}
+                        placeholder="1.0000"
+                      />
+                    </Form.Item>
+                  )}
                 </Form.Item>
               </Col>
               <Col xs={24} sm={24} md={24} lg={8}>
@@ -1527,30 +1605,22 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             <Input placeholder="Наименование" size="small" />
           </Form.Item>
         </Col>
-        <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
-          prevValues.type !== currentValues.type
-        }>
-          {({ getFieldValue }) => 
-            (getFieldValue('type') === 'work' || getFieldValue('type') === 'sub_work') ? (
-              <Col xs={12} sm={6} md={3} lg={3}>
-                <Form.Item
-                  name="quantity"
-                  className="mb-0"
-                  label={<Text strong>Кол-во</Text>}
-                  rules={[{ required: true, message: 'Кол-во' }]}
-                >
-                  <DecimalInput 
-                    placeholder="Кол-во" 
-                    min={0}
-                    precision={4}
-                    className="w-full"
-                    size="small"
-                  />
-                </Form.Item>
-              </Col>
-            ) : null
-          }
-        </Form.Item>
+        <Col xs={12} sm={6} md={3} lg={3}>
+          <Form.Item
+            name="quantity"
+            className="mb-0"
+            label={<Text strong>Кол-во</Text>}
+            rules={[{ required: true, message: 'Кол-во' }]}
+          >
+            <DecimalInput 
+              placeholder="Кол-во" 
+              min={0}
+              precision={4}
+              className="w-full"
+              size="small"
+            />
+          </Form.Item>
+        </Col>
         <Col xs={12} sm={6} md={3} lg={2}>
           <Form.Item
             name="unit"
@@ -1670,76 +1740,104 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 </Form.Item>
               </Col>
               <Col xs={12} sm={6} md={7} lg={4}>
-                <Form.Item
-                  name="consumption_coefficient"
-                  className="mb-0"
-                  label={<Text strong>Коэф. расхода</Text>}
-                  initialValue={1}
-                  rules={[
-                    { type: 'number', min: 1, message: 'Значение коэфф. расхода не может быть менее 1,00' }
-                  ]}
-                >
-                  <DecimalInput 
-                    min={1}
-                    max={9999}
-                    precision={4} 
-                    className="w-full"
-                    size="small"
-                    onChange={() => {
-                      const workId = quickAddForm.getFieldValue('work_id');
-                      if (!workId) return;
-                      const work = works.find(w => w.id === workId);
-                      if (work && work.quantity) {
-                        const consumptionCoef = quickAddForm.getFieldValue('consumption_coefficient') || 1;
-                        const conversionCoef = quickAddForm.getFieldValue('conversion_coefficient') || 1;
-                        const calculatedQuantity = work.quantity * consumptionCoef * conversionCoef;
-                        
-                        // Check for overflow
-                        const MAX_NUMERIC_VALUE = 99999999.9999;
-                        if (calculatedQuantity > MAX_NUMERIC_VALUE) {
-                          message.warning(`Количество слишком большое: ${calculatedQuantity.toLocaleString('ru-RU')}. Максимум: ${MAX_NUMERIC_VALUE.toLocaleString('ru-RU')}`);
-                          quickAddForm.setFieldsValue({ quantity: MAX_NUMERIC_VALUE });
-                        } else {
-                          quickAddForm.setFieldsValue({ quantity: calculatedQuantity });
+                <Form.Item noStyle shouldUpdate>
+                  {({ getFieldValue }) => {
+                    const consumptionValue = getFieldValue('consumption_coefficient');
+                    const hasError = consumptionValue && consumptionValue < 1;
+                    
+                    return (
+                      <Form.Item
+                        name="consumption_coefficient"
+                        className="mb-0"
+                        label={
+                          <Space size={4}>
+                            <Text strong>Коэф. расхода</Text>
+                            <Tooltip title="Значение коэфф. расхода не может быть менее 1,00. При вводе значения менее 1 оно будет автоматически заменено на 1">
+                              <QuestionCircleOutlined style={{ color: '#8c8c8c', fontSize: '12px' }} />
+                            </Tooltip>
+                          </Space>
                         }
-                      }
-                    }}
-                  />
+                        initialValue={1}
+                        validateStatus={hasError ? 'error' : ''}
+                      >
+                        <DecimalInput 
+                          min={1}
+                          max={9999}
+                          precision={4} 
+                          className="w-full"
+                          size="small"
+                          style={hasError ? { borderColor: '#ff4d4f', boxShadow: '0 0 0 2px rgba(255, 77, 79, 0.2)' } : {}}
+                          onChange={() => {
+                            const workId = quickAddForm.getFieldValue('work_id');
+                            if (!workId) return;
+                            const work = works.find(w => w.id === workId);
+                            if (work && work.quantity) {
+                              const consumptionCoef = quickAddForm.getFieldValue('consumption_coefficient') || 1;
+                              const conversionCoef = quickAddForm.getFieldValue('conversion_coefficient') || 1;
+                              const calculatedQuantity = work.quantity * consumptionCoef * conversionCoef;
+                              
+                              // Check for overflow
+                              const MAX_NUMERIC_VALUE = 99999999.9999;
+                              if (calculatedQuantity > MAX_NUMERIC_VALUE) {
+                                message.warning(`Количество слишком большое: ${calculatedQuantity.toLocaleString('ru-RU')}. Максимум: ${MAX_NUMERIC_VALUE.toLocaleString('ru-RU')}`);
+                                quickAddForm.setFieldsValue({ quantity: MAX_NUMERIC_VALUE });
+                              } else {
+                                quickAddForm.setFieldsValue({ quantity: calculatedQuantity });
+                              }
+                            }
+                          }}
+                        />
+                      </Form.Item>
+                    );
+                  }}
                 </Form.Item>
               </Col>
               <Col xs={12} sm={6} md={7} lg={4}>
-                <Form.Item
-                  name="conversion_coefficient"
-                  className="mb-0"
-                  label={<Text strong>Коэф. перевода</Text>}
-                  initialValue={1}
-                >
-                  <DecimalInput 
-                    min={0.01}
-                    max={9999}
-                    precision={4} 
-                    className="w-full"
-                    size="small"
-                    onChange={() => {
-                      const workId = quickAddForm.getFieldValue('work_id');
-                      if (!workId) return;
-                      const work = works.find(w => w.id === workId);
-                      if (work && work.quantity) {
-                        const consumptionCoef = quickAddForm.getFieldValue('consumption_coefficient') || 1;
-                        const conversionCoef = quickAddForm.getFieldValue('conversion_coefficient') || 1;
-                        const calculatedQuantity = work.quantity * consumptionCoef * conversionCoef;
-                        
-                        // Check for overflow
-                        const MAX_NUMERIC_VALUE = 99999999.9999;
-                        if (calculatedQuantity > MAX_NUMERIC_VALUE) {
-                          message.warning(`Количество слишком большое: ${calculatedQuantity.toLocaleString('ru-RU')}. Максимум: ${MAX_NUMERIC_VALUE.toLocaleString('ru-RU')}`);
-                          quickAddForm.setFieldsValue({ quantity: MAX_NUMERIC_VALUE });
-                        } else {
-                          quickAddForm.setFieldsValue({ quantity: calculatedQuantity });
-                        }
+                <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
+                  prevValues.work_id !== currentValues.work_id
+                }>
+                  {({ getFieldValue }) => (
+                    <Form.Item
+                      name="conversion_coefficient"
+                      className="mb-0"
+                      label={
+                        <Tooltip title={!getFieldValue('work_id') ? 'Доступно только при привязке к работе' : 'Коэффициент перевода единиц измерения'}>
+                          <Text strong className={!getFieldValue('work_id') ? 'text-gray-400' : ''}>
+                            Коэф. перевода
+                          </Text>
+                        </Tooltip>
                       }
-                    }}
-                  />
+                      initialValue={1}
+                    >
+                      <DecimalInput 
+                        min={0.01}
+                        max={9999}
+                        precision={4} 
+                        className="w-full"
+                        size="small"
+                        disabled={!getFieldValue('work_id')}
+                        onChange={() => {
+                          const workId = quickAddForm.getFieldValue('work_id');
+                          if (!workId) return;
+                          const work = works.find(w => w.id === workId);
+                          if (work && work.quantity) {
+                            const consumptionCoef = quickAddForm.getFieldValue('consumption_coefficient') || 1;
+                            const conversionCoef = quickAddForm.getFieldValue('conversion_coefficient') || 1;
+                            const calculatedQuantity = work.quantity * consumptionCoef * conversionCoef;
+                            
+                            // Check for overflow
+                            const MAX_NUMERIC_VALUE = 99999999.9999;
+                            if (calculatedQuantity > MAX_NUMERIC_VALUE) {
+                              message.warning(`Количество слишком большое: ${calculatedQuantity.toLocaleString('ru-RU')}. Максимум: ${MAX_NUMERIC_VALUE.toLocaleString('ru-RU')}`);
+                              quickAddForm.setFieldsValue({ quantity: MAX_NUMERIC_VALUE });
+                            } else {
+                              quickAddForm.setFieldsValue({ quantity: calculatedQuantity });
+                            }
+                          }
+                        }}
+                      />
+                    </Form.Item>
+                  )}
                 </Form.Item>
               </Col>
               <Col xs={24} sm={24} md={24} lg={8}>
@@ -1777,6 +1875,15 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         }
         .custom-table .ant-table {
           font-size: 13px;
+        }
+        .custom-table .ant-table-tbody > tr {
+          transition: all 0.2s ease;
+        }
+        .custom-table .ant-table-tbody > tr:hover > td {
+          background-color: #ffd4a3 !important;
+        }
+        .custom-table .ant-table-tbody > tr:hover {
+          cursor: pointer;
         }
         .custom-table .ant-input-number {
           border: none !important;

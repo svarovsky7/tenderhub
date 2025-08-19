@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TenderHub is a construction tender management portal built with React 19, TypeScript 5.8, and Vite 7. The application manages hierarchical Bill of Quantities (BOQ), materials/works libraries, and tender workflows for construction project bidding. Currently operates without authentication for simplified development.
 
+**Language**: Russian UI throughout the application
+
 ## Development Commands
 
 ```bash
@@ -110,7 +112,7 @@ console.log('🚀 [FunctionName] starting:', params);
 console.log('✅ [FunctionName] success:', result);
 console.log('❌ [FunctionName] error:', error);
 ```
-Emojis: 🚀 Start, ✅ Success, ❌ Error, 📡 API, 📦 Response, 🔍 Validation, 🔄 State
+Emojis: 🚀 Start, ✅ Success, ❌ Error, 💥 Critical Error, 📡 API, 📦 Response, 🔍 Validation, 🔄 State
 
 ### 4. Error Handling
 ```typescript
@@ -168,6 +170,12 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - HMR: overlay disabled, 5s timeout
 - lucide-react excluded from optimization
 
+## TypeScript Configuration
+- Strict mode enabled with all strict checks
+- Target: ES2022
+- Module: ESNext with bundler resolution
+- Project references: tsconfig.app.json (source code), tsconfig.node.json (config files)
+
 ## Current Status
 
 ### ✅ Working
@@ -195,9 +203,10 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 
 - **Material Linking**: Uses `MaterialLinkModal.tsx`, not drag-drop
 - **TypeScript**: Strict mode with project references (tsconfig.app.json, tsconfig.node.json)
-- **ESLint**: Flat config with React hooks/refresh plugins (note: check eslint.config.js line 6)
-- **Connection Monitoring**: Built-in Supabase status tracking
-- **Excel Import**: Batch operations via `client-works.ts`
+- **ESLint**: Flat config with React hooks/refresh plugins (note: globalIgnores import on line 6 may need adjustment)
+- **Connection Monitoring**: Built-in Supabase status tracking via ConnectionStatus component
+- **Excel Import**: Batch operations via `client-works.ts` and `client-positions.ts`
+- **BOQ Simplified Page**: Alternative interface available at `/boq` (see BOQ_SIMPLIFIED_GUIDE.md)
 
 ## Development Workflow
 
@@ -209,5 +218,17 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
    - Update types to match prod.sql
 4. Always verify against `supabase/schemas/prod.sql`
 5. Test with manual testing + type checking
+
+## Specialized Agents Available
+
+When working with complex tasks, consider using these specialized agents via the Task tool:
+
+- **ui-ux-designer**: For creating new UI components, design systems, or improving user experience
+- **backend-architect**: For designing API endpoints, database schemas, or complex business logic
+- **typescript-pro**: For complex TypeScript patterns, advanced types, or generics
+- **sql-pro**: For optimizing database queries, designing schemas, or complex SQL operations
+- **database-optimizer**: For performance tuning, indexing strategies, or query optimization
+- **debugger**: For troubleshooting errors, test failures, or unexpected behavior
+- **docs-architect**: For creating comprehensive technical documentation
 
 Remember: This is a simplified dev environment. Production will require authentication, RLS, and security features.

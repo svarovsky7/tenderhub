@@ -178,19 +178,63 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
   };
 
   return (
-    <Modal
-      title={isEditing ? 'Редактировать элемент BOQ' : 'Добавить элемент BOQ'}
+    <>
+      {/* Стили для модального окна */}
+      <style jsx>{`
+        :global(.boq-item-modal .ant-modal-body) {
+          max-height: 80vh;
+          overflow-y: auto;
+          padding-bottom: 24px;
+        }
+        
+        :global(.boq-item-modal .ant-form-item:last-of-type) {
+          margin-bottom: 24px;
+        }
+        
+        :global(.boq-item-modal .ant-divider) {
+          margin: 24px 0;
+        }
+        
+        @media (max-width: 768px) {
+          :global(.boq-item-modal) {
+            margin: 0;
+            max-width: 100vw;
+            top: 0;
+            padding-bottom: 0;
+          }
+          
+          :global(.boq-item-modal .ant-modal-content) {
+            border-radius: 0;
+          }
+          
+          :global(.boq-item-modal .ant-modal-body) {
+            max-height: calc(100vh - 110px);
+            padding: 16px;
+          }
+        }
+      `}</style>
+      <Modal
+      title={isEditing ? 'Редактировать элемент' : 'Добавить элемент BOQ'}
       open={visible}
       onCancel={handleCancel}
       footer={null}
       width={800}
       destroyOnHidden
+      className="boq-item-modal"
+      styles={{
+        body: {
+          paddingBottom: '24px',
+          maxHeight: '80vh',
+          overflowY: 'auto'
+        }
+      }}
     >
       <Form
         form={form}
         layout="vertical"
         onFinish={handleSubmit}
         className="mt-4"
+        style={{ paddingBottom: '16px' }}
       >
         <Row gutter={16}>
           <Col span={8}>
@@ -393,6 +437,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
           name="sort_order"
           label="Порядок сортировки"
           initialValue={0}
+          className="mb-6"
         >
           <DecimalInput
             min={0}
@@ -402,9 +447,9 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
           />
         </Form.Item>
 
-        <Divider />
+        <Divider className="my-6" />
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 pt-4">
           <Button onClick={handleCancel}>
             Отмена
           </Button>
@@ -419,6 +464,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
         </div>
       </Form>
     </Modal>
+    </>
   );
 };
 
