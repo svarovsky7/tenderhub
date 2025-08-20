@@ -33,9 +33,10 @@ npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 - **Styling**: Tailwind CSS 3.4.17 (preflight disabled for Ant Design)
 - **Excel**: XLSX 0.18.5 for import/export
 - **Drag & Drop**: @dnd-kit/core 6.3.1, @dnd-kit/sortable 10.0.0
-- **Virtual Scrolling**: react-window 1.8.11 + infinite-loader
-- **Forms**: react-hook-form 7.62.0 + yup validation
+- **Virtual Scrolling**: react-window 1.8.11 + react-window-infinite-loader 1.0.10
+- **Forms**: react-hook-form 7.62.0 + yup 1.7.0 validation
 - **Routing**: react-router-dom 7.7.1
+- **Utilities**: lodash 4.17.21, dayjs 1.11.13
 
 ## 🚨 CRITICAL DATABASE RULE 🚨
 
@@ -55,6 +56,15 @@ ALWAYS verify schema before ANY database work
 
 ## Architecture
 
+### Core Database Tables
+- `boq_items` - Bill of Quantities items with hierarchy
+- `client_positions` - Customer position groupings
+- `tenders` - Main tender records
+- `materials_library` & `works_library` - Resource libraries
+- `work_material_links` - M2M relationships between works and materials
+- `cost_categories` & `detail_cost_categories` - Cost categorization system
+- `location` - Geographic locations for costs
+
 ### API Layer (`src/lib/supabase/api/`)
 Modular domain-specific modules (all < 600 lines):
 - `boq/` - BOQ operations split into: crud, hierarchy, bulk, analytics, queries
@@ -68,30 +78,48 @@ Modular domain-specific modules (all < 600 lines):
   - `cost-structure.ts` & `cost-structure-fixed.ts` - Cost structures
   - `tender-construction-costs.ts` - Tender-specific costs
   - `import-costs.ts` - Cost data import
+- `users.ts` - User management
+- `work-materials-management.ts` - Combined work-material operations
 - Real-time subscriptions ready but disabled
+
+### Type System (`src/lib/supabase/types/`)
+- **Database Schema**: Split into modular files (tables.ts, views.ts, functions.ts, enums.ts)
+- **Domain Types**: API types, BOQ types, cost types, tender types, UI types
+- **Extended Types**: Additional helper types for better DX
+- **Backward Compatibility**: Re-exports for legacy imports
 
 ### Component Organization
 ```
-src/components/tender/     # Core BOQ components
+src/components/tender/     # Core BOQ components (40+ components)
   TenderBOQManagerNew.tsx  # Main BOQ interface
-  BOQItemList/            # Virtual scrolling lists
-  LibrarySelector/        # Material/work selection
+  TenderBOQManagerSimplified.tsx # Alternative simplified BOQ
+  ClientPositionCardStreamlined.tsx # Position card with inline editing
+  BOQItemList/            # Virtual scrolling with drag-drop
+  LibrarySelector/        # Material/work selection with cart
   MaterialLinkModal.tsx   # Material linking UI
   CostCategoryDisplay.tsx # Dynamic cost category display
 
 src/components/common/     # Shared components
-  CostDetailCascadeSelector.tsx # Combined cascade/search selector
+  CostDetailCascadeSelector.tsx # Combined cascade/search selector with caching
+  AutoCompleteSearch.tsx # Debounced autocomplete component
+  DecimalInput.tsx       # Formatted decimal input
+  UploadProgressModal.tsx # File upload progress
+
+src/components/admin/      # Admin interfaces
+  ModernImportModal.tsx  # Excel import with progress
+  EditableTable.tsx     # In-place table editing
 
 src/pages/                # Route components
-  TendersPage/            # Tender management
+  TendersPage/            # Tender management with filters/stats
   Dashboard.tsx           # Statistics dashboard
-  admin/                  # Admin interfaces
+  admin/                  # Admin interfaces for costs/categories
 ```
 
 ### Routing (all lazy-loaded)
 - `/` → `/dashboard`
 - `/tenders/*` - Tender management
-- `/tender/:tenderId/boq` - Specific tender BOQ
+- `/tender/:tenderId/boq` - Standard BOQ interface
+- `/boq` - Simplified BOQ interface
 - `/libraries/materials` - Materials library
 - `/libraries/works` - Works library
 - `/admin/*` - Admin pages
@@ -139,6 +167,7 @@ try {
 
 ### State Management
 - **Server State**: TanStack Query with 5-minute staleTime
+- **Cache Strategy**: Infinite cache for static data (categories, locations)
 - **Local State**: React hooks only
 - **Form State**: react-hook-form + yup
 - **No Redux/Zustand** - Keep it simple
@@ -149,17 +178,20 @@ try {
 - **Modals**: All create/edit operations
 - **Virtual Scrolling**: Required for large lists (>100 items)
 - **Debounced Search**: 300ms default
+- **Hover Effects**: Row highlighting with type-specific colors
 
 ### BOQ Quantity Calculations
 - **Unlinked Materials**: `quantity = base_quantity * consumption_coefficient`
 - **Linked Materials**: `quantity = work_quantity * consumption_coefficient * conversion_coefficient`
 - **Base Quantity**: Stored only for unlinked materials, NULL for linked
+- **Delivery Costs**: Calculated based on `delivery_price_type` (amount/percentage/not_included)
 
 ### Cost Categories Architecture
 - **Detail Categories**: Central connecting table between categories and locations
 - **Display Format**: "Category → Detail → Location"
 - **Dynamic Loading**: Cost category displays loaded on-demand, not stored in DB
 - **Selector Modes**: Combined cascade selection and search (min 2 chars)
+- **Grouping**: Details grouped by name to avoid duplicates with different locations
 
 ### Performance Optimizations
 - Code splitting with React.lazy() for all routes
@@ -167,12 +199,16 @@ try {
 - GIN indexes for full-text search
 - Dynamic imports for heavy operations
 - Batch API operations for Excel import
+- React Query caching for static data
+- Memoization with React.memo for expensive components
 
 ### Code Organization
-- Components grouped by feature in `components/tender/`
-- Custom hooks extracted to separate files
-- Types centralized in `lib/supabase/types/`
-- Domain-specific API modules
+- Components grouped by feature in `components/tender/` (40+ BOQ-related components)
+- Custom hooks extracted to separate files (`hooks/useBOQManagement.ts`, `hooks/useMaterialDragDrop.tsx`)
+- Types centralized in modular `lib/supabase/types/` structure
+- Domain-specific API modules with barrel exports (`src/lib/supabase/api/index.ts`)
+- Utility functions in `utils/` (excel templates, formatters, calculations)
+- Page components organized by feature with hooks/components subfolders
 
 ## Environment Setup
 
@@ -188,10 +224,11 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - lucide-react excluded from optimization
 
 ## TypeScript Configuration
-- Strict mode enabled with all strict checks
-- Target: ES2022
-- Module: ESNext with bundler resolution
-- Project references: tsconfig.app.json (source code), tsconfig.node.json (config files)
+- **Project References**: Root tsconfig.json references tsconfig.app.json (src/) and tsconfig.node.json (config files)
+- **Strict Mode**: All strict checks enabled
+- **Target**: ES2022 with ESNext modules and bundler resolution
+- **Type Safety**: Modular database types in `src/lib/supabase/types/database/`
+- **Path Resolution**: Configured for absolute imports from src/
 
 ## Current Status
 
@@ -205,6 +242,8 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - Construction cost management with cascade/search selector
 - Delivery cost management for materials
 - Base quantity tracking for unlinked materials
+- Hover effects and visual feedback
+- React Query caching for performance
 
 ### ⚠️ Disabled
 - Authentication (no login)
@@ -222,10 +261,10 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 
 - **Material Linking**: Uses `MaterialLinkModal.tsx`, not drag-drop
 - **TypeScript**: Strict mode with project references (tsconfig.app.json, tsconfig.node.json)
-- **ESLint**: Flat config with React hooks/refresh plugins (note: globalIgnores import on line 6 may need adjustment)
+- **ESLint**: Flat config with React hooks/refresh plugins
 - **Connection Monitoring**: Built-in Supabase status tracking via ConnectionStatus component
 - **Excel Import**: Batch operations via `client-works.ts` and `client-positions.ts`
-- **BOQ Simplified Page**: Alternative interface available at `/boq` (see BOQ_SIMPLIFIED_GUIDE.md)
+- **BOQ Pages**: Two interfaces - standard (`/tender/:id/boq`) and simplified (`/boq`)
 
 ## Development Workflow
 

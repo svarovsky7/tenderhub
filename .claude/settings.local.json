@@ -34,9 +34,13 @@
       "Bash(taskkill:*)",
       "Bash(touch:*)",
       "Bash(git checkout:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
-    "defaultMode": "acceptEdits"
+    "defaultMode": "acceptEdits",
+    "additionalDirectories": [
+      "C:\\Users\\nekrasov.l.m\\AppData\\Roaming\\Claude"
+    ]
   }
 }
