@@ -976,7 +976,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       render: (type) => {
         switch(type) {
           case 'work':
-            return <Tag icon={<BuildOutlined />} color="green" className="text-xs">Работа</Tag>;
+            return <Tag icon={<BuildOutlined />} color="orange" className="text-xs">Работа</Tag>;
           case 'sub_work':
             return <Tag icon={<BuildOutlined />} color="purple" className="text-xs">Суб-раб</Tag>;
           case 'material':
@@ -1504,9 +1504,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               <Form.Item
                 name="detail_cost_category_id"
                 className="mb-0"
+                getValueFromEvent={(value) => value}
               >
                 <CostDetailCascadeSelector
-                  value={workEditForm.getFieldValue('detail_cost_category_id')}
                   placeholder="Категория затрат"
                   onChange={(value, display) => {
                     workEditForm.setFieldValue('detail_cost_category_id', value);
@@ -1663,9 +1663,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               <Form.Item
                 name="detail_cost_category_id"
                 className="mb-2"
+                getValueFromEvent={(value) => value}
               >
                 <CostDetailCascadeSelector
-                  value={editForm.getFieldValue('detail_cost_category_id')}
                   placeholder="Категория затрат"
                   onChange={(value, display) => {
                     editForm.setFieldValue('detail_cost_category_id', value);
@@ -1755,13 +1755,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                     </Form.Item>
                   )}
                 </Form.Item>
-              </Col>
-              <Col xs={24} sm={24} md={24} lg={8}>
-                <div className="text-sm text-gray-600 pt-2">
-                  <Text type="secondary">
-                    Количество будет рассчитано автоматически при привязке к работе
-                  </Text>
-                </div>
               </Col>
             </Row>
           )}
@@ -1855,19 +1848,42 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           </Form.Item>
         </Col>
         <Col xs={12} sm={6} md={3} lg={3}>
-          <Form.Item
-            name="quantity"
-            className="mb-0"
-            label={<Text strong>Кол-во</Text>}
-            rules={[{ required: true, message: 'Кол-во' }]}
-          >
-            <DecimalInput 
-              placeholder="Кол-во" 
-              min={0}
-              precision={4}
-              className="w-full"
-              size="small"
-            />
+          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
+            prevValues.type !== currentValues.type || prevValues.work_id !== currentValues.work_id
+          }>
+            {({ getFieldValue }) => {
+              const isMaterial = getFieldValue('type') === 'material' || getFieldValue('type') === 'sub_material';
+              const hasWorkSelected = !!getFieldValue('work_id');
+              const showTooltip = isMaterial && hasWorkSelected;
+              
+              return (
+                <Form.Item
+                  name="quantity"
+                  className="mb-0"
+                  label={
+                    <Space size={4}>
+                      <Text strong>Кол-во</Text>
+                      {showTooltip && (
+                        <Tooltip title="Количество рассчитывается автоматически: Объём работы × Коэф. расхода × Коэф. перевода">
+                          <QuestionCircleOutlined style={{ color: '#1890ff', fontSize: '12px', cursor: 'help' }} />
+                        </Tooltip>
+                      )}
+                    </Space>
+                  }
+                  rules={[{ required: true, message: 'Кол-во' }]}
+                >
+                  <DecimalInput 
+                    placeholder="Кол-во" 
+                    min={0}
+                    precision={4}
+                    className="w-full"
+                    size="small"
+                    disabled={showTooltip}
+                    style={showTooltip ? { backgroundColor: '#f5f5f5' } : {}}
+                  />
+                </Form.Item>
+              );
+            }}
           </Form.Item>
         </Col>
         <Col xs={12} sm={6} md={3} lg={2}>
@@ -1912,9 +1928,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             name="detail_cost_category_id"
             className="mb-0"
             label={<Text strong>Категория затрат</Text>}
+            getValueFromEvent={(value) => value}
           >
             <CostDetailCascadeSelector
-              value={quickAddForm.getFieldValue('detail_cost_category_id')}
               placeholder="Выберите категорию"
               style={{ width: '100%' }}
               onChange={(value, display) => {
@@ -1922,25 +1938,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 quickAddForm.setFieldValue('cost_category_display', display);
               }}
             />
-          </Form.Item>
-        </Col>
-        <Col xs={24} sm={12} md={6} lg={4}>
-          <Form.Item label={<Text strong>Действия</Text>} className="mb-0">
-            <Space className="w-full" size="small">
-              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} size="small">
-                Сохранить
-              </Button>
-              <Button 
-                icon={<CloseOutlined />} 
-                size="small"
-                onClick={() => {
-                  setQuickAddMode(false);
-                  quickAddForm.resetFields();
-                }}
-              >
-                Отмена
-              </Button>
-            </Space>
           </Form.Item>
         </Col>
       </Row>
@@ -1951,7 +1948,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           (getFieldValue('type') === 'material' || getFieldValue('type') === 'sub_material') && works.length > 0 && (
             <>
             <Row gutter={[12, 8]} className="w-full mt-3 pt-3 border-t border-blue-200">
-              <Col xs={24} sm={12} md={10} lg={8}>
+              <Col xs={12} sm={12} md={5} lg={4}>
                 <Form.Item
                   name="work_id"
                   className="mb-0"
@@ -1989,7 +1986,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   </Select>
                 </Form.Item>
               </Col>
-              <Col xs={12} sm={6} md={7} lg={4}>
+              <Col xs={6} sm={6} md={3} lg={2}>
                 <Form.Item noStyle shouldUpdate>
                   {({ getFieldValue }) => {
                     const consumptionValue = getFieldValue('consumption_coefficient');
@@ -2042,7 +2039,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   }}
                 </Form.Item>
               </Col>
-              <Col xs={12} sm={6} md={7} lg={4}>
+              <Col xs={6} sm={6} md={3} lg={2}>
                 <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
                   prevValues.work_id !== currentValues.work_id
                 }>
@@ -2090,34 +2087,25 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   )}
                 </Form.Item>
               </Col>
-              <Col xs={24} sm={24} md={24} lg={8}>
-                <div className="text-sm text-gray-600 pt-2">
-                  <Text type="secondary">
-                    Количество будет рассчитано автоматически при привязке к работе
-                  </Text>
-                </div>
-              </Col>
-            </Row>
-            <Row gutter={[12, 8]} className="mt-2">
-              <Col xs={12} sm={8} md={6} lg={4}>
+              <Col xs={12} sm={6} md={3} lg={2}>
                 <Form.Item
                   name="delivery_price_type"
-                  label={<Text strong>Тип доставки</Text>}
+                  label={<Text strong>Доставка</Text>}
                   initialValue="included"
                   className="mb-0"
                 >
                   <Select
-                    placeholder="Тип доставки"
+                    placeholder="Тип"
                     style={{ width: '100%' }}
                     size="small"
                   >
                     <Select.Option value="included">Включена</Select.Option>
                     <Select.Option value="not_included">Не включена</Select.Option>
-                    <Select.Option value="amount">Фиксированная сумма</Select.Option>
+                    <Select.Option value="amount">Сумма</Select.Option>
                   </Select>
                 </Form.Item>
               </Col>
-              <Col xs={12} sm={8} md={6} lg={4}>
+              <Col xs={12} sm={6} md={3} lg={2}>
                 <Form.Item
                   noStyle
                   shouldUpdate={(prevValues, currentValues) => 
@@ -2129,12 +2117,12 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                     return (
                       <Form.Item
                         name="delivery_amount"
-                        label={<Text strong>Сумма доставки</Text>}
+                        label={<Text strong>Сумма</Text>}
                         className="mb-0"
                         rules={[
                           {
                             required: deliveryType === 'amount',
-                            message: 'Введите сумму'
+                            message: 'Сумма'
                           }
                         ]}
                       >
@@ -2156,6 +2144,29 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           )
         }
       </Form.Item>
+      
+      {/* Action buttons - moved to the bottom */}
+      <Row gutter={[12, 8]} className="mt-3">
+        <Col xs={24}>
+          <Form.Item className="mb-0">
+            <Space className="w-full" size="small">
+              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} size="small">
+                Сохранить
+              </Button>
+              <Button 
+                icon={<CloseOutlined />} 
+                size="small"
+                onClick={() => {
+                  setQuickAddMode(false);
+                  quickAddForm.resetFields();
+                }}
+              >
+                Отмена
+              </Button>
+            </Space>
+          </Form.Item>
+        </Col>
+      </Row>
     </Form>
   );
 
@@ -2182,13 +2193,30 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           font-size: 13px;
         }
         .custom-table .ant-table-tbody > tr {
-          transition: all 0.2s ease;
+          transition: background-color 0.2s ease;
         }
-        .custom-table .ant-table-tbody > tr:hover > td {
-          background-color: #ffd4a3 !important;
+        .custom-table .ant-table-tbody > tr > td {
+          transition: background-color 0.2s ease;
+        }
+        /* Hover effects for different row types */
+        .custom-table .ant-table-tbody > tr.bg-orange-100\\/90:hover > td {
+          background-color: #fed7aa !important; /* Fully saturated orange for work */
+        }
+        .custom-table .ant-table-tbody > tr.bg-purple-100:hover > td {
+          background-color: #e9d5ff !important; /* Darker purple for sub-work */
+        }
+        .custom-table .ant-table-tbody > tr.bg-blue-100:hover > td {
+          background-color: #bfdbfe !important; /* Darker blue for material */
+        }
+        .custom-table .ant-table-tbody > tr.bg-blue-100\\/60:hover > td {
+          background-color: #dbeafe !important; /* Darker blue for unlinked material */
+        }
+        .custom-table .ant-table-tbody > tr.bg-green-100\\/80:hover > td {
+          background-color: #bbf7d0 !important; /* Darker green for sub-material */
         }
         .custom-table .ant-table-tbody > tr:hover {
           cursor: pointer;
+          transition: all 0.2s ease;
         }
         .custom-table .ant-input-number {
           border: none !important;
@@ -2398,13 +2426,13 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   rowClassName={(record) => {
                     switch(record.item_type) {
                       case 'work':
-                        return 'bg-orange-50 font-medium';
+                        return 'bg-orange-100/90 hover:bg-orange-100 font-medium transition-colors';
                       case 'sub_work':
-                        return 'bg-purple-100 font-medium';
+                        return 'bg-purple-100 hover:bg-purple-200 font-medium transition-colors';
                       case 'material':
-                        return record.work_link ? 'bg-blue-100' : 'bg-blue-100/60';
+                        return record.work_link ? 'bg-blue-100 hover:bg-blue-200 transition-colors' : 'bg-blue-100/60 hover:bg-blue-200/80 transition-colors';
                       case 'sub_material':
-                        return 'bg-green-100/80';
+                        return 'bg-green-100/80 hover:bg-green-200 transition-colors';
                       default:
                         return '';
                     }

@@ -77,6 +77,10 @@ src/components/tender/     # Core BOQ components
   BOQItemList/            # Virtual scrolling lists
   LibrarySelector/        # Material/work selection
   MaterialLinkModal.tsx   # Material linking UI
+  CostCategoryDisplay.tsx # Dynamic cost category display
+
+src/components/common/     # Shared components
+  CostDetailCascadeSelector.tsx # Combined cascade/search selector
 
 src/pages/                # Route components
   TendersPage/            # Tender management
@@ -100,6 +104,8 @@ src/pages/                # Route components
 - **VERIFY** table structure before any query
 - All tables use UUID primary keys
 - Timestamps are auto-managed
+- **BOQ Items**: Uses `detail_cost_category_id` (not `cost_node_id`)
+- **Base Quantity**: `base_quantity` field stores user input for unlinked materials
 
 ### 2. File Size Limits
 - **Maximum 600 lines per file**
@@ -144,6 +150,17 @@ try {
 - **Virtual Scrolling**: Required for large lists (>100 items)
 - **Debounced Search**: 300ms default
 
+### BOQ Quantity Calculations
+- **Unlinked Materials**: `quantity = base_quantity * consumption_coefficient`
+- **Linked Materials**: `quantity = work_quantity * consumption_coefficient * conversion_coefficient`
+- **Base Quantity**: Stored only for unlinked materials, NULL for linked
+
+### Cost Categories Architecture
+- **Detail Categories**: Central connecting table between categories and locations
+- **Display Format**: "Category → Detail → Location"
+- **Dynamic Loading**: Cost category displays loaded on-demand, not stored in DB
+- **Selector Modes**: Combined cascade selection and search (min 2 chars)
+
 ### Performance Optimizations
 - Code splitting with React.lazy() for all routes
 - Virtual scrolling with react-window for BOQ lists
@@ -185,8 +202,9 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - Dashboard statistics
 - Work-Material linking
 - Virtual scrolling
-- Construction cost management
+- Construction cost management with cascade/search selector
 - Delivery cost management for materials
+- Base quantity tracking for unlinked materials
 
 ### ⚠️ Disabled
 - Authentication (no login)
