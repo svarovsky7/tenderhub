@@ -418,6 +418,7 @@ export async function getLocationsByDetail(
 
 /**
  * Find cost_node_id by combination of category, detail and location
+ * This function ensures that only valid cost_node IDs from the cost_nodes table are returned
  */
 export async function findCostNodeByCombination(
   categoryId: string,
@@ -427,33 +428,139 @@ export async function findCostNodeByCombination(
   console.log('🚀 [findCostNodeByCombination] Finding cost node for:', { categoryId, detailId, locationId });
   
   try {
-    const { data, error } = await supabase
-      .rpc('find_cost_node_by_combination', {
-        p_category_id: categoryId,
-        p_detail_id: detailId,
-        p_location_id: locationId
-      });
+    // First, try to find existing cost_node
+    const { data: existingCostNode } = await supabase
+      .from('cost_nodes')
+      .select('id')
+      .eq('id', detailId)
+      .eq('parent_id', categoryId)  
+      .eq('location_id', locationId)
+      .eq('kind', 'item')
+      .single();
     
-    if (error) {
-      console.error('❌ [findCostNodeByCombination] Error:', error);
-      // If the RPC function fails, return the detail_id as fallback
-      console.log('⚠️ Using detail_id as fallback due to error');
-      return { data: detailId, error: null };
+    if (existingCostNode) {
+      console.log('✅ [findCostNodeByCombination] Found existing cost_node:', existingCostNode.id);
+      return { data: existingCostNode.id, error: null };
     }
     
-    // If no data returned, use detail_id as fallback
-    if (!data) {
-      console.log('⚠️ No cost node found, using detail_id as fallback:', detailId);
-      return { data: detailId, error: null };
+    // If not found, try to create it by getting detail from detail_cost_categories
+    console.log('🔄 [findCostNodeByCombination] Cost node not found, attempting to create...');
+    
+    // First, ensure the parent category exists in cost_nodes
+    const { data: existingCategory } = await supabase
+      .from('cost_nodes')
+      .select('id')
+      .eq('id', categoryId)
+      .eq('kind', 'group')
+      .single();
+    
+    if (!existingCategory) {
+      console.log('🔄 [findCostNodeByCombination] Parent category not found, creating...');
+      
+      // Get category details
+      const { data: category } = await supabase
+        .from('cost_categories')
+        .select('id, name, code')
+        .eq('id', categoryId)
+        .single();
+      
+      if (category) {
+        // Create parent category in cost_nodes
+        await supabase
+          .from('cost_nodes')
+          .insert({
+            id: category.id,
+            parent_id: null,
+            kind: 'group',
+            name: category.name,
+            code: category.code,
+            sort_order: 100,
+            path: category.id.replace(/-/g, '_'),
+            is_active: true
+          })
+          .select('id')
+          .single();
+        
+        console.log('✅ [findCostNodeByCombination] Created parent category:', category.name);
+      }
     }
     
-    console.log('✅ [findCostNodeByCombination] Success:', data);
-    return { data, error: null };
+    const { data: detailCategory } = await supabase
+      .from('detail_cost_categories')
+      .select(`
+        id,
+        name,
+        cost_category_id,
+        location_id,
+        location:location(city, country, title, code)
+      `)
+      .eq('id', detailId)
+      .eq('cost_category_id', categoryId)
+      .eq('location_id', locationId)
+      .single();
+    
+    if (!detailCategory) {
+      console.log('⚠️ [findCostNodeByCombination] Detail category not found');
+      return { data: null, error: null };
+    }
+    
+    // Create the missing cost_node
+    const locationName = detailCategory.location?.city || 
+                        detailCategory.location?.country ||
+                        detailCategory.location?.title || 
+                        detailCategory.location?.code ||
+                        `ID: ${detailCategory.location_id.substring(0, 8)}`;
+    
+    const costNodeName = `${detailCategory.name} (${locationName})`;
+    
+    console.log('🔄 [findCostNodeByCombination] Creating cost_node:', costNodeName);
+    
+    const { data: newCostNode, error: insertError } = await supabase
+      .from('cost_nodes')
+      .insert({
+        id: detailCategory.id, // Use the same ID as detail_cost_category
+        parent_id: categoryId,
+        kind: 'item',
+        name: costNodeName,
+        location_id: locationId,
+        sort_order: 1000,
+        path: detailCategory.id.replace(/-/g, '_'), // Convert UUID to ltree format
+        is_active: true
+      })
+      .select('id')
+      .single();
+    
+    if (insertError) {
+      // If insert failed due to conflict, try to get the existing record
+      if (insertError.code === '23505') {
+        console.log('🔄 [findCostNodeByCombination] Record already exists, fetching...');
+        const { data: existingRecord } = await supabase
+          .from('cost_nodes')
+          .select('id')
+          .eq('id', detailId)
+          .single();
+        
+        if (existingRecord) {
+          console.log('✅ [findCostNodeByCombination] Found existing record after conflict:', existingRecord.id);
+          return { data: existingRecord.id, error: null };
+        }
+      }
+      
+      console.error('❌ [findCostNodeByCombination] Failed to create cost_node:', insertError);
+      return { data: null, error: insertError };
+    }
+    
+    if (newCostNode) {
+      console.log('✅ [findCostNodeByCombination] Created new cost_node:', newCostNode.id);
+      return { data: newCostNode.id, error: null };
+    }
+    
+    console.log('⚠️ [findCostNodeByCombination] No cost node could be found or created');
+    return { data: null, error: null };
+    
   } catch (err) {
     console.error('❌ [findCostNodeByCombination] Exception:', err);
-    // Return detail_id as fallback on any error
-    console.log('⚠️ Using detail_id as fallback due to exception');
-    return { data: detailId, error: null };
+    return { data: null, error: err };
   }
 }
 
@@ -497,6 +604,7 @@ export interface CostNodeSearchResult {
 /**
  * Search cost nodes by partial text match
  * Searches in category names, detail names, and location names
+ * Filters results to only return items with valid cost_node IDs
  */
 export async function searchCostNodes(
   searchTerm: string,
@@ -511,10 +619,10 @@ export async function searchCostNodes(
   }
   
   try {
-    const { data, error } = await supabase
+    const { data: rawResults, error } = await supabase
       .rpc('search_cost_nodes', { 
         p_search_term: searchTerm.trim(),
-        p_limit: limit 
+        p_limit: limit * 2 // Get more results to filter from
       });
     
     if (error) {
@@ -522,8 +630,44 @@ export async function searchCostNodes(
       return { data: null, error };
     }
     
-    console.log('✅ [searchCostNodes] Found:', data?.length || 0, 'results');
-    return { data: data || [], error: null };
+    if (!rawResults || rawResults.length === 0) {
+      console.log('✅ [searchCostNodes] No results found');
+      return { data: [], error: null };
+    }
+    
+    // Filter results to only include those with valid cost_node IDs
+    console.log('🔍 [searchCostNodes] Validating', rawResults.length, 'results');
+    const validResults: CostNodeSearchResult[] = [];
+    
+    for (const result of rawResults) {
+      try {
+        // Verify this combination has a valid cost_node_id
+        const { data: validCostNodeId } = await findCostNodeByCombination(
+          result.category_id,
+          result.detail_id, 
+          result.location_id
+        );
+        
+        if (validCostNodeId) {
+          // Update the result with the correct cost_node_id
+          validResults.push({
+            ...result,
+            cost_node_id: validCostNodeId
+          });
+          
+          // Stop when we have enough valid results
+          if (validResults.length >= limit) {
+            break;
+          }
+        }
+      } catch (err) {
+        console.log('⚠️ [searchCostNodes] Skipping invalid result:', result.cost_node_id);
+        continue;
+      }
+    }
+    
+    console.log('✅ [searchCostNodes] Found:', validResults.length, 'valid results out of', rawResults.length, 'total');
+    return { data: validResults, error: null };
   } catch (err) {
     console.error('❌ [searchCostNodes] Exception:', err);
     return { data: null, error: err };

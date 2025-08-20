@@ -24,6 +24,7 @@ export type DatabaseTables = {
       work_id: string | null;
       consumption_coefficient: number | null;
       conversion_coefficient: number | null;
+      base_quantity: number | null;
       category?: string | null;
       subcategory?: string | null;
       notes?: string | null;
@@ -49,6 +50,7 @@ export type DatabaseTables = {
       work_id?: string | null;
       consumption_coefficient?: number | null;
       conversion_coefficient?: number | null;
+      base_quantity?: number | null;
       category?: string | null;
       subcategory?: string | null;
       notes?: string | null;
@@ -74,6 +76,7 @@ export type DatabaseTables = {
       work_id?: string | null;
       consumption_coefficient?: number | null;
       conversion_coefficient?: number | null;
+      base_quantity?: number | null;
       category?: string | null;
       subcategory?: string | null;
       notes?: string | null;

@@ -23,8 +23,9 @@ export interface BOQItemWithLibrary extends BOQItem {
   linked_materials?: any[]; // Materials linked to this work
   consumption_coefficient?: number; // Коэффициент расхода материала
   conversion_coefficient?: number; // Коэффициент перевода единиц
-  cost_node_id?: string | null; // ID категории затрат из cost_nodes
-  cost_node_display?: string; // Отображаемое название категории затрат
+  base_quantity?: number | null; // Базовое количество без коэффициентов
+  detail_cost_category_id?: string | null; // ID категории затрат из detail_cost_categories
+  cost_category_display?: string; // Отображаемое название категории затрат
 }
 
 export interface BOQItemWithPosition extends BOQItemWithLibrary {

@@ -186,6 +186,7 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - Work-Material linking
 - Virtual scrolling
 - Construction cost management
+- Delivery cost management for materials
 
 ### ⚠️ Disabled
 - Authentication (no login)
@@ -203,7 +204,7 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 
 - **Material Linking**: Uses `MaterialLinkModal.tsx`, not drag-drop
 - **TypeScript**: Strict mode with project references (tsconfig.app.json, tsconfig.node.json)
-- **ESLint**: Flat config with React hooks/refresh plugins (note: globalIgnores import may need adjustment - use function directly if import fails)
+- **ESLint**: Flat config with React hooks/refresh plugins (note: globalIgnores import on line 6 may need adjustment)
 - **Connection Monitoring**: Built-in Supabase status tracking via ConnectionStatus component
 - **Excel Import**: Batch operations via `client-works.ts` and `client-positions.ts`
 - **BOQ Simplified Page**: Alternative interface available at `/boq` (see BOQ_SIMPLIFIED_GUIDE.md)

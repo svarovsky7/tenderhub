@@ -90,10 +90,10 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
   
   // Sync input value with display value when not searching
   useEffect(() => {
-    if (!searchTerm && displayValue) {
+    if (!searchTerm && displayValue && inputValue !== displayValue) {
       setInputValue(displayValue);
     }
-  }, [displayValue, searchTerm]);
+  }, [displayValue, searchTerm, inputValue]);
 
   const loadCategories = async () => {
     console.log('🚀 [CostCascadeSelector] Loading categories');
@@ -240,15 +240,20 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
         locationId
       );
       
-      // The API now always returns a value (either the found ID or detail_id as fallback)
-      const finalCostNodeId = costNodeId || detailId;
-      const newDisplayValue = `${selection.category.name} → ${detail.name} → ${locationName}`;
+      if (error) {
+        console.error('❌ [CostCascadeSelector] Error finding cost node:', error);
+        message.warning('Не удалось найти точную категорию затрат');
+        return;
+      }
       
       if (!costNodeId) {
-        console.log('⚠️ [CostCascadeSelector] Using detail_id as fallback');
-      } else {
-        console.log('✅ [CostCascadeSelector] Using cost_node_id:', costNodeId);
+        console.log('⚠️ [CostCascadeSelector] No cost node found for this combination');
+        message.warning('Для выбранной комбинации не найдена категория затрат в базе данных');
+        return;
       }
+      
+      const newDisplayValue = `${selection.category.name} → ${detail.name} → ${locationName}`;
+      console.log('✅ [CostCascadeSelector] Using cost_node_id:', costNodeId);
       
       setSelection(prev => ({
         ...prev,
@@ -267,13 +272,13 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
         clearTimeout(blurTimeoutRef.current);
       }
       
-      // Call onChange with the final ID (real or fallback) and display value
+      // Call onChange with the cost node ID and display value
       if (onChange) {
-        onChange(finalCostNodeId, newDisplayValue);
+        onChange(costNodeId, newDisplayValue);
       }
       
       console.log('✅ [CostCascadeSelector] Selection completed:', {
-        finalCostNodeId,
+        costNodeId,
         displayValue: newDisplayValue
       });
       
@@ -286,7 +291,7 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
     }
   };
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     console.log('🚀 [CostCascadeSelector] Resetting selection');
     
     setStep('category');
@@ -306,7 +311,7 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
     if (onChange) {
       onChange(null, '');
     }
-  };
+  }, [onChange]);
   
   // Debounced search function
   const debouncedSearch = useCallback(
@@ -353,8 +358,8 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
     } else {
       setSearchResults([]);
       setSearchTerm('');
-      // Reset to display value if exists
-      if (displayValue) {
+      // Reset to display value if exists and different
+      if (displayValue && inputValue !== displayValue) {
         setInputValue(displayValue);
       }
     }
@@ -374,15 +379,15 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
     // Delay closing to allow clicking on dropdown items
     blurTimeoutRef.current = setTimeout(() => {
       setIsOpen(false);
-      // Reset input to display value if no search
-      if (!searchTerm && displayValue) {
+      // Reset input to display value if no search and different
+      if (!searchTerm && displayValue && inputValue !== displayValue) {
         setInputValue(displayValue);
       }
     }, 200);
   };
   
   // Handle search result selection
-  const handleSearchResultSelect = (result: CostNodeSearchResult) => {
+  const handleSearchResultSelect = async (result: CostNodeSearchResult) => {
     console.log('🚀 [CostCascadeSelector] Selected search result:', result);
     
     // Clear blur timeout to prevent closing
@@ -390,17 +395,40 @@ const CostCascadeSelector: React.FC<CostCascadeSelectorProps> = ({
       clearTimeout(blurTimeoutRef.current);
     }
     
-    setDisplayValue(result.display_name);
-    setInputValue(result.display_name);
-    setSearchTerm('');
-    setSearchResults([]);
-    setIsOpen(false);
-    
-    if (onChange) {
-      onChange(result.cost_node_id, result.display_name);
+    // Try to find the real cost_node_id using the combination
+    setLoading(true);
+    try {
+      const { data: realCostNodeId, error } = await findCostNodeByCombination(
+        result.category_id,
+        result.detail_id,
+        result.location_id
+      );
+      
+      if (error || !realCostNodeId) {
+        console.error('❌ [CostCascadeSelector] Cannot find valid cost_node_id for search result');
+        message.error('Выбранная категория затрат недоступна');
+        return;
+      }
+      
+      console.log('✅ [CostCascadeSelector] Found valid cost_node_id:', realCostNodeId);
+      
+      setDisplayValue(result.display_name);
+      setInputValue(result.display_name);
+      setSearchTerm('');
+      setSearchResults([]);
+      setIsOpen(false);
+      
+      if (onChange) {
+        onChange(realCostNodeId, result.display_name);
+      }
+      
+      message.success('Категория затрат выбрана');
+    } catch (err) {
+      console.error('❌ [CostCascadeSelector] Error finding cost node:', err);
+      message.error('Ошибка выбора категории затрат');
+    } finally {
+      setLoading(false);
     }
-    
-    message.success('Категория затрат выбрана');
   };
 
   const renderDropdown = () => {

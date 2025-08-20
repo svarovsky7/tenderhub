@@ -39,7 +39,9 @@ import { boqApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import MaterialLinkingModal from './MaterialLinkingModal';
 import GroupedBOQDisplay from './GroupedBOQDisplay';
-import { CostCascadeSelector, DecimalInput } from '../common';
+import { DecimalInput } from '../common';
+import CostDetailCascadeSelector from '../common/CostDetailCascadeSelector';
+import CostCategoryDisplay from './CostCategoryDisplay';
 import type { 
   BOQItemWithLibrary,
   BOQItemInsert
@@ -64,8 +66,8 @@ interface QuickAddRowData {
   work_id?: string;
   consumption_coefficient?: number;
   conversion_coefficient?: number;
-  cost_node_id?: string;
-  cost_node_display?: string;
+  detail_cost_category_id?: string;
+  cost_category_display?: string;
   delivery_price_type?: 'included' | 'not_included' | 'amount';
   delivery_amount?: number;
 }
@@ -272,19 +274,20 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       const nextSubNumber = existingItems.length + 1;
 
       let finalQuantity = values.quantity;
+      let baseQuantity = values.quantity; // Store user-entered base quantity
       
       // For unlinked materials and sub-materials, apply coefficients to user-entered quantity
       if ((values.type === 'material' || values.type === 'sub_material') && !values.work_id) {
         // Use the quantity entered by user and apply coefficients
         const consumptionCoef = values.consumption_coefficient || 1;
-        const conversionCoef = values.conversion_coefficient || 1;
-        finalQuantity = (values.quantity || 1) * consumptionCoef * conversionCoef;
+        // Note: conversion_coefficient is always 1 for unlinked materials (field is disabled in UI)
+        finalQuantity = (values.quantity || 1) * consumptionCoef;
+        baseQuantity = values.quantity || 1; // Store the base quantity before coefficients
         
         console.log('📊 Calculated unlinked material quantity:', {
-          userQuantity: values.quantity,
+          baseQuantity: baseQuantity,
           consumption: consumptionCoef,
-          conversion: conversionCoef,
-          result: finalQuantity
+          finalQuantity: finalQuantity
         });
       }
       
@@ -315,6 +318,26 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         }
       }
 
+      // Validate detail_cost_category_id before creating item
+      let detailCostCategoryId = null;
+      if (values.detail_cost_category_id && values.detail_cost_category_id !== '') {
+        console.log('🔍 Validating quick add detail_cost_category_id:', values.detail_cost_category_id);
+        
+        // Import validation function
+        const { getDetailCategoryDisplay } = await import('../../lib/supabase/api/construction-costs');
+        
+        const { data: categoryExists } = await getDetailCategoryDisplay(values.detail_cost_category_id);
+        if (categoryExists) {
+          detailCostCategoryId = values.detail_cost_category_id;
+          console.log('✅ Quick add detail_cost_category_id validated:', detailCostCategoryId);
+        } else {
+          console.error('❌ Quick add detail_cost_category_id does not exist in database:', values.detail_cost_category_id);
+          message.error('Выбранная категория затрат не найдена в базе данных');
+          setLoading(false);
+          return;
+        }
+      }
+
       const newItem: BOQItemInsert = {
         tender_id: tenderId,
         client_position_id: position.id,
@@ -326,8 +349,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         item_number: `${positionNumber}.${nextSubNumber}`,
         sub_number: nextSubNumber,
         sort_order: nextSubNumber,
-        // Add cost node if provided
-        ...(values.cost_node_id && { cost_node_id: values.cost_node_id }),
+        // Add detail cost category if validated
+        ...(detailCostCategoryId && { 
+          detail_cost_category_id: detailCostCategoryId
+        }),
+        // Add base_quantity for unlinked materials
+        ...((values.type === 'material' || values.type === 'sub_material') && !values.work_id && {
+          base_quantity: baseQuantity
+        }),
         // Add coefficients and delivery fields for materials and sub-materials
         ...((values.type === 'material' || values.type === 'sub_material') && {
           consumption_coefficient: values.consumption_coefficient || 1,
@@ -544,15 +573,27 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       }
     });
     
+    // For unlinked materials, show base_quantity if available, otherwise use quantity
+    const displayQuantity = (!linkedWork && item.base_quantity !== null && item.base_quantity !== undefined) 
+      ? item.base_quantity 
+      : item.quantity;
+    
+    console.log('📝 Setting edit form values:', {
+      isLinked: !!linkedWork,
+      baseQuantity: item.base_quantity,
+      quantity: item.quantity,
+      displayQuantity: displayQuantity
+    });
+    
     editForm.setFieldsValue({
       description: item.description,
       unit: item.unit,
-      quantity: item.quantity,
+      quantity: displayQuantity,
       unit_rate: item.unit_rate,
       work_id: linkedWork?.id || undefined,
       consumption_coefficient: consumptionCoef,
       conversion_coefficient: conversionCoef,
-      cost_node_id: item.cost_node_id || null,
+      detail_cost_category_id: item.detail_cost_category_id || null,
       delivery_price_type: item.delivery_price_type || 'included',
       delivery_amount: item.delivery_amount || 0
     });
@@ -607,18 +648,38 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           }
         }
       } else {
-        // For unlinked materials and sub-materials, apply coefficients to user-entered quantity
+        // For unlinked materials and sub-materials, check if recalculation is needed
         if (editingItem.item_type === 'material' || editingItem.item_type === 'sub_material') {
           const consumptionCoef = values.consumption_coefficient || 1;
-          const conversionCoef = values.conversion_coefficient || 1;
-          finalQuantity = (values.quantity || 1) * consumptionCoef * conversionCoef;
+          // Note: conversion_coefficient is always 1 for unlinked materials (field is disabled)
           
-          console.log('📊 Calculated unlinked material quantity in edit:', {
-            userQuantity: values.quantity,
-            consumption: consumptionCoef,
-            conversion: conversionCoef,
-            result: finalQuantity
+          // Check if values actually changed
+          const baseQuantityChanged = values.quantity !== editingItem.base_quantity;
+          const consumptionChanged = consumptionCoef !== (editingItem.consumption_coefficient || 1);
+          
+          console.log('🔍 Checking for changes:', {
+            baseQuantityChanged,
+            consumptionChanged,
+            newBase: values.quantity,
+            oldBase: editingItem.base_quantity,
+            newConsumption: consumptionCoef,
+            oldConsumption: editingItem.consumption_coefficient
           });
+          
+          if (baseQuantityChanged || consumptionChanged) {
+            // Recalculate only if something changed
+            finalQuantity = (values.quantity || 1) * consumptionCoef;
+            
+            console.log('📊 Recalculated unlinked material quantity:', {
+              baseQuantity: values.quantity,
+              consumption: consumptionCoef,
+              finalQuantity: finalQuantity
+            });
+          } else {
+            // Keep existing calculated quantity
+            finalQuantity = editingItem.quantity;
+            console.log('📊 No changes detected, keeping existing quantity:', finalQuantity);
+          }
           
           // Check for numeric overflow
           const MAX_NUMERIC_VALUE = 99999999.9999;
@@ -631,18 +692,43 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         }
       }
       
+      // Validate detail_cost_category_id before updating
+      let detailCostCategoryId = null;
+      if (values.detail_cost_category_id && values.detail_cost_category_id !== '') {
+        console.log('🔍 Validating material detail_cost_category_id:', values.detail_cost_category_id);
+        
+        // Import validation function
+        const { getDetailCategoryDisplay } = await import('../../lib/supabase/api/construction-costs');
+        
+        const { data: categoryExists } = await getDetailCategoryDisplay(values.detail_cost_category_id);
+        if (categoryExists) {
+          detailCostCategoryId = values.detail_cost_category_id;
+          console.log('✅ Material detail_cost_category_id validated:', detailCostCategoryId);
+        } else {
+          console.error('❌ Material detail_cost_category_id does not exist in database:', values.detail_cost_category_id);
+          message.error('Выбранная категория затрат не найдена в базе данных');
+          setLoading(false);
+          return;
+        }
+      }
+      
       // Update the material itself INCLUDING coefficients and delivery fields
-      const updateData = {
+      const updateData: any = {
         description: values.description,
         unit: values.unit,
         quantity: finalQuantity,  // Use calculated quantity
         unit_rate: values.unit_rate,
         consumption_coefficient: values.consumption_coefficient || 1,
         conversion_coefficient: values.conversion_coefficient || 1,
-        cost_node_id: values.cost_node_id || null,
+        detail_cost_category_id: detailCostCategoryId,
         delivery_price_type: values.delivery_price_type || 'included',
         delivery_amount: values.delivery_amount || 0
       };
+      
+      // Add base_quantity for unlinked materials
+      if (!values.work_id && (editingItem.item_type === 'material' || editingItem.item_type === 'sub_material')) {
+        updateData.base_quantity = values.quantity; // Store the user-entered base value
+      }
       
       const result = await boqApi.update(editingMaterialId, updateData);
       if (result.error) {
@@ -810,14 +896,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   // Start editing work inline
   const handleEditWork = useCallback((item: BOQItemWithLibrary) => {
     console.log('✏️ Starting inline edit for work:', item.id);
-    console.log('🎯 Work cost_node_id:', item.cost_node_id);
+    console.log('🎯 Work detail_cost_category_id:', item.detail_cost_category_id);
     setEditingWorkId(item.id);
     workEditForm.setFieldsValue({
       description: item.description,
       unit: item.unit,
       quantity: item.quantity,
       unit_rate: item.unit_rate,
-      cost_node_id: item.cost_node_id || null
+      detail_cost_category_id: item.detail_cost_category_id || null
     });
   }, [workEditForm]);
 
@@ -826,9 +912,34 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     if (!editingWorkId) return;
     
     console.log('💾 Saving work edits:', values);
+    console.log('🔍 Validating detail_cost_category_id:', values.detail_cost_category_id);
     setLoading(true);
     try {
-      const result = await boqApi.update(editingWorkId, values);
+      let detailCostCategoryId = null;
+      
+      // Validate detail_cost_category_id if provided
+      if (values.detail_cost_category_id && values.detail_cost_category_id !== '') {
+        // Import validation function
+        const { getDetailCategoryDisplay } = await import('../../lib/supabase/api/construction-costs');
+        
+        const { data: categoryExists } = await getDetailCategoryDisplay(values.detail_cost_category_id);
+        if (categoryExists) {
+          detailCostCategoryId = values.detail_cost_category_id;
+          console.log('✅ detail_cost_category_id validated:', detailCostCategoryId);
+        } else {
+          console.error('❌ detail_cost_category_id does not exist in database:', values.detail_cost_category_id);
+          message.error('Выбранная категория затрат не найдена в базе данных');
+          return;
+        }
+      }
+      
+      const updateData = {
+        ...values,
+        detail_cost_category_id: detailCostCategoryId
+      };
+      
+      console.log('💾 Final update data:', updateData);
+      const result = await boqApi.update(editingWorkId, updateData);
       if (result.error) {
         throw new Error(result.error);
       }
@@ -1019,17 +1130,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         // For unlinked materials and sub-materials, show tooltip with calculation formula
         if ((record.item_type === 'material' || record.item_type === 'sub_material') && !record.work_link) {
           const consumptionCoef = record.consumption_coefficient || 1;
-          const conversionCoef = record.conversion_coefficient || 1;
           
-          // Check if coefficients are applied (not default 1)
-          const hasCoefficients = consumptionCoef !== 1 || conversionCoef !== 1;
+          // Check if coefficients are applied (consumption > 1, conversion is always 1 for unlinked)
+          const hasCoefficients = consumptionCoef > 1;
           
-          if (hasCoefficients) {
-            // Calculate base quantity before coefficients
-            const baseQuantity = value / (consumptionCoef * conversionCoef);
-            
+          if (hasCoefficients && record.base_quantity !== null && record.base_quantity !== undefined) {
+            // Show base quantity and coefficient in tooltip
             return (
-              <Tooltip title={`${baseQuantity.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} × ${consumptionCoef} × ${conversionCoef}`}>
+              <Tooltip title={`Базовое: ${record.base_quantity.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} × Коэф: ${consumptionCoef} = ${value.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 3 })}`}>
                 <div className="text-right py-1">
                   <div className="font-medium text-green-600 text-sm">
                     {value?.toLocaleString('ru-RU', {
@@ -1234,43 +1342,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     },
     {
       title: 'Категория затрат',
-      dataIndex: 'cost_node_display',
-      key: 'cost_node_display',
+      dataIndex: 'detail_cost_category_id',
+      key: 'detail_cost_category_id',
       width: '15%',
       minWidth: 150,
       align: 'center',
-      render: (text, record) => {
-        if (record.cost_node_display) {
-          // Разбиваем строку на части для более компактного отображения
-          const parts = record.cost_node_display.split(' → ');
-          if (parts.length === 3) {
-            return (
-              <Tooltip title={record.cost_node_display} placement="left">
-                <div className="py-1 text-center">
-                  <div className="text-[10px] text-gray-500 font-medium leading-tight">
-                    {parts[0]}
-                  </div>
-                  <div className="text-[11px] text-gray-700 font-medium leading-tight mt-0.5">
-                    {parts[1]}
-                  </div>
-                  <div className="text-[10px] text-gray-500 leading-tight mt-0.5">
-                    📍 {parts[2]}
-                  </div>
-                </div>
-              </Tooltip>
-            );
-          }
-          // Если формат не стандартный, показываем как есть
-          return (
-            <Tooltip title={record.cost_node_display} placement="left">
-              <div className="text-[11px] text-gray-600 leading-relaxed py-1 text-center">
-                {record.cost_node_display.replace(/ → /g, ' / ')}
-              </div>
-            </Tooltip>
-          );
-        }
-        return <div className="text-xs text-gray-400 text-center">—</div>;
-      }
+      render: (detailCategoryId) => (
+        <CostCategoryDisplay detailCategoryId={detailCategoryId} />
+      )
     },
     {
       title: '',
@@ -1423,15 +1502,15 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Form.Item
-                name="cost_node_id"
+                name="detail_cost_category_id"
                 className="mb-0"
               >
-                <CostCascadeSelector
-                  value={workEditForm.getFieldValue('cost_node_id')}
+                <CostDetailCascadeSelector
+                  value={workEditForm.getFieldValue('detail_cost_category_id')}
                   placeholder="Категория затрат"
                   onChange={(value, display) => {
-                    workEditForm.setFieldValue('cost_node_id', value);
-                    workEditForm.setFieldValue('cost_node_display', display);
+                    workEditForm.setFieldValue('detail_cost_category_id', value);
+                    workEditForm.setFieldValue('cost_category_display', display);
                   }}
                 />
               </Form.Item>
@@ -1582,15 +1661,15 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           <Row gutter={[12, 8]} className="w-full mt-2">
             <Col xs={24} sm={16} md={14} lg={12}>
               <Form.Item
-                name="cost_node_id"
+                name="detail_cost_category_id"
                 className="mb-2"
               >
-                <CostCascadeSelector
-                  value={editForm.getFieldValue('cost_node_id')}
+                <CostDetailCascadeSelector
+                  value={editForm.getFieldValue('detail_cost_category_id')}
                   placeholder="Категория затрат"
                   onChange={(value, display) => {
-                    editForm.setFieldValue('cost_node_id', value);
-                    editForm.setFieldValue('cost_node_display', display);
+                    editForm.setFieldValue('detail_cost_category_id', value);
+                    editForm.setFieldValue('cost_category_display', display);
                   }}
                 />
               </Form.Item>
@@ -1830,17 +1909,17 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         </Col>
         <Col xs={24} sm={12} md={6} lg={5}>
           <Form.Item
-            name="cost_node_id"
+            name="detail_cost_category_id"
             className="mb-0"
             label={<Text strong>Категория затрат</Text>}
           >
-            <CostCascadeSelector
-              value={quickAddForm.getFieldValue('cost_node_id')}
+            <CostDetailCascadeSelector
+              value={quickAddForm.getFieldValue('detail_cost_category_id')}
               placeholder="Выберите категорию"
               style={{ width: '100%' }}
               onChange={(value, display) => {
-                quickAddForm.setFieldValue('cost_node_id', value);
-                quickAddForm.setFieldValue('cost_node_display', display);
+                quickAddForm.setFieldValue('detail_cost_category_id', value);
+                quickAddForm.setFieldValue('cost_category_display', display);
               }}
             />
           </Form.Item>

@@ -255,3 +255,175 @@ export async function clearAllData() {
     return { error: err };
   }
 }
+
+// Поиск в detail_cost_categories для CostCascadeSelector
+export interface DetailCategorySearchResult {
+  id: string;
+  name: string;
+  unit_cost: number | null;
+  category_name: string;
+  location_name: string;
+  display_name: string;
+  cost_category_id: string;
+  location_id: string;
+}
+
+export async function searchDetailCategories(searchTerm: string, limit: number = 30) {
+  console.log('🚀 [searchDetailCategories] Searching:', { searchTerm, limit });
+  
+  try {
+    // Сначала ищем детали категорий
+    const { data: detailsData, error } = await supabase
+      .from('detail_cost_categories')
+      .select('*')
+      .ilike('name', `%${searchTerm}%`)
+      .limit(limit);
+      
+    if (error) {
+      console.error('❌ [searchDetailCategories] Error:', error);
+      return { data: null, error };
+    }
+    
+    console.log('📦 [searchDetailCategories] Raw data:', detailsData);
+    
+    if (!detailsData || detailsData.length === 0) {
+      return { data: [], error: null };
+    }
+    
+    // Получаем уникальные IDs категорий и локаций
+    const categoryIds = [...new Set(detailsData.map(d => d.cost_category_id).filter(Boolean))];
+    const locationIds = [...new Set(detailsData.map(d => d.location_id).filter(Boolean))];
+    
+    // Загружаем категории
+    const categoriesMap: Record<string, string> = {};
+    if (categoryIds.length > 0) {
+      const { data: categories } = await supabase
+        .from('cost_categories')
+        .select('id, name')
+        .in('id', categoryIds);
+      
+      if (categories) {
+        categories.forEach(cat => {
+          categoriesMap[cat.id] = cat.name;
+        });
+      }
+    }
+    
+    // Загружаем локации
+    const locationsMap: Record<string, string> = {};
+    if (locationIds.length > 0) {
+      const { data: locations } = await supabase
+        .from('location')
+        .select('id, city, region, country')
+        .in('id', locationIds);
+      
+      if (locations) {
+        locations.forEach(loc => {
+          const parts = [];
+          if (loc.city) parts.push(loc.city);
+          if (loc.region) parts.push(loc.region);
+          if (loc.country) parts.push(loc.country);
+          locationsMap[loc.id] = parts.length > 0 ? parts.join(', ') : 'Локация не указана';
+        });
+      }
+    }
+    
+    // Transform results to match expected format
+    const results: DetailCategorySearchResult[] = detailsData.map(item => {
+      const categoryName = item.cost_category_id && categoriesMap[item.cost_category_id] 
+        ? categoriesMap[item.cost_category_id] 
+        : 'Категория не указана';
+      
+      const locationName = item.location_id && locationsMap[item.location_id]
+        ? locationsMap[item.location_id]
+        : 'Локация не указана';
+      
+      const displayName = `${categoryName} → ${item.name} → ${locationName}`;
+      
+      return {
+        id: item.id,
+        name: item.name,
+        unit_cost: item.unit_cost,
+        category_name: categoryName,
+        location_name: locationName,
+        display_name: displayName,
+        cost_category_id: item.cost_category_id,
+        location_id: item.location_id
+      };
+    });
+    
+    console.log('✅ [searchDetailCategories] Found:', results.length);
+    return { data: results, error: null };
+  } catch (err: any) {
+    console.error('❌ [searchDetailCategories] Error:', err);
+    return { data: null, error: err };
+  }
+}
+
+// Получить отображаемое значение для detail_cost_category_id
+export async function getDetailCategoryDisplay(detailCategoryId: string) {
+  console.log('🚀 [getDetailCategoryDisplay] Loading for:', detailCategoryId);
+  
+  try {
+    // Сначала получаем основную запись
+    const { data: detailDataArray, error: detailError } = await supabase
+      .from('detail_cost_categories')
+      .select('*')
+      .eq('id', detailCategoryId);
+      
+    if (detailError) {
+      console.error('❌ [getDetailCategoryDisplay] Error loading detail:', detailError);
+      return { data: null, error: detailError };
+    }
+    
+    if (!detailDataArray || detailDataArray.length === 0) {
+      console.log('⚠️ [getDetailCategoryDisplay] No data found for ID:', detailCategoryId);
+      return { data: null, error: { message: 'Detail category not found' } };
+    }
+    
+    const detailData = detailDataArray[0];
+    console.log('📦 [getDetailCategoryDisplay] Detail data:', detailData);
+    
+    // Получаем название категории отдельным запросом
+    let categoryName = 'Категория не указана';
+    if (detailData.cost_category_id) {
+      const { data: categoryDataArray } = await supabase
+        .from('cost_categories')
+        .select('name')
+        .eq('id', detailData.cost_category_id);
+      
+      if (categoryDataArray && categoryDataArray.length > 0) {
+        categoryName = categoryDataArray[0].name;
+      }
+    }
+    
+    // Получаем локацию отдельным запросом
+    let locationName = 'Локация не указана';
+    if (detailData.location_id) {
+      const { data: locationDataArray } = await supabase
+        .from('location')
+        .select('city, region, country')
+        .eq('id', detailData.location_id);
+      
+      if (locationDataArray && locationDataArray.length > 0) {
+        const locationData = locationDataArray[0];
+        const locationParts = [];
+        if (locationData.city) locationParts.push(locationData.city);
+        if (locationData.region) locationParts.push(locationData.region);
+        if (locationData.country) locationParts.push(locationData.country);
+        locationName = locationParts.length > 0 ? locationParts.join(', ') : 'Локация не указана';
+      }
+    }
+    
+    // Get detail name - this is the main name field
+    const detailName = detailData.name || 'Детализация не указана';
+    
+    const displayName = `${categoryName} → ${detailName} → ${locationName}`;
+    
+    console.log('✅ [getDetailCategoryDisplay] Display:', displayName);
+    return { data: displayName, error: null };
+  } catch (err: any) {
+    console.error('❌ [getDetailCategoryDisplay] Error:', err);
+    return { data: null, error: err };
+  }
+}
