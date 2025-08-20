@@ -30,7 +30,7 @@ interface BOQItemFormProps {
 }
 
 interface FormData {
-  item_type: 'material' | 'work';
+  item_type: 'material' | 'work' | 'sub_material' | 'sub_work';
   description: string;
   unit: string;
   quantity: number;
@@ -43,6 +43,8 @@ interface FormData {
   subcategory?: string;
   notes?: string;
   sort_order?: number;
+  delivery_price_type?: 'included' | 'not_included' | 'amount';
+  delivery_amount?: number;
 }
 
 const BOQItemForm: React.FC<BOQItemFormProps> = ({
@@ -85,11 +87,13 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
         notes: editingItem.notes || '',
         sort_order: editingItem.sort_order || 0,
         consumption_coefficient: editingItem.consumption_coefficient || undefined,
-        conversion_coefficient: editingItem.conversion_coefficient || undefined
+        conversion_coefficient: editingItem.conversion_coefficient || undefined,
+        delivery_price_type: editingItem.delivery_price_type || 'included',
+        delivery_amount: editingItem.delivery_amount || 0
       });
     } else if (visible) {
       form.resetFields();
-      form.setFieldsValue({ item_type: 'material', sort_order: 0 });
+      form.setFieldsValue({ item_type: 'material', sort_order: 0, delivery_price_type: 'included', delivery_amount: 0 });
     }
   }, [visible, editingItem, form]);
 
@@ -125,7 +129,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
   };
 
   const getLibraryOptions = () => {
-    const items = itemType === 'material' ? libraryItems.materials : libraryItems.works;
+    const items = (itemType === 'material' || itemType === 'sub_material') ? libraryItems.materials : libraryItems.works;
     return items.map(item => ({
       value: item.id,
       label: `${item.code} - ${item.name} (${item.base_price} ₽/${item.unit})`,
@@ -141,10 +145,12 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
         ...values,
         tender_id: tenderId,
         client_position_id: positionId,
-        material_id: values.item_type === 'material' ? values.material_id : null,
+        material_id: (values.item_type === 'material' || values.item_type === 'sub_material') ? values.material_id : null,
         work_id: values.item_type === 'work' ? values.work_id : null,
-        consumption_coefficient: values.item_type === 'material' ? values.consumption_coefficient : null,
-        conversion_coefficient: values.item_type === 'material' ? values.conversion_coefficient : null
+        consumption_coefficient: (values.item_type === 'material' || values.item_type === 'sub_material') ? values.consumption_coefficient : null,
+        conversion_coefficient: (values.item_type === 'material' || values.item_type === 'sub_material') ? values.conversion_coefficient : null,
+        delivery_price_type: (values.item_type === 'material' || values.item_type === 'sub_material') ? values.delivery_price_type : null,
+        delivery_amount: (values.item_type === 'material' || values.item_type === 'sub_material') ? values.delivery_amount : null
       };
 
       if (isEditing && editingItem) {
@@ -245,19 +251,21 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
             >
               <Radio.Group>
                 <Radio.Button value="material">Материал</Radio.Button>
+                <Radio.Button value="sub_material">Субматериал</Radio.Button>
                 <Radio.Button value="work">Работа</Radio.Button>
+                <Radio.Button value="sub_work">Субработа</Radio.Button>
               </Radio.Group>
             </Form.Item>
           </Col>
           
           <Col span={16}>
             <Form.Item
-              name={itemType === 'material' ? 'material_id' : 'work_id'}
-              label={`Выбрать из справочника ${itemType === 'material' ? 'материалов' : 'работ'}`}
+              name={(itemType === 'material' || itemType === 'sub_material') ? 'material_id' : 'work_id'}
+              label={`Выбрать из справочника ${(itemType === 'material' || itemType === 'sub_material') ? 'материалов' : 'работ'}`}
             >
               <Select
                 showSearch
-                placeholder={`Найти ${itemType === 'material' ? 'материал' : 'работу'} в справочнике`}
+                placeholder={`Найти ${(itemType === 'material' || itemType === 'sub_material') ? 'материал' : 'работу'} в справочнике`}
                 optionFilterProp="label"
                 onSelect={handleLibraryItemSelect}
                 loading={searchLoading}
@@ -283,7 +291,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
           ]}
         >
           <Input 
-            placeholder={`Наименование ${itemType === 'material' ? 'материала' : 'работы'}`}
+            placeholder={`Наименование ${(itemType === 'material' || itemType === 'sub_material') ? 'материала' : 'работы'}`}
             maxLength={500}
           />
         </Form.Item>
@@ -364,7 +372,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
           </Col>
         </Row>
 
-        {itemType === 'material' && (
+        {(itemType === 'material' || itemType === 'sub_material') && (
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
@@ -395,6 +403,52 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
                   precision={4}
                   placeholder="1.0000"
                   className="w-full"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        )}
+
+        {(itemType === 'material' || itemType === 'sub_material') && (
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="delivery_price_type"
+                label="Тип доставки"
+                rules={[{ required: true, message: 'Выберите тип доставки' }]}
+              >
+                <Select placeholder="Выберите тип доставки">
+                  <Option value="included">Доставка включена</Option>
+                  <Option value="not_included">Доставка не включена</Option>
+                  <Option value="amount">Фиксированная сумма</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            
+            <Col span={12}>
+              <Form.Item
+                name="delivery_amount"
+                label="Сумма доставки"
+                rules={[
+                  {
+                    validator: (_, value) => {
+                      const deliveryType = form.getFieldValue('delivery_price_type');
+                      if (deliveryType === 'amount' && (!value || value <= 0)) {
+                        return Promise.reject('Введите сумму доставки');
+                      }
+                      return Promise.resolve();
+                    }
+                  }
+                ]}
+                dependencies={['delivery_price_type']}
+              >
+                <DecimalInput
+                  min={0}
+                  precision={2}
+                  placeholder="0.00"
+                  addonAfter="₽"
+                  className="w-full"
+                  disabled={Form.useWatch('delivery_price_type', form) !== 'amount'}
                 />
               </Form.Item>
             </Col>

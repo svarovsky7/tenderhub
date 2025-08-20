@@ -65,7 +65,8 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
       const items = position.boq_items || [];
       stats.works += items.filter(item => item.item_type === 'work' || item.item_type === 'sub_work').length;
       stats.materials += items.filter(item => item.item_type === 'material' || item.item_type === 'sub_material').length;
-      stats.total += position.total_materials_cost + position.total_works_cost;
+      // Use the calculated total_position_cost which includes delivery
+      stats.total += position.total_position_cost || 0;
     });
 
     console.log('📊 Stats calculated:', stats);
@@ -151,12 +152,64 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
             return item;
           });
           
+          // Calculate total position cost from actual BOQ items including delivery
+          let calculatedTotal = 0;
+          processedItems.forEach(item => {
+            let quantity = item.quantity || 0;
+            const unitRate = item.unit_rate || 0;
+            
+            // For linked materials, calculate quantity based on work volume and coefficients
+            if ((item.item_type === 'material' || item.item_type === 'sub_material') && item.work_link) {
+              // Find the linked work
+              const work = processedItems.find(procItem => {
+                if (item.work_link.work_boq_item_id && 
+                    procItem.id === item.work_link.work_boq_item_id && 
+                    procItem.item_type === 'work') {
+                  return true;
+                }
+                if (item.work_link.sub_work_boq_item_id && 
+                    procItem.id === item.work_link.sub_work_boq_item_id && 
+                    procItem.item_type === 'sub_work') {
+                  return true;
+                }
+                return false;
+              });
+              
+              if (work) {
+                // Get coefficients from BOQ item first, then from work_link
+                const consumptionCoef = item.consumption_coefficient || 
+                                       item.work_link.material_quantity_per_work || 1;
+                const conversionCoef = item.conversion_coefficient || 
+                                      item.work_link.usage_coefficient || 1;
+                const workQuantity = work.quantity || 0;
+                quantity = workQuantity * consumptionCoef * conversionCoef;
+              }
+            }
+            
+            let itemTotal = quantity * unitRate;
+            
+            // Add delivery cost for materials
+            if (item.item_type === 'material' || item.item_type === 'sub_material') {
+              const deliveryType = item.delivery_price_type;
+              const deliveryAmount = item.delivery_amount || 0;
+              
+              if (deliveryType === 'amount' && deliveryAmount > 0) {
+                itemTotal += deliveryAmount * quantity;
+              } else if (deliveryType === 'not_included') {
+                const deliveryPerUnit = unitRate * 0.03;
+                itemTotal += deliveryPerUnit * quantity;
+              }
+            }
+            
+            calculatedTotal += itemTotal;
+          });
+          
           return {
             ...pos,
             boq_items: processedItems,
             materials_count: items.filter(item => item.item_type === 'material').length,
             works_count: items.filter(item => item.item_type === 'work').length,
-            total_position_cost: pos.total_materials_cost + pos.total_works_cost
+            total_position_cost: calculatedTotal
           };
         })
       );

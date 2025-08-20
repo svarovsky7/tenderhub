@@ -5,7 +5,7 @@
 
 export type DatabaseEnums = {
   audit_action: 'INSERT' | 'UPDATE' | 'DELETE';
-  boq_item_type: 'work' | 'material';
+  boq_item_type: 'work' | 'material' | 'sub_work' | 'sub_material';
   client_position_status: 'active' | 'inactive' | 'completed';
   tender_status: 'draft' | 'active' | 'submitted' | 'awarded' | 'closed';
   user_role: 'Administrator' | 'Engineer' | 'View-only';

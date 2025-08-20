@@ -16,7 +16,7 @@ interface InlineBoqItemFormProps {
 }
 
 interface FormValues {
-  item_type: 'material' | 'work';
+  item_type: 'material' | 'work' | 'sub_material' | 'sub_work';
   description: string;
   unit: string;
   quantity: number;
@@ -25,6 +25,8 @@ interface FormValues {
   conversion_coefficient?: number;
   material_id?: string;
   work_id?: string;
+  delivery_price_type?: 'included' | 'not_included' | 'amount';
+  delivery_amount?: number;
 }
 
 interface LibraryOption {
@@ -34,7 +36,7 @@ interface LibraryOption {
 }
 
 const schema = yup.object({
-  item_type: yup.mixed<'material' | 'work'>().oneOf(['material', 'work']).required(),
+  item_type: yup.mixed<'material' | 'work' | 'sub_material' | 'sub_work'>().oneOf(['material', 'work', 'sub_material', 'sub_work']).required(),
   description: yup.string().required('Введите наименование'),
   unit: yup.string().required('Выберите единицу'),
   quantity: yup
@@ -47,6 +49,21 @@ const schema = yup.object({
     .typeError('Введите цену')
     .min(0, 'Цена не может быть отрицательной')
     .required('Введите цену'),
+  delivery_price_type: yup.mixed<'included' | 'not_included' | 'amount'>()
+    .oneOf(['included', 'not_included', 'amount'])
+    .when('item_type', {
+      is: (value: string) => value === 'material' || value === 'sub_material',
+      then: (schema) => schema.required('Выберите тип доставки'),
+      otherwise: (schema) => schema.nullable(),
+    }),
+  delivery_amount: yup
+    .number()
+    .when(['item_type', 'delivery_price_type'], {
+      is: (itemType: string, deliveryType: string) => 
+        (itemType === 'material' || itemType === 'sub_material') && deliveryType === 'amount',
+      then: (schema) => schema.min(0).required('Введите сумму доставки'),
+      otherwise: (schema) => schema.nullable(),
+    }),
 });
 
 const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
@@ -73,6 +90,8 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
       unit_rate: 0,
       consumption_coefficient: undefined,
       conversion_coefficient: undefined,
+      delivery_price_type: 'included',
+      delivery_amount: 0,
     },
     resolver: yupResolver(schema),
   });
@@ -108,8 +127,9 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
   const itemType = watch('item_type');
   const quantity = watch('quantity');
   const unitRate = watch('unit_rate');
+  const deliveryPriceType = watch('delivery_price_type');
 
-  const options: LibraryOption[] = (itemType === 'material'
+  const options: LibraryOption[] = (itemType === 'material' || itemType === 'sub_material'
     ? libraryItems.materials
     : libraryItems.works
   ).map((item) => ({
@@ -123,7 +143,7 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
     setValue('description', option.item.name);
     setValue('unit', option.item.unit);
     setValue('unit_rate', option.item.base_price);
-    if (itemType === 'material') {
+    if (itemType === 'material' || itemType === 'sub_material') {
       setValue('material_id', option.item.id);
       setValue('work_id', undefined);
     } else {
@@ -138,10 +158,12 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
       ...values,
       tender_id: tenderId,
       client_position_id: positionId,
-      material_id: values.item_type === 'material' ? values.material_id : null,
+      material_id: values.item_type === 'material' || values.item_type === 'sub_material' ? values.material_id : null,
       work_id: values.item_type === 'work' ? values.work_id : null,
-      consumption_coefficient: values.item_type === 'material' ? values.consumption_coefficient : null,
-      conversion_coefficient: values.item_type === 'material' ? values.conversion_coefficient : null,
+      consumption_coefficient: values.item_type === 'material' || values.item_type === 'sub_material' ? values.consumption_coefficient : null,
+      conversion_coefficient: values.item_type === 'material' || values.item_type === 'sub_material' ? values.conversion_coefficient : null,
+      delivery_price_type: values.item_type === 'material' || values.item_type === 'sub_material' ? values.delivery_price_type : null,
+      delivery_amount: values.item_type === 'material' || values.item_type === 'sub_material' ? values.delivery_amount : null,
     };
     try {
       console.log('📡 Calling boqItemsApi.create', payload);
@@ -186,7 +208,9 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
               {...field}
               options={[
                 { value: 'material', label: 'Материал' },
+                { value: 'sub_material', label: 'Субматериал' },
                 { value: 'work', label: 'Работа' },
+                { value: 'sub_work', label: 'Субработа' },
               ]}
               style={{ width: 120 }}
             />
@@ -275,7 +299,7 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
         />
       </Form.Item>
 
-      {itemType === 'material' && (
+      {(itemType === 'material' || itemType === 'sub_material') && (
         <>
           <Form.Item>
             <Controller
@@ -308,6 +332,46 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
               )}
             />
           </Form.Item>
+
+          <Form.Item validateStatus={errors.delivery_price_type ? 'error' : ''}>
+            <Controller
+              name="delivery_price_type"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  {...field}
+                  options={[
+                    { value: 'included', label: 'Включена' },
+                    { value: 'not_included', label: 'Не включена' },
+                    { value: 'amount', label: 'Сумма' },
+                  ]}
+                  placeholder="Тип доставки"
+                  style={{ width: 130 }}
+                />
+              )}
+            />
+          </Form.Item>
+
+          {deliveryPriceType === 'amount' && (
+            <Form.Item
+              validateStatus={errors.delivery_amount ? 'error' : ''}
+              help={errors.delivery_amount?.message}
+            >
+              <Controller
+                name="delivery_amount"
+                control={control}
+                render={({ field }) => (
+                  <DecimalInput
+                    {...field}
+                    min={0}
+                    precision={2}
+                    placeholder="Сумма доставки"
+                    style={{ width: 130 }}
+                  />
+                )}
+              />
+            </Form.Item>
+          )}
         </>
       )}
 

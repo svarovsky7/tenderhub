@@ -66,6 +66,8 @@ interface QuickAddRowData {
   conversion_coefficient?: number;
   cost_node_id?: string;
   cost_node_display?: string;
+  delivery_price_type?: 'included' | 'not_included' | 'amount';
+  delivery_amount?: number;
 }
 
 const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps> = ({
@@ -326,10 +328,12 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         sort_order: nextSubNumber,
         // Add cost node if provided
         ...(values.cost_node_id && { cost_node_id: values.cost_node_id }),
-        // Add coefficients for materials and sub-materials
+        // Add coefficients and delivery fields for materials and sub-materials
         ...((values.type === 'material' || values.type === 'sub_material') && {
           consumption_coefficient: values.consumption_coefficient || 1,
-          conversion_coefficient: values.conversion_coefficient || 1
+          conversion_coefficient: values.conversion_coefficient || 1,
+          delivery_price_type: values.delivery_price_type || 'included',
+          delivery_amount: values.delivery_amount || 0
         })
       };
 
@@ -548,7 +552,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       work_id: linkedWork?.id || undefined,
       consumption_coefficient: consumptionCoef,
       conversion_coefficient: conversionCoef,
-      cost_node_id: item.cost_node_id || null
+      cost_node_id: item.cost_node_id || null,
+      delivery_price_type: item.delivery_price_type || 'included',
+      delivery_amount: item.delivery_amount || 0
     });
   }, [editForm, position.boq_items, localWorks]);
 
@@ -625,7 +631,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         }
       }
       
-      // Update the material itself INCLUDING coefficients
+      // Update the material itself INCLUDING coefficients and delivery fields
       const updateData = {
         description: values.description,
         unit: values.unit,
@@ -633,7 +639,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         unit_rate: values.unit_rate,
         consumption_coefficient: values.consumption_coefficient || 1,
         conversion_coefficient: values.conversion_coefficient || 1,
-        cost_node_id: values.cost_node_id || null
+        cost_node_id: values.cost_node_id || null,
+        delivery_price_type: values.delivery_price_type || 'included',
+        delivery_amount: values.delivery_amount || 0
       };
       
       const result = await boqApi.update(editingMaterialId, updateData);
@@ -873,7 +881,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       title: 'Наименование',
       dataIndex: 'description',
       key: 'description',
-      width: '35%',
+      width: '30%',
       minWidth: 180,
       ellipsis: { showTitle: false },
       render: (text, record) => {
@@ -1073,19 +1081,75 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       )
     },
     {
+      title: 'Доставка',
+      key: 'delivery',
+      width: '10%',
+      minWidth: 100,
+      align: 'center',
+      render: (_, record) => {
+        // Показываем доставку только для материалов и субматериалов
+        if (record.item_type === 'material' || record.item_type === 'sub_material') {
+          const deliveryType = record.delivery_price_type || 'included';
+          const deliveryAmount = record.delivery_amount || 0;
+          
+          if (deliveryType === 'included') {
+            return (
+              <Tag color="green" className="text-xs">
+                Включена
+              </Tag>
+            );
+          } else if (deliveryType === 'not_included') {
+            const unitRate = record.unit_rate || 0;
+            const deliveryPerUnit = unitRate * 0.03;
+            return (
+              <Tooltip title={`3% от ${unitRate.toLocaleString('ru-RU')} ₽ = ${deliveryPerUnit.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽`}>
+                <Tag color="orange" className="text-xs">
+                  Не включена (3%)
+                </Tag>
+              </Tooltip>
+            );
+          } else if (deliveryType === 'amount') {
+            return (
+              <Tooltip title="Фиксированная сумма доставки">
+                <Tag color="blue" className="text-xs">
+                  {deliveryAmount.toLocaleString('ru-RU', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2
+                  })} ₽
+                </Tag>
+              </Tooltip>
+            );
+          }
+        }
+        return <div className="text-xs text-gray-400 text-center">—</div>;
+      }
+    },
+    {
       title: 'Сумма',
       key: 'total',
       width: '12%',
       minWidth: 100,
       align: 'right',
       render: (_, record) => {
-        let total = (record.quantity || 0) * (record.unit_rate || 0);
+        let quantity = record.quantity || 0;
+        let total = 0;
         
-        // For linked materials, calculate based on work volume and coefficients
-        if (record.item_type === 'material' && record.work_link) {
-          const work = position.boq_items?.find(item => 
-            item.id === record.work_link.work_boq_item_id && item.item_type === 'work'
-          );
+        // For linked materials, calculate quantity based on work volume and coefficients
+        if ((record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link) {
+          // Find the linked work (could be work or sub_work)
+          const work = position.boq_items?.find(item => {
+            if (record.work_link.work_boq_item_id && 
+                item.id === record.work_link.work_boq_item_id && 
+                item.item_type === 'work') {
+              return true;
+            }
+            if (record.work_link.sub_work_boq_item_id && 
+                item.id === record.work_link.sub_work_boq_item_id && 
+                item.item_type === 'sub_work') {
+              return true;
+            }
+            return false;
+          });
           
           if (work) {
             // Get coefficients from BOQ item first, then from work_link
@@ -1094,12 +1158,63 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             const conversionCoef = record.conversion_coefficient || 
                                   record.work_link.usage_coefficient || 1;
             const workQuantity = work.quantity || 0;
-            const calculatedQuantity = workQuantity * consumptionCoef * conversionCoef;
-            total = calculatedQuantity * (record.unit_rate || 0);
+            quantity = workQuantity * consumptionCoef * conversionCoef;
           }
         }
         
-        return (
+        // Calculate base total
+        const unitRate = record.unit_rate || 0;
+        total = quantity * unitRate;
+        
+        // Add delivery cost for materials and sub_materials
+        if (record.item_type === 'material' || record.item_type === 'sub_material') {
+          const deliveryType = record.delivery_price_type || 'included';
+          const deliveryAmount = record.delivery_amount || 0;
+          
+          // If delivery type is 'amount', add delivery cost multiplied by quantity
+          if (deliveryType === 'amount' && deliveryAmount > 0) {
+            total += deliveryAmount * quantity;
+          }
+          // If delivery type is 'not_included', add 3% of unit price
+          else if (deliveryType === 'not_included') {
+            const deliveryPerUnit = unitRate * 0.03; // 3% от цены за единицу
+            total += deliveryPerUnit * quantity;
+          }
+        }
+        
+        // Create tooltip content for materials with delivery
+        let tooltipContent = null;
+        if ((record.item_type === 'material' || record.item_type === 'sub_material')) {
+          const deliveryType = record.delivery_price_type || 'included';
+          const baseTotal = quantity * unitRate;
+          
+          if (deliveryType === 'amount' && record.delivery_amount > 0) {
+            const deliveryTotal = record.delivery_amount * quantity;
+            tooltipContent = (
+              <div>
+                <div>Материал: {baseTotal.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽</div>
+                <div>Доставка: {deliveryTotal.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽</div>
+                <div className="border-t pt-1 mt-1">
+                  <strong>Итого: {total.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽</strong>
+                </div>
+              </div>
+            );
+          } else if (deliveryType === 'not_included') {
+            const deliveryPerUnit = unitRate * 0.03;
+            const deliveryTotal = deliveryPerUnit * quantity;
+            tooltipContent = (
+              <div>
+                <div>Материал: {baseTotal.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽</div>
+                <div>Доставка (3%): {deliveryTotal.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽</div>
+                <div className="border-t pt-1 mt-1">
+                  <strong>Итого: {total.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽</strong>
+                </div>
+              </div>
+            );
+          }
+        }
+        
+        const totalElement = (
           <div className="whitespace-nowrap text-right">
             <Text strong className="text-green-600 text-sm">
               {total.toLocaleString('ru-RU', { 
@@ -1109,14 +1224,20 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             </Text>
           </div>
         );
+        
+        return tooltipContent ? (
+          <Tooltip title={tooltipContent} placement="left">
+            {totalElement}
+          </Tooltip>
+        ) : totalElement;
       }
     },
     {
       title: 'Категория затрат',
       dataIndex: 'cost_node_display',
       key: 'cost_node_display',
-      width: '20%',
-      minWidth: 200,
+      width: '15%',
+      minWidth: 150,
       align: 'center',
       render: (text, record) => {
         if (record.cost_node_display) {
@@ -1565,6 +1686,55 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               </Col>
             </Row>
           )}
+          
+          {/* Delivery fields for materials and sub-materials */}
+          <Row gutter={[12, 8]} className="w-full mt-3 pt-3 border-t border-blue-200">
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <Form.Item
+                name="delivery_price_type"
+                label={<Text strong>Тип доставки</Text>}
+                className="mb-0"
+              >
+                <Select
+                  placeholder="Тип доставки"
+                  style={{ width: '100%' }}
+                  size="small"
+                >
+                  <Select.Option value="included">Включена</Select.Option>
+                  <Select.Option value="not_included">Не включена</Select.Option>
+                  <Select.Option value="amount">Фиксированная сумма</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <Form.Item
+                noStyle
+                shouldUpdate={(prevValues, currentValues) => 
+                  prevValues.delivery_price_type !== currentValues.delivery_price_type
+                }
+              >
+                {({ getFieldValue }) => {
+                  const deliveryType = getFieldValue('delivery_price_type');
+                  return (
+                    <Form.Item
+                      name="delivery_amount"
+                      label={<Text strong>Сумма доставки</Text>}
+                      className="mb-0"
+                    >
+                      <DecimalInput
+                        min={0}
+                        precision={2}
+                        placeholder="0.00"
+                        disabled={deliveryType !== 'amount'}
+                        style={{ width: '100%' }}
+                        size="small"
+                      />
+                    </Form.Item>
+                  );
+                }}
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </td>
     </tr>
@@ -1700,6 +1870,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}>
         {({ getFieldValue }) =>
           (getFieldValue('type') === 'material' || getFieldValue('type') === 'sub_material') && works.length > 0 && (
+            <>
             <Row gutter={[12, 8]} className="w-full mt-3 pt-3 border-t border-blue-200">
               <Col xs={24} sm={12} md={10} lg={8}>
                 <Form.Item
@@ -1848,6 +2019,61 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 </div>
               </Col>
             </Row>
+            <Row gutter={[12, 8]} className="mt-2">
+              <Col xs={12} sm={8} md={6} lg={4}>
+                <Form.Item
+                  name="delivery_price_type"
+                  label={<Text strong>Тип доставки</Text>}
+                  initialValue="included"
+                  className="mb-0"
+                >
+                  <Select
+                    placeholder="Тип доставки"
+                    style={{ width: '100%' }}
+                    size="small"
+                  >
+                    <Select.Option value="included">Включена</Select.Option>
+                    <Select.Option value="not_included">Не включена</Select.Option>
+                    <Select.Option value="amount">Фиксированная сумма</Select.Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col xs={12} sm={8} md={6} lg={4}>
+                <Form.Item
+                  noStyle
+                  shouldUpdate={(prevValues, currentValues) => 
+                    prevValues.delivery_price_type !== currentValues.delivery_price_type
+                  }
+                >
+                  {({ getFieldValue }) => {
+                    const deliveryType = getFieldValue('delivery_price_type');
+                    return (
+                      <Form.Item
+                        name="delivery_amount"
+                        label={<Text strong>Сумма доставки</Text>}
+                        className="mb-0"
+                        rules={[
+                          {
+                            required: deliveryType === 'amount',
+                            message: 'Введите сумму'
+                          }
+                        ]}
+                      >
+                        <DecimalInput
+                          min={0}
+                          precision={2}
+                          placeholder="0.00"
+                          disabled={deliveryType !== 'amount'}
+                          style={{ width: '100%' }}
+                          size="small"
+                        />
+                      </Form.Item>
+                    );
+                  }}
+                </Form.Item>
+              </Col>
+            </Row>
+            </>
           )
         }
       </Form.Item>
@@ -2130,9 +2356,55 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   'data-row-key': record.id,
                 })}
                 summary={(pageData) => {
-                  const total = pageData.reduce((sum, item) => 
-                    sum + (item.quantity || 0) * (item.unit_rate || 0), 0
-                  );
+                  const total = pageData.reduce((sum, item) => {
+                    let quantity = item.quantity || 0;
+                    const unitRate = item.unit_rate || 0;
+                    
+                    // For linked materials, calculate quantity based on work volume and coefficients
+                    if ((item.item_type === 'material' || item.item_type === 'sub_material') && item.work_link) {
+                      // Find the linked work
+                      const work = position.boq_items?.find(boqItem => {
+                        if (item.work_link.work_boq_item_id && 
+                            boqItem.id === item.work_link.work_boq_item_id && 
+                            boqItem.item_type === 'work') {
+                          return true;
+                        }
+                        if (item.work_link.sub_work_boq_item_id && 
+                            boqItem.id === item.work_link.sub_work_boq_item_id && 
+                            boqItem.item_type === 'sub_work') {
+                          return true;
+                        }
+                        return false;
+                      });
+                      
+                      if (work) {
+                        // Get coefficients from BOQ item first, then from work_link
+                        const consumptionCoef = item.consumption_coefficient || 
+                                               item.work_link.material_quantity_per_work || 1;
+                        const conversionCoef = item.conversion_coefficient || 
+                                              item.work_link.usage_coefficient || 1;
+                        const workQuantity = work.quantity || 0;
+                        quantity = workQuantity * consumptionCoef * conversionCoef;
+                      }
+                    }
+                    
+                    let itemTotal = quantity * unitRate;
+                    
+                    // Add delivery cost for materials
+                    if (item.item_type === 'material' || item.item_type === 'sub_material') {
+                      const deliveryType = item.delivery_price_type;
+                      const deliveryAmount = item.delivery_amount || 0;
+                      
+                      if (deliveryType === 'amount' && deliveryAmount > 0) {
+                        itemTotal += deliveryAmount * quantity;
+                      } else if (deliveryType === 'not_included') {
+                        const deliveryPerUnit = unitRate * 0.03;
+                        itemTotal += deliveryPerUnit * quantity;
+                      }
+                    }
+                    
+                    return sum + itemTotal;
+                  }, 0);
                   return (
                     <Table.Summary fixed>
                       <Table.Summary.Row style={{ backgroundColor: '#f8f9fa' }}>
