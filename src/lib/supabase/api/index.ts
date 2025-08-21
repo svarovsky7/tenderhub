@@ -16,3 +16,4 @@ export { subscriptions } from './subscriptions';
 export { workMaterialLinksApi } from './work-material-links';
 export { workMaterialsManagementApi } from './work-materials-management';
 export { costsApi } from './costs';
+export { tenderCostVolumesApi } from './tender-cost-volumes';
