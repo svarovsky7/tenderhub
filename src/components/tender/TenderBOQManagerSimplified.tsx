@@ -196,8 +196,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
               if (deliveryType === 'amount' && deliveryAmount > 0) {
                 itemTotal += deliveryAmount * quantity;
               } else if (deliveryType === 'not_included') {
-                const deliveryPerUnit = unitRate * 0.03;
-                itemTotal += deliveryPerUnit * quantity;
+                itemTotal += deliveryAmount * quantity; // Используем значение из БД
               }
             }
             

@@ -342,7 +342,7 @@ const InlineBoqItemForm: React.FC<InlineBoqItemFormProps> = ({
                   {...field}
                   options={[
                     { value: 'included', label: 'Включена' },
-                    { value: 'not_included', label: 'Не включена' },
+                    { value: 'not_included', label: 'Не включена (3%)' },
                     { value: 'amount', label: 'Сумма' },
                   ]}
                   placeholder="Тип доставки"

@@ -241,11 +241,8 @@ const BOQPageSimplified: React.FC = () => {
                       precision={0}
                       suffix="₽"
                       formatter={(value) => {
-                        const num = Number(value);
-                        return num.toLocaleString('ru-RU', {
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 2
-                        });
+                        const num = Math.round(Number(value));
+                        return num.toLocaleString('ru-RU');
                       }}
                     />
                   </Card>

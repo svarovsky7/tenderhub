@@ -1268,9 +1268,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             );
           } else if (deliveryType === 'not_included') {
             const unitRate = record.unit_rate || 0;
-            const deliveryPerUnit = unitRate * 0.03;
+            const deliveryPerUnit = deliveryAmount; // Используем значение из БД
             return (
-              <Tooltip title={`3% от ${unitRate.toLocaleString('ru-RU')} ₽ = ${deliveryPerUnit.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽`}>
+              <Tooltip title={`Доставка: ${deliveryPerUnit.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽ за единицу (3% от цены ${unitRate.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽)`}>
                 <Tag color="orange" className="text-xs">
                   Не включена (3%)
                 </Tag>
@@ -1299,8 +1299,12 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       minWidth: 100,
       align: 'right',
       render: (_, record) => {
+        // Используем total_amount из БД - там уже учтена доставка
+        const total = record.total_amount || 0;
+        
+        // Получаем дополнительные данные для тултипа
         let quantity = record.quantity || 0;
-        let total = 0;
+        const unitRate = record.unit_rate || 0;
         
         // For linked materials, calculate quantity based on work volume and coefficients
         if ((record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link) {
@@ -1330,52 +1334,33 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           }
         }
         
-        // Calculate base total
-        const unitRate = record.unit_rate || 0;
-        total = quantity * unitRate;
-        
-        // Add delivery cost for materials and sub_materials
-        if (record.item_type === 'material' || record.item_type === 'sub_material') {
-          const deliveryType = record.delivery_price_type || 'included';
-          const deliveryAmount = record.delivery_amount || 0;
-          
-          // If delivery type is 'amount', add delivery cost multiplied by quantity
-          if (deliveryType === 'amount' && deliveryAmount > 0) {
-            total += deliveryAmount * quantity;
-          }
-          // If delivery type is 'not_included', add 3% of unit price
-          else if (deliveryType === 'not_included') {
-            const deliveryPerUnit = unitRate * 0.03; // 3% от цены за единицу
-            total += deliveryPerUnit * quantity;
-          }
-        }
-        
         // Create tooltip content for materials with delivery
         let tooltipContent = null;
         if ((record.item_type === 'material' || record.item_type === 'sub_material')) {
           const deliveryType = record.delivery_price_type || 'included';
+          const deliveryAmount = record.delivery_amount || 0;
           const baseTotal = quantity * unitRate;
           
           if (deliveryType === 'amount' && record.delivery_amount > 0) {
             const deliveryTotal = record.delivery_amount * quantity;
             tooltipContent = (
               <div>
-                <div>Материал: {baseTotal.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽</div>
-                <div>Доставка: {deliveryTotal.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽</div>
+                <div>Материал: {Math.round(baseTotal).toLocaleString('ru-RU')} ₽</div>
+                <div>Доставка: {Math.round(deliveryTotal).toLocaleString('ru-RU')} ₽</div>
                 <div className="border-t pt-1 mt-1">
-                  <strong>Итого: {total.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽</strong>
+                  <strong>Итого: {Math.round(total).toLocaleString('ru-RU')} ₽</strong>
                 </div>
               </div>
             );
           } else if (deliveryType === 'not_included') {
-            const deliveryPerUnit = unitRate * 0.03;
+            const deliveryPerUnit = deliveryAmount || 0; // Используем значение из БД
             const deliveryTotal = deliveryPerUnit * quantity;
             tooltipContent = (
               <div>
-                <div>Материал: {baseTotal.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽</div>
-                <div>Доставка (3%): {deliveryTotal.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽</div>
+                <div>Материал: {Math.round(baseTotal).toLocaleString('ru-RU')} ₽</div>
+                <div>Доставка: {Math.round(deliveryTotal).toLocaleString('ru-RU')} ₽</div>
                 <div className="border-t pt-1 mt-1">
-                  <strong>Итого: {total.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽</strong>
+                  <strong>Итого: {Math.round(total).toLocaleString('ru-RU')} ₽</strong>
                 </div>
               </div>
             );
@@ -1385,10 +1370,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         const totalElement = (
           <div className="whitespace-nowrap text-right">
             <Text strong className="text-green-600 text-sm">
-              {total.toLocaleString('ru-RU', { 
-                minimumFractionDigits: 0, 
-                maximumFractionDigits: 2 
-              })} ₽
+              {Math.round(total).toLocaleString('ru-RU')} ₽
             </Text>
           </div>
         );
@@ -1577,11 +1559,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             </Col>
             <Col xs={12} sm={4} md={3}>
               <Text strong className="text-green-600">
-                {((workEditForm.getFieldValue('quantity') || 0) * 
-                  (workEditForm.getFieldValue('unit_rate') || 0)).toLocaleString('ru-RU', {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 2
-                })} ₽
+                {Math.round((workEditForm.getFieldValue('quantity') || 0) * 
+                  (workEditForm.getFieldValue('unit_rate') || 0)).toLocaleString('ru-RU')} ₽
               </Text>
             </Col>
             <Col xs={12} sm={6} md={4}>
@@ -1694,11 +1673,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             <Col xs={12} sm={6} md={4} lg={3}>
               <div className="flex items-center h-8">
                 <Text strong className="text-green-600 whitespace-nowrap">
-                  {((editForm.getFieldValue('quantity') || 0) * 
-                    (editForm.getFieldValue('unit_rate') || 0)).toLocaleString('ru-RU', {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 2
-                  })} ₽
+                  {Math.round((editForm.getFieldValue('quantity') || 0) * 
+                    (editForm.getFieldValue('unit_rate') || 0)).toLocaleString('ru-RU')} ₽
                 </Text>
               </div>
             </Col>
@@ -1833,7 +1809,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   size="small"
                 >
                   <Select.Option value="included">Включена</Select.Option>
-                  <Select.Option value="not_included">Не включена</Select.Option>
+                  <Select.Option value="not_included">Не включена (3%)</Select.Option>
                   <Select.Option value="amount">Фиксированная сумма</Select.Option>
                 </Select>
               </Form.Item>
@@ -2160,7 +2136,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                     size="small"
                   >
                     <Select.Option value="included">Включена</Select.Option>
-                    <Select.Option value="not_included">Не включена</Select.Option>
+                    <Select.Option value="not_included">Не включена (3%)</Select.Option>
                     <Select.Option value="amount">Сумма</Select.Option>
                   </Select>
                 </Form.Item>
@@ -2421,10 +2397,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               <div className="flex justify-end">
                 <div className="text-right">
                   <Text strong className="text-lg text-green-700 whitespace-nowrap block">
-                    {totalCost.toLocaleString('ru-RU', { 
-                      minimumFractionDigits: 0, 
-                      maximumFractionDigits: 2 
-                    })} ₽
+                    {Math.round(totalCost).toLocaleString('ru-RU')} ₽
                   </Text>
                   <Text type="secondary" className="text-xs">Итого</Text>
                 </div>
@@ -2614,8 +2587,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                       if (deliveryType === 'amount' && deliveryAmount > 0) {
                         itemTotal += deliveryAmount * quantity;
                       } else if (deliveryType === 'not_included') {
-                        const deliveryPerUnit = unitRate * 0.03;
-                        itemTotal += deliveryPerUnit * quantity;
+                        itemTotal += deliveryAmount * quantity; // Используем значение из БД
                       }
                     }
                     
@@ -2630,10 +2602,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                         <Table.Summary.Cell index={1} align="right">
                           <div className="whitespace-nowrap">
                             <Text strong className="text-lg text-green-700">
-                              {total.toLocaleString('ru-RU', { 
-                                minimumFractionDigits: 0, 
-                                maximumFractionDigits: 2 
-                              })} ₽
+                              {Math.round(total).toLocaleString('ru-RU')} ₽
                             </Text>
                           </div>
                         </Table.Summary.Cell>
