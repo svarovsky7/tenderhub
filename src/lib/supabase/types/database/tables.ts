@@ -131,6 +131,7 @@ export type DatabaseTables = {
       unit: string | null;       // Ед. изм. из Excel
       volume: number | null;     // Объем работ из Excel
       manual_volume: number | null; // Объем, заданный вручную
+      manual_note: string | null;   // Примечание ГП (генподряда)
       client_note: string | null; // Примечание из Excel
     };
     Insert: {
@@ -144,6 +145,7 @@ export type DatabaseTables = {
       unit?: string | null;      // Ед. изм. из Excel
       volume?: number | null;    // Объем работ из Excel
       manual_volume?: number | null; // Объем, заданный вручную
+      manual_note?: string | null;   // Примечание ГП (генподряда)
       client_note?: string | null; // Примечание из Excel
       created_at?: string;
       updated_at?: string;
@@ -159,6 +161,7 @@ export type DatabaseTables = {
       unit?: string | null;      // Ед. изм. из Excel
       volume?: number | null;    // Объем работ из Excel
       manual_volume?: number | null; // Объем, заданный вручную
+      manual_note?: string | null;   // Примечание ГП (генподряда)
       client_note?: string | null; // Примечание из Excel
       created_at?: string;
       updated_at?: string;

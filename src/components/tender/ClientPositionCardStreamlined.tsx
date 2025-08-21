@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Card,
   Typography,
@@ -15,7 +15,8 @@ import {
   Tooltip,
   Popconfirm,
   Row,
-  Col
+  Col,
+  InputNumber
 } from 'antd';
 import {
   FolderOpenOutlined,
@@ -35,7 +36,7 @@ import {
   QuestionCircleOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { boqApi } from '../../lib/supabase/api';
+import { boqApi, clientPositionsApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import MaterialLinkingModal from './MaterialLinkingModal';
 import GroupedBOQDisplay from './GroupedBOQDisplay';
@@ -204,6 +205,65 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   }, [position.boq_items]);
 
   // Delete BOQ item
+  const handleManualVolumeChange = useCallback(async (value: number | null) => {
+    console.log('✏️ handleManualVolumeChange called:', { positionId: position.id, value });
+    
+    try {
+      const result = await clientPositionsApi.update(position.id, { manual_volume: value });
+      
+      if (result.error) {
+        console.error('❌ Manual volume update failed:', result.error);
+        message.error('Ошибка сохранения количества ГП');
+      } else {
+        console.log('✅ Manual volume updated successfully');
+        message.success('Количество ГП обновлено');
+        onUpdate(); // Обновляем родительский компонент
+      }
+    } catch (error) {
+      console.error('💥 Manual volume update exception:', error);
+      message.error('Ошибка сохранения количества ГП');
+    }
+  }, [position.id, onUpdate]);
+
+  const manualNoteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Очистка таймаута при размонтировании
+  useEffect(() => {
+    return () => {
+      if (manualNoteTimeoutRef.current) {
+        clearTimeout(manualNoteTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleManualNoteChange = useCallback((value: string) => {
+    console.log('✏️ handleManualNoteChange called:', { positionId: position.id, value });
+    
+    // Очищаем предыдущий таймаут
+    if (manualNoteTimeoutRef.current) {
+      clearTimeout(manualNoteTimeoutRef.current);
+    }
+    
+    // Устанавливаем новый таймаут с задержкой 800мс
+    manualNoteTimeoutRef.current = setTimeout(async () => {
+      try {
+        const result = await clientPositionsApi.update(position.id, { manual_note: value || null });
+        
+        if (result.error) {
+          console.error('❌ Manual note update failed:', result.error);
+          message.error('Ошибка сохранения примечания ГП');
+        } else {
+          console.log('✅ Manual note updated successfully');
+          message.success('Примечание ГП обновлено');
+          onUpdate(); // Обновляем родительский компонент
+        }
+      } catch (error) {
+        console.error('💥 Manual note update exception:', error);
+        message.error('Ошибка сохранения примечания ГП');
+      }
+    }, 800);
+  }, [position.id, onUpdate]);
+
   const handleDeleteItem = useCallback(async (itemId: string) => {
     console.log('🗑️ Deleting BOQ item:', itemId);
     try {
@@ -2286,16 +2346,65 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               </div>
             </Col>
             
-            {/* Work Name */}
+            {/* Work Name with client data */}
             <Col xs={24} sm={18} md={12} lg={10}>
-              <Title level={5} className="mb-0" ellipsis={{ tooltip: position.work_name }}>
-                {position.work_name}
-              </Title>
+              <div>
+                <Title level={5} className="mb-1" ellipsis={{ tooltip: position.work_name }}>
+                  {position.work_name}
+                </Title>
+                <div className="flex flex-wrap gap-3 mt-1">
+                  {position.unit && (
+                    <Tooltip title="Единица измерения">
+                      <Text className="text-xs text-gray-600">
+                        <span className="text-gray-500">Ед.изм:</span> <strong>{position.unit}</strong>
+                      </Text>
+                    </Tooltip>
+                  )}
+                  {position.volume && (
+                    <Tooltip title="Количество">
+                      <Text className="text-xs text-gray-600">
+                        <span className="text-gray-500">Кол-во:</span> <strong>{position.volume}</strong>
+                      </Text>
+                    </Tooltip>
+                  )}
+                  {position.client_note && (
+                    <Tooltip title={`Примечание: ${position.client_note}`}>
+                      <Text className="text-xs text-gray-600">
+                        <QuestionCircleOutlined className="mr-1" />
+                        <span className="text-gray-500">Примечание</span>
+                      </Text>
+                    </Tooltip>
+                  )}
+                </div>
+              </div>
             </Col>
             
             {/* Statistics - responsive layout */}
             <Col xs={24} sm={24} md={8} lg={8}>
-              <div className="flex flex-wrap gap-4 justify-end">
+              <div className="flex flex-wrap gap-4 justify-end items-center">
+                <div className="flex items-center gap-1">
+                  <Text className="text-xs text-gray-500">Кол-во ГП:</Text>
+                  <InputNumber
+                    size="small"
+                    min={0}
+                    value={position.manual_volume ?? undefined}
+                    placeholder="0"
+                    className="w-20"
+                    onChange={(value) => handleManualVolumeChange(value)}
+                    style={{ fontSize: '12px' }}
+                  />
+                </div>
+                <div className="flex items-center gap-1">
+                  <Text className="text-xs text-gray-500">Примечание ГП:</Text>
+                  <Input
+                    size="small"
+                    value={position.manual_note ?? undefined}
+                    placeholder="Примечание"
+                    className="w-32"
+                    onChange={(e) => handleManualNoteChange(e.target.value)}
+                    style={{ fontSize: '12px' }}
+                  />
+                </div>
                 <div className="whitespace-nowrap">
                   <Text className="text-gray-600">Работы: </Text>
                   <Text strong className="text-green-600">{worksCount}</Text>
