@@ -29,6 +29,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 // Removed auth imports - no authentication needed
 import type { TenderStatus } from '../lib/supabase/types';
+import { supabase } from '../lib/supabase/client';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -74,26 +75,45 @@ const Dashboard: React.FC = () => {
         });
 
         if (tendersResponse.data) {
-          setTenders(tendersResponse.data);
+          // Load BOQ totals for each tender
+          const tendersWithBOQ = await Promise.all(
+            tendersResponse.data.map(async (tender) => {
+              // Get total cost from client_positions
+              const { data: positionsData } = await supabase
+                .from('client_positions')
+                .select('total_materials_cost, total_works_cost')
+                .eq('tender_id', tender.id);
+
+              const boqTotal = positionsData?.reduce((sum, pos) => 
+                sum + (pos.total_materials_cost || 0) + (pos.total_works_cost || 0), 0
+              ) || 0;
+
+              return {
+                ...tender,
+                boq_total_value: boqTotal
+              };
+            })
+          );
+
+          setTenders(tendersWithBOQ);
+
+          // Calculate stats including BOQ totals
+          const totalTenders = tendersWithBOQ.length;
+          const activeTenders = tendersWithBOQ.filter(t => t.status === 'active').length;
+          const submittedTenders = tendersWithBOQ.filter(t => t.status === 'submitted').length;
+          const wonTenders = tendersWithBOQ.filter(t => t.status === 'awarded').length;
+          const totalValue = tendersWithBOQ.reduce((sum, t) => sum + (t.boq_total_value || 0), 0);
+          const winRate = totalTenders > 0 ? (wonTenders / totalTenders) * 100 : 0;
+
+          setStats({
+            totalTenders,
+            activeTenders,
+            submittedTenders,
+            wonTenders,
+            totalValue,
+            winRate,
+          });
         }
-
-        // For now, calculate basic stats from loaded tenders
-        // TODO: Implement getTenderStats API function
-        const totalTenders = tendersResponse.data?.length || 0;
-        const activeTenders = tendersResponse.data?.filter(t => t.status === 'active').length || 0;
-        const submittedTenders = tendersResponse.data?.filter(t => t.status === 'submitted').length || 0;
-        const wonTenders = tendersResponse.data?.filter(t => t.status === 'awarded').length || 0;
-        const totalValue = tendersResponse.data?.reduce((sum, t) => sum + (t.estimated_value || 0), 0) || 0;
-        const winRate = totalTenders > 0 ? (wonTenders / totalTenders) * 100 : 0;
-
-        setStats({
-          totalTenders,
-          activeTenders,
-          submittedTenders,
-          wonTenders,
-          totalValue,
-          winRate,
-        });
       } catch (error) {
         console.error('Error loading dashboard data:', error);
       } finally {

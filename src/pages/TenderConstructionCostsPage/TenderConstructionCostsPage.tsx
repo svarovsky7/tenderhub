@@ -196,7 +196,19 @@ export const TenderConstructionCostsPage: React.FC = () => {
       title: 'Код',
       dataIndex: ['cost', 'code'],
       key: 'code',
-      width: 100
+      width: 100,
+      render: (text: string) => (
+        <span style={{ 
+          fontFamily: 'monospace',
+          fontSize: '12px',
+          color: 'var(--color-neutral-600)',
+          background: 'var(--color-neutral-100)',
+          padding: '2px 6px',
+          borderRadius: 'var(--radius-sm)'
+        }}>
+          {text}
+        </span>
+      )
     },
     {
       title: 'Наименование',
@@ -204,9 +216,21 @@ export const TenderConstructionCostsPage: React.FC = () => {
       key: 'name',
       render: (text: string, record: TenderConstructionCostWithDetails) => (
         <Space direction="vertical" size={0}>
-          <span style={{ fontWeight: 500 }}>{text}</span>
+          <span style={{ 
+            fontWeight: 500,
+            color: 'var(--color-neutral-800)',
+            lineHeight: '1.4'
+          }}>
+            {text}
+          </span>
           {record.cost?.description && (
-            <span style={{ fontSize: 12, color: '#888' }}>{record.cost.description}</span>
+            <span style={{ 
+              fontSize: 12, 
+              color: 'var(--color-neutral-500)',
+              lineHeight: '1.3'
+            }}>
+              {record.cost.description}
+            </span>
           )}
         </Space>
       )
@@ -216,37 +240,91 @@ export const TenderConstructionCostsPage: React.FC = () => {
       dataIndex: ['cost', 'category', 'name'],
       key: 'category',
       width: 150,
-      render: (text: string) => text ? (
-        <Tag icon={<FolderOutlined />} color="blue">{text}</Tag>
-      ) : '-'
+      render: (text: string, record: TenderConstructionCostWithDetails) => {
+        if (!text) return <span style={{ color: 'var(--color-neutral-400)' }}>-</span>;
+        
+        // Определяем цвет категории на основе типа затрат
+        let categoryColor = 'var(--color-primary-500)';
+        let categoryBg = 'var(--color-primary-50)';
+        
+        if (text.toLowerCase().includes('материал')) {
+          categoryColor = 'var(--color-materials-600)';
+          categoryBg = 'var(--color-materials-50)';
+        } else if (text.toLowerCase().includes('работ')) {
+          categoryColor = 'var(--color-works-600)';
+          categoryBg = 'var(--color-works-50)';
+        }
+        
+        return (
+          <span 
+            className="category-tag"
+            style={{
+              background: categoryBg,
+              color: categoryColor,
+              border: `1px solid ${categoryColor}20`,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            <FolderOutlined style={{ fontSize: 10 }} />
+            {text}
+          </span>
+        );
+      }
     },
     {
       title: 'Ед. изм.',
       dataIndex: ['cost', 'unit'],
       key: 'unit',
-      width: 80
+      width: 80,
+      render: (text: string) => (
+        <span style={{ 
+          fontSize: '12px',
+          color: 'var(--color-neutral-600)' 
+        }}>
+          {text}
+        </span>
+      )
     },
     {
       title: 'Количество',
       dataIndex: 'quantity',
       key: 'quantity',
-      width: 100,
-      render: (value: number) => value.toLocaleString('ru-RU')
+      width: 110,
+      render: (value: number) => (
+        <span className="money-value" style={{ 
+          color: 'var(--color-neutral-700)',
+          fontWeight: 500
+        }}>
+          {value.toLocaleString('ru-RU')}
+        </span>
+      )
     },
     {
       title: 'Цена за ед.',
       dataIndex: 'unit_price',
       key: 'unit_price',
-      width: 120,
-      render: (price: number) => `${price.toLocaleString('ru-RU')} ₽`
+      width: 130,
+      render: (price: number) => (
+        <span className="money-value" style={{ 
+          color: 'var(--color-neutral-700)',
+          fontWeight: 500
+        }}>
+          {price.toLocaleString('ru-RU')} ₽
+        </span>
+      )
     },
     {
       title: 'Сумма',
       dataIndex: 'total_price',
       key: 'total_price',
-      width: 120,
+      width: 130,
       render: (price: number) => (
-        <span style={{ fontWeight: 500 }}>
+        <span className="money-value" style={{ 
+          fontWeight: 600,
+          color: 'var(--color-neutral-800)'
+        }}>
           {price.toLocaleString('ru-RU')} ₽
         </span>
       )
@@ -257,16 +335,37 @@ export const TenderConstructionCostsPage: React.FC = () => {
       key: 'markup_percent',
       width: 100,
       render: (value: number) => value ? (
-        <Tag icon={<PercentageOutlined />} color="orange">{value}%</Tag>
-      ) : '-'
+        <span 
+          style={{
+            background: 'var(--color-warning-100)',
+            color: 'var(--color-warning-700)',
+            padding: '2px 8px',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '12px',
+            fontWeight: 500,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          <PercentageOutlined style={{ fontSize: 10 }} />
+          {value}%
+        </span>
+      ) : (
+        <span style={{ color: 'var(--color-neutral-400)' }}>-</span>
+      )
     },
     {
       title: 'Итого',
       dataIndex: 'final_price',
       key: 'final_price',
-      width: 130,
+      width: 140,
       render: (price: number) => (
-        <span style={{ fontWeight: 600, color: '#1890ff' }}>
+        <span className="money-value money-positive" style={{ 
+          fontWeight: 700,
+          color: 'var(--color-success-600)',
+          fontSize: '14px'
+        }}>
           {price.toLocaleString('ru-RU')} ₽
         </span>
       )
@@ -283,19 +382,46 @@ export const TenderConstructionCostsPage: React.FC = () => {
               type="text"
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
+              className="action-button"
+              style={{
+                width: 32,
+                height: 32,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--color-primary-600)'
+              }}
             />
           </Tooltip>
           <Popconfirm
             title="Удалить затраты из тендера?"
+            description="Это действие нельзя будет отменить"
             onConfirm={() => removeCostMutation.mutate(record.id)}
-            okText="Да"
-            cancelText="Нет"
+            okText="Удалить"
+            cancelText="Отмена"
+            okButtonProps={{ 
+              danger: true,
+              style: { borderRadius: 'var(--radius-md)' }
+            }}
+            cancelButtonProps={{ 
+              style: { borderRadius: 'var(--radius-md)' }
+            }}
           >
             <Tooltip title="Удалить">
               <Button
                 type="text"
                 danger
                 icon={<DeleteOutlined />}
+                style={{
+                  width: 32,
+                  height: 32,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--color-error-500)'
+                }}
               />
             </Tooltip>
           </Popconfirm>
@@ -383,125 +509,362 @@ export const TenderConstructionCostsPage: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <Button 
-        icon={<ArrowLeftOutlined />} 
-        onClick={() => navigate('/tenders')}
-        style={{ marginBottom: 16 }}
-      >
-        Назад к тендерам
-      </Button>
+    <div style={{ 
+      padding: '24px 32px',
+      backgroundColor: 'var(--bg-page)',
+      minHeight: '100vh'
+    }}>
+      {/* Навигация назад */}
+      <div style={{ marginBottom: 24 }}>
+        <Button 
+          icon={<ArrowLeftOutlined />} 
+          onClick={() => navigate('/tenders')}
+          className="action-button"
+          style={{ 
+            borderRadius: 'var(--radius-md)',
+            padding: '8px 16px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          Назад к тендерам
+        </Button>
+      </div>
 
+      {/* Основная карточка */}
       <Card
+        style={{
+          borderRadius: 'var(--radius-xl)',
+          border: '1px solid var(--border-light)',
+          boxShadow: 'var(--shadow-card)',
+          background: 'var(--bg-card)'
+        }}
         title={
-          <Space>
-            <DollarOutlined />
-            <span>Затраты на строительство - {tender?.title || 'Тендер'}</span>
-          </Space>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 12,
+            padding: '8px 0'
+          }}>
+            <DollarOutlined style={{ 
+              fontSize: 20, 
+              color: 'var(--color-primary-500)' 
+            }} />
+            <span style={{ 
+              fontSize: '18px', 
+              fontWeight: 600, 
+              color: 'var(--color-neutral-800)' 
+            }}>
+              Затраты на строительство - {tender?.title || 'Тендер'}
+            </span>
+          </div>
         }
         extra={
-          <Space>
-            <Button icon={<ImportOutlined />} onClick={() => setImportModalVisible(true)}>
+          <Space wrap className="action-buttons">
+            <Button 
+              icon={<ImportOutlined />} 
+              onClick={() => setImportModalVisible(true)}
+              className="action-button"
+              style={{ borderRadius: 'var(--radius-md)' }}
+            >
               Импорт из Excel
             </Button>
-            <Button icon={<ExportOutlined />} onClick={handleExport}>
+            <Button 
+              icon={<ExportOutlined />} 
+              onClick={handleExport}
+              className="action-button"
+              style={{ borderRadius: 'var(--radius-md)' }}
+            >
               Экспорт в Excel
             </Button>
-            <Button icon={<GroupOutlined />} onClick={() => setGroupModalVisible(true)}>
+            <Button 
+              icon={<GroupOutlined />} 
+              onClick={() => setGroupModalVisible(true)}
+              className="action-button"
+              style={{ borderRadius: 'var(--radius-md)' }}
+            >
               Создать группу
             </Button>
             <Button 
               type="primary" 
               icon={<PlusOutlined />}
               onClick={() => setAddCostModalVisible(true)}
+              className="action-button-primary"
+              style={{ 
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-primary-500)',
+                borderColor: 'var(--color-primary-500)'
+              }}
             >
               Добавить затраты
             </Button>
           </Space>
         }
       >
-        {/* Statistics */}
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={6}>
-            <Card bordered={false}>
-              <Statistic
-                title="Позиций"
-                value={summary?.items_count || 0}
-                prefix={<CalculatorOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card bordered={false}>
-              <Statistic
-                title="Категорий"
-                value={summary?.categories_count || 0}
-                prefix={<FolderOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card bordered={false}>
-              <Statistic
-                title="Базовая сумма"
-                value={summary?.total_base || 0}
-                precision={0}
-                suffix="₽"
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card bordered={false}>
-              <Statistic
-                title="Итого с наценкой"
-                value={summary?.total_with_markup || 0}
-                precision={0}
-                suffix="₽"
-                valueStyle={{ color: '#1890ff', fontWeight: 600 }}
-              />
-            </Card>
-          </Col>
-        </Row>
+        {/* Статистические карточки */}
+        <div 
+          className="stats-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '16px',
+            marginBottom: 32
+          }}
+        >
+          <Card 
+            className="stats-card animate-fade-in"
+            bordered={false}
+            style={{ borderRadius: 'var(--radius-lg)' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div 
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'var(--color-primary-100)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <CalculatorOutlined style={{ 
+                  fontSize: 20, 
+                  color: 'var(--color-primary-600)' 
+                }} />
+              </div>
+              <div>
+                <div className="stats-card-title">Позиций</div>
+                <div className="stats-card-value">
+                  {summary?.items_count || 0}
+                </div>
+              </div>
+            </div>
+          </Card>
 
-        {/* Search */}
-        <Space style={{ marginBottom: 16 }}>
+          <Card 
+            className="stats-card animate-fade-in"
+            bordered={false}
+            style={{ 
+              borderRadius: 'var(--radius-lg)',
+              animationDelay: '0.1s'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div 
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'var(--color-materials-100)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <FolderOutlined style={{ 
+                  fontSize: 20, 
+                  color: 'var(--color-materials-600)' 
+                }} />
+              </div>
+              <div>
+                <div className="stats-card-title">Категорий</div>
+                <div className="stats-card-value">
+                  {summary?.categories_count || 0}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card 
+            className="stats-card animate-fade-in"
+            bordered={false}
+            style={{ 
+              borderRadius: 'var(--radius-lg)',
+              animationDelay: '0.2s'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div 
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'var(--color-neutral-100)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <DollarOutlined style={{ 
+                  fontSize: 20, 
+                  color: 'var(--color-neutral-600)' 
+                }} />
+              </div>
+              <div>
+                <div className="stats-card-title">Базовая сумма</div>
+                <div className="stats-card-value money-value">
+                  {(summary?.total_base || 0).toLocaleString('ru-RU')} ₽
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card 
+            className="stats-card animate-fade-in"
+            bordered={false}
+            style={{ 
+              borderRadius: 'var(--radius-lg)',
+              animationDelay: '0.3s'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div 
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'var(--color-success-100)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <PercentageOutlined style={{ 
+                  fontSize: 20, 
+                  color: 'var(--color-success-600)' 
+                }} />
+              </div>
+              <div>
+                <div className="stats-card-title">Итого с наценкой</div>
+                <div 
+                  className="stats-card-value money-value money-positive"
+                  style={{ color: 'var(--color-success-600)' }}
+                >
+                  {(summary?.total_with_markup || 0).toLocaleString('ru-RU')} ₽
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Поиск и фильтры */}
+        <div style={{ 
+          marginBottom: 24,
+          padding: '16px 20px',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-light)',
+          borderRadius: 'var(--radius-lg)'
+        }}>
           <Search
-            placeholder="Поиск по названию или коду"
+            placeholder="Поиск по названию или коду затрат..."
             allowClear
-            style={{ width: 400 }}
+            size="large"
+            style={{ 
+              width: '100%',
+              maxWidth: 500
+            }}
+            className="input-field"
             onSearch={setSearchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-        </Space>
+        </div>
 
-        {/* Groups with costs */}
+        {/* Группы затрат */}
         {filteredGroups.length === 0 ? (
-          <Empty description="Нет затрат в этом тендере" />
+          <div style={{
+            padding: '48px 24px',
+            textAlign: 'center',
+            background: 'var(--bg-card)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-light)'
+          }}>
+            <Empty 
+              description={
+                <span style={{ color: 'var(--color-neutral-500)' }}>
+                  Нет затрат в этом тендере
+                </span>
+              }
+            />
+          </div>
         ) : (
-          <Collapse defaultActiveKey={['ungrouped']} ghost>
+          <Collapse 
+            defaultActiveKey={['ungrouped']} 
+            ghost
+            style={{ background: 'transparent' }}
+          >
             {filteredGroups
               .sort((a, b) => a.sort_order - b.sort_order)
               .map(group => (
                 <Panel
                   key={group.id}
                   header={
-                    <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                    <div className="cost-group-header" style={{ 
+                      width: '100%',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '12px 20px',
+                      margin: '-12px -20px',
+                      borderRadius: 'var(--radius-lg)'
+                    }}>
                       <Space>
-                        <GroupOutlined />
-                        <Title level={5} style={{ margin: 0 }}>{group.name}</Title>
-                        <Badge count={group.costs.length} showZero />
+                        <GroupOutlined style={{ 
+                          fontSize: 16,
+                          color: 'var(--color-primary-500)' 
+                        }} />
+                        <Title 
+                          level={5} 
+                          style={{ 
+                            margin: 0,
+                            color: 'var(--color-neutral-800)',
+                            fontWeight: 600
+                          }}
+                        >
+                          {group.name}
+                        </Title>
+                        <Badge 
+                          count={group.costs.length} 
+                          showZero 
+                          style={{ 
+                            backgroundColor: 'var(--color-primary-500)',
+                            borderRadius: 'var(--radius-sm)'
+                          }}
+                        />
                       </Space>
-                      <Space>
-                        <Text type="secondary">Сумма:</Text>
-                        <Text strong>{group.total_base.toLocaleString('ru-RU')} ₽</Text>
+                      <Space size="large">
+                        <Space size="small">
+                          <Text type="secondary" style={{ fontSize: 12 }}>Сумма:</Text>
+                          <Text 
+                            strong 
+                            className="money-value"
+                            style={{ color: 'var(--color-neutral-700)' }}
+                          >
+                            {group.total_base.toLocaleString('ru-RU')} ₽
+                          </Text>
+                        </Space>
                         <Divider type="vertical" />
-                        <Text type="secondary">С наценкой:</Text>
-                        <Text strong style={{ color: '#1890ff' }}>
-                          {group.total_with_markup.toLocaleString('ru-RU')} ₽
-                        </Text>
+                        <Space size="small">
+                          <Text type="secondary" style={{ fontSize: 12 }}>С наценкой:</Text>
+                          <Text 
+                            strong 
+                            className="money-value money-positive"
+                            style={{ color: 'var(--color-success-600)' }}
+                          >
+                            {group.total_with_markup.toLocaleString('ru-RU')} ₽
+                          </Text>
+                        </Space>
                       </Space>
-                    </Space>
+                    </div>
                   }
+                  style={{ 
+                    marginBottom: 16,
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-light)',
+                    borderRadius: 'var(--radius-lg)',
+                    overflow: 'hidden'
+                  }}
                 >
                   {group.costs.length > 0 ? (
                     <Table
@@ -511,9 +874,29 @@ export const TenderConstructionCostsPage: React.FC = () => {
                       pagination={false}
                       scroll={{ x: 1300 }}
                       size="small"
+                      className="tender-costs-table"
+                      style={{
+                        marginTop: 16,
+                        borderRadius: 'var(--radius-md)',
+                        overflow: 'hidden'
+                      }}
                     />
                   ) : (
-                    <Empty description="Нет затрат в этой группе" />
+                    <div style={{
+                      padding: '24px',
+                      textAlign: 'center',
+                      background: 'var(--color-neutral-50)',
+                      borderRadius: 'var(--radius-md)',
+                      margin: '16px 0'
+                    }}>
+                      <Empty 
+                        description={
+                          <span style={{ color: 'var(--color-neutral-500)' }}>
+                            Нет затрат в этой группе
+                          </span>
+                        }
+                      />
+                    </div>
                   )}
                 </Panel>
               ))}
@@ -523,54 +906,170 @@ export const TenderConstructionCostsPage: React.FC = () => {
 
       {/* Edit Cost Drawer */}
       <Drawer
-        title="Редактировать затраты"
-        width={500}
+        title={
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '8px 0'
+          }}>
+            <EditOutlined style={{ 
+              fontSize: 18, 
+              color: 'var(--color-primary-500)' 
+            }} />
+            <span style={{ 
+              fontSize: '16px', 
+              fontWeight: 600,
+              color: 'var(--color-neutral-800)' 
+            }}>
+              Редактировать затраты
+            </span>
+          </div>
+        }
+        width={550}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
           setSelectedCost(null);
           form.resetFields();
         }}
+        styles={{
+          body: { 
+            background: 'var(--bg-page)',
+            padding: '24px 24px 80px'
+          },
+          header: {
+            background: 'var(--bg-card)',
+            borderBottom: '1px solid var(--border-light)'
+          }
+        }}
         footer={
-          <Space style={{ float: 'right' }}>
-            <Button onClick={() => setDrawerVisible(false)}>Отмена</Button>
+          <div style={{ 
+            padding: '16px 24px',
+            background: 'var(--bg-card)',
+            borderTop: '1px solid var(--border-light)',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: '12px'
+          }}>
+            <Button 
+              onClick={() => setDrawerVisible(false)}
+              style={{
+                borderRadius: 'var(--radius-md)',
+                height: '40px',
+                padding: '0 20px'
+              }}
+            >
+              Отмена
+            </Button>
             <Button 
               type="primary" 
               onClick={() => form.submit()}
               loading={updateCostMutation.isPending}
+              style={{
+                borderRadius: 'var(--radius-md)',
+                height: '40px',
+                padding: '0 20px',
+                background: 'var(--color-primary-500)',
+                borderColor: 'var(--color-primary-500)'
+              }}
             >
               Сохранить
             </Button>
-          </Space>
+          </div>
         }
       >
         {selectedCost && (
-          <div style={{ marginBottom: 16 }}>
-            <Card size="small">
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Text strong>{selectedCost.cost?.name}</Text>
-                <Text type="secondary">Код: {selectedCost.cost?.code}</Text>
-                <Text type="secondary">Единица: {selectedCost.cost?.unit}</Text>
-                <Text type="secondary">Базовая цена: {selectedCost.cost?.base_price.toLocaleString('ru-RU')} ₽</Text>
-              </Space>
-            </Card>
-          </div>
+          <Card 
+            style={{
+              marginBottom: 24,
+              border: '1px solid var(--border-light)',
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--bg-card)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+              <div 
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'var(--color-primary-100)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
+                <DollarOutlined style={{ 
+                  fontSize: 20, 
+                  color: 'var(--color-primary-600)' 
+                }} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Title 
+                  level={5} 
+                  style={{ 
+                    margin: '0 0 8px 0',
+                    color: 'var(--color-neutral-800)',
+                    lineHeight: '1.3'
+                  }}
+                >
+                  {selectedCost.cost?.name}
+                </Title>
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: '1fr 1fr', 
+                  gap: '8px 16px',
+                  fontSize: '13px',
+                  color: 'var(--color-neutral-600)'
+                }}>
+                  <div>
+                    <strong>Код:</strong> {selectedCost.cost?.code}
+                  </div>
+                  <div>
+                    <strong>Единица:</strong> {selectedCost.cost?.unit}
+                  </div>
+                  <div>
+                    <strong>Базовая цена:</strong>{' '}
+                    <span className="money-value" style={{ color: 'var(--color-neutral-700)' }}>
+                      {selectedCost.cost?.base_price.toLocaleString('ru-RU')} ₽
+                    </span>
+                  </div>
+                  <div>
+                    <strong>Категория:</strong> {selectedCost.cost?.category?.name || 'Не указана'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
         )}
 
         <Form
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
+          style={{
+            background: 'var(--bg-card)',
+            padding: '24px',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-light)'
+          }}
         >
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
                 name="quantity"
-                label="Количество"
+                label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Количество</span>}
                 rules={[{ required: true, message: 'Введите количество' }]}
               >
                 <InputNumber
-                  style={{ width: '100%' }}
+                  style={{ 
+                    width: '100%',
+                    height: '40px',
+                    borderRadius: 'var(--radius-md)'
+                  }}
+                  className="input-field"
                   min={0}
                   precision={3}
                   placeholder="0.000"
@@ -580,11 +1079,16 @@ export const TenderConstructionCostsPage: React.FC = () => {
             <Col span={12}>
               <Form.Item
                 name="unit_price"
-                label="Цена за единицу"
+                label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Цена за единицу</span>}
                 rules={[{ required: true, message: 'Введите цену' }]}
               >
                 <InputNumber
-                  style={{ width: '100%' }}
+                  style={{ 
+                    width: '100%',
+                    height: '40px',
+                    borderRadius: 'var(--radius-md)'
+                  }}
+                  className="input-field"
                   min={0}
                   precision={2}
                   placeholder="0.00"
@@ -596,10 +1100,15 @@ export const TenderConstructionCostsPage: React.FC = () => {
 
           <Form.Item
             name="markup_percent"
-            label="Наценка (%)"
+            label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Наценка (%)</span>}
           >
             <InputNumber
-              style={{ width: '100%' }}
+              style={{ 
+                width: '100%',
+                height: '40px',
+                borderRadius: 'var(--radius-md)'
+              }}
+              className="input-field"
               min={0}
               max={100}
               precision={2}
@@ -610,9 +1119,16 @@ export const TenderConstructionCostsPage: React.FC = () => {
 
           <Form.Item
             name="group_id"
-            label="Группа"
+            label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Группа</span>}
           >
-            <Select placeholder="Выберите группу" allowClear>
+            <Select 
+              placeholder="Выберите группу" 
+              allowClear
+              style={{ 
+                borderRadius: 'var(--radius-md)',
+              }}
+              className="input-field"
+            >
               {groupsWithCosts
                 .filter(g => g.id !== 'ungrouped')
                 .map(group => (
@@ -623,19 +1139,54 @@ export const TenderConstructionCostsPage: React.FC = () => {
 
           <Form.Item
             name="notes"
-            label="Примечания"
+            label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Примечания</span>}
           >
-            <Input.TextArea rows={3} placeholder="Примечания" />
+            <Input.TextArea 
+              rows={3} 
+              placeholder="Примечания к позиции..."
+              style={{ 
+                borderRadius: 'var(--radius-md)',
+                resize: 'none'
+              }}
+              className="input-field"
+            />
           </Form.Item>
 
           <Form.Item
             name="is_included"
-            label="Включено в расчет"
+            label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Включено в расчет</span>}
             valuePropName="checked"
           >
-            <Select>
-              <Option value={true}>Включено</Option>
-              <Option value={false}>Исключено</Option>
+            <Select
+              style={{ 
+                borderRadius: 'var(--radius-md)',
+              }}
+              className="input-field"
+            >
+              <Option value={true}>
+                <Space>
+                  <span style={{ 
+                    display: 'inline-block',
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--color-success-500)'
+                  }}></span>
+                  Включено
+                </Space>
+              </Option>
+              <Option value={false}>
+                <Space>
+                  <span style={{ 
+                    display: 'inline-block',
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--color-error-500)'
+                  }}></span>
+                  Исключено
+                </Space>
+              </Option>
             </Select>
           </Form.Item>
         </Form>
@@ -643,37 +1194,119 @@ export const TenderConstructionCostsPage: React.FC = () => {
 
       {/* Add Cost Modal */}
       <Modal
-        title="Добавить затраты в тендер"
+        title={
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '8px 0'
+          }}>
+            <PlusOutlined style={{ 
+              fontSize: 18, 
+              color: 'var(--color-success-500)' 
+            }} />
+            <span style={{ 
+              fontSize: '18px', 
+              fontWeight: 600,
+              color: 'var(--color-neutral-800)' 
+            }}>
+              Добавить затраты в тендер
+            </span>
+          </div>
+        }
         open={addCostModalVisible}
         onCancel={() => {
           setAddCostModalVisible(false);
           addCostForm.resetFields();
         }}
         onOk={() => addCostForm.submit()}
-        width={700}
+        width={750}
         confirmLoading={addCostMutation.isPending}
+        className="modal-content"
+        okButtonProps={{
+          style: {
+            borderRadius: 'var(--radius-md)',
+            height: '40px',
+            background: 'var(--color-success-500)',
+            borderColor: 'var(--color-success-500)'
+          }
+        }}
+        cancelButtonProps={{
+          style: {
+            borderRadius: 'var(--radius-md)',
+            height: '40px'
+          }
+        }}
+        okText="Добавить"
+        cancelText="Отмена"
       >
         <Form
           form={addCostForm}
           layout="vertical"
           onFinish={handleAddCost}
+          style={{ padding: '8px 0' }}
         >
           <Form.Item
             name="cost_ids"
-            label="Выберите затраты"
+            label={
+              <div style={{ 
+                color: 'var(--color-neutral-700)', 
+                fontWeight: 500,
+                marginBottom: 8
+              }}>
+                Выберите затраты
+                <Text type="secondary" style={{ fontSize: '12px', marginLeft: 8 }}>
+                  (можно выбрать несколько позиций)
+                </Text>
+              </div>
+            }
             rules={[{ required: true, message: 'Выберите хотя бы одну позицию' }]}
           >
             <Select
               mode="multiple"
-              placeholder="Начните вводить название или код"
+              placeholder="Начните вводить название или код затраты..."
               showSearch
+              style={{ 
+                minHeight: '40px',
+                borderRadius: 'var(--radius-md)'
+              }}
+              className="input-field"
               filterOption={(input, option) =>
                 (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
               }
               options={availableCosts.map(cost => ({
                 value: cost.id,
-                label: `${cost.code} - ${cost.name} (${cost.unit})`
+                label: `${cost.code} - ${cost.name} (${cost.unit})`,
+                title: `${cost.name} - ${cost.description || 'Без описания'}`
               }))}
+              tagRender={(props) => {
+                const { label, onClose } = props;
+                return (
+                  <span style={{
+                    background: 'var(--color-primary-100)',
+                    color: 'var(--color-primary-700)',
+                    padding: '2px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '12px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    margin: '2px'
+                  }}>
+                    {typeof label === 'string' ? label.split(' - ')[0] : label}
+                    <span
+                      onClick={onClose}
+                      style={{
+                        cursor: 'pointer',
+                        fontSize: '10px',
+                        opacity: 0.7
+                      }}
+                    >
+                      ×
+                    </span>
+                  </span>
+                );
+              }}
             />
           </Form.Item>
 
@@ -681,12 +1314,17 @@ export const TenderConstructionCostsPage: React.FC = () => {
             <Col span={8}>
               <Form.Item
                 name="quantity"
-                label="Количество"
+                label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Количество</span>}
                 initialValue={1}
                 rules={[{ required: true, message: 'Введите количество' }]}
               >
                 <InputNumber
-                  style={{ width: '100%' }}
+                  style={{ 
+                    width: '100%',
+                    height: '40px',
+                    borderRadius: 'var(--radius-md)'
+                  }}
+                  className="input-field"
                   min={0}
                   precision={3}
                   placeholder="0.000"
@@ -696,11 +1334,16 @@ export const TenderConstructionCostsPage: React.FC = () => {
             <Col span={8}>
               <Form.Item
                 name="unit_price"
-                label="Цена за единицу"
+                label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Цена за единицу</span>}
                 rules={[{ required: true, message: 'Введите цену' }]}
               >
                 <InputNumber
-                  style={{ width: '100%' }}
+                  style={{ 
+                    width: '100%',
+                    height: '40px',
+                    borderRadius: 'var(--radius-md)'
+                  }}
+                  className="input-field"
                   min={0}
                   precision={2}
                   placeholder="0.00"
@@ -711,11 +1354,16 @@ export const TenderConstructionCostsPage: React.FC = () => {
             <Col span={8}>
               <Form.Item
                 name="markup_percent"
-                label="Наценка (%)"
+                label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Наценка (%)</span>}
                 initialValue={0}
               >
                 <InputNumber
-                  style={{ width: '100%' }}
+                  style={{ 
+                    width: '100%',
+                    height: '40px',
+                    borderRadius: 'var(--radius-md)'
+                  }}
+                  className="input-field"
                   min={0}
                   max={100}
                   precision={2}
@@ -728,13 +1376,26 @@ export const TenderConstructionCostsPage: React.FC = () => {
 
           <Form.Item
             name="group_id"
-            label="Группа"
+            label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Группа</span>}
           >
-            <Select placeholder="Выберите группу" allowClear>
+            <Select 
+              placeholder="Выберите группу (необязательно)" 
+              allowClear
+              style={{ 
+                height: '40px',
+                borderRadius: 'var(--radius-md)'
+              }}
+              className="input-field"
+            >
               {groupsWithCosts
                 .filter(g => g.id !== 'ungrouped')
                 .map(group => (
-                  <Option key={group.id} value={group.id}>{group.name}</Option>
+                  <Option key={group.id} value={group.id}>
+                    <Space>
+                      <GroupOutlined style={{ color: 'var(--color-primary-500)' }} />
+                      {group.name}
+                    </Space>
+                  </Option>
                 ))}
             </Select>
           </Form.Item>
@@ -743,7 +1404,26 @@ export const TenderConstructionCostsPage: React.FC = () => {
 
       {/* Create Group Modal */}
       <Modal
-        title="Создать группу затрат"
+        title={
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '8px 0'
+          }}>
+            <GroupOutlined style={{ 
+              fontSize: 18, 
+              color: 'var(--color-primary-500)' 
+            }} />
+            <span style={{ 
+              fontSize: '18px', 
+              fontWeight: 600,
+              color: 'var(--color-neutral-800)' 
+            }}>
+              Создать группу затрат
+            </span>
+          </div>
+        }
         open={groupModalVisible}
         onCancel={() => {
           setGroupModalVisible(false);
@@ -751,33 +1431,76 @@ export const TenderConstructionCostsPage: React.FC = () => {
         }}
         onOk={() => groupForm.submit()}
         confirmLoading={createGroupMutation.isPending}
+        className="modal-content"
+        width={500}
+        okButtonProps={{
+          style: {
+            borderRadius: 'var(--radius-md)',
+            height: '40px',
+            background: 'var(--color-primary-500)',
+            borderColor: 'var(--color-primary-500)'
+          }
+        }}
+        cancelButtonProps={{
+          style: {
+            borderRadius: 'var(--radius-md)',
+            height: '40px'
+          }
+        }}
+        okText="Создать"
+        cancelText="Отмена"
       >
         <Form
           form={groupForm}
           layout="vertical"
           onFinish={(values) => createGroupMutation.mutate(values)}
+          style={{ padding: '8px 0' }}
         >
           <Form.Item
             name="name"
-            label="Название группы"
+            label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Название группы</span>}
             rules={[{ required: true, message: 'Введите название группы' }]}
           >
-            <Input placeholder="Например: Материалы" />
+            <Input 
+              placeholder="Например: Материалы, Работы, Оборудование..."
+              style={{ 
+                height: '40px',
+                borderRadius: 'var(--radius-md)'
+              }}
+              className="input-field"
+            />
           </Form.Item>
 
           <Form.Item
             name="description"
-            label="Описание"
+            label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Описание</span>}
           >
-            <Input.TextArea rows={3} placeholder="Описание группы" />
+            <Input.TextArea 
+              rows={3} 
+              placeholder="Краткое описание группы затрат..."
+              style={{ 
+                borderRadius: 'var(--radius-md)',
+                resize: 'none'
+              }}
+              className="input-field"
+            />
           </Form.Item>
 
           <Form.Item
             name="sort_order"
-            label="Порядок сортировки"
+            label={<span style={{ color: 'var(--color-neutral-700)', fontWeight: 500 }}>Порядок сортировки</span>}
             initialValue={0}
           >
-            <InputNumber style={{ width: '100%' }} min={0} />
+            <InputNumber 
+              style={{ 
+                width: '100%',
+                height: '40px',
+                borderRadius: 'var(--radius-md)'
+              }}
+              className="input-field"
+              min={0}
+              placeholder="0"
+            />
           </Form.Item>
         </Form>
       </Modal>

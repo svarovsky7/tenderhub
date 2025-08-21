@@ -1,0 +1,491 @@
+/* TenderHub - Цветовая палитра для затрат тендера */
+:root {
+  /* === ОСНОВНЫЕ ЦВЕТА === */
+  
+  /* Нейтральные цвета - основа интерфейса */
+  --color-neutral-50: #fafbfc;
+  --color-neutral-100: #f4f6f8;
+  --color-neutral-200: #e8ecf0;
+  --color-neutral-300: #d1d9e0;
+  --color-neutral-400: #9ba9b4;
+  --color-neutral-500: #6b7684;
+  --color-neutral-600: #4a5568;
+  --color-neutral-700: #2d3748;
+  --color-neutral-800: #1a202c;
+  --color-neutral-900: #0f1419;
+
+  /* Основной бренд - строительная тематика */
+  --color-primary-50: #eff8ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6; /* Основной синий */
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+
+  /* === ТИПЫ ЗАТРАТ === */
+  
+  /* Материалы - насыщенный коричневый */
+  --color-materials-50: #fdf8f6;
+  --color-materials-100: #f2e8e5;
+  --color-materials-200: #eaddd7;
+  --color-materials-300: #d69e89;
+  --color-materials-400: #c4854f;
+  --color-materials-500: #b36c2f;  /* Более насыщенный основной */
+  --color-materials-600: #9a5528;  /* Более темный */
+  --color-materials-700: #813e20;
+  --color-materials-800: #682718;
+  --color-materials-900: #4f1010;
+
+  /* Работы - насыщенный зеленый */
+  --color-works-50: #f0fdf4;
+  --color-works-100: #dcfce7;
+  --color-works-200: #bbf7d0;
+  --color-works-300: #86efac;
+  --color-works-400: #4ade80;
+  --color-works-500: #16a34a;    /* Более насыщенный основной */
+  --color-works-600: #138a3a;    /* Более темный */
+  --color-works-700: #0f6b2a;
+  --color-works-800: #0b4c1a;
+  --color-works-900: #072d0a;
+
+  /* Субматериалы - насыщенный фиолетовый */
+  --color-sub-materials-50: #faf8ff;
+  --color-sub-materials-100: #f3f0ff;
+  --color-sub-materials-200: #e9e5ff;
+  --color-sub-materials-300: #d9d1ff;
+  --color-sub-materials-400: #c4b5fd;
+  --color-sub-materials-500: #8b5cf6;  /* Более насыщенный основной */
+  --color-sub-materials-600: #7c3aed;  /* Более темный */
+  --color-sub-materials-700: #6d28d9;
+  --color-sub-materials-800: #5b21b6;
+  --color-sub-materials-900: #4c1d95;
+
+  /* Субработы - насыщенный оранжевый */
+  --color-sub-works-50: #fff9f5;
+  --color-sub-works-100: #fff2e5;
+  --color-sub-works-200: #ffe1cc;
+  --color-sub-works-300: #ffca9a;
+  --color-sub-works-400: #ffa85c;
+  --color-sub-works-500: #f06f00;    /* Более насыщенный основной */
+  --color-sub-works-600: #d45a00;    /* Более темный */
+  --color-sub-works-700: #b84500;
+  --color-sub-works-800: #9c3000;
+  --color-sub-works-900: #801b00;
+
+  /* === СЕМАНТИЧЕСКИЕ ЦВЕТА === */
+  
+  /* Успех */
+  --color-success-50: #f0fdf4;
+  --color-success-100: #dcfce7;
+  --color-success-500: #22c55e;
+  --color-success-600: #16a34a;
+  --color-success-700: #15803d;
+
+  /* Предупреждение */
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+
+  /* Ошибка */
+  --color-error-50: #fef2f2;
+  --color-error-100: #fee2e2;
+  --color-error-500: #ef4444;
+  --color-error-600: #dc2626;
+  --color-error-700: #b91c1c;
+
+  /* Информация */
+  --color-info-50: #eff6ff;
+  --color-info-100: #dbeafe;
+  --color-info-500: #3b82f6;
+  --color-info-600: #2563eb;
+  --color-info-700: #1d4ed8;
+
+  /* === СПЕЦИАЛИЗИРОВАННЫЕ ЦВЕТА === */
+  
+  /* Финансовые показатели */
+  --color-money-positive: #16a34a;
+  --color-money-negative: #dc2626;
+  --color-money-neutral: var(--color-neutral-600);
+
+  /* Статус включения/исключения */
+  --color-included: #22c55e;
+  --color-excluded: #ef4444;
+
+  /* === ФОНОВЫЕ ЦВЕТА === */
+  --bg-page: #fafbfc;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f8fafc;
+  --bg-table-header: #f1f5f9;
+  --bg-table-row-hover: #f8fafc;
+  --bg-selected: #dbeafe;
+
+  /* === ГРАНИЦЫ === */
+  --border-light: #e2e8f0;
+  --border-medium: #cbd5e1;
+  --border-strong: #94a3b8;
+
+  /* === ТЕНИ === */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-card-hover: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  /* === РАЗМЕРЫ === */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* === ТИПОГРАФИКА === */
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+}
+
+/* === УТИЛИТАРНЫЕ КЛАССЫ === */
+
+/* Цвета для типов затрат */
+.cost-type-materials {
+  --type-color-primary: var(--color-materials-500);
+  --type-color-light: var(--color-materials-100);
+  --type-color-bg: var(--color-materials-50);
+}
+
+.cost-type-works {
+  --type-color-primary: var(--color-works-500);
+  --type-color-light: var(--color-works-100);
+  --type-color-bg: var(--color-works-50);
+}
+
+.cost-type-sub-materials {
+  --type-color-primary: var(--color-sub-materials-500);
+  --type-color-light: var(--color-sub-materials-100);
+  --type-color-bg: var(--color-sub-materials-50);
+}
+
+.cost-type-sub-works {
+  --type-color-primary: var(--color-sub-works-500);
+  --type-color-light: var(--color-sub-works-100);
+  --type-color-bg: var(--color-sub-works-50);
+}
+
+/* Карточки статистики */
+.stats-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: all 0.2s ease-in-out;
+}
+
+.stats-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-1px);
+}
+
+/* Заголовки карточек статистики */
+.stats-card-title {
+  color: var(--color-neutral-600);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Значения в карточках статистики */
+.stats-card-value {
+  color: var(--color-neutral-800);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+/* Финансовые значения */
+.money-value {
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums;
+}
+
+.money-positive {
+  color: var(--color-money-positive);
+}
+
+.money-negative {
+  color: var(--color-money-negative);
+}
+
+/* Таблица */
+.tender-costs-table {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.tender-costs-table .ant-table-thead > tr > th {
+  background: var(--bg-table-header);
+  border-bottom: 1px solid var(--border-medium);
+  color: var(--color-neutral-700);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  white-space: nowrap;
+}
+
+.tender-costs-table .ant-table-tbody > tr > td {
+  border-bottom: 1px solid var(--border-light);
+  padding: var(--spacing-sm) var(--spacing-md);
+  vertical-align: top;
+}
+
+.tender-costs-table .ant-table-tbody > tr:hover > td {
+  background: var(--bg-table-row-hover);
+}
+
+/* Фиксированные столбцы */
+.tender-costs-table .ant-table-cell-fix-left {
+  background: var(--bg-card) !important;
+}
+
+.tender-costs-table .ant-table-cell-fix-left:hover {
+  background: var(--bg-table-row-hover) !important;
+}
+
+.tender-costs-table .ant-table-thead .ant-table-cell-fix-left {
+  background: var(--bg-table-header) !important;
+}
+
+/* Улучшенная прокрутка */
+.tender-costs-table .ant-table-body {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* Стили для тегов в таблице */
+.tender-costs-table .category-tag {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Блок поиска */
+.search-block {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  transition: all 0.2s ease-in-out;
+}
+
+.search-block:hover {
+  border-color: var(--color-primary-300);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.search-block .ant-input-search {
+  border-radius: var(--radius-md);
+}
+
+.search-block .ant-input-search .ant-input {
+  border-color: var(--border-medium);
+  transition: all 0.2s ease-in-out;
+}
+
+.search-block .ant-input-search .ant-input:focus {
+  border-color: var(--color-primary-400);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* Адаптивная панель поиска */
+@media (max-width: 768px) {
+  .search-block > div {
+    flex-direction: column !important;
+    gap: var(--spacing-sm) !important;
+    align-items: stretch !important;
+  }
+  
+  .search-block .ant-input-search {
+    max-width: none !important;
+    width: 100% !important;
+  }
+  
+  .search-block .ant-btn {
+    width: 100% !important;
+    min-width: auto !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .search-block {
+    padding: var(--spacing-sm);
+  }
+  
+  .search-block .ant-space {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+/* Группы затрат */
+.cost-group-header {
+  background: linear-gradient(135deg, var(--color-neutral-50) 0%, var(--color-neutral-100) 100%);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  margin-bottom: var(--spacing-sm);
+}
+
+/* Теги категорий */
+.category-tag {
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  padding: 2px 8px;
+}
+
+/* Кнопки действий */
+.action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-medium);
+  background: var(--bg-card);
+  color: var(--color-neutral-600);
+  transition: all 0.2s ease-in-out;
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.action-button:hover {
+  background: var(--bg-card-hover);
+  color: var(--color-primary-600);
+  border-color: var(--color-primary-300);
+}
+
+.action-button-primary {
+  background: var(--color-primary-500);
+  color: white;
+  border-color: var(--color-primary-500);
+}
+
+.action-button-primary:hover {
+  background: var(--color-primary-600);
+  border-color: var(--color-primary-600);
+}
+
+/* Кнопка фильтра активна */
+.filter-button-active {
+  background: var(--color-success-500) !important;
+  color: white !important;
+  border-color: var(--color-success-500) !important;
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+}
+
+.filter-button-active:hover {
+  background: var(--color-success-600) !important;
+  border-color: var(--color-success-600) !important;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+}
+
+/* Поля ввода */
+.input-field {
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  transition: all 0.2s ease-in-out;
+}
+
+.input-field:focus {
+  border-color: var(--color-primary-400);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.1);
+}
+
+/* Модальные окна */
+.modal-content {
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
+}
+
+/* Анимации */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slideInUp 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Responsive дизайн */
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-sm);
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+  
+  .tender-costs-table .ant-table-thead > tr > th,
+  .tender-costs-table .ant-table-tbody > tr > td {
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-xs);
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .stats-card-value {
+    font-size: var(--font-size-xl);
+  }
+}

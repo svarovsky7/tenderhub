@@ -1,0 +1,448 @@
+/* Ant Design переопределения для TenderHub */
+
+/* === ГЛОБАЛЬНЫЕ ПЕРЕОПРЕДЕЛЕНИЯ === */
+
+/* Кнопки */
+.ant-btn {
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-medium);
+  transition: all 0.2s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.ant-btn-primary {
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-500);
+  box-shadow: 0 2px 4px rgb(59 130 246 / 0.1);
+}
+
+.ant-btn-primary:hover {
+  background: var(--color-primary-600);
+  border-color: var(--color-primary-600);
+  box-shadow: 0 4px 8px rgb(59 130 246 / 0.15);
+  transform: translateY(-1px);
+}
+
+.ant-btn-default {
+  border-color: var(--border-medium);
+  color: var(--color-neutral-700);
+}
+
+.ant-btn-default:hover {
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-600);
+}
+
+/* Поля ввода */
+.ant-input,
+.ant-input-number,
+.ant-select-selector {
+  border-radius: var(--radius-md);
+  border-color: var(--border-medium);
+  transition: all 0.2s ease-in-out;
+}
+
+.ant-input:focus,
+.ant-input-number:focus,
+.ant-select-focused .ant-select-selector {
+  border-color: var(--color-primary-400);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.1);
+}
+
+.ant-input:hover,
+.ant-input-number:hover,
+.ant-select:hover .ant-select-selector {
+  border-color: var(--color-primary-300);
+}
+
+/* Выпадающие списки */
+.ant-select-dropdown {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  border: 1px solid var(--border-light);
+}
+
+.ant-select-item {
+  border-radius: var(--radius-sm);
+  margin: 2px 4px;
+}
+
+.ant-select-item-option-selected {
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.ant-select-item-option-active {
+  background: var(--color-primary-100);
+}
+
+/* Карточки */
+.ant-card {
+  border-radius: var(--radius-lg);
+  border-color: var(--border-light);
+  box-shadow: var(--shadow-card);
+}
+
+.ant-card-head {
+  border-bottom-color: var(--border-light);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.ant-card-body {
+  padding: var(--spacing-lg);
+}
+
+/* Таблицы */
+.ant-table {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.ant-table-thead > tr > th {
+  background: var(--bg-table-header);
+  border-bottom-color: var(--border-medium);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-neutral-700);
+  padding: var(--spacing-md);
+}
+
+.ant-table-tbody > tr > td {
+  border-bottom-color: var(--border-light);
+  padding: var(--spacing-md);
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: var(--bg-table-row-hover);
+}
+
+.ant-table-row-selected > td {
+  background: var(--bg-selected);
+}
+
+/* Модальные окна */
+.ant-modal {
+  border-radius: var(--radius-xl);
+}
+
+.ant-modal-content {
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-modal);
+}
+
+.ant-modal-header {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-light);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md);
+}
+
+.ant-modal-body {
+  padding: var(--spacing-lg);
+}
+
+.ant-modal-footer {
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-light);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+/* Drawer (боковые панели) */
+.ant-drawer-content {
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+}
+
+.ant-drawer-header {
+  border-bottom-color: var(--border-light);
+  background: var(--bg-card);
+}
+
+.ant-drawer-body {
+  background: var(--bg-page);
+}
+
+.ant-drawer-footer {
+  border-top-color: var(--border-light);
+  background: var(--bg-card);
+}
+
+/* Форма */
+.ant-form-item-label > label {
+  color: var(--color-neutral-700);
+  font-weight: var(--font-weight-medium);
+}
+
+.ant-form-item-explain-error {
+  color: var(--color-error-600);
+  font-size: var(--font-size-xs);
+}
+
+/* Статистика */
+.ant-statistic-title {
+  color: var(--color-neutral-600);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--spacing-xs);
+}
+
+.ant-statistic-content {
+  color: var(--color-neutral-800);
+  font-weight: var(--font-weight-bold);
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums;
+}
+
+/* Collapse (аккордеон) */
+.ant-collapse {
+  border: none;
+  background: transparent;
+}
+
+.ant-collapse-item {
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-md);
+  overflow: hidden;
+}
+
+.ant-collapse-header {
+  background: var(--color-neutral-50);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.ant-collapse-content {
+  border: 1px solid var(--border-light);
+  border-top: none;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.ant-collapse-content-box {
+  padding: var(--spacing-lg);
+  padding-top: var(--spacing-md);
+}
+
+/* Теги */
+.ant-tag {
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  padding: 2px 8px;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Badges */
+.ant-badge-count {
+  background: var(--color-primary-500);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  min-width: 20px;
+  height: 20px;
+  line-height: 18px;
+}
+
+/* Tooltip */
+.ant-tooltip {
+  border-radius: var(--radius-md);
+}
+
+.ant-tooltip-inner {
+  background: var(--color-neutral-800);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
+}
+
+/* Popconfirm */
+.ant-popover {
+  border-radius: var(--radius-lg);
+}
+
+.ant-popover-inner {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+}
+
+.ant-popconfirm-buttons {
+  margin-top: var(--spacing-sm);
+}
+
+/* Search Input */
+.ant-input-search > .ant-input-group > .ant-input-group-addon {
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.ant-input-search .ant-input-search-button {
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-500);
+}
+
+.ant-input-search .ant-input-search-button:hover {
+  background: var(--color-primary-600);
+  border-color: var(--color-primary-600);
+}
+
+/* Empty State */
+.ant-empty {
+  color: var(--color-neutral-500);
+}
+
+.ant-empty-description {
+  color: var(--color-neutral-500);
+  font-size: var(--font-size-sm);
+}
+
+/* Divider */
+.ant-divider {
+  border-color: var(--border-light);
+  margin: var(--spacing-md) 0;
+}
+
+/* Typography */
+.ant-typography {
+  color: var(--color-neutral-800);
+}
+
+.ant-typography h1,
+.ant-typography h2,
+.ant-typography h3,
+.ant-typography h4,
+.ant-typography h5 {
+  color: var(--color-neutral-800);
+  font-weight: var(--font-weight-semibold);
+  margin-top: 0;
+}
+
+/* === СПЕЦИФИЧНЫЕ КЛАССЫ === */
+
+/* Стили для статистических карточек */
+.stats-card .ant-card-body {
+  padding: var(--spacing-lg);
+}
+
+/* Стили для таблицы затрат */
+.tender-costs-table .ant-table-thead > tr > th:first-child {
+  border-radius: var(--radius-md) 0 0 0;
+}
+
+.tender-costs-table .ant-table-thead > tr > th:last-child {
+  border-radius: 0 var(--radius-md) 0 0;
+}
+
+/* Стили для групп затрат */
+.cost-group-header {
+  transition: all 0.2s ease-in-out;
+}
+
+.cost-group-header:hover {
+  background: var(--color-neutral-100);
+  transform: translateY(-1px);
+}
+
+/* Стили для кнопок действий */
+.action-button {
+  border-color: var(--border-medium);
+  background: var(--bg-card);
+}
+
+.action-button:hover {
+  border-color: var(--color-primary-300);
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
+  transform: translateY(-1px);
+}
+
+/* Анимации для появляющихся элементов */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideInUp 0.3s ease-out;
+}
+
+/* Hover эффекты для строк таблицы */
+.ant-table-tbody > tr:hover {
+  cursor: pointer;
+}
+
+.ant-table-tbody > tr:hover .action-button {
+  opacity: 1;
+  visibility: visible;
+}
+
+.action-button {
+  opacity: 0.7;
+  visibility: visible;
+  transition: all 0.2s ease-in-out;
+}
+
+/* Цветовое кодирование для разных типов данных */
+.money-value {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums;
+}
+
+.money-positive {
+  color: var(--color-success-600);
+}
+
+.money-negative {
+  color: var(--color-error-600);
+}
+
+/* Загрузочные состояния */
+.ant-btn-loading::before {
+  border-radius: var(--radius-md);
+}
+
+.ant-spin-dot {
+  color: var(--color-primary-500);
+}
+
+/* Responsive адаптация */
+@media (max-width: 768px) {
+  .ant-card-body {
+    padding: var(--spacing-md);
+  }
+  
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-xs);
+  }
+  
+  .ant-modal {
+    margin: var(--spacing-md);
+  }
+  
+  .ant-drawer-content {
+    border-radius: 0;
+  }
+}
+
+/* Фиксы для производительности */
+.ant-table-tbody > tr {
+  will-change: background-color;
+}
+
+.stats-card {
+  will-change: transform, box-shadow;
+}
+
+.action-button {
+  will-change: opacity, visibility, transform;
+}

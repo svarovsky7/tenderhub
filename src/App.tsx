@@ -17,6 +17,8 @@ const Works = React.lazy(() => import('./pages/Works'));
 const UsersPage = React.lazy(() => import('./pages/admin/UsersPage'));
 const SettingsPage = React.lazy(() => import('./pages/admin/SettingsPage'));
 const ConstructionCostsPage = React.lazy(() => import('./pages/admin/ConstructionCostsPage'));
+const ConstructionCostsEditPage = React.lazy(() => import('./pages/ConstructionCostsEditPage'));
+const TenderConstructionCostsPage = React.lazy(() => import('./pages/TenderConstructionCostsPage'));
 const CostSelectorTest = React.lazy(() => import('./pages/admin/CostSelectorTest'));
 const TestCostSearch = React.lazy(() => import('./pages/admin/TestCostSearch'));
 const TestCostSearchAuto = React.lazy(() => import('./pages/admin/TestCostSearchAuto'));
@@ -104,6 +106,34 @@ function App() {
               />
             </Route>
 
+            {/* Construction Costs routes */}
+            <Route path="construction-costs">
+              <Route
+                path="tender"
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <TenderConstructionCostsPage />
+                  </React.Suspense>
+                }
+              />
+              <Route
+                path="management"
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <ConstructionCostsPage />
+                  </React.Suspense>
+                }
+              />
+              <Route
+                path="edit"
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <ConstructionCostsEditPage />
+                  </React.Suspense>
+                }
+              />
+            </Route>
+
             {/* Admin routes */}
             <Route path="admin">
               <Route
@@ -113,14 +143,6 @@ function App() {
                     <UsersPage />
                   </React.Suspense>
                 } 
-              />
-              <Route
-                path="construction-costs"
-                element={
-                  <React.Suspense fallback={<div>Загрузка...</div>}>
-                    <ConstructionCostsPage />
-                  </React.Suspense>
-                }
               />
               <Route
                 path="cost-test"

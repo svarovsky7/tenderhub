@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Импорт темы для страницы затрат тендера */
+@import './styles/tender-costs-theme.css';
+
+/* Переопределения для Ant Design компонентов */
+@import './styles/antd-overrides.css';
+
 :root {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',

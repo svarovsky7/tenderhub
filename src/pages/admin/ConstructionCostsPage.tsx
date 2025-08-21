@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Key } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Layout,
   Tree,
@@ -6,7 +6,6 @@ import {
   Space,
   Card,
   Modal,
-  Form,
   Input,
   Select,
   Switch,
@@ -59,15 +58,11 @@ import { importConstructionCosts, type ImportRow } from '../../lib/supabase/api/
 import { 
   getCategoriesWithDetails, 
   getLocations,
-  createLocation,
-  deleteCategory,
-  deleteDetail,
   deleteLocation,
   clearAllData
 } from '../../lib/supabase/api/construction-costs';
 import { supabase } from '../../lib/supabase/client';
 import ModernImportModal from '../../components/admin/ModernImportModal';
-import EditableTable from '../../components/admin/EditableTable';
 
 const { Content } = Layout;
 const { TabPane } = Tabs;
@@ -87,46 +82,21 @@ const ConstructionCostsPage: React.FC = () => {
   const [locations, setLocations] = useState<any[]>([]);
   const [details, setDetails] = useState<any[]>([]);
   
-  // Состояния для редактирования
-  const [editingKey, setEditingKey] = useState<string>('');
-  const [editedData, setEditedData] = useState<any[]>([]);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [expandedRowKeys, setExpandedRowKeys] = useState<Key[]>([]);
-  const [combinedData, setCombinedData] = useState<any[]>([]);
-  
   // Модальные окна
   const [isImportModalVisible, setIsImportModalVisible] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importStatus, setImportStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
   const [importLog, setImportLog] = useState<string[]>([]);
-  
-  const [form] = Form.useForm();
 
   // Загрузка данных при монтировании
   useEffect(() => {
     loadData();
   }, []);
 
-  // Обновление объединенных данных при изменении категорий
-  useEffect(() => {
-    if (categories.length > 0) {
-      const data = getCombinedData();
-      setCombinedData(data);
-      
-      // Устанавливаем развернутыми все категории по умолчанию
-      const defaultExpandedKeys: Key[] = data
-        .filter(record => record.type === 'category')
-        .map(record => record.key);
-      
-      setExpandedRowKeys(defaultExpandedKeys);
-    }
-  }, [categories]);
-
   // Загрузка дерева категорий и деталей
   const loadData = async () => {
     console.log('🚀 [ConstructionCostsPage] Loading data');
     setLoading(true);
-    
     
     try {
       // Загружаем категории с деталями
@@ -154,7 +124,6 @@ const ConstructionCostsPage: React.FC = () => {
           }
         });
         setDetails(allDetails);
-        
         
         // Группируем детали по названию (так как одна деталь может иметь много локализаций)
         const detailsByName = new Map<string, any[]>();
@@ -188,7 +157,6 @@ const ConstructionCostsPage: React.FC = () => {
               )
             );
             
-            
             detailNodes.push({
               key: `detail-${detailGroup[0].id}-group`,
               title: (
@@ -201,78 +169,79 @@ const ConstructionCostsPage: React.FC = () => {
                     )}
                   </span>
                   {uniqueLocations.length > 0 && (
-                    <Space size={4}>
-                      <GlobalOutlined style={{ color: '#52c41a' }} />
-                      <span style={{ fontSize: '12px', color: '#52c41a' }}>
-                        {uniqueLocations.length} локализаци{uniqueLocations.length === 1 ? 'я' : uniqueLocations.length < 5 ? 'и' : 'й'}
-                      </span>
-                    </Space>
-                  )}
-                  {detailGroup[0].unit_cost && (
-                    <Tag color="orange">{detailGroup[0].unit_cost} ₽</Tag>
+                    <Tag color="blue">{uniqueLocations.length} локализ.</Tag>
                   )}
                 </Space>
               ),
-              children: uniqueLocations.map((loc, idx) => {
-                // Формируем отображаемое название локализации
-                const locationName = [loc.city, loc.region, loc.country].filter(Boolean).join(', ') || 'Не указано';
-                
-                return {
-                  key: `detail-${detailGroup[0].id}-loc-${idx}`,
-                  title: (
-                    <Tag color="green" style={{ fontSize: '11px' }}>
-                      <GlobalOutlined /> {locationName}
-                    </Tag>
-                  ),
-                  isLeaf: true
-                };
-              }),
               data: detailGroup[0],
-              type: 'detail' as const,
-              isLeaf: uniqueLocations.length === 0
+              type: 'detail',
+              children: uniqueLocations.map(loc => ({
+                key: `location-${loc.id}`,
+                title: (
+                  <Space>
+                    <GlobalOutlined />
+                    <span>
+                      {[loc.city, loc.region, loc.country].filter(Boolean).join(', ') || 'Локализация'}
+                    </span>
+                  </Space>
+                ),
+                data: loc,
+                isLeaf: true
+              }))
             });
           });
           
           return {
-            key: `cat-${category.id}`,
+            key: `category-${category.id}`,
             title: (
               <Space>
                 <FolderOutlined />
-                <span style={{ fontWeight: 'bold' }}>
+                <span style={{ fontWeight: 500 }}>
                   {category.name}
                   {category.unit && (
-                    <span style={{ fontWeight: 'normal', color: '#666' }}> ({category.unit})</span>
+                    <span style={{ color: '#666' }}> ({category.unit})</span>
                   )}
                 </span>
-                <span style={{ fontSize: '12px', color: '#999' }}>
-                  ({detailNodes.length} вид{detailNodes.length === 1 ? '' : detailNodes.length < 5 ? 'а' : 'ов'} затрат)
-                </span>
+                <Tag color="green">{category.details?.length || 0} видов</Tag>
               </Space>
             ),
-            children: detailNodes,
             data: category,
-            type: 'category' as const
+            type: 'category',
+            children: detailNodes
           };
         });
         
         setTreeData(tree);
         
-        // Раскрываем все категории
-        const categoryKeys = categoriesData.map((cat: any) => `cat-${cat.id}`);
-        setExpandedKeys(categoryKeys);
+        // Раскрываем все узлы по умолчанию
+        const allKeys: string[] = [];
+        const extractKeys = (nodes: any[]) => {
+          nodes.forEach(node => {
+            allKeys.push(node.key);
+            if (node.children) {
+              extractKeys(node.children);
+            }
+          });
+        };
+        extractKeys(tree);
+        setExpandedKeys(allKeys);
       }
       
       if (locationsData) {
         setLocations(locationsData);
       }
-      
-      console.log('✅ [ConstructionCostsPage] Data loaded');
-    } catch (err: any) {
-      console.error('❌ [ConstructionCostsPage] Error:', err);
+    } catch (error) {
+      console.error('❌ [loadData] Error:', error);
       message.error('Ошибка загрузки данных');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Обработка раскрытия/свертывания узлов
+  const onExpand: TreeProps['onExpand'] = (expandedKeysValue) => {
+    console.log('🚀 [ConstructionCostsPage] Expanded keys:', expandedKeysValue);
+    setExpandedKeys(expandedKeysValue as string[]);
   };
 
   // Обработка выбора узла
@@ -280,287 +249,6 @@ const ConstructionCostsPage: React.FC = () => {
     console.log('🚀 [ConstructionCostsPage] Node selected:', selectedKeys);
     setSelectedKeys(selectedKeys as string[]);
   };
-
-  // Функции для редактирования
-  const isEditing = (record: any) => {
-    // Для локализаций используем составной ключ
-    if (record.type === 'location' && record.detailRecordId) {
-      return editingKey === `${record.detailRecordId}-${record.id || 'new'}`;
-    }
-    return editingKey === String(record.id);
-  };
-
-  const edit = (record: any) => {
-    form.setFieldsValue({ ...record });
-    // Для локализаций используем составной ключ
-    if (record.type === 'location' && record.detailRecordId) {
-      setEditingKey(`${record.detailRecordId}-${record.id || 'new'}`);
-    } else {
-      setEditingKey(String(record.id));
-    }
-  };
-
-  const cancel = () => {
-    setEditingKey('');
-  };
-
-  const save = async (record: any) => {
-    try {
-      const row = await form.validateFields();
-      console.log('🚀 [save] Saving:', { record, row });
-
-      if (record.type === 'category') {
-        const { error } = await supabase
-          .from('cost_categories')
-          .update({ 
-            name: row.name, 
-            description: row.description,
-            unit: row.unit !== '-' ? row.unit : null
-          })
-          .eq('id', record.id);
-        
-        if (error) throw error;
-        message.success('Категория обновлена');
-      } else if (record.type === 'detail') {
-        const { error } = await supabase
-          .from('detail_cost_categories')
-          .update({ 
-            name: row.name,
-            unit: row.unit !== '-' ? row.unit : null
-          })
-          .eq('id', record.id);
-        
-        if (error) throw error;
-        message.success('Детальная категория обновлена');
-      } else if (record.type === 'location') {
-        // Парсим локализацию из строки
-        const parts = row.name.split(',').map((s: string) => s.trim());
-        const locationData: any = {};
-        
-        if (parts[0]) locationData.country = parts[0];
-        if (parts[1]) locationData.region = parts[1];
-        if (parts[2]) locationData.city = parts[2];
-        
-        // Сначала проверяем, существует ли уже такая локализация
-        const locationString = [locationData.country, locationData.region, locationData.city]
-          .filter(Boolean).join(', ');
-        
-        // Проверяем, изменилась ли локализация
-        const currentLocationString = [record.country, record.region, record.city]
-          .filter(Boolean).join(', ');
-        
-        if (locationString !== currentLocationString) {
-          // Ищем существующую локализацию с такими же данными
-          const { data: existingLocation, error: searchError } = await supabase
-            .from('location')
-            .select('id')
-            .eq('country', locationData.country || null)
-            .eq('region', locationData.region || null) 
-            .eq('city', locationData.city || null)
-            .maybeSingle();
-          
-          if (searchError && searchError.code !== 'PGRST116') {
-            throw searchError;
-          }
-          
-          let locationId = record.id;
-          
-          if (existingLocation) {
-            // Используем существующую локализацию
-            locationId = existingLocation.id;
-            console.log('✅ [save] Using existing location:', locationId);
-          } else {
-            // Создаем новую локализацию
-            const { data: newLocation, error: createError } = await createLocation(
-              locationData.country, 
-              locationData.region, 
-              locationData.city
-            );
-            
-            if (createError || !newLocation) {
-              throw createError || new Error('Failed to create location');
-            }
-            
-            locationId = newLocation.id;
-            console.log('✅ [save] Created new location:', locationId);
-            message.success('Создана новая локализация');
-          }
-          
-          // Обновляем связи detail_cost_categories с новой локализацией
-          if (locationId !== record.id) {
-            const { error: updateError } = await supabase
-              .from('detail_cost_categories')
-              .update({ location_id: locationId })
-              .eq('id', record.detailRecordId);
-              
-            if (updateError) throw updateError;
-            
-            // Если старая локализация больше не используется, удаляем её
-            const { data: usageCheck, error: usageError } = await supabase
-              .from('detail_cost_categories')
-              .select('id')
-              .eq('location_id', record.id)
-              .limit(1);
-              
-            if (usageError) throw usageError;
-            
-            if (!usageCheck || usageCheck.length === 0) {
-              const { error: deleteError } = await deleteLocation(record.id);
-              if (deleteError) {
-                console.warn('⚠️ Failed to delete unused location:', deleteError);
-              }
-            }
-          }
-        } else {
-          // Локализация не изменилась, просто обновляем её
-          const { error } = await supabase
-            .from('location')
-            .update(locationData)
-            .eq('id', record.id);
-          
-          if (error) throw error;
-        }
-        
-        message.success('Локализация обновлена');
-      }
-
-      setEditingKey('');
-      await loadData();
-    } catch (errInfo) {
-      console.error('❌ [save] Error:', errInfo);
-      message.error('Ошибка сохранения');
-    }
-  };
-
-  const handleDelete = async (record: any) => {
-    try {
-      console.log('🚀 [handleDelete] Deleting:', record);
-      
-      if (record.type === 'category') {
-        const { error } = await deleteCategory(record.id);
-        if (error) throw error;
-        message.success('Категория удалена');
-      } else if (record.type === 'detail') {
-        const { error } = await deleteDetail(record.id);
-        if (error) throw error;
-        message.success('Детальная категория удалена');
-      } else if (record.type === 'location') {
-        const { error } = await deleteLocation(record.id);
-        if (error) throw error;
-        message.success('Локализация удалена');
-      }
-      
-      await loadData();
-    } catch (error) {
-      console.error('❌ [handleDelete] Error:', error);
-      message.error('Ошибка удаления');
-    }
-  };
-
-  // Подготовка данных для таблицы редактирования с полной иерархией
-  const getCombinedData = () => {
-    const result: any[] = [];
-    
-    categories.forEach(category => {
-      // Получаем детали этой категории
-      const categoryDetails = category.details || [];
-      
-      // Добавляем категорию со вложенными деталями
-      const categoryNode = {
-        key: `cat-${category.id}`,
-        id: category.id,
-        type: 'category',
-        level: 1,
-        name: category.name,
-        description: category.description || '',
-        unit: category.unit || '-',
-        location: '-',
-        categoryName: '-',
-        detailName: '-',
-        children: [] as any[]
-      };
-      
-      // Группируем детали по названию и единицам измерения
-      const detailGroups = new Map<string, any[]>();
-      categoryDetails.forEach((detail: any) => {
-        const groupKey = `${detail.name}_${detail.unit || ''}`;
-        if (!detailGroups.has(groupKey)) {
-          detailGroups.set(groupKey, []);
-        }
-        detailGroups.get(groupKey)!.push(detail);
-      });
-      
-      // Создаем узлы для сгруппированных деталей
-      detailGroups.forEach((detailGroup, groupKey) => {
-        const firstDetail = detailGroup[0];
-        const detailNode = {
-          key: `detail-group-${firstDetail.id}`,
-          id: firstDetail.id,
-          type: 'detail',
-          level: 2,
-          name: firstDetail.name,
-          description: '-',
-          unit: firstDetail.unit || '-',
-          location: '-',
-          categoryName: category.name,
-          detailName: firstDetail.name,
-          parentId: category.id,
-          children: [] as any[]
-        };
-        
-        // Добавляем локализации для этой детали
-        detailGroup.forEach((detail: any) => {
-          if (detail.location) {
-            const locationNode = {
-              key: `loc-${detail.id}-${detail.location.id}`,
-              id: detail.location.id,
-              detailRecordId: detail.id, // ID записи в detail_cost_categories
-              type: 'location',
-              level: 3,
-              name: [detail.location.country, detail.location.region, detail.location.city]
-                .filter(Boolean).join(', ') || 'Без локализации',
-              description: '-',
-              unit: detail.unit || '-',
-              location: detail.location,
-              categoryName: category.name,
-              detailName: firstDetail.name,
-              parentDetailId: firstDetail.id,
-              parentCategoryId: category.id
-            };
-            detailNode.children.push(locationNode);
-          }
-        });
-        
-        // Если нет локализаций, добавляем пустую запись
-        if (detailNode.children.length === 0) {
-          const emptyLocationNode = {
-            key: `loc-empty-${firstDetail.id}`,
-            id: null,
-            detailRecordId: firstDetail.id,
-            type: 'location',
-            level: 3,
-            name: 'Без локализации',
-            description: '-',
-            unit: firstDetail.unit || '-',
-            location: null,
-            categoryName: category.name,
-            detailName: firstDetail.name,
-            parentDetailId: firstDetail.id,
-            parentCategoryId: category.id
-          };
-          detailNode.children.push(emptyLocationNode);
-        }
-        
-        categoryNode.children.push(detailNode);
-      });
-      
-      result.push(categoryNode);
-    });
-    
-    return result;
-  };
-
-
 
   // Обработчик импорта Excel
   const handleImportExcel = async (file: File) => {
@@ -741,312 +429,62 @@ const ConstructionCostsPage: React.FC = () => {
     setLoading(false);
   };
 
-  // Таблица локализаций
-  const locationColumns = [
-    {
-      title: 'Страна',
-      dataIndex: 'country',
-      key: 'country',
-      render: (text: string) => text || '-'
-    },
-    {
-      title: 'Регион',
-      dataIndex: 'region',
-      key: 'region',
-      render: (text: string) => text || '-'
-    },
-    {
-      title: 'Город',
-      dataIndex: 'city',
-      key: 'city',
-      render: (text: string) => text || '-'
-    },
-    {
-      title: 'Действия',
-      key: 'actions',
-      width: 100,
-      render: (_: any, record: any) => (
-        <Popconfirm
-          title="Удалить локализацию?"
-          onConfirm={async () => {
-            await deleteLocation(record.id);
-            message.success('Локализация удалена');
-            loadData();
-          }}
-        >
-          <Button type="link" danger size="small" icon={<DeleteOutlined />} />
-        </Popconfirm>
-      )
-    }
-  ];
-
   return (
     <>
       <style>
         {`
-          /* Стилизация заголовка */
-          .page-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 16px;
-            margin-bottom: 24px;
-            padding: 32px;
-            color: white;
-            position: relative;
-            overflow: hidden;
-          }
-          .page-header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="%23ffffff" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="%23ffffff" opacity="0.1"/><circle cx="50" cy="10" r="1" fill="%23ffffff" opacity="0.05"/><circle cx="10" cy="90" r="1" fill="%23ffffff" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>') repeat;
-            pointer-events: none;
-          }
-          .page-header .ant-typography {
-            color: white !important;
-            position: relative;
-            z-index: 1;
-          }
-          
-          /* Улучшенные карточки */
+          /* Современная карточка */
           .modern-card {
+            background: white;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            border: 1px solid #f0f0f0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+            border: none;
             transition: all 0.3s ease;
           }
+          
           .modern-card:hover {
-            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
-            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
           }
           
-          /* Стилизация вкладок */
-          .ant-tabs-nav {
-            margin-bottom: 0 !important;
-            padding: 0 24px;
-            background: white;
-            border-radius: 12px 12px 0 0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-          }
-          .ant-tabs-tab {
-            font-weight: 500 !important;
-            margin: 0 8px !important;
-          }
-          .ant-tabs-content-holder {
-            background: white;
-            border-radius: 0 0 12px 12px;
-            border: 1px solid #f0f0f0;
-            border-top: none;
+          /* Стилизация дерева */
+          .ant-tree {
+            background: transparent;
+            font-size: 15px;
           }
           
-          /* Стилизация таблиц */
-          .category-row {
-            background: linear-gradient(90deg, #f8f9ff 0%, #f0f5ff 100%) !important;
-            font-weight: 500;
-            border-left: 4px solid #1890ff;
-            transition: all 0.2s ease;
-          }
-          .category-row:hover td {
-            background: linear-gradient(90deg, #e6f7ff 0%, #d9efff 100%) !important;
-            transform: translateX(2px);
-            box-shadow: 0 2px 8px rgba(24, 144, 255, 0.15);
-          }
-          .detail-row {
-            background: linear-gradient(90deg, #f9fff9 0%, #f0fff0 100%) !important;
-            border-left: 4px solid #52c41a;
-            transition: all 0.2s ease;
-          }
-          .detail-row:hover td {
-            background: linear-gradient(90deg, #eaffcc 0%, #d9f7be 100%) !important;
-            transform: translateX(2px);
-            box-shadow: 0 2px 8px rgba(82, 196, 26, 0.15);
-          }
-          .location-row {
-            background: linear-gradient(90deg, #fffaf0 0%, #fff2e6 100%) !important;
-            border-left: 4px solid #faad14;
-            transition: all 0.2s ease;
-          }
-          .location-row:hover td {
-            background: linear-gradient(90deg, #ffe7ba 0%, #ffd591 100%) !important;
-            transform: translateX(2px);
-            box-shadow: 0 2px 8px rgba(250, 173, 20, 0.15);
+          .ant-tree-node-content-wrapper {
+            transition: all 0.2s;
+            padding: 6px 12px;
+            border-radius: 6px;
           }
           
-          /* Дерево категорий */
-          .ant-tree .ant-tree-node-content-wrapper {
-            border-radius: 8px;
-            transition: all 0.2s ease;
-          }
-          .ant-tree .ant-tree-node-content-wrapper:hover {
-            background: linear-gradient(90deg, #f0f5ff 0%, #e6f7ff 100%);
+          .ant-tree-node-content-wrapper:hover {
+            background: #f0f2f5;
           }
           
-          /* Статистические карточки */
+          .ant-tree-node-selected .ant-tree-node-content-wrapper {
+            background: #e6f7ff;
+          }
+          
+          /* Быстрая статистика */
           .stats-card {
-            text-align: center;
-            padding: 28px 24px;
-            border-radius: 16px;
-            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-            border: 1px solid #f0f0f0;
-            position: relative;
-            overflow: hidden;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            border: none;
             transition: all 0.3s ease;
+            height: 100%;
           }
+          
           .stats-card:hover {
             transform: translateY(-4px);
-            box-shadow: 0 12px 32px rgba(0,0,0,0.12);
-          }
-          .stats-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, #1890ff 0%, #722ed1 100%);
-          }
-          .stats-card:nth-child(2)::before {
-            background: linear-gradient(90deg, #52c41a 0%, #389e0d 100%);
-          }
-          .stats-card:nth-child(3)::before {
-            background: linear-gradient(90deg, #faad14 0%, #d46b08 100%);
-          }
-          .stats-card .ant-statistic-content {
-            margin-bottom: 8px;
-          }
-          
-          /* Кнопки действий */
-          .action-buttons {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-          }
-          .action-btn {
-            border-radius: 8px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-          }
-          .action-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 16px rgba(0,0,0,0.2) !important;
-          }
-          .action-btn:active {
-            transform: translateY(0);
-          }
-          
-          /* Модальные окна */
-          .ant-modal-content {
-            border-radius: 16px;
-            overflow: hidden;
-          }
-          .ant-modal-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-bottom: none;
-          }
-          .ant-modal-title {
-            color: white !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           }
         `}
       </style>
-      <Layout style={{ minHeight: '100vh', background: '#fafbfc' }}>
-        <Content style={{ padding: '24px' }}>
-          {/* Современный заголовок */}
-          <div className="page-header">
-            <Row align="middle" justify="space-between">
-              <Col>
-                <Flex align="center" gap={16}>
-                  <Avatar 
-                    size={64} 
-                    icon={<DatabaseOutlined />} 
-                    style={{ background: 'rgba(255,255,255,0.2)' }}
-                  />
-                  <div>
-                    <Title level={2} style={{ margin: 0, color: 'white' }}>
-                      Управление затратами на строительство
-                    </Title>
-                    <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>
-                      Импорт, редактирование и анализ строительных затрат
-                    </Text>
-                  </div>
-                </Flex>
-              </Col>
-              <Col>
-                <div className="action-buttons">
-                  <Button
-                    className="action-btn"
-                    style={{ 
-                      background: 'rgba(255, 255, 255, 0.95)',
-                      color: '#52c41a',
-                      borderColor: 'rgba(255, 255, 255, 0.3)',
-                      fontWeight: 600
-                    }}
-                    icon={<ReloadOutlined />}
-                    onClick={loadData}
-                    loading={loading}
-                    size="large"
-                  >
-                    Обновить
-                  </Button>
-                  <Button
-                    className="action-btn"
-                    style={{ 
-                      background: 'rgba(255, 255, 255, 0.95)',
-                      color: '#faad14',
-                      borderColor: 'rgba(255, 255, 255, 0.3)',
-                      fontWeight: 600
-                    }}
-                    icon={<DownloadOutlined />}
-                    onClick={handleExportExcel}
-                    disabled={categories.length === 0}
-                    size="large"
-                  >
-                    Экспорт
-                  </Button>
-                  <Button
-                    className="action-btn"
-                    style={{ 
-                      background: '#ffd93d',
-                      color: '#333',
-                      borderColor: '#ffd93d',
-                      fontWeight: 600,
-                      boxShadow: '0 2px 8px rgba(255, 217, 61, 0.4)'
-                    }}
-                    icon={<UploadOutlined />}
-                    onClick={() => setIsImportModalVisible(true)}
-                    size="large"
-                  >
-                    Импорт
-                  </Button>
-                  <Popconfirm
-                    title="Удалить все данные?"
-                    description="Это действие необратимо. Все категории, детали и локализации будут удалены."
-                    onConfirm={handleClearAll}
-                    okText="Да, удалить"
-                    cancelText="Отмена"
-                  >
-                    <Button
-                      className="action-btn"
-                      style={{ 
-                        background: 'rgba(255, 77, 79, 0.1)',
-                        color: '#ff4d4f',
-                        borderColor: 'rgba(255, 77, 79, 0.3)',
-                        fontWeight: 600
-                      }}
-                      icon={<ClearOutlined />}
-                      disabled={categories.length === 0}
-                      size="large"
-                    >
-                      Очистить
-                    </Button>
-                  </Popconfirm>
-                </div>
-              </Col>
-            </Row>
-          </div>
 
+      <Content style={{ background: '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
+        <div style={{ padding: '24px', maxWidth: 1600, margin: '0 auto' }}>
           {/* Быстрая статистика */}
           <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
             <Col xs={24} sm={8}>
@@ -1082,286 +520,63 @@ const ConstructionCostsPage: React.FC = () => {
           </Row>
 
           {/* Основной контент */}
-          <Card className="modern-card" style={{ overflow: 'hidden', padding: 0 }}>
-            <Tabs 
-              defaultActiveKey="1"
-              size="large"
-              items={[
-                {
-                  key: '1',
-                  label: (
-                    <span>
-                      <FolderOutlined />
-                      <span style={{ marginLeft: 8 }}>Структура затрат</span>
-                      <Badge count={categories.length} style={{ marginLeft: 8 }} />
-                    </span>
-                  ),
-                  children: (
-                    <div style={{ padding: '24px' }}>
-                      {treeData.length > 0 ? (
-                        <>
-                          <Alert
-                            message="Структура категорий затрат"
-                            description="Иерархическое представление категорий, видов затрат и их локализаций. Кликните на элементы для просмотра деталей."
-                            type="info"
-                            showIcon
-                            style={{ marginBottom: 24, borderRadius: 8 }}
-                          />
-                          <Spin spinning={loading}>
-                            <Tree
-                              showLine
-                              showIcon
-                              blockNode
-                              treeData={treeData}
-                              expandedKeys={expandedKeys}
-                              selectedKeys={selectedKeys}
-                              onExpand={setExpandedKeys}
-                              onSelect={onSelect}
-                              style={{ 
-                                minHeight: 500,
-                                background: '#fafbfc',
-                                padding: '20px',
-                                borderRadius: '8px',
-                                border: '1px solid #f0f0f0'
-                              }}
-                            />
-                          </Spin>
-                        </>
-                      ) : (
-                        <Empty
-                          image={Empty.PRESENTED_IMAGE_SIMPLE}
-                          description={
-                            <span>
-                              Нет данных для отображения<br/>
-                              <Text type="secondary">Импортируйте Excel файл для начала работы</Text>
-                            </span>
-                          }
-                        >
-                          <Button
-                            type="primary"
-                            icon={<UploadOutlined />}
-                            onClick={() => setIsImportModalVisible(true)}
-                            size="large"
-                          >
-                            Импортировать данные
-                          </Button>
-                        </Empty>
-                      )}
-                    </div>
-                  )
-                },
-                {
-                  key: '2',
-                  label: (
-                    <span>
-                      <EditOutlined />
-                      <span style={{ marginLeft: 8 }}>Редактирование</span>
-                      <Badge count={details.length} style={{ marginLeft: 8 }} />
-                    </span>
-                  ),
-                  children: (
-                    <div style={{ padding: '24px' }}>
-                      <Row gutter={[0, 24]}>
-                        <Col span={24}>
-                          <Alert
-                            message="Интерактивное редактирование затрат"
-                            description="Редактируйте названия, единицы измерения и описания прямо в таблице. Изменения сохраняются автоматически."
-                            type="success"
-                            showIcon
-                            style={{ borderRadius: 8 }}
-                            action={
-                              <Button
-                                size="small"
-                                type="primary"
-                                ghost
-                                icon={<PlusOutlined />}
-                                onClick={() => message.info('Функция добавления в разработке')}
-                              >
-                                Добавить
-                              </Button>
-                            }
-                          />
-                        </Col>
-                        <Col span={24}>
-                          <EditableTable
-                            dataSource={combinedData}
-                            loading={loading}
-                            editingKey={editingKey}
-                            form={form}
-                            onEdit={edit}
-                            onSave={save}
-                            onCancel={cancel}
-                            onDelete={handleDelete}
-                            expandedRowKeys={expandedRowKeys}
-                            onExpandedRowsChange={setExpandedRowKeys}
-                          />
-                        </Col>
-                      </Row>
-                    </div>
-                  )
-                },
-                  
-                  {/* <TabPane tab={`Локализации (${locations.length})`} key="3">
-                    <Card>
-                      <Table
-                        dataSource={locations}
-                        columns={locationColumns}
-                        rowKey="id"
-                        loading={loading}
-                        pagination={{ pageSize: 20 }}
-                        locale={{ emptyText: 'Нет локализаций' }}
-                      />
-                    </Card>
-                  </TabPane> */
-                },
-                {
-                  key: '3',
-                  label: (
-                    <span>
-                      <BarChartOutlined />
-                      <span style={{ marginLeft: 8 }}>Аналитика</span>
-                    </span>
-                  ),
-                  children: (
-                    <div style={{ padding: '24px' }}>
-                      <Row gutter={[24, 24]}>
-                        <Col span={24}>
-                          <Alert
-                            message="Статистика и аналитика данных"
-                            description="Детальная информация о структуре затрат, распределении по категориям и локализациям."
-                            type="info"
-                            showIcon
-                            style={{ borderRadius: 8 }}
-                          />
-                        </Col>
-                        
-                        {/* Подробная статистика */}
-                        <Col xs={24} lg={8}>
-                          <Card className="modern-card" style={{ height: '200px' }}>
-                            <Statistic
-                              title="Общее количество категорий"
-                              value={categories.length}
-                              prefix={<FolderOutlined style={{ color: '#1890ff' }} />}
-                              valueStyle={{ color: '#1890ff', fontSize: 32 }}
-                            />
-                            <Divider style={{ margin: '12px 0' }} />
-                            <Text type="secondary">Основные группы затрат</Text>
-                          </Card>
-                        </Col>
-                        
-                        <Col xs={24} lg={8}>
-                          <Card className="modern-card" style={{ height: '200px' }}>
-                            <Statistic
-                              title="Детальные виды затрат"
-                              value={details.length}
-                              prefix={<FileOutlined style={{ color: '#52c41a' }} />}
-                              valueStyle={{ color: '#52c41a', fontSize: 32 }}
-                            />
-                            <Divider style={{ margin: '12px 0' }} />
-                            <Text type="secondary">Конкретные статьи расходов</Text>
-                          </Card>
-                        </Col>
-                        
-                        <Col xs={24} lg={8}>
-                          <Card className="modern-card" style={{ height: '200px' }}>
-                            <Statistic
-                              title="Географические локализации"
-                              value={locations.length}
-                              prefix={<GlobalOutlined style={{ color: '#faad14' }} />}
-                              valueStyle={{ color: '#faad14', fontSize: 32 }}
-                            />
-                            <Divider style={{ margin: '12px 0' }} />
-                            <Text type="secondary">Региональные привязки</Text>
-                          </Card>
-                        </Col>
-                        
-                        {/* Дополнительные метрики */}
-                        <Col xs={24} lg={12}>
-                          <Card className="modern-card" title="Структура данных" extra={<SettingOutlined />}>
-                            <Space direction="vertical" style={{ width: '100%' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span>Средняя детализация:</span>
-                                <Badge 
-                                  count={categories.length > 0 ? Math.round(details.length / categories.length * 10) / 10 : 0} 
-                                  style={{ backgroundColor: '#52c41a' }}
-                                />
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span>Покрытие локализациями:</span>
-                                <Badge 
-                                  count={`${locations.length > 0 && details.length > 0 ? Math.round(locations.length / details.length * 100) : 0}%`}
-                                  style={{ backgroundColor: '#faad14' }}
-                                />
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span>Общая заполненность:</span>
-                                <Progress 
-                                  percent={categories.length > 0 ? 100 : 0}
-                                  size="small"
-                                  status={categories.length > 0 ? "success" : "exception"}
-                                />
-                              </div>
-                            </Space>
-                          </Card>
-                        </Col>
-                        
-                        <Col xs={24} lg={12}>
-                          <Card className="modern-card" title="Быстрые действия" extra={<ThunderboltOutlined />}>
-                            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                              <Button 
-                                type="primary" 
-                                block 
-                                icon={<UploadOutlined />}
-                                onClick={() => setIsImportModalVisible(true)}
-                                size="large"
-                              >
-                                Импортировать новые данные
-                              </Button>
-                              <Button 
-                                block 
-                                icon={<DownloadOutlined />}
-                                onClick={handleExportExcel}
-                                disabled={categories.length === 0}
-                                size="large"
-                              >
-                                Экспортировать все данные
-                              </Button>
-                              <Button 
-                                block 
-                                icon={<ReloadOutlined />}
-                                onClick={loadData}
-                                loading={loading}
-                                size="large"
-                              >
-                                Обновить данные
-                              </Button>
-                            </Space>
-                          </Card>
-                        </Col>
-                      </Row>
-                    </div>
-                  )
-                }
-              ]}
-            />
+          <Card className="modern-card">
+            {treeData.length > 0 ? (
+              <>
+                <Alert
+                  message="Структура категорий затрат"
+                  description="Иерархическое представление категорий, видов затрат и их локализаций. Кликните на элементы для просмотра деталей."
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 16, borderRadius: 8 }}
+                />
+                
+                <Tree
+                  showLine={{ showLeafIcon: false }}
+                  showIcon
+                  defaultExpandAll
+                  expandedKeys={expandedKeys}
+                  selectedKeys={selectedKeys}
+                  onExpand={onExpand}
+                  onSelect={onSelect}
+                  treeData={treeData}
+                  style={{ padding: '8px 0' }}
+                />
+              </>
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="Нет данных для отображения"
+                style={{ padding: '80px 0' }}
+              >
+                <Button 
+                  type="primary" 
+                  icon={<UploadOutlined />}
+                  onClick={() => setIsImportModalVisible(true)}
+                  size="large"
+                >
+                  Импортировать данные
+                </Button>
+              </Empty>
+            )}
           </Card>
 
-        {/* Современное модальное окно импорта */}
-        <ModernImportModal
-          visible={isImportModalVisible}
-          status={importStatus}
-          progress={importProgress}
-          logs={importLog}
-          onCancel={() => {
-            setIsImportModalVisible(false);
-            setImportStatus('idle');
-            setImportProgress(0);
-            setImportLog([]);
-          }}
-          onUpload={handleImportExcel}
-        />
+          {/* Модальное окно импорта */}
+          <ModernImportModal
+            visible={isImportModalVisible}
+            onCancel={() => {
+              setIsImportModalVisible(false);
+              setImportStatus('idle');
+              setImportProgress(0);
+              setImportLog([]);
+            }}
+            onImport={handleImportExcel}
+            importProgress={importProgress}
+            importStatus={importStatus}
+            importLog={importLog}
+          />
+        </div>
       </Content>
-    </Layout>
     </>
   );
 };

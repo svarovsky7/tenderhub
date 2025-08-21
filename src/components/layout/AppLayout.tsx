@@ -12,6 +12,7 @@ import {
   UserOutlined,
   BellOutlined,
   SearchOutlined,
+  DollarOutlined,
 } from '@ant-design/icons';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import ConnectionStatus from './ConnectionStatus';
@@ -29,7 +30,7 @@ interface MenuItem {
 
 const AppLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const [openKeys, setOpenKeys] = useState<string[]>(['libraries', 'admin']);
+  const [openKeys, setOpenKeys] = useState<string[]>(['libraries', 'construction-costs', 'admin']);
   const location = useLocation();
 
   // Menu items configuration
@@ -79,6 +80,32 @@ const AppLayout: React.FC = () => {
       ],
     },
     {
+      key: 'construction-costs',
+      icon: <DollarOutlined />,
+      label: 'Затраты на строительство',
+      path: '/construction-costs',
+      children: [
+        {
+          key: 'tender-costs',
+          icon: null,
+          label: <Link to="/construction-costs/tender">Затраты тендера</Link>,
+          path: '/construction-costs/tender',
+        },
+        {
+          key: 'cost-management',
+          icon: null,
+          label: <Link to="/construction-costs/management">Структура затрат</Link>,
+          path: '/construction-costs/management',
+        },
+        {
+          key: 'cost-edit',
+          icon: null,
+          label: <Link to="/construction-costs/edit">Редактирование</Link>,
+          path: '/construction-costs/edit',
+        },
+      ],
+    },
+    {
       key: 'admin',
       icon: <SettingOutlined />,
       label: 'Администрирование',
@@ -89,12 +116,6 @@ const AppLayout: React.FC = () => {
           icon: null,
           label: <Link to="/admin/users">Пользователи</Link>,
           path: '/admin/users',
-        },
-        {
-          key: 'construction-costs',
-          icon: null,
-          label: <Link to="/admin/construction-costs">Затраты на строительство</Link>,
-          path: '/admin/construction-costs',
         },
         {
           key: 'settings',
@@ -196,12 +217,20 @@ const AppLayout: React.FC = () => {
             breadcrumbItems.push({ title: <span>Работы и Материалы</span> });
           }
           break;
+        case 'construction-costs':
+          breadcrumbItems.push({ title: <span>Затраты на строительство</span> });
+          if (pathSegments[1] === 'tender') {
+            breadcrumbItems.push({ title: <span>Затраты тендера</span> });
+          } else if (pathSegments[1] === 'management') {
+            breadcrumbItems.push({ title: <span>Структура затрат</span> });
+          } else if (pathSegments[1] === 'edit') {
+            breadcrumbItems.push({ title: <span>Редактирование</span> });
+          }
+          break;
         case 'admin':
           breadcrumbItems.push({ title: <span>Администрирование</span> });
           if (pathSegments[1] === 'users') {
             breadcrumbItems.push({ title: <span>Пользователи</span> });
-          } else if (pathSegments[1] === 'construction-costs') {
-            breadcrumbItems.push({ title: <span>Затраты на строительство</span> });
           } else if (pathSegments[1] === 'settings') {
             breadcrumbItems.push({ title: <span>Настройки</span> });
           }
