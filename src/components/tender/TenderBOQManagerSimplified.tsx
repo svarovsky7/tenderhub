@@ -15,7 +15,7 @@ import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { clientPositionsApi, boqApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import ClientPositionCardStreamlined from './ClientPositionCardStreamlined';
-import type { ClientPositionInsert } from '../../lib/supabase/types';
+import type { ClientPositionInsert, ClientPositionType } from '../../lib/supabase/types';
 
 const { Title } = Typography;
 
@@ -34,6 +34,8 @@ interface ClientPositionWithStats {
   total_works_cost: number;
   created_at: string;
   updated_at: string;
+  position_type?: ClientPositionType;
+  hierarchy_level?: number;
   boq_items?: any[];
   materials_count?: number;
   works_count?: number;
@@ -45,6 +47,14 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
   onStatsUpdate 
 }) => {
   console.log('🚀 TenderBOQManagerSimplified rendered for tender:', tenderId);
+
+  // Sort positions by position number only (preserving Excel file order)
+  const sortPositionsByNumber = useCallback((positions: ClientPositionWithStats[]): ClientPositionWithStats[] => {
+    return [...positions].sort((a, b) => {
+      // Sort only by position number to preserve Excel file order
+      return a.position_number - b.position_number;
+    });
+  }, []);
 
   const [positions, setPositions] = useState<ClientPositionWithStats[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,7 +88,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
     console.log('📡 Loading positions for tender:', tenderId);
     setLoading(true);
     try {
-      const result = await clientPositionsApi.getByTenderId(tenderId);
+      const result = await clientPositionsApi.getByTenderId(tenderId, {}, { limit: 1000 });
       if (result.error) {
         throw new Error(result.error);
       }
@@ -329,7 +339,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
         </Card>
       ) : (
         <div className="space-y-3 w-full">
-          {positions.map(position => (
+          {sortPositionsByNumber(positions).map(position => (
             <ClientPositionCardStreamlined
               key={position.id}
               position={position}

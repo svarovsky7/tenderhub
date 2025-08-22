@@ -1,7 +1,8 @@
 import { supabase } from '../client';
 import * as XLSX from 'xlsx';
-import type { ApiResponse } from '../types';
+import type { ApiResponse, ClientPositionType } from '../types';
 import { handleSupabaseError } from './utils';
+import { HIERARCHY_LEVELS } from '../../../utils/clientPositionHierarchy';
 
 export const clientWorksApi = {
   async uploadFromXlsx(
@@ -21,9 +22,9 @@ export const clientWorksApi = {
       console.log('📋 Available sheets:', workbook.SheetNames);
       onProgress?.(25, 'Парсинг данных из Excel...');
       
-      // Read all data from Excel with proper headers including client_note
+      // Read all data from Excel with proper headers including position_type and client_note
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-        header: ['position_number', 'work_name', 'unit', 'volume', 'client_note'], // Map columns to meaningful names
+        header: ['position_number', 'position_type', 'work_name', 'unit', 'volume', 'client_note'], // Map columns to meaningful names
         range: 1, // Skip header row
         raw: false,
         defval: ''
@@ -32,10 +33,54 @@ export const clientWorksApi = {
       console.log('📊 Raw Excel data:', rows.slice(0, 3)); // Log first 3 rows for debugging
       console.log('📈 Total rows found:', rows.length);
 
+      // Valid position types (English)
+      const validPositionTypes = ['article', 'section', 'subsection', 'header', 'subheader', 'executable'];
+      
+      // Russian to English type mapping
+      const russianTypeMapping: Record<string, ClientPositionType> = {
+        'статья': 'article',
+        'раздел': 'section',
+        'подраздел': 'subsection', 
+        'заголовок': 'header',
+        'подзаголовок': 'subheader',
+        'исполняемая': 'executable'
+      };
+      
+      // Function to normalize position type (supports both Russian and English)
+      const normalizePositionType = (rawType: string): ClientPositionType => {
+        if (!rawType) return 'executable';
+        
+        const cleanType = String(rawType).trim().toLowerCase();
+        console.log(`🔍 Normalizing position type: "${rawType}" -> "${cleanType}"`);
+        
+        // Check English types first
+        if (validPositionTypes.includes(cleanType)) {
+          console.log(`✅ Found English type: ${cleanType}`);
+          return cleanType as ClientPositionType;
+        }
+        
+        // Check Russian types
+        if (russianTypeMapping[cleanType]) {
+          const englishType = russianTypeMapping[cleanType];
+          console.log(`✅ Found Russian type: "${cleanType}" -> "${englishType}"`);
+          return englishType;
+        }
+        
+        // Default fallback
+        console.warn(`⚠️ Unknown position type "${rawType}", defaulting to "executable"`);
+        return 'executable';
+      };
+      
       // Filter and validate data - include all rows with position number and work name
       const validRows = rows.filter((row: any) => {
         const hasPositionNumber = row.position_number && String(row.position_number).trim();
         const hasWorkName = row.work_name && String(row.work_name).trim();
+        
+        // Just log the position type for debugging
+        if (row.position_type) {
+          const normalizedType = normalizePositionType(row.position_type);
+          console.log(`📊 Row ${row.position_number}: type="${row.position_type}" -> "${normalizedType}"`);
+        }
         
         // Include row even if unit or volume is missing
         return hasPositionNumber && hasWorkName;
@@ -47,7 +92,7 @@ export const clientWorksApi = {
       if (validRows.length === 0) {
         console.warn('⚠️ No valid data found in Excel file');
         return { 
-          error: 'В Excel файле не найдено валидных данных. Проверьте формат: № п/п | Наименование работ | Ед. изм. | Объем работ' 
+          error: 'В Excel файле не найдено валидных данных. Проверьте формат: № п/п | Тип позиции | Наименование работ | Ед. изм. | Объем работ | Примечание\n\nПоддерживаемые типы позиций:\n• Статья (или article)\n• Раздел (или section)\n• Подраздел (или subsection)\n• Заголовок (или header)\n• Подзаголовок (или subheader)\n• Исполняемая (или executable)' 
         };
       }
 
@@ -56,19 +101,23 @@ export const clientWorksApi = {
       
       validRows.forEach((row: any) => {
         const positionNum = String(row.position_number).trim();
+        const validatedType: ClientPositionType = normalizePositionType(row.position_type);
+        const hierarchyLevel = HIERARCHY_LEVELS[validatedType];
         
         if (!positionsMap.has(positionNum)) {
           positionsMap.set(positionNum, []);
         }
         
         const volume = row.volume ? Number(row.volume) : 0; // Allow 0 volume after removing DB constraint
-        console.log(`📊 Processing row: position=${positionNum}, work=${String(row.work_name).trim()}, unit=${row.unit || 'empty'}, volume=${volume}`);
+        console.log(`📊 Processing row: position=${positionNum}, type=${validatedType}, hierarchy=${hierarchyLevel}, work=${String(row.work_name).trim()}, unit=${row.unit || 'empty'}, volume=${volume}`);
         
         positionsMap.get(positionNum)!.push({
           work_name: String(row.work_name).trim(),
           unit: row.unit ? String(row.unit).trim() : '',  // Allow empty unit
           volume: volume,   // Allow 0 volume after removing DB constraint
-          client_note: row.client_note ? String(row.client_note).trim() : null
+          client_note: row.client_note ? String(row.client_note).trim() : null,
+          position_type: validatedType,
+          hierarchy_level: hierarchyLevel
         });
       });
 
@@ -139,6 +188,8 @@ export const clientWorksApi = {
           unit: firstItem.unit || null,
           volume: firstItem.volume || null,
           client_note: firstItem.client_note || null, // Примечание from Excel
+          position_type: firstItem.position_type || 'executable', // Position type from Excel
+          hierarchy_level: firstItem.hierarchy_level || 6, // Hierarchy level calculated from type
           total_materials_cost: 0,
           total_works_cost: 0
         };
