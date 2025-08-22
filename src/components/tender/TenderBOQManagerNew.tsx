@@ -179,7 +179,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     setLoading(true);
     
     try {
-      const result = await clientPositionsApi.getByTenderId(tenderId);
+      const result = await clientPositionsApi.getByTenderId(tenderId, {}, { limit: 1000 });
       console.log('📦 Positions API response:', result);
       
       if (result.error) {

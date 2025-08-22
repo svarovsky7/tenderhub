@@ -134,6 +134,7 @@ src/pages/                # Route components
 - Timestamps are auto-managed
 - **BOQ Items**: Uses `detail_cost_category_id` (not `cost_node_id`)
 - **Base Quantity**: `base_quantity` field stores user input for unlinked materials
+- **Total Amount**: Calculated as `(unit_rate + delivery_amount) × quantity` via database trigger
 
 ### 2. File Size Limits
 - **Maximum 600 lines per file**
@@ -184,7 +185,16 @@ try {
 - **Unlinked Materials**: `quantity = base_quantity * consumption_coefficient`
 - **Linked Materials**: `quantity = work_quantity * consumption_coefficient * conversion_coefficient`
 - **Base Quantity**: Stored only for unlinked materials, NULL for linked
-- **Delivery Costs**: Calculated based on `delivery_price_type` (amount/percentage/not_included)
+- **Total Amount Formula**: `total_amount = (unit_rate + delivery_amount) × quantity`
+
+### Delivery Cost System
+- **Delivery Types**: 
+  - `included` - Delivery included in unit_rate (delivery_amount = 0)
+  - `not_included` - Auto-calculated 3% of unit_rate (delivery_amount = unit_rate × 0.03)
+  - `amount` - Fixed delivery amount per unit (user-specified delivery_amount)
+- **Database Calculation**: Handled by trigger `calculate_boq_amounts_trigger()` 
+- **UI Display**: Shows "(3%)" label for `not_included` type for clarity
+- **Rounding**: Visual rounding to whole numbers in UI, precise decimals in database
 
 ### Cost Categories Architecture
 - **Detail Categories**: Central connecting table between categories and locations
@@ -240,10 +250,12 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - Work-Material linking
 - Virtual scrolling
 - Construction cost management with cascade/search selector
-- Delivery cost management for materials
+- Delivery cost auto-calculation with 3% for "not included" type
 - Base quantity tracking for unlinked materials
 - Hover effects and visual feedback
 - React Query caching for performance
+- Visual amount rounding in UI (whole numbers)
+- Automatic total_amount calculation including delivery
 
 ### ⚠️ Disabled
 - Authentication (no login)
@@ -256,6 +268,12 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - Large Excel imports (>10K rows) may timeout
 - Drag-drop slow with many items
 - Some Ant Design React 19 warnings (patches applied)
+
+### Recent Improvements (December 2024)
+- Fixed total_amount calculation to include delivery costs
+- Added "(3%)" labels for "not included" delivery type
+- Implemented visual rounding to whole numbers in UI
+- Database trigger for automatic delivery amount calculation
 
 ## Important Notes
 
@@ -274,8 +292,12 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
    - Modify in Supabase dashboard
    - Run `npm run db:schema` to export
    - Update types to match prod.sql
+   - Apply migrations if needed
 4. Always verify against `supabase/schemas/prod.sql`
 5. Test with manual testing + type checking
+6. Git workflow:
+   - Commit with descriptive emoji prefixes (🎯, ✨, 🚀, etc.)
+   - Push to origin/main after testing
 
 ## Specialized Agents Available
 

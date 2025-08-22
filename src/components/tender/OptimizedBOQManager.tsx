@@ -18,7 +18,7 @@ const OptimizedBOQManager: React.FC<OptimizedBOQManagerProps> = ({ tenderId }) =
     console.log('🚀 [loadPositions] called for tender:', tenderId);
     setLoading(true);
     try {
-      const result = await clientPositionsApi.getByTenderId(tenderId);
+      const result = await clientPositionsApi.getByTenderId(tenderId, {}, { limit: 1000 });
       if (result.error) {
         console.error('❌ [loadPositions] failed:', result.error);
         throw new Error(result.error);

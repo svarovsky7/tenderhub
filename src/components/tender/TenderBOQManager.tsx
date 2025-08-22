@@ -133,7 +133,7 @@ const TenderBOQManager: React.FC<TenderBOQManagerProps> = ({ tenderId }) => {
   // Load positions and their BOQ items
   const loadPositions = useCallback(async () => {
     try {
-      const result = await clientPositionsApi.getByTenderId(tenderId);
+      const result = await clientPositionsApi.getByTenderId(tenderId, {}, { limit: 1000 });
       if (result.error) {
         throw new Error(result.error);
       }
