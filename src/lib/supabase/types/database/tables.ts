@@ -337,6 +337,9 @@ export type DatabaseTables = {
       submission_deadline: string | null;
       created_at: string;
       updated_at: string;
+      version: number;
+      area_sp: number | null;
+      area_client: number | null;
     };
     Insert: {
       id?: string;
@@ -347,6 +350,9 @@ export type DatabaseTables = {
       submission_deadline?: string | null;
       created_at?: string;
       updated_at?: string;
+      version?: number;
+      area_sp?: number | null;
+      area_client?: number | null;
     };
     Update: {
       id?: string;
@@ -357,6 +363,9 @@ export type DatabaseTables = {
       submission_deadline?: string | null;
       created_at?: string;
       updated_at?: string;
+      version?: number;
+      area_sp?: number | null;
+      area_client?: number | null;
     };
     Relationships: [
       {

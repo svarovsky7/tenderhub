@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Form, Input, DatePicker, Select, Row, Col, Button } from 'antd';
+import { Modal, Form, Input, DatePicker, Select, Row, Col, Button, InputNumber, Divider } from 'antd';
 import type { CreateTenderModalProps, TenderInsert } from '../types';
 
 const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
@@ -23,8 +23,10 @@ const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
         description: values.description,
         client_name: values.client_name,
         tender_number: values.tender_number,
-        submission_deadline: values.submission_deadline?.format('YYYY-MM-DD HH:mm:ss')
-        // Note: status and estimated_value fields removed from schema
+        submission_deadline: values.submission_deadline?.format('YYYY-MM-DD HH:mm:ss'),
+        version: values.version || 1,
+        area_sp: values.area_sp || null,
+        area_client: values.area_client || null
       };
 
       console.log('🔄 Calling onSubmit with processed data:', tenderData);
@@ -58,7 +60,7 @@ const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
         className="mt-4"
       >
         <Row gutter={16}>
-          <Col span={16}>
+          <Col span={12}>
             <Form.Item
               name="title"
               label="Название тендера"
@@ -67,13 +69,29 @@ const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
               <Input placeholder="Название тендерного проекта" />
             </Form.Item>
           </Col>
-          <Col span={8}>
+          <Col span={6}>
             <Form.Item
               name="tender_number"
               label="Номер тендера"
               rules={[{ required: true, message: 'Введите номер' }]}
             >
               <Input placeholder="T-2024-001" />
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item
+              name="version"
+              label="Версия"
+              rules={[{ required: true, message: 'Укажите версию' }]}
+              initialValue={1}
+            >
+              <InputNumber 
+                min={1} 
+                step={1}
+                precision={0}
+                placeholder="1" 
+                style={{ width: '100%' }}
+              />
             </Form.Item>
           </Col>
         </Row>
@@ -106,7 +124,41 @@ const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
               />
             </Form.Item>
           </Col>
-          {/* Note: estimated_value and status fields removed from schema */}
+        </Row>
+
+        <Divider orientation="left">Площади</Divider>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item
+              name="area_sp"
+              label="Площадь по СП"
+              tooltip="Площадь по строительным правилам"
+            >
+              <InputNumber 
+                style={{ width: '100%' }}
+                placeholder="0.00"
+                suffix="м²"
+                precision={2}
+                min={0}
+              />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item
+              name="area_client"
+              label="Площадь от Заказчика"
+              tooltip="Площадь, указанная заказчиком"
+            >
+              <InputNumber 
+                style={{ width: '100%' }}
+                placeholder="0.00"
+                suffix="м²"
+                precision={2}
+                min={0}
+              />
+            </Form.Item>
+          </Col>
         </Row>
 
         <div className="flex justify-end gap-2 pt-4 border-t">
