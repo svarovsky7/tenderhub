@@ -40,6 +40,7 @@ import {
 } from '@ant-design/icons';
 import { supabase } from '../lib/supabase/client';
 import { getCategoriesWithDetails } from '../lib/supabase/api/construction-costs';
+// import { FinancialIndicatorsTab } from '../components/financial/FinancialIndicatorsTab';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Title, Text } = Typography;
@@ -452,6 +453,8 @@ const TenderConstructionCostsPage: React.FC = () => {
         volume: volume,
         unit_total: Number(unitTotal.toFixed(2))
       };
+      
+      console.log('💾 [saveVolumeRecord] Record to save:', JSON.stringify(record, null, 2));
 
       if (volume >= 1) {
         // Сначала пробуем обновить существующую запись
@@ -459,6 +462,15 @@ const TenderConstructionCostsPage: React.FC = () => {
           tender_id: selectedTenderId,
           detail_cost_category_id: detailCostCategoryId
         });
+        
+        // First check if any records exist
+        const { data: allRecords, error: allError } = await supabase
+          .from('tender_cost_volumes')
+          .select('*')
+          .eq('tender_id', selectedTenderId);
+        
+        console.log('📋 [saveVolumeRecord] All existing records for tender:', allRecords);
+        
         const { data: existing, error: selectError } = await supabase
           .from('tender_cost_volumes')
           .select('id')
@@ -466,26 +478,49 @@ const TenderConstructionCostsPage: React.FC = () => {
           .eq('detail_cost_category_id', detailCostCategoryId)
           .single();
         
+        console.log('🔎 [saveVolumeRecord] Existing record check result:', { existing, selectError });
+        
         if (selectError && selectError.code !== 'PGRST116') {
           console.log('⚠️ [saveVolumeRecord] Select error (not 404):', selectError);
         }
+        
+        const existingRecord = existing && existing.length > 0;
+        console.log('📝 [saveVolumeRecord] Will update existing:', existingRecord, 'Will create new:', !existingRecord);
 
         let error;
-        if (existing) {
+        if (existingRecord) {
           // Обновляем существующую запись
           console.log('📝 [saveVolumeRecord] Updating existing record for:', detailCostCategoryId);
-          const { error: updateError } = await supabase
+          const updatePayload = { 
+            volume: volume, 
+            unit_total: Number(unitTotal.toFixed(2)),
+            updated_at: new Date().toISOString()
+          };
+          
+          console.log('🔄 [saveVolumeRecord] Update payload:', updatePayload);
+          console.log('🎯 [saveVolumeRecord] Update filters:', { tender_id: selectedTenderId, detail_cost_category_id: detailCostCategoryId });
+          
+          const { data: updateData, error: updateError, count } = await supabase
             .from('tender_cost_volumes')
-            .update({ volume: volume, unit_total: Number(unitTotal.toFixed(2)) })
+            .update(updatePayload)
             .eq('tender_id', selectedTenderId)
-            .eq('detail_cost_category_id', detailCostCategoryId);
+            .eq('detail_cost_category_id', detailCostCategoryId)
+            .select();
+          
+          console.log('📦 [saveVolumeRecord] Update result:', { data: updateData, error: updateError, count });
           error = updateError;
         } else {
           // Создаем новую запись
+          console.log('➕ [saveVolumeRecord] Creating new record for category:', detailCostCategoryId);
           console.log('➕ [saveVolumeRecord] Creating new record:', record);
-          const { error: insertError } = await supabase
+          console.log('➕ [saveVolumeRecord] Inserting new record:', record);
+          
+          const { data: insertData, error: insertError, count } = await supabase
             .from('tender_cost_volumes')
-            .insert(record);
+            .insert(record)
+            .select();
+          
+          console.log('📦 [saveVolumeRecord] Insert result:', { data: insertData, error: insertError, count });
           error = insertError;
           if (insertError) {
             console.error('❌ [saveVolumeRecord] Insert error details:', insertError);
@@ -1092,42 +1127,54 @@ const TenderConstructionCostsPage: React.FC = () => {
 
       {selectedTenderId && (
         <>
-          <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)' }}>
-            <Card className="stats-card cost-type-materials" style={{ height: '100%', minHeight: '180px', padding: 'var(--spacing-md)' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--spacing-sm)' }}>
-                <div className="stats-card-title">Материалы (BOQ)</div>
-                <InboxOutlined style={{ fontSize: '32px', color: 'var(--color-materials-500)', opacity: 0.8 }} />
-              </div>
-              <div className="stats-card-value money-value" style={{ color: 'var(--color-materials-600)' }}>
-                {Math.round(stats.actualTotalMaterials).toLocaleString('ru-RU')} ₽
-              </div>
-              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-neutral-500)', marginBottom: 'var(--spacing-sm)' }}>
-                Включая доставку
-              </div>
-              <Progress 
-                percent={stats.actualTotalCost > 0 ? 
-                  Number((stats.actualTotalMaterials / stats.actualTotalCost * 100).toFixed(1)) : 0
-                }
-                size="small"
-                strokeColor="var(--color-materials-500)"
-                trailColor="var(--color-materials-100)"
-                style={{ marginBottom: 'var(--spacing-xs)' }}
-                showInfo={false}
-              />
-              <div style={{ 
-                fontSize: 'var(--font-size-xs)', 
-                color: 'var(--color-materials-600)', 
-                fontWeight: 'var(--font-weight-medium)',
-                textAlign: 'center'
-              }}>
-                {stats.actualTotalCost > 0 ? 
-                  `${((stats.actualTotalMaterials / stats.actualTotalCost) * 100).toFixed(1)}% от общих затрат` : 
-                  '0% от общих затрат'
-                }
-              </div>
-            </Card>
+                    <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)' }}>
+                      <Card className="stats-card cost-type-materials" style={{ 
+                        height: '100%', 
+                        minHeight: '180px', 
+                        padding: 'var(--spacing-md)',
+                        background: 'linear-gradient(135deg, var(--color-materials-50) 0%, var(--color-materials-100) 100%)',
+                        border: '1px solid var(--color-materials-200)'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--spacing-sm)' }}>
+                          <div className="stats-card-title">Материалы (BOQ)</div>
+                          <InboxOutlined style={{ fontSize: '32px', color: 'var(--color-materials-500)', opacity: 0.8 }} />
+                        </div>
+                        <div className="stats-card-value money-value" style={{ color: 'var(--color-materials-600)' }}>
+                          {Math.round(stats.actualTotalMaterials).toLocaleString('ru-RU')} ₽
+                        </div>
+                        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-neutral-500)', marginBottom: 'var(--spacing-sm)' }}>
+                          Включая доставку
+                        </div>
+                        <Progress 
+                          percent={stats.actualTotalCost > 0 ? 
+                            Number((stats.actualTotalMaterials / stats.actualTotalCost * 100).toFixed(1)) : 0
+                          }
+                          size="small"
+                          strokeColor="var(--color-materials-500)"
+                          trailColor="var(--color-materials-100)"
+                          style={{ marginBottom: 'var(--spacing-xs)' }}
+                          showInfo={false}
+                        />
+                        <div style={{ 
+                          fontSize: 'var(--font-size-xs)', 
+                          color: 'var(--color-materials-600)', 
+                          fontWeight: 'var(--font-weight-medium)',
+                          textAlign: 'center'
+                        }}>
+                          {stats.actualTotalCost > 0 ? 
+                            `${((stats.actualTotalMaterials / stats.actualTotalCost) * 100).toFixed(1)}% от общих затрат` : 
+                            '0% от общих затрат'
+                          }
+                        </div>
+                      </Card>
 
-            <Card className="stats-card cost-type-works" style={{ height: '100%', minHeight: '180px', padding: 'var(--spacing-md)' }}>
+            <Card className="stats-card cost-type-works" style={{ 
+              height: '100%', 
+              minHeight: '180px', 
+              padding: 'var(--spacing-md)',
+              background: 'linear-gradient(135deg, var(--color-works-50) 0%, var(--color-works-100) 100%)',
+              border: '1px solid var(--color-works-200)'
+            }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--spacing-sm)' }}>
                 <div className="stats-card-title">Работы (BOQ)</div>
                 <BuildOutlined style={{ fontSize: '32px', color: 'var(--color-works-500)', opacity: 0.8 }} />
@@ -1161,7 +1208,13 @@ const TenderConstructionCostsPage: React.FC = () => {
               </div>
             </Card>
 
-            <Card className="stats-card cost-type-sub-materials" style={{ height: '100%', minHeight: '180px', padding: 'var(--spacing-md)' }}>
+            <Card className="stats-card cost-type-sub-materials" style={{ 
+              height: '100%', 
+              minHeight: '180px', 
+              padding: 'var(--spacing-md)',
+              background: 'linear-gradient(135deg, var(--color-sub-materials-50) 0%, var(--color-sub-materials-100) 100%)',
+              border: '1px solid var(--color-sub-materials-200)'
+            }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--spacing-sm)' }}>
                 <div className="stats-card-title">Субматериалы</div>
                 <ToolOutlined style={{ fontSize: '32px', color: 'var(--color-sub-materials-500)', opacity: 0.8 }} />
@@ -1195,7 +1248,13 @@ const TenderConstructionCostsPage: React.FC = () => {
               </div>
             </Card>
 
-            <Card className="stats-card cost-type-sub-works" style={{ height: '100%', minHeight: '180px', padding: 'var(--spacing-md)' }}>
+            <Card className="stats-card cost-type-sub-works" style={{ 
+              height: '100%', 
+              minHeight: '180px', 
+              padding: 'var(--spacing-md)',
+              background: 'linear-gradient(135deg, var(--color-sub-works-50) 0%, var(--color-sub-works-100) 100%)',
+              border: '1px solid var(--color-sub-works-200)'
+            }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--spacing-sm)' }}>
                 <div className="stats-card-title">Субработы</div>
                 <TeamOutlined style={{ fontSize: '32px', color: 'var(--color-sub-works-500)', opacity: 0.8 }} />

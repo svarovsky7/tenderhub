@@ -24,6 +24,8 @@ const TestCostSearch = React.lazy(() => import('./pages/admin/TestCostSearch'));
 const TestCostSearchAuto = React.lazy(() => import('./pages/admin/TestCostSearchAuto'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 const WorkMaterialsPage = React.lazy(() => import('./pages/WorkMaterialsPage'));
+const FinancialIndicatorsPage = React.lazy(() => import('./pages/FinancialIndicatorsPage'));
+const TestMarkupTable = React.lazy(() => import('./pages/admin/TestMarkupTable'));
 
 function App() {
   // Initialize connection monitoring on app start
@@ -134,6 +136,16 @@ function App() {
               />
             </Route>
 
+            {/* Financial Indicators route */}
+            <Route 
+              path="financial" 
+              element={
+                <React.Suspense fallback={<div>Загрузка...</div>}>
+                  <FinancialIndicatorsPage />
+                </React.Suspense>
+              } 
+            />
+
             {/* Admin routes */}
             <Route path="admin">
               <Route
@@ -173,6 +185,14 @@ function App() {
                 element={
                   <React.Suspense fallback={<div>Загрузка...</div>}>
                     <SettingsPage />
+                  </React.Suspense>
+                } 
+              />
+              <Route
+                path="test-markup-table"
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <TestMarkupTable />
                   </React.Suspense>
                 } 
               />

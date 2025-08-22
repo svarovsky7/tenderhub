@@ -13,6 +13,7 @@ import {
   BellOutlined,
   SearchOutlined,
   DollarOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import ConnectionStatus from './ConnectionStatus';
@@ -104,6 +105,12 @@ const AppLayout: React.FC = () => {
           path: '/construction-costs/edit',
         },
       ],
+    },
+    {
+      key: 'financial',
+      icon: <LineChartOutlined />,
+      label: <Link to="/financial">Финансовые показатели</Link>,
+      path: '/financial',
     },
     {
       key: 'admin',
