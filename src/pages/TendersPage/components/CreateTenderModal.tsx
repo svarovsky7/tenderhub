@@ -16,6 +16,7 @@ const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
 
   const handleSubmit = async (values: any) => {
     console.log('📝 Form submitted with values:', values);
+    console.log('🔍 New fields check - version:', values.version, 'area_sp:', values.area_sp, 'area_client:', values.area_client);
     
     try {
       const tenderData: TenderInsert = {
@@ -24,12 +25,13 @@ const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
         client_name: values.client_name,
         tender_number: values.tender_number,
         submission_deadline: values.submission_deadline?.format('YYYY-MM-DD HH:mm:ss'),
-        version: values.version || 1,
-        area_sp: values.area_sp || null,
-        area_client: values.area_client || null
+        version: values.version ?? 1,
+        area_sp: values.area_sp ?? null,
+        area_client: values.area_client ?? null
       };
 
       console.log('🔄 Calling onSubmit with processed data:', tenderData);
+      console.log('🔍 Processed new fields - version:', tenderData.version, 'area_sp:', tenderData.area_sp, 'area_client:', tenderData.area_client);
       await onSubmit(tenderData);
       
       console.log('✅ Form submission successful, resetting form');

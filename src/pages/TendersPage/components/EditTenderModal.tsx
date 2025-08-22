@@ -23,13 +23,17 @@ const EditTenderModal: React.FC<EditTenderModalProps> = ({
       console.log('🔄 Populating form with tender data:', editingTender);
       form.setFieldsValue({
         ...editingTender,
-        submission_deadline: editingTender.submission_deadline ? dayjs(editingTender.submission_deadline) : null
+        submission_deadline: editingTender.submission_deadline ? dayjs(editingTender.submission_deadline) : null,
+        version: editingTender.version || 1,
+        area_sp: editingTender.area_sp || null,
+        area_client: editingTender.area_client || null
       });
     }
   }, [editingTender, visible, form]);
 
   const handleSubmit = async (values: any) => {
     console.log('📝 Edit form submitted with values:', values);
+    console.log('🔍 New fields check - version:', values.version, 'area_sp:', values.area_sp, 'area_client:', values.area_client);
     
     if (!editingTender) {
       console.error('❌ No tender being edited');
@@ -43,12 +47,13 @@ const EditTenderModal: React.FC<EditTenderModalProps> = ({
         client_name: values.client_name,
         tender_number: values.tender_number,
         submission_deadline: values.submission_deadline?.format('YYYY-MM-DD HH:mm:ss'),
-        version: values.version,
-        area_sp: values.area_sp || null,
-        area_client: values.area_client || null
+        version: values.version ?? 1,
+        area_sp: values.area_sp ?? null,
+        area_client: values.area_client ?? null
       };
 
       console.log('🔄 Calling onSubmit with processed data:', updates);
+      console.log('🔍 Processed new fields - version:', updates.version, 'area_sp:', updates.area_sp, 'area_client:', updates.area_client);
       await onSubmit(updates);
       
       console.log('✅ Edit form submission successful, resetting form');

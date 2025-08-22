@@ -63,6 +63,12 @@ const TenderTable: React.FC<TenderTableProps> = ({
     await onExcelUpload(tenderId, file);
   };
 
+  // Check if any tender has area_sp data
+  const hasAreaSP = tenders.some(tender => tender.area_sp && tender.area_sp > 0);
+  
+  // Check if any tender has area_client data
+  const hasAreaClient = tenders.some(tender => tender.area_client && tender.area_client > 0);
+
   const columns: ColumnsType<TenderWithSummary> = [
     {
       title: 'Тендер',
@@ -83,7 +89,9 @@ const TenderTable: React.FC<TenderTableProps> = ({
               >
                 {record.title}
               </Text>
-              {/* Note: status tag removed as status field was removed from schema */}
+              <Tag color="blue" size="small">
+                v{record.version || 1}
+              </Tag>
             </div>
             <Text type="secondary" className="text-sm block">
               №{record.tender_number} • {record.client_name}
@@ -136,6 +144,48 @@ const TenderTable: React.FC<TenderTableProps> = ({
       ),
       sorter: (a, b) => (a.boq_total_value || 0) - (b.boq_total_value || 0)
     },
+    // Conditionally add Area SP column
+    ...(hasAreaSP ? [{
+      title: 'Площадь по СП',
+      key: 'area_sp',
+      width: 120,
+      render: (_, record) => (
+        <div className="text-center">
+          <Text className="text-xs text-gray-500 block mb-1">м²</Text>
+          {record.area_sp ? (
+            <Text strong className="text-sm block">
+              {record.area_sp.toLocaleString('ru-RU')}
+            </Text>
+          ) : (
+            <Text type="secondary" className="text-sm block">
+              —
+            </Text>
+          )}
+        </div>
+      ),
+      sorter: (a, b) => (a.area_sp || 0) - (b.area_sp || 0)
+    }] : []),
+    // Conditionally add Area Client column
+    ...(hasAreaClient ? [{
+      title: 'Площадь от Заказчика',
+      key: 'area_client', 
+      width: 140,
+      render: (_, record) => (
+        <div className="text-center">
+          <Text className="text-xs text-gray-500 block mb-1">м²</Text>
+          {record.area_client ? (
+            <Text strong className="text-sm block">
+              {record.area_client.toLocaleString('ru-RU')}
+            </Text>
+          ) : (
+            <Text type="secondary" className="text-sm block">
+              —
+            </Text>
+          )}
+        </div>
+      ),
+      sorter: (a, b) => (a.area_client || 0) - (b.area_client || 0)
+    }] : []),
     {
       title: 'Прогресс',
       key: 'progress',

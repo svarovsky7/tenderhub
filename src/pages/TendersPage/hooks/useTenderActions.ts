@@ -93,7 +93,10 @@ export const useTenderActions = (
         description: values.description,
         client_name: values.client_name,
         tender_number: values.tender_number,
-        submission_deadline: values.submission_deadline ? dayjs(values.submission_deadline).format('YYYY-MM-DD HH:mm:ss') : undefined
+        submission_deadline: values.submission_deadline ? dayjs(values.submission_deadline).format('YYYY-MM-DD HH:mm:ss') : undefined,
+        version: values.version ?? 1,
+        area_sp: values.area_sp ?? null,
+        area_client: values.area_client ?? null
         // Note: status and estimated_value fields removed from schema
       };
 
@@ -139,7 +142,10 @@ export const useTenderActions = (
         description: values.description,
         client_name: values.client_name,
         tender_number: values.tender_number,
-        submission_deadline: values.submission_deadline ? dayjs(values.submission_deadline).format('YYYY-MM-DD HH:mm:ss') : undefined
+        submission_deadline: values.submission_deadline ? dayjs(values.submission_deadline).format('YYYY-MM-DD HH:mm:ss') : undefined,
+        version: values.version ?? 1,
+        area_sp: values.area_sp ?? null,
+        area_client: values.area_client ?? null
         // Note: status and estimated_value fields removed from schema
       };
 

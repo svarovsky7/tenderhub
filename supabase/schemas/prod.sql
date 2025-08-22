@@ -476,10 +476,16 @@ CREATE TABLE IF NOT EXISTS public.tenders (
     submission_deadline timestamp with time zone,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    version integer DEFAULT 1 NOT NULL,
+    area_sp numeric(10,2),
+    area_client numeric(10,2),
     CONSTRAINT tenders_pkey PRIMARY KEY (id),
     CONSTRAINT tenders_tender_number_key UNIQUE (tender_number)
 );
 COMMENT ON TABLE public.tenders IS 'Main tender projects with client details';
+COMMENT ON COLUMN public.tenders.version IS 'Версия тендера (целое число для отслеживания изменений ВОР)';
+COMMENT ON COLUMN public.tenders.area_sp IS 'Площадь по СП (м²)';
+COMMENT ON COLUMN public.tenders.area_client IS 'Площадь от Заказчика (м²)';
 
 -- Table: public.units
 CREATE TABLE IF NOT EXISTS public.units (

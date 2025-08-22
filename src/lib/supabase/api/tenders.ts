@@ -129,6 +129,13 @@ export const tendersApi = {
 
   // Update tender
   async update(id: string, updates: TenderUpdate): Promise<ApiResponse<Tender>> {
+    console.log('🔄 tendersApi.update called with:', { id, updates });
+    console.log('🔍 New fields in update:', { 
+      version: updates.version, 
+      area_sp: updates.area_sp, 
+      area_client: updates.area_client 
+    });
+    
     try {
       const { data, error } = await supabase
         .from('tenders')
@@ -136,6 +143,8 @@ export const tendersApi = {
         .eq('id', id)
         .select()
         .single();
+
+      console.log('📦 Supabase update response:', { data, error });
 
       if (error) {
         return {
