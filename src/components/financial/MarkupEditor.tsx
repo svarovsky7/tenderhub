@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Card, Form, InputNumber, Input, Button, message, Space, Typography, Row, Col, Progress, Statistic, Table } from 'antd';
-import { SaveOutlined, ReloadOutlined, InfoCircleOutlined, SettingOutlined, CalculatorOutlined } from '@ant-design/icons';
+import { Card, Form, InputNumber, Input, Button, message, Space, Typography, Row, Col, Progress, Statistic, Table, Tooltip } from 'antd';
+import { ReloadOutlined, InfoCircleOutlined, SettingOutlined, CalculatorOutlined } from '@ant-design/icons';
 import { 
   getActiveTenderMarkup, 
   updateTenderMarkup, 
@@ -18,37 +18,107 @@ interface MarkupEditorProps {
     submaterials: number;
     subworks: number;
   };
+  tenderData?: {
+    title: string;
+    client_name: string;
+    area_sp?: number;
+    area_client?: number;
+  };
   onMarkupChange?: (calculatedFinancials: any) => void;
 }
 
 // Конфигурация полей для табличного представления
 const markupFields = [
+  // Базовые затраты (только для отображения, без редактирования)
+  {
+    key: 'base_materials',
+    name: 'base_materials',
+    label: 'Материалы (ПЗ)',
+    tooltip: 'Базовые затраты на материалы из BOQ',
+    isBaseInfo: true,
+    baseType: 'materials'
+  },
+  {
+    key: 'base_works',
+    name: 'base_works',
+    label: 'Работы (ПЗ)',
+    tooltip: 'Базовые затраты на работы из BOQ',
+    isBaseInfo: true,
+    baseType: 'works'
+  },
+  {
+    key: 'base_submaterials',
+    name: 'base_submaterials',
+    label: 'Субматериалы (ПЗ)',
+    tooltip: 'Базовые затраты на субматериалы из BOQ',
+    isBaseInfo: true,
+    baseType: 'submaterials'
+  },
+  {
+    key: 'base_subworks',
+    name: 'base_subworks',
+    label: 'Субработы (ПЗ)',
+    tooltip: 'Базовые затраты на субработы из BOQ',
+    isBaseInfo: true,
+    baseType: 'subworks'
+  },
+  // Редактируемые поля
+  {
+    key: 'mechanization_service',
+    name: 'mechanization_service',
+    label: 'Служба механизации раб (бурильщики, автотехника, электрики)',
+    tooltip: 'Расчет: Работы ПЗ × процент. Затраты на службу механизации работ (бурильщики, автотехника, электрики)',
+    max: 100,
+    suffix: '%',
+    baseType: 'works',
+    calculationType: 'percentage'
+  },
+  {
+    key: 'mbp_gsm',
+    name: 'mbp_gsm',
+    label: 'МБП+ГСМ (топливо+масло)',
+    tooltip: 'Расчет: Работы ПЗ × процент. Малоценные быстроизнашивающиеся предметы и горюче-смазочные материалы',
+    max: 100,
+    suffix: '%',
+    baseType: 'works',
+    calculationType: 'percentage'
+  },
+  {
+    key: 'warranty_period',
+    name: 'warranty_period',
+    label: 'Гарантийный период 5 лет',
+    tooltip: 'Расчет: Работы ПЗ × процент. Затраты на гарантийное обслуживание в течение 5 лет',
+    max: 100,
+    suffix: '%',
+    baseType: 'works',
+    calculationType: 'percentage'
+  },
   {
     key: 'works_16_markup',
     name: 'works_16_markup',
     label: 'Работы 1,6',
-    tooltip: 'Процент накрутки на работы',
+    tooltip: 'Расчет: (Работы ПЗ + Служба механизации) × процент. Процент затрат на работы с коэффициентом 1,6',
     max: 1000,
     suffix: '%',
     required: true,
-    baseType: 'works',
+    baseType: 'worksWithMechanization',
     calculationType: 'percentage'
   },
   {
     key: 'works_cost_growth',
     name: 'works_cost_growth',
     label: 'Рост стоимости работ',
-    tooltip: 'Процент роста стоимости работ (применяется к результату "Работы 1,6")',
+    tooltip: 'Расчет: (Работы 1,6 + МБП+ГСМ) × процент. Процент роста стоимости работ',
     max: 100,
     suffix: '%',
-    baseType: 'worksAfter16',
+    baseType: 'worksAfter16WithMbp',
     calculationType: 'percentage'
   },
   {
     key: 'materials_cost_growth',
     name: 'materials_cost_growth',
     label: 'Рост стоимости материалов',
-    tooltip: 'Процент роста стоимости материалов',
+    tooltip: 'Расчет: Материалы ПЗ × процент. Процент роста стоимости материалов',
     max: 100,
     suffix: '%',
     baseType: 'materials',
@@ -58,7 +128,7 @@ const markupFields = [
     key: 'subcontract_works_cost_growth',
     name: 'subcontract_works_cost_growth',
     label: 'Рост работ субподряда',
-    tooltip: 'Процент роста стоимости субподрядных работ',
+    tooltip: 'Расчет: Субработы ПЗ × процент. Процент роста стоимости субподрядных работ',
     max: 100,
     suffix: '%',
     baseType: 'subworks',
@@ -68,7 +138,7 @@ const markupFields = [
     key: 'subcontract_materials_cost_growth',
     name: 'subcontract_materials_cost_growth',
     label: 'Рост материалов субподряда',
-    tooltip: 'Процент роста стоимости субподрядных материалов',
+    tooltip: 'Расчет: Субматериалы ПЗ × процент. Процент роста стоимости субподрядных материалов',
     max: 100,
     suffix: '%',
     baseType: 'submaterials',
@@ -78,72 +148,72 @@ const markupFields = [
     key: 'contingency_costs',
     name: 'contingency_costs',
     label: 'Непредвиденные затраты',
-    tooltip: 'Резерв на непредвиденные ситуации (от суммы Работ РОСТ + Материалов РОСТ)',
+    tooltip: 'Расчет: (Работы 1,6 + МБП+ГСМ + Материалы ПЗ) × процент. Резерв на непредвиденные ситуации',
     max: 20,
     suffix: '%',
-    baseType: 'contingencyBase',
+    baseType: 'contingencyBaseNew',
     calculationType: 'percentage'
   },
   {
     key: 'overhead_own_forces',
     name: 'overhead_own_forces',
     label: 'ООЗ собств. силы',
-    tooltip: 'Общехозяйственные затраты собственными силами',
+    tooltip: 'Расчет: (Работы РОСТ + Материалы РОСТ + Непредвиденные - Работы 1,6 - Материалы ПЗ - МБП) × процент. Общехозяйственные затраты собственными силами',
     max: 50,
     suffix: '%',
-    baseType: 'ownForcesBase',
+    baseType: 'ownForcesBaseNew',
     calculationType: 'percentage'
   },
   {
     key: 'overhead_subcontract',
     name: 'overhead_subcontract',
     label: 'ООЗ Субподряд',
-    tooltip: 'Общехозяйственные затраты субподряда (от суммы Субматериалов ПЗ + Субработ ПЗ)',
+    tooltip: 'Расчет: (Субматериалы РОСТ + Субработы РОСТ) × процент. Общехозяйственные затраты субподряда',
     max: 50,
     suffix: '%',
-    baseType: 'subcontractBaseOriginal',
+    baseType: 'subcontractBase',
     calculationType: 'percentage'
   },
   {
     key: 'general_costs_without_subcontract',
     name: 'general_costs_without_subcontract',
     label: 'ОФЗ (Без субподряда)',
-    tooltip: 'Общефирменные затраты без субподряда',
+    tooltip: 'Расчет: ООЗ собств. силы × процент. Общефирменные затраты без субподряда',
     max: 30,
     suffix: '%',
-    baseType: 'ownForcesBase',
+    baseType: 'overheadOwnForces',
     calculationType: 'percentage'
   },
   {
     key: 'profit_own_forces',
     name: 'profit_own_forces',
     label: 'Прибыль собств. силы',
-    tooltip: 'Прибыль от работ собственными силами',
+    tooltip: 'Расчет: ОФЗ × процент. Прибыль от работ собственными силами',
     max: 50,
     suffix: '%',
-    baseType: 'ownForcesBase',
+    baseType: 'generalCosts',
     calculationType: 'percentage'
   },
   {
     key: 'profit_subcontract',
     name: 'profit_subcontract',
     label: 'Прибыль Субподряд',
-    tooltip: 'Прибыль от субподрядных работ',
+    tooltip: 'Расчет: ООЗ Субподряд × процент. Прибыль от субподрядных работ',
     max: 50,
     suffix: '%',
-    baseType: 'subcontractBase',
+    baseType: 'overheadSubcontract',
     calculationType: 'percentage'
   }
 ];
 
 export const MarkupEditor: React.FC<MarkupEditorProps> = ({ 
   tenderId, 
-  baseCosts, 
+  baseCosts,
+  tenderData,
   onMarkupChange 
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const [markupData, setMarkupData] = useState<TenderMarkupPercentages | null>(null);
   const [calculatedFinancials, setCalculatedFinancials] = useState<any>(null);
@@ -182,7 +252,7 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
       console.log('✅ [MarkupEditor] Markup data loaded:', data);
     } catch (error) {
       console.error('❌ [MarkupEditor] Error loading markup data:', error);
-      message.error('Ошибка загрузки настроек накруток');
+      message.error('Ошибка загрузки процентов затрат');
     } finally {
       setLoading(false);
     }
@@ -209,51 +279,83 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
     }
   }, [calculateFinancials, markupData, baseCosts]);
 
-  const handleSave = async () => {
-    if (!markupData) return;
-    
-    try {
-      setSaving(true);
-      const values = await form.validateFields();
+
+  const handleRefreshCalculation = () => {
+    const values = form.getFieldsValue();
+    if (markupData && values) {
+      console.log('🔄 [MarkupEditor] Принудительное обновление расчета');
       
-      console.log('🚀 [MarkupEditor] Saving markup updates:', values);
+      const tempMarkupData = { ...markupData, ...values };
+      const financials = calculateMarkupFinancials(baseCosts, tempMarkupData);
+      setCalculatedFinancials(financials);
       
-      const updateData: UpdateTenderMarkupPercentages = values;
-      const updatedData = await updateTenderMarkup(markupData.id, updateData);
-      setMarkupData(updatedData);
+      if (onMarkupChange) {
+        onMarkupChange(financials);
+      }
       
-      message.success('✅ Настройки накруток сохранены!');
-      console.log('✅ [MarkupEditor] Markup saved successfully:', updatedData);
-      
-    } catch (error) {
-      console.error('❌ [MarkupEditor] Error saving markup:', error);
-      message.error('Ошибка сохранения настроек накруток');
-    } finally {
-      setSaving(false);
+      message.success('Расчет обновлен');
+      console.log('✅ [MarkupEditor] Расчет принудительно обновлен:', financials);
     }
   };
 
-  const handleReset = () => {
-    if (markupData) {
-      form.setFieldsValue(markupData);
-      message.info('Значения возвращены к сохраненным');
-    }
-  };
-
-  // Функция для расчета стоимости конкретной накрутки
+  // Функция для расчета стоимости конкретного процента затрат
   const calculateMarkupCost = (field: any, formValues: any) => {
     if (!calculatedFinancials || !formValues[field.name]) return 0;
     
     const value = formValues[field.name];
+    
+    // Рассчитываем службы для использования в других расчетах
+    const mechanizationServiceCost = formValues['mechanization_service'] 
+      ? baseCosts.works * (formValues['mechanization_service'] / 100) 
+      : 0;
+    
+    const mbpGsmCost = formValues['mbp_gsm']
+      ? baseCosts.works * (formValues['mbp_gsm'] / 100)
+      : 0;
+    
+    // Рассчитываем "Работы 1,6"
+    const worksWithMechanization = baseCosts.works + mechanizationServiceCost;
+    const works16Result = formValues['works_16_markup']
+      ? worksWithMechanization * (formValues['works_16_markup'] / 100)
+      : 0;
+    
+    // Рассчитываем непредвиденные затраты для использования в ООЗ
+    const contingencyCost = formValues['contingency_costs']
+      ? (works16Result + mbpGsmCost + baseCosts.materials) * (formValues['contingency_costs'] / 100)
+      : 0;
+
+    // Рассчитываем ООЗ собств. силы для использования в ОФЗ
+    const overheadOwnForcesBase = (calculatedFinancials.worksWithGrowth || 0) + (calculatedFinancials.materialsWithGrowth || 0) + contingencyCost - works16Result - baseCosts.materials - mbpGsmCost;
+    const overheadOwnForcesCost = formValues['overhead_own_forces']
+      ? overheadOwnForcesBase * (formValues['overhead_own_forces'] / 100)
+      : 0;
+
+    // Рассчитываем ОФЗ для использования в прибыли собственных сил
+    const generalCostsCost = formValues['general_costs_without_subcontract']
+      ? overheadOwnForcesCost * (formValues['general_costs_without_subcontract'] / 100)
+      : 0;
+
+    // Рассчитываем ООЗ Субподряд для использования в прибыли субподряда
+    const overheadSubcontractCost = formValues['overhead_subcontract']
+      ? ((calculatedFinancials.submaterialsWithGrowth || 0) + (calculatedFinancials.subworksWithGrowth || 0)) * (formValues['overhead_subcontract'] / 100)
+      : 0;
+
     const baseValues = {
       works: baseCosts.works,
       materials: baseCosts.materials,
       submaterials: baseCosts.submaterials,
       subworks: baseCosts.subworks,
+      worksWithMechanization: worksWithMechanization, // База для "Работы 1,6"
+      worksAfter16WithMbp: works16Result + mbpGsmCost, // База для "Рост стоимости работ"
       worksAfter16: calculatedFinancials.worksAfter16 || 0,
       subtotalAfterGrowth: calculatedFinancials.subtotalAfterGrowth || 0,
       contingencyBase: (calculatedFinancials.worksWithGrowth || 0) + (calculatedFinancials.materialsWithGrowth || 0),
+      contingencyBaseNew: works16Result + mbpGsmCost + baseCosts.materials, // Новая база для непредвиденных: Работы 1,6 + МБП + Материалы ПЗ
       ownForcesBase: (calculatedFinancials.materialsWithGrowth || 0) + (calculatedFinancials.worksWithGrowth || 0),
+      ownForcesBaseNew: (calculatedFinancials.worksWithGrowth || 0) + (calculatedFinancials.materialsWithGrowth || 0) + contingencyCost - works16Result - baseCosts.materials - mbpGsmCost, // Новая база для ООЗ собств. силы
+      overheadOwnForces: overheadOwnForcesCost, // ООЗ собств. силы для расчета ОФЗ
+      generalCosts: generalCostsCost, // ОФЗ для расчета прибыли собственных сил
+      overheadSubcontract: overheadSubcontractCost, // ООЗ Субподряд для расчета прибыли субподряда
       subcontractBase: (calculatedFinancials.submaterialsWithGrowth || 0) + (calculatedFinancials.subworksWithGrowth || 0),
       subcontractBaseOriginal: baseCosts.submaterials + baseCosts.subworks // Базовые ПЗ для ООЗ субподряда
     };
@@ -313,7 +415,7 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
   const tableData = markupFields.map(field => {
     const formValues = form.getFieldsValue();
     const currentValue = formValues[field.name] || 0;
-    const calculatedCost = calculateMarkupCost(field, formValues);
+    const calculatedCost = field.isBaseInfo ? 0 : calculateMarkupCost(field, formValues);
     
     return {
       key: field.key,
@@ -324,24 +426,52 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
       max: field.max,
       suffix: field.suffix,
       currentValue,
-      calculatedCost
+      calculatedCost,
+      isBaseInfo: field.isBaseInfo,
+      baseType: field.baseType
     };
   });
+
+  // Рассчитываем итоги
+  const totalBaseCosts = baseCosts.materials + baseCosts.works + baseCosts.submaterials + baseCosts.subworks;
+  
+  // Правильная итоговая стоимость - суммируем все строки таблицы
+  const totalCalculatedCosts = tableData.reduce((sum, row) => {
+    if (row.isBaseInfo) {
+      // Для базовых затрат берем их значения
+      switch (row.baseType) {
+        case 'materials': return sum + baseCosts.materials;
+        case 'works': return sum + baseCosts.works;
+        case 'submaterials': return sum + baseCosts.submaterials;
+        case 'subworks': return sum + baseCosts.subworks;
+        default: return sum;
+      }
+    } else {
+      // Для процентных строк берем расчетную стоимость
+      return sum + row.calculatedCost;
+    }
+  }, 0);
+  
+  // Итог цены за м² по СП
+  const totalCostPerSqm = tenderData?.area_sp && tenderData.area_sp > 0 
+    ? totalCalculatedCosts / tenderData.area_sp 
+    : 0;
 
   // Колонки таблицы
   const columns = [
     {
-      title: 'Тип накрутки',
+      title: 'Тип процента',
       dataIndex: 'label',
       key: 'label',
       width: 200,
       render: (text: string, record: any) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Text strong style={{ fontSize: 13 }}>{text}</Text>
-          <InfoCircleOutlined 
-            style={{ color: '#8c8c8c', fontSize: 12 }}
-            title={record.tooltip}
-          />
+          <Tooltip title={record.tooltip} placement="topLeft">
+            <InfoCircleOutlined 
+              style={{ color: '#8c8c8c', fontSize: 12, cursor: 'help' }}
+            />
+          </Tooltip>
         </div>
       ),
     },
@@ -349,40 +479,138 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
       title: 'Значение',
       dataIndex: 'currentValue',
       key: 'value',
-      width: 150,
-      render: (value: number, record: any) => (
-        <Form.Item
-          name={record.name}
-          style={{ margin: 0 }}
-          rules={record.required ? [
-            { required: true, message: `Укажите ${record.label.toLowerCase()}` },
-            { type: 'number', min: 0, max: record.max, message: `Значение от 0 до ${record.max}${record.suffix}` }
-          ] : [
-            { type: 'number', min: 0, max: record.max, message: `Значение от 0 до ${record.max}${record.suffix}` }
-          ]}
-        >
-          <InputNumber
-            style={{ width: '100%' }}
-            min={0}
-            max={record.max}
-            step={0.1}
-            precision={2}
-            suffix={record.suffix}
-            placeholder={`0.00${record.suffix}`}
-          />
-        </Form.Item>
-      ),
+      width: 50,
+      render: (value: number, record: any) => {
+        // Для строк базовой информации не показываем поле ввода
+        if (record.isBaseInfo) {
+          return <div style={{ height: '32px' }}></div>;
+        }
+        
+        return (
+          <Form.Item
+            name={record.name}
+            style={{ margin: 0 }}
+            rules={record.required ? [
+              { required: true, message: `Укажите ${record.label.toLowerCase()}` },
+              { type: 'number', min: 0, max: record.max, message: `Значение от 0 до ${record.max}${record.suffix}` }
+            ] : [
+              { type: 'number', min: 0, max: record.max, message: `Значение от 0 до ${record.max}${record.suffix}` }
+            ]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0}
+              max={record.max}
+              step={0.1}
+              precision={2}
+              suffix={record.suffix}
+              placeholder={`0.00${record.suffix}`}
+            />
+          </Form.Item>
+        );
+      },
+    },
+    {
+      title: 'Цена за м² по СП',
+      dataIndex: 'costPerSqm',
+      key: 'costPerSqm',
+      width: 100,
+      align: 'center',
+      render: (value: number, record: any) => {
+        // Для строк базовой информации показываем стоимость базовых затрат за м²
+        if (record.isBaseInfo) {
+          if (!tenderData?.area_sp || tenderData.area_sp <= 0) {
+            return <div style={{ height: '32px' }}></div>;
+          }
+          
+          let baseCost = 0;
+          switch (record.baseType) {
+            case 'materials':
+              baseCost = baseCosts.materials;
+              break;
+            case 'works':
+              baseCost = baseCosts.works;
+              break;
+            case 'submaterials':
+              baseCost = baseCosts.submaterials;
+              break;
+            case 'subworks':
+              baseCost = baseCosts.subworks;
+              break;
+          }
+          
+          const costPerSqm = baseCost / tenderData.area_sp;
+          
+          return (
+            <Text style={{ 
+              fontSize: 13,
+              color: '#666',
+              fontWeight: 500
+            }}>
+              {Math.round(costPerSqm).toLocaleString('ru-RU')}
+            </Text>
+          );
+        }
+        
+        // Для редактируемых строк показываем стоимость за м² от расчетной стоимости
+        if (!tenderData?.area_sp || tenderData.area_sp <= 0 || record.calculatedCost <= 0) {
+          return <div style={{ height: '32px' }}></div>;
+        }
+        
+        const costPerSqm = record.calculatedCost / tenderData.area_sp;
+        
+        return (
+          <Text style={{ 
+            fontSize: 13,
+            color: '#52c41a',
+            fontWeight: 500
+          }}>
+            {Math.round(costPerSqm).toLocaleString('ru-RU')}
+          </Text>
+        );
+      },
     },
     {
       title: 'Расчетная стоимость',
       dataIndex: 'calculatedCost',
       key: 'cost',
       width: 150,
-      render: (cost: number) => (
-        <Text strong style={{ color: '#1890ff' }}>
-          {Math.round(cost).toLocaleString('ru-RU')} ₽
-        </Text>
-      ),
+      render: (cost: number, record: any) => {
+        // Для строк базовой информации показываем базовые затраты
+        if (record.isBaseInfo) {
+          let baseCost = 0;
+          switch (record.baseType) {
+            case 'materials':
+              baseCost = baseCosts.materials;
+              break;
+            case 'works':
+              baseCost = baseCosts.works;
+              break;
+            case 'submaterials':
+              baseCost = baseCosts.submaterials;
+              break;
+            case 'subworks':
+              baseCost = baseCosts.subworks;
+              break;
+          }
+          
+          return (
+            <Text strong style={{ 
+              fontSize: 14,
+              color: '#1890ff',
+              fontWeight: 600
+            }}>
+              {baseCost.toLocaleString('ru-RU')} ₽
+            </Text>
+          );
+        }
+        
+        return (
+          <Text strong style={{ color: '#1890ff' }}>
+            {Math.round(cost).toLocaleString('ru-RU')} ₽
+          </Text>
+        );
+      },
     },
   ];
 
@@ -399,16 +627,56 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
       <div style={{ marginBottom: 20 }}>
         <Title level={4} style={{ margin: 0, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
           <SettingOutlined style={{ color: '#1890ff' }} />
-          Настройка накруток
+          Редактирование процентов затрат
           {autoSaving && (
             <Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
               • автосохранение...
             </Text>
           )}
         </Title>
-        <Text type="secondary">
-          Общая базовая стоимость: <Text strong>{totalCost.toLocaleString('ru-RU')} ₽</Text>
-        </Text>
+        
+        <div style={{ 
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          gap: 16, 
+          alignItems: 'center',
+          marginBottom: 8 
+        }}>
+          <Text type="secondary">
+            Общая базовая стоимость: <Text strong>{totalCost.toLocaleString('ru-RU')} ₽</Text>
+          </Text>
+          
+          {tenderData && (
+            <>
+              {tenderData.area_sp && (
+                <Text type="secondary">
+                  Площадь СП: <Text strong>{tenderData.area_sp.toLocaleString('ru-RU')} м²</Text>
+                </Text>
+              )}
+              
+              {tenderData.area_client && (
+                <Text type="secondary">
+                  Площадь заказчика: <Text strong>{tenderData.area_client.toLocaleString('ru-RU')} м²</Text>
+                </Text>
+              )}
+              
+              {(tenderData.area_sp || tenderData.area_client) && totalCost > 0 && (
+                <Text type="secondary">
+                  Базовая стоимость за м²: <Text strong>
+                    {Math.round(totalCost / (tenderData.area_sp || tenderData.area_client || 1)).toLocaleString('ru-RU')} ₽/м²
+                  </Text>
+                </Text>
+              )}
+            </>
+          )}
+        </div>
+        
+        {tenderData && (
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            Проект: <Text strong>{tenderData.title}</Text> • 
+            Заказчик: <Text strong>{tenderData.client_name || 'Не указан'}</Text>
+          </Text>
+        )}
       </div>
 
       <Form
@@ -416,80 +684,217 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
         layout="vertical"
         onValuesChange={handleFormChange}
       >
-        {/* Табличное представление накруток */}
+        {/* Табличное представление процентов затрат */}
         <Table
           dataSource={tableData}
           columns={columns}
           pagination={false}
           size="small"
           bordered
-          style={{ marginBottom: 20 }}
+          style={{ marginBottom: 12 }}
+          summary={() => (
+            <Table.Summary.Row>
+              <Table.Summary.Cell index={0}>
+                <Text strong style={{ fontSize: 14, color: '#1890ff' }}>
+                  ИТОГО
+                </Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={1}>
+                {/* Пустая ячейка для столбца "Значение" */}
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={2} align="center">
+                <Text strong style={{ fontSize: 14, color: '#1890ff' }}>
+                  {totalCostPerSqm > 0 ? Math.round(totalCostPerSqm).toLocaleString('ru-RU') : '-'}
+                </Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={3}>
+                <Text strong style={{ fontSize: 14, color: '#1890ff' }}>
+                  {Math.round(totalCalculatedCosts).toLocaleString('ru-RU')} ₽
+                </Text>
+              </Table.Summary.Cell>
+            </Table.Summary.Row>
+          )}
         />
 
-        <Row style={{ marginTop: 20 }}>
-          <Col span={24}>
-            <Form.Item 
-              name="notes" 
-              label="Примечания"
-              style={{ marginBottom: 16 }}
-            >
-              <Input.TextArea
-                rows={2}
-                placeholder="Дополнительные комментарии..."
-              />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Row justify="center" style={{ marginTop: 16 }}>
-          <Space>
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              loading={saving}
-              onClick={handleSave}
-            >
-              Сохранить
-            </Button>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={handleReset}
-            >
-              Сбросить
-            </Button>
-          </Space>
+        <Row justify="center" style={{ marginTop: 20 }}>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={handleRefreshCalculation}
+            type="primary"
+          >
+            Обновить расчет
+          </Button>
         </Row>
       </Form>
 
-      {/* Предварительный расчет */}
+      {/* Итоговый расчет */}
       {calculatedFinancials && (
-        <div style={{ 
-          marginTop: 20,
-          padding: 16,
-          background: '#f0f2f5',
-          borderRadius: 8,
-          borderLeft: '4px solid #1890ff'
-        }}>
-          <Title level={5} style={{ margin: 0, marginBottom: 12 }}>
-            <CalculatorOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-            Предварительный расчет
-          </Title>
+        <Card 
+          style={{ 
+            marginTop: 20, 
+            borderRadius: 16,
+            background: '#ffffff',
+            border: '1px solid #f0f0f0',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+          }}
+        >
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            marginBottom: 24
+          }}>
+            <Title level={4} style={{ 
+              margin: 0, 
+              color: '#262626',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
+            }}>
+              <CalculatorOutlined style={{ color: '#1890ff' }} />
+              Итоговый расчет стоимости
+            </Title>
+            
+            {tenderData?.area_sp && (
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                Площадь: <Text strong>{tenderData.area_sp.toLocaleString('ru-RU')} м²</Text>
+              </Text>
+            )}
+          </div>
           
-          <Row gutter={16}>
-            <Col span={12}>
-              <Text type="secondary">Итоговая стоимость:</Text>
-              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1890ff' }}>
-                {Math.round(calculatedFinancials.totalCostWithProfit || 0).toLocaleString('ru-RU')} ₽
+          {/* Основные компоненты */}
+          <div style={{ 
+            background: '#fafafa', 
+            borderRadius: 12, 
+            padding: 20,
+            marginBottom: 20 
+          }}>
+            <Text strong style={{ fontSize: 14, color: '#595959', marginBottom: 12, display: 'block' }}>
+              💼 Основные затраты с накрутками
+            </Text>
+            <Row gutter={[16, 12]}>
+              <Col xs={12} sm={6}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: '#52c41a' }}>
+                    {Math.round(calculatedFinancials.materialsWithGrowth).toLocaleString('ru-RU')} ₽
+                  </div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Материалы</div>
+                </div>
+              </Col>
+              <Col xs={12} sm={6}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: '#1890ff' }}>
+                    {Math.round(calculatedFinancials.worksWithGrowth).toLocaleString('ru-RU')} ₽
+                  </div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Работы</div>
+                </div>
+              </Col>
+              <Col xs={12} sm={6}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: '#fa8c16' }}>
+                    {Math.round(calculatedFinancials.submaterialsWithGrowth).toLocaleString('ru-RU')} ₽
+                  </div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Субматериалы</div>
+                </div>
+              </Col>
+              <Col xs={12} sm={6}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: '#eb2f96' }}>
+                    {Math.round(calculatedFinancials.subworksWithGrowth).toLocaleString('ru-RU')} ₽
+                  </div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Субработы</div>
+                </div>
+              </Col>
+            </Row>
+          </div>
+
+          {/* Дополнительные затраты */}
+          <div style={{ 
+            background: '#f6f6f6', 
+            borderRadius: 12, 
+            padding: 20,
+            marginBottom: 20 
+          }}>
+            <Text strong style={{ fontSize: 14, color: '#595959', marginBottom: 12, display: 'block' }}>
+              📊 Дополнительные затраты
+            </Text>
+            <Row gutter={[16, 12]}>
+              <Col xs={8}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#faad14' }}>
+                    {Math.round(calculatedFinancials.contingencyCost).toLocaleString('ru-RU')} ₽
+                  </div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Непредвиденные</div>
+                </div>
+              </Col>
+              <Col xs={8}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#722ed1' }}>
+                    {Math.round(calculatedFinancials.overheadOwnForces + calculatedFinancials.overheadSubcontract).toLocaleString('ru-RU')} ₽
+                  </div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>ООЗ</div>
+                </div>
+              </Col>
+              <Col xs={8}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#f5222d' }}>
+                    {Math.round(calculatedFinancials.totalProfit).toLocaleString('ru-RU')} ₽
+                  </div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Прибыль</div>
+                </div>
+              </Col>
+            </Row>
+          </div>
+
+          {/* Итоговая стоимость */}
+          <div style={{ 
+            background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)', 
+            borderRadius: 16,
+            padding: 24,
+            textAlign: 'center',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              width: '100px',
+              height: '100px',
+              background: 'rgba(255,255,255,0.1)',
+              borderRadius: '50%',
+              transform: 'translate(30px, -30px)'
+            }} />
+            
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ 
+                color: 'rgba(255,255,255,0.9)', 
+                fontSize: 16, 
+                marginBottom: 8,
+                fontWeight: 500
+              }}>
+                Итоговая стоимость тендера
               </div>
-            </Col>
-            <Col span={12}>
-              <Text type="secondary">Общая прибыль:</Text>
-              <div style={{ fontSize: 16, fontWeight: 'bold', color: '#52c41a' }}>
-                {Math.round(calculatedFinancials.totalProfit || 0).toLocaleString('ru-RU')} ₽
+              <div style={{ 
+                color: 'white', 
+                fontSize: 32, 
+                fontWeight: 'bold',
+                lineHeight: 1,
+                marginBottom: 8
+              }}>
+                {Math.round(totalCalculatedCosts).toLocaleString('ru-RU')} ₽
               </div>
-            </Col>
-          </Row>
-        </div>
+              {tenderData?.area_sp && (
+                <div style={{ 
+                  color: 'rgba(255,255,255,0.85)', 
+                  fontSize: 14
+                }}>
+                  {Math.round(totalCalculatedCosts / tenderData.area_sp).toLocaleString('ru-RU')} ₽/м²
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
       )}
     </Card>
   );

@@ -172,6 +172,9 @@ export const calculateMarkupFinancials = (
   // Безопасно извлекаем значения с fallback на 0
   const safeMarkup = {
     works_16_markup: markup.works_16_markup ?? 160,
+    mechanization_service: markup.mechanization_service ?? 0,
+    mbp_gsm: markup.mbp_gsm ?? 0,
+    warranty_period: markup.warranty_period ?? 0,
     works_cost_growth: markup.works_cost_growth ?? 5,
     materials_cost_growth: markup.materials_cost_growth ?? 3,
     subcontract_works_cost_growth: markup.subcontract_works_cost_growth ?? 7,
@@ -186,13 +189,21 @@ export const calculateMarkupFinancials = (
   
   console.log('🔍 [calculateMarkupFinancials] Safe markup values:', safeMarkup);
   
-  // ЭТАП 1: Применяем процент "Работы 1,6" к базовым работам ПЗ
-  const worksAfter16 = baseCosts.works * (safeMarkup.works_16_markup / 100);
-  console.log('💼 [Этап 1] Работы ПЗ * Работы 1,6%:', baseCosts.works, '*', safeMarkup.works_16_markup + '%', '=', worksAfter16);
+  // ПРЕДВАРИТЕЛЬНЫЕ РАСЧЕТЫ: Службы от базовых работ ПЗ
+  const mechanizationServiceCost = baseCosts.works * (safeMarkup.mechanization_service / 100);
+  const mbpGsmCost = baseCosts.works * (safeMarkup.mbp_gsm / 100);
+  const warrantyPeriodCost = baseCosts.works * (safeMarkup.warranty_period / 100);
+  console.log('⚙️ [Службы] Механизация:', mechanizationServiceCost, 'МБП+ГСМ:', mbpGsmCost, 'Гарантия:', warrantyPeriodCost);
   
-  // ЭТАП 2: Применяем "Работы РОСТ" к результату Этапа 1 
-  const worksWithGrowth = worksAfter16 * (1 + safeMarkup.works_cost_growth / 100);
-  console.log('📈 [Этап 2] Результат Этапа 1 * Работы РОСТ%:', worksAfter16, '* (1 +', safeMarkup.works_cost_growth + '%)', '=', worksWithGrowth);
+  // ЭТАП 1: Применяем процент "Работы 1,6" к сумме (Работы ПЗ + Служба механизации)
+  const worksBaseWithMechanization = baseCosts.works + mechanizationServiceCost;
+  const worksAfter16 = worksBaseWithMechanization * (safeMarkup.works_16_markup / 100);
+  console.log('💼 [Этап 1] (Работы ПЗ + Механизация) * Работы 1,6%:', worksBaseWithMechanization, '*', safeMarkup.works_16_markup + '%', '=', worksAfter16);
+  
+  // ЭТАП 2: Применяем "Работы РОСТ" к сумме (Результат Этапа 1 + МБП+ГСМ)
+  const worksAfter16WithMbp = worksAfter16 + mbpGsmCost;
+  const worksWithGrowth = worksAfter16WithMbp * (1 + safeMarkup.works_cost_growth / 100);
+  console.log('📈 [Этап 2] (Работы 1,6 + МБП+ГСМ) * Работы РОСТ%:', worksAfter16WithMbp, '* (1 +', safeMarkup.works_cost_growth + '%)', '=', worksWithGrowth);
   
   // ЭТАП для МАТЕРИАЛОВ: Применяем "Рост стоимости материалов" к Материалам ПЗ
   const materialsGrowthAmount = baseCosts.materials * (safeMarkup.materials_cost_growth / 100);
@@ -209,12 +220,13 @@ export const calculateMarkupFinancials = (
   const subworksWithGrowth = baseCosts.subworks + subworksGrowthAmount;
   console.log('👷 [Субработы] Субработы ПЗ * Рост субработ%:', baseCosts.subworks, '*', safeMarkup.subcontract_works_cost_growth + '%', '=', subworksGrowthAmount, '→ Итого:', subworksWithGrowth);
   
-  const subtotalAfterGrowth = materialsWithGrowth + worksWithGrowth + submaterialsWithGrowth + subworksWithGrowth;
+  // Добавляем все дополнительные службы к общему итогу
+  const subtotalAfterGrowth = materialsWithGrowth + worksWithGrowth + submaterialsWithGrowth + subworksWithGrowth + mbpGsmCost + warrantyPeriodCost;
   
-  // НЕПРЕДВИДЕННЫЕ ЗАТРАТЫ: Применяем % только к Работам РОСТ + Материалам РОСТ (без субподряда)
-  const contingencyBase = worksWithGrowth + materialsWithGrowth;
+  // НЕПРЕДВИДЕННЫЕ ЗАТРАТЫ: Применяем % к (Работы 1,6 + МБП+ГСМ + Материалы ПЗ)
+  const contingencyBase = worksAfter16 + mbpGsmCost + baseCosts.materials;
   const contingencyCost = contingencyBase * (safeMarkup.contingency_costs / 100);
-  console.log('⚠️ [Непредвиденные] (Работы РОСТ + Материалы РОСТ) * Непредвиденные%:', '(' + worksWithGrowth.toFixed(2), '+', materialsWithGrowth.toFixed(2) + ')', '*', safeMarkup.contingency_costs + '%', '=', contingencyCost.toFixed(2));
+  console.log('⚠️ [Непредвиденные] (Работы 1,6 + МБП+ГСМ + Материалы ПЗ) * Непредвиденные%:', '(' + worksAfter16.toFixed(2), '+', mbpGsmCost.toFixed(2), '+', baseCosts.materials.toFixed(2) + ')', '*', safeMarkup.contingency_costs + '%', '=', contingencyCost.toFixed(2));
   
   const subtotalWithContingency = subtotalAfterGrowth + contingencyCost;
   
@@ -222,24 +234,30 @@ export const calculateMarkupFinancials = (
   const ownForcesBase = materialsWithGrowth + worksWithGrowth;
   const subcontractBase = submaterialsWithGrowth + subworksWithGrowth;
   
-  // ООЗ СУБПОДРЯД: Применяем % к сумме Субматериалов ПЗ и Субработ ПЗ (базовые значения, не с ростом!)
-  const overheadSubcontractBase = baseCosts.submaterials + baseCosts.subworks;
-  const overheadSubcontract = overheadSubcontractBase * (safeMarkup.overhead_subcontract / 100);
-  console.log('🏗️ [ООЗ Субподряд] (Субмат ПЗ + Субраб ПЗ) * ООЗ субподряд%:', '(' + baseCosts.submaterials.toFixed(2), '+', baseCosts.subworks.toFixed(2) + ')', '*', safeMarkup.overhead_subcontract + '%', '=', overheadSubcontract.toFixed(2));
+  // ООЗ СУБПОДРЯД: Применяем % к сумме Субматериалов РОСТ и Субработ РОСТ
+  const overheadSubcontract = subcontractBase * (safeMarkup.overhead_subcontract / 100);
+  console.log('🏗️ [ООЗ Субподряд] (Субматериалы РОСТ + Субработы РОСТ) * ООЗ субподряд%:', '(' + submaterialsWithGrowth.toFixed(2), '+', subworksWithGrowth.toFixed(2) + ')', '*', safeMarkup.overhead_subcontract + '%', '=', overheadSubcontract.toFixed(2));
   
-  // Добавляем ООЗ собственные силы (пока оставляем старую логику, потом уточним)
-  const overheadOwnForces = ownForcesBase * (safeMarkup.overhead_own_forces / 100);
+  // ООЗ СОБСТВЕННЫЕ СИЛЫ: Применяем % к (Работы РОСТ + Материалы РОСТ + Непредвиденные - Работы 1,6 - Материалы ПЗ - МБП)
+  const overheadOwnForcesBase = worksWithGrowth + materialsWithGrowth + contingencyCost - worksAfter16 - baseCosts.materials - mbpGsmCost;
+  const overheadOwnForces = overheadOwnForcesBase * (safeMarkup.overhead_own_forces / 100);
+  console.log('🏭 [ООЗ Собств. силы] (Работы РОСТ + Материалы РОСТ + Непредвиденные - Работы 1,6 - Материалы ПЗ - МБП) * ООЗ%:', '(' + worksWithGrowth.toFixed(2), '+', materialsWithGrowth.toFixed(2), '+', contingencyCost.toFixed(2), '-', worksAfter16.toFixed(2), '-', baseCosts.materials.toFixed(2), '-', mbpGsmCost.toFixed(2) + ')', '*', safeMarkup.overhead_own_forces + '%', '=', overheadOwnForces.toFixed(2));
   
   const subtotalWithOverhead = subtotalWithContingency + overheadOwnForces + overheadSubcontract;
   
-  // Добавляем ОФЗ (общие фирменные затраты) - только для собственных сил
-  const generalCosts = ownForcesBase * (safeMarkup.general_costs_without_subcontract / 100);
+  // ОФЗ (общефирменные затраты): Применяем % к ООЗ собственных сил
+  const generalCosts = overheadOwnForces * (safeMarkup.general_costs_without_subcontract / 100);
+  console.log('🏢 [ОФЗ] ООЗ собств. силы * ОФЗ%:', overheadOwnForces.toFixed(2), '*', safeMarkup.general_costs_without_subcontract + '%', '=', generalCosts.toFixed(2));
   
   const subtotalWithGeneralCosts = subtotalWithOverhead + generalCosts;
   
-  // Добавляем прибыль раздельно для собственных сил и субподряда
-  const profitOwnForces = ownForcesBase * (safeMarkup.profit_own_forces / 100);
-  const profitSubcontract = subcontractBase * (safeMarkup.profit_subcontract / 100);
+  // ПРИБЫЛЬ СОБСТВЕННЫХ СИЛ: Применяем % к ОФЗ
+  const profitOwnForces = generalCosts * (safeMarkup.profit_own_forces / 100);
+  console.log('💰 [Прибыль собств. силы] ОФЗ * Прибыль%:', generalCosts.toFixed(2), '*', safeMarkup.profit_own_forces + '%', '=', profitOwnForces.toFixed(2));
+  
+  // ПРИБЫЛЬ СУБПОДРЯДА: Применяем % к ООЗ Субподряд
+  const profitSubcontract = overheadSubcontract * (safeMarkup.profit_subcontract / 100);
+  console.log('💰 [Прибыль субподряд] ООЗ Субподряд * Прибыль%:', overheadSubcontract.toFixed(2), '*', safeMarkup.profit_subcontract + '%', '=', profitSubcontract.toFixed(2));
   
   const totalProfit = profitOwnForces + profitSubcontract;
   const totalCostWithProfit = subtotalWithGeneralCosts + totalProfit;
@@ -252,6 +270,11 @@ export const calculateMarkupFinancials = (
     submaterialsWithGrowth,
     subworksWithGrowth,
     subtotalAfterGrowth,
+    
+    // Новые службы
+    mechanizationServiceCost,
+    mbpGsmCost,
+    warrantyPeriodCost,
     
     // Дополнительные расходы
     contingencyCost,

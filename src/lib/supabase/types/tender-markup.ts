@@ -4,6 +4,9 @@ export interface TenderMarkupPercentages {
   
   // Новые типы накруток согласно требованиям
   works_16_markup: number;                      // Работы 1,6
+  mechanization_service: number;                // Служба механизации раб (бурильщики, автотехника, электрики)
+  mbp_gsm: number;                             // МБП+ГСМ (топливо+масло)
+  warranty_period: number;                      // Гарантийный период 5 лет
   works_cost_growth: number;                    // Рост Стоимости Работ
   materials_cost_growth: number;                // Рост стоимости Материалов
   subcontract_works_cost_growth: number;        // Рост стоимости Работ субподряда
@@ -27,6 +30,9 @@ export interface TenderMarkupPercentages {
 export interface CreateTenderMarkupPercentages {
   tender_id: string;
   works_16_markup?: number;
+  mechanization_service?: number;
+  mbp_gsm?: number;
+  warranty_period?: number;
   works_cost_growth?: number;
   materials_cost_growth?: number;
   subcontract_works_cost_growth?: number;
@@ -43,6 +49,9 @@ export interface CreateTenderMarkupPercentages {
 
 export interface UpdateTenderMarkupPercentages {
   works_16_markup?: number;
+  mechanization_service?: number;
+  mbp_gsm?: number;
+  warranty_period?: number;
   works_cost_growth?: number;
   materials_cost_growth?: number;
   subcontract_works_cost_growth?: number;
@@ -60,6 +69,9 @@ export interface UpdateTenderMarkupPercentages {
 // Значения по умолчанию
 export const DEFAULT_MARKUP_PERCENTAGES: Omit<TenderMarkupPercentages, 'id' | 'tender_id' | 'created_at' | 'updated_at'> = {
   works_16_markup: 160,
+  mechanization_service: 0.00,
+  mbp_gsm: 0.00,
+  warranty_period: 0.00,
   works_cost_growth: 5.00,
   materials_cost_growth: 3.00,
   subcontract_works_cost_growth: 7.00,

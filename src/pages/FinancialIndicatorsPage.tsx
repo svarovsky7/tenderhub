@@ -13,6 +13,8 @@ interface Tender {
   title: string;
   tender_number: string;
   client_name: string;
+  area_sp?: number;
+  area_client?: number;
 }
 
 const FinancialIndicatorsPage: React.FC = () => {
@@ -48,7 +50,7 @@ const FinancialIndicatorsPage: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('tenders')
-        .select('id, title, tender_number, client_name')
+        .select('id, title, tender_number, client_name, area_sp, area_client')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -68,43 +70,123 @@ const FinancialIndicatorsPage: React.FC = () => {
     setLoading(true);
 
     try {
-      // Получаем простые данные BOQ для выбранного тендера
-      const { data: boqData, error: boqError } = await supabase
-        .from('boq_items')
-        .select('*')
-        .eq('tender_id', selectedTenderId);
+      // Получаем агрегированные данные по типам напрямую из БД
+      const { data: aggregatedData, error: aggError } = await supabase
+        .rpc('get_tender_costs_by_type', { tender_id: selectedTenderId });
 
-      if (boqError) throw boqError;
-
-      // Подсчитываем статистику на основе простых данных BOQ
       let totalMaterials = 0;
       let totalWorks = 0;
       let totalSubmaterials = 0;
       let totalSubworks = 0;
+      let boqData: any[] = [];
 
-      if (boqData && boqData.length > 0) {
-        boqData.forEach((item: any) => {
-          const totalItemAmount = item.total_amount || 0;
-          const itemType = item.item_type || 'material';
-          
-          // Распределяем по типам на основе item_type
-          if (itemType === 'material') {
-            totalMaterials += totalItemAmount;
-            // Добавляем доставку для материалов
-            totalMaterials += (item.delivery_amount || 0);
-          } else if (itemType === 'work') {
-            totalWorks += totalItemAmount;
-          } else {
-            // Если тип неизвестен, считаем 50/50
-            totalMaterials += totalItemAmount * 0.5;
-            totalWorks += totalItemAmount * 0.5;
-          }
-          
-          // Субматериалы и субработы (примерная логика на основе процентов)
-          totalSubmaterials += totalItemAmount * 0.08; // 8% от общей стоимости как субматериалы
-          totalSubworks += totalItemAmount * 0.12; // 12% от общей стоимости как субработы
-        });
+      if (aggError) {
+        console.log('📡 [FinancialIndicatorsPage] RPC not available, using manual aggregation');
+        
+        // Fallback: получаем данные BOQ и агрегируем вручную
+        const { data: fallbackBoqData, error: boqError } = await supabase
+          .from('boq_items')
+          .select(`
+            id,
+            item_type,
+            description,
+            total_amount,
+            unit_rate,
+            delivery_amount,
+            quantity,
+            created_at
+          `)
+          .eq('tender_id', selectedTenderId)
+          .order('created_at', { ascending: true });
+
+        if (boqError) throw boqError;
+        boqData = fallbackBoqData || [];
       } else {
+        console.log('✅ [FinancialIndicatorsPage] Using aggregated data from RPC:', aggregatedData);
+        
+        // Используем агрегированные данные
+        if (aggregatedData && aggregatedData.length > 0) {
+          aggregatedData.forEach((row: any) => {
+            const amount = parseFloat(row.total_amount || 0);
+            switch (row.item_type) {
+              case 'material':
+                totalMaterials = amount;
+                break;
+              case 'work':
+                totalWorks = amount;
+                break;
+              case 'sub_material':
+                totalSubmaterials = amount;
+                break;
+              case 'sub_work':
+                totalSubworks = amount;
+                break;
+            }
+          });
+        }
+        
+        // Получаем детальные данные для отображения
+        const { data: detailData } = await supabase
+          .from('boq_items')
+          .select('id, item_type, description, total_amount')
+          .eq('tender_id', selectedTenderId)
+          .limit(100);
+        
+        boqData = detailData || [];
+      }
+
+      // Если используем fallback (manual aggregation), обрабатываем данные
+      if (aggError && boqData && boqData.length > 0) {
+        console.log('📊 [FinancialIndicatorsPage] Processing BOQ items manually:', boqData.length);
+        
+        // Сбрасываем значения для пересчета
+        totalMaterials = 0;
+        totalWorks = 0;
+        totalSubmaterials = 0;
+        totalSubworks = 0;
+        
+        boqData.forEach((item: any) => {
+          const totalItemAmount = parseFloat(item.total_amount || 0);
+          const itemType = item.item_type;
+          
+          console.log('🔍 Processing item:', { 
+            itemType, 
+            totalItemAmount, 
+            description: item.description?.substring(0, 50) 
+          });
+          
+          // Корректно распределяем по типам согласно схеме БД
+          switch (itemType) {
+            case 'material':
+              totalMaterials += totalItemAmount;
+              break;
+            case 'work':
+              totalWorks += totalItemAmount;
+              break;
+            case 'sub_material':
+              totalSubmaterials += totalItemAmount;
+              break;
+            case 'sub_work':
+              totalSubworks += totalItemAmount;
+              break;
+            default:
+              console.warn('⚠️ Unknown item_type:', itemType, 'for item:', item.id);
+              // Если тип неизвестен, относим к материалам по умолчанию
+              totalMaterials += totalItemAmount;
+              break;
+          }
+        });
+
+        console.log('📊 [FinancialIndicatorsPage] Manual aggregation totals:', {
+          totalMaterials,
+          totalWorks,
+          totalSubmaterials,
+          totalSubworks
+        });
+      }
+
+      // Проверяем, есть ли данные
+      if (totalMaterials === 0 && totalWorks === 0 && totalSubmaterials === 0 && totalSubworks === 0) {
         // Если нет данных BOQ, используем демонстрационные данные
         console.log('📊 [FinancialIndicatorsPage] No BOQ data found, using demo values');
         totalMaterials = 1500000;   // 1.5M руб
@@ -115,12 +197,18 @@ const FinancialIndicatorsPage: React.FC = () => {
 
       const totalCost = totalMaterials + totalWorks + totalSubmaterials + totalSubworks;
 
+      // Валидация данных
+      if (totalCost < 0 || isNaN(totalCost)) {
+        console.warn('⚠️ [FinancialIndicatorsPage] Invalid total cost calculated:', totalCost);
+        throw new Error('Некорректные данные расчета стоимости');
+      }
+
       setStats({
-        actualTotalMaterials: totalMaterials,
-        actualTotalWorks: totalWorks,
-        actualTotalSubmaterials: totalSubmaterials,
-        actualTotalSubworks: totalSubworks,
-        actualTotalCost: totalCost
+        actualTotalMaterials: Math.max(0, totalMaterials),
+        actualTotalWorks: Math.max(0, totalWorks),
+        actualTotalSubmaterials: Math.max(0, totalSubmaterials),
+        actualTotalSubworks: Math.max(0, totalSubworks),
+        actualTotalCost: Math.max(0, totalCost)
       });
 
       setCostsWithCalculations(boqData || []);
@@ -131,7 +219,8 @@ const FinancialIndicatorsPage: React.FC = () => {
         totalSubmaterials,
         totalSubworks,
         totalCost,
-        boqItemsCount: boqData?.length || 0
+        boqItemsCount: boqData?.length || 0,
+        dataSource: aggError ? 'manual_aggregation' : 'rpc_function'
       });
 
     } catch (error) {
@@ -165,23 +254,27 @@ const FinancialIndicatorsPage: React.FC = () => {
   };
 
   return (
-    <div style={{ 
-      padding: '16px'
-    }}>
-      {/* Заголовок страницы */}
-      <div style={{
-        padding: '20px 0',
-        borderBottom: '1px solid #f0f0f0',
-        marginBottom: 20
+    <div className="w-full min-h-full bg-gray-50">
+      {/* Header */}
+      <div style={{ 
+        background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
+        padding: '24px',
+        borderBottom: '1px solid #e8e8e8',
+        borderRadius: '0 0 16px 16px'
       }}>
-        <Title level={2} style={{ margin: 0, marginBottom: 4 }}>
-          <LineChartOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-          Финансовые показатели
-        </Title>
-        <Text type="secondary">
-          Анализ рентабельности и структуры затрат тендера
-        </Text>
+        <div className="max-w-none">
+          <Title level={2} className="mb-2" style={{ color: 'white', margin: 0, marginBottom: 8 }}>
+            <LineChartOutlined className="mr-2" />
+            Финансовые показатели
+          </Title>
+          <Text style={{ color: 'rgba(255, 255, 255, 0.85)' }}>
+            Анализ рентабельности и структуры затрат тендера
+          </Text>
+        </div>
       </div>
+
+      {/* Main Content */}
+      <div className="p-6 max-w-none">
 
       {/* Выбор тендера */}
       <Card 
@@ -222,93 +315,89 @@ const FinancialIndicatorsPage: React.FC = () => {
             {tenders.map(tender => (
               <Option key={tender.id} value={tender.id}>
                 <div style={{ 
-                  display: 'block', 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
                   lineHeight: '1.4',
-                  overflow: 'hidden'
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap'
                 }}>
-                  <div style={{ 
+                  <span style={{ 
                     fontWeight: 'bold', 
                     color: '#2c3e50',
-                    marginBottom: 2,
-                    fontSize: 13
+                    fontSize: 15,
+                    flexShrink: 0
                   }}>
                     {tender.tender_number}
-                  </div>
-                  <div style={{ 
-                    fontSize: 11, 
+                  </span>
+                  <span style={{
                     color: '#7f8c8d',
-                    whiteSpace: 'nowrap',
+                    fontSize: 14
+                  }}>
+                    •
+                  </span>
+                  <span style={{ 
+                    fontSize: 14, 
+                    color: '#2c3e50',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    maxWidth: '100%'
+                    minWidth: 0,
+                    flexShrink: 1
                   }}>
                     {tender.title}
-                  </div>
+                  </span>
+                  {tender.client_name && (
+                    <>
+                      <span style={{
+                        color: '#7f8c8d',
+                        fontSize: 14,
+                        flexShrink: 0
+                      }}>
+                        •
+                      </span>
+                      <span style={{ 
+                        fontSize: 14, 
+                        color: '#7f8c8d',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        minWidth: 0,
+                        flexShrink: 1
+                      }}>
+                        {tender.client_name}
+                      </span>
+                    </>
+                  )}
                 </div>
               </Option>
             ))}
           </Select>
         </div>
 
-        {/* Информация о выбранном тендере */}
-        {selectedTender && (
-          <div style={{ 
-            paddingTop: 12,
-            borderTop: '1px solid #f0f0f0',
-            fontSize: 12
-          }}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Text type="secondary">📋 Название:</Text>
-                <div style={{ fontWeight: 500, color: '#2c3e50', marginTop: 2 }}>
-                  {selectedTender.title}
-                </div>
-              </Col>
-              <Col span={12}>
-                <Text type="secondary">👤 Заказчик:</Text>
-                <div style={{ fontWeight: 500, color: '#2c3e50', marginTop: 2 }}>
-                  {selectedTender.client_name || 'Не указан'}
-                </div>
-              </Col>
-            </Row>
-          </div>
-        )}
       </Card>
 
       {/* Основной контент */}
       {selectedTenderId ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Компактная сводка базовых затрат */}
-          <Card 
-            size="small"
-            style={{ 
-              borderRadius: 8,
-              marginBottom: 16
-            }}
-          >
-            <Row gutter={16} align="middle">
-              <Col xs={24} sm={16}>
-                <Text strong style={{ fontSize: 16 }}>📊 Базовые затраты:</Text>
-                <div style={{ marginTop: 4 }}>
-                  <Text type="secondary" style={{ fontSize: 13 }}>
-                    Материалы: {stats.actualTotalMaterials.toLocaleString('ru-RU')} ₽ • 
-                    Работы: {stats.actualTotalWorks.toLocaleString('ru-RU')} ₽ • 
-                    Субподряд: {(stats.actualTotalSubmaterials + stats.actualTotalSubworks).toLocaleString('ru-RU')} ₽
+
+          {/* Информация о выбранном тендере */}
+          {selectedTender && (
+            <Card style={{ marginBottom: 16, borderRadius: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <DollarOutlined style={{ fontSize: 16, color: '#1890ff' }} />
+                <div>
+                  <Text strong style={{ fontSize: 16, display: 'block' }}>
+                    {selectedTender.title}
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: 14 }}>
+                    Заказчик: {selectedTender.client_name || 'Не указан'} • 
+                    Общие затраты: {stats.actualTotalCost.toLocaleString('ru-RU')} ₽
                   </Text>
                 </div>
-              </Col>
-              <Col xs={24} sm={8} style={{ textAlign: 'right' }}>
-                <Text strong style={{ fontSize: 18, color: '#1890ff' }}>
-                  {stats.actualTotalCost.toLocaleString('ru-RU')} ₽
-                </Text>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>общая стоимость</Text>
-                </div>
-              </Col>
-            </Row>
-          </Card>
+              </div>
+            </Card>
+          )}
 
-          {/* Редактор накруток */}
+          {/* Редактор процентов затрат */}
           <MarkupEditor
             tenderId={selectedTenderId}
             baseCosts={{
@@ -317,6 +406,12 @@ const FinancialIndicatorsPage: React.FC = () => {
               submaterials: stats.actualTotalSubmaterials,
               subworks: stats.actualTotalSubworks
             }}
+            tenderData={selectedTender ? {
+              title: selectedTender.title,
+              client_name: selectedTender.client_name,
+              area_sp: selectedTender.area_sp,
+              area_client: selectedTender.area_client
+            } : undefined}
             onMarkupChange={handleMarkupChange}
           />
           
@@ -356,6 +451,7 @@ const FinancialIndicatorsPage: React.FC = () => {
           </div>
         </Card>
       )}
+      </div>
     </div>
   );
 };
