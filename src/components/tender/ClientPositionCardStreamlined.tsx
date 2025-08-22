@@ -16,7 +16,8 @@ import {
   Popconfirm,
   Row,
   Col,
-  InputNumber
+  InputNumber,
+  ConfigProvider
 } from 'antd';
 import {
   FolderOpenOutlined,
@@ -61,6 +62,7 @@ import {
   POSITION_ICONS,
   POSITION_LABELS
 } from '../../utils/clientPositionHierarchy';
+import { formatCurrency } from '../../utils/formatters';
 
 const { Title, Text } = Typography;
 
@@ -94,7 +96,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   onUpdate,
   tenderId
 }) => {
-  console.log('🚀 ClientPositionCardStreamlined rendered:', position.id);
+  // console.log('🚀 ClientPositionCardStreamlined rendered:', position.id);
   
   
   const [loading, setLoading] = useState(false);
@@ -127,10 +129,10 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const positionIcon = POSITION_ICONS[positionType];
   const positionLabel = POSITION_LABELS[positionType];
   const visualIndent = getIndentByLevel(hierarchyLevel);
-  const positionColors = getPositionColors(positionType);
-  const fontWeight = getFontWeight(positionType);
-  const textSize = getTextSize(positionType);
-  const tagColor = getTagColor(positionType);
+  const positionColors = useMemo(() => getPositionColors(positionType), [positionType]);
+  const fontWeight = useMemo(() => getFontWeight(positionType), [positionType]);
+  const textSize = useMemo(() => getTextSize(positionType), [positionType]);
+  const tagColor = useMemo(() => getTagColor(positionType), [positionType]);
   
   // Create stable dependency for position items
   const positionItemsKey = useMemo(() => {
@@ -156,7 +158,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       const newIds = updatedWorks.map(w => w.id).sort().join(',');
       
       if (prevIds !== newIds) {
-        console.log('🔧 Updated available works for linking:', updatedWorks.length, updatedWorks.map(w => ({ id: w.id, desc: w.description })));
+        // console.log('🔧 Updated available works for linking:', updatedWorks.length, updatedWorks.map(w => ({ id: w.id, desc: w.description })));
         return updatedWorks;
       }
       return prevWorks;
@@ -164,7 +166,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   }, [positionItemsKey]);
   
   const works = localWorks;
-  console.log('🔧 Current works for linking:', works.length, works.map(w => ({ id: w.id, desc: w.description })));
+  // console.log('🔧 Current works for linking:', works.length, works.map(w => ({ id: w.id, desc: w.description })));
 
   // Sort BOQ items: works first, then their linked materials, then unlinked materials
   const sortedBOQItems = useMemo(() => {
@@ -172,7 +174,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       return [];
     }
 
-    console.log('🔄 Sorting BOQ items for table view');
+    // console.log('🔄 Sorting BOQ items for table view');
     const items = [...position.boq_items];
     const sortedItems: BOQItemWithLibrary[] = [];
     
@@ -215,18 +217,18 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     
     sortedItems.push(...unlinkedMaterials);
     
-    console.log('✅ Sorted items:', {
-      total: sortedItems.length,
-      works: works.length,
-      linked: sortedItems.filter(i => (i.item_type === 'material' || i.item_type === 'sub_material') && i.work_link).length,
-      unlinked: unlinkedMaterials.length,
-      subMaterials: sortedItems.filter(i => i.item_type === 'sub_material').map(i => ({
-        desc: i.description,
-        hasLink: !!i.work_link,
-        workId: i.work_link?.work_boq_item_id,
-        subWorkId: i.work_link?.sub_work_boq_item_id
-      }))
-    });
+    // console.log('✅ Sorted items:', {
+    //   total: sortedItems.length,
+    //   works: works.length,
+    //   linked: sortedItems.filter(i => (i.item_type === 'material' || i.item_type === 'sub_material') && i.work_link).length,
+    //   unlinked: unlinkedMaterials.length,
+    //   subMaterials: sortedItems.filter(i => i.item_type === 'sub_material').map(i => ({
+    //     desc: i.description,
+    //     hasLink: !!i.work_link,
+    //     workId: i.work_link?.work_boq_item_id,
+    //     subWorkId: i.work_link?.sub_work_boq_item_id
+    //   }))
+    // });
     
     return sortedItems;
   }, [position.boq_items]);
@@ -260,6 +262,29 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       if (manualNoteTimeoutRef.current) {
         clearTimeout(manualNoteTimeoutRef.current);
       }
+    };
+  }, []);
+
+  // Отключаем все MediaQueryList listeners для предотвращения infinite loops
+  useEffect(() => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = (query: string) => {
+      const mql = originalMatchMedia.call(window, query);
+      // Блокируем addEventListener для всех MediaQueryList объектов
+      const originalAddListener = mql.addEventListener;
+      mql.addEventListener = function(...args: any[]) {
+        // Игнорируем все попытки добавить listeners
+        return;
+      };
+      // Блокируем addListener для совместимости
+      (mql as any).addListener = function() {
+        return;
+      };
+      return mql;
+    };
+    
+    return () => {
+      window.matchMedia = originalMatchMedia;
     };
   }, []);
 
@@ -682,7 +707,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       conversion_coefficient: conversionCoef,
       detail_cost_category_id: item.detail_cost_category_id || null,
       delivery_price_type: item.delivery_price_type || 'included',
-      delivery_amount: item.delivery_amount || 0
+      delivery_amount: item.delivery_amount || 0,
+      item_type: item.item_type
     });
   }, [editForm, position.boq_items, localWorks]);
 
@@ -809,7 +835,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         conversion_coefficient: values.conversion_coefficient || 1,
         detail_cost_category_id: detailCostCategoryId,
         delivery_price_type: values.delivery_price_type || 'included',
-        delivery_amount: values.delivery_amount || 0
+        delivery_amount: values.delivery_amount || 0,
+        item_type: values.item_type || editingItem.item_type
       };
       
       // Add base_quantity for unlinked materials
@@ -817,10 +844,26 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         updateData.base_quantity = values.quantity; // Store the user-entered base value
       }
       
+      console.log('📡 Calling boqApi.update for material with data:', {
+        materialId: editingMaterialId, 
+        updateData,
+        dataKeys: Object.keys(updateData)
+      });
+      
       const result = await boqApi.update(editingMaterialId, updateData);
+      
+      console.log('📦 Material update API result:', { 
+        error: result.error, 
+        data: result.data,
+        dataId: result.data?.id
+      });
+      
       if (result.error) {
+        console.error('❌ Material update failed with error:', result.error);
         throw new Error(result.error);
       }
+      
+      console.log('✅ Material BOQ item updated in database successfully');
       
       // Handle work linking if changed - get links for this position
       const positionLinks = await workMaterialLinksApi.getLinksByPosition(position.id);
@@ -959,6 +1002,29 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           }
         }
       }
+
+      // Update linked works in the background when material changes affect them
+      setTimeout(async () => {
+        try {
+          console.log('🔄 Background: Checking for linked works affected by material:', editingMaterialId);
+          const positionLinksResult = await workMaterialLinksApi.getLinksByPosition(position.id);
+          if (!positionLinksResult.error && positionLinksResult.data) {
+            const linkedWorks = positionLinksResult.data.filter(link => {
+              return (link.material_boq_item_id === editingMaterialId) ||
+                     (link.sub_material_boq_item_id === editingMaterialId);
+            });
+
+            // Note: For materials, we typically don't need to update work totals
+            // but we could add logic here if needed for specific business rules
+            if (linkedWorks.length > 0) {
+              console.log('✅ Background: Found', linkedWorks.length, 'linked works for updated material');
+              // Add any work update logic here if needed in the future
+            }
+          }
+        } catch (error) {
+          console.error('❌ Background: Error checking linked works:', error);
+        }
+      }, 100); // Small delay to let the UI update first
       
       console.log('✅ Material updated successfully');
       message.success('Материал обновлен и коэффициенты сохранены');
@@ -990,7 +1056,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       unit: item.unit,
       quantity: item.quantity,
       unit_rate: item.unit_rate,
-      detail_cost_category_id: item.detail_cost_category_id || null
+      detail_cost_category_id: item.detail_cost_category_id || null,
+      item_type: item.item_type
     });
   }, [workEditForm]);
 
@@ -1002,6 +1069,18 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     console.log('🔍 Validating detail_cost_category_id:', values.detail_cost_category_id);
     setLoading(true);
     try {
+      // Find current work item
+      const currentWorkItem = position.boq_items?.find(item => item.id === editingWorkId);
+      if (!currentWorkItem) {
+        console.error('❌ Current work item not found:', editingWorkId);
+        message.error('Редактируемая работа не найдена');
+        return;
+      }
+
+      const oldItemType = currentWorkItem.item_type;
+      const newItemType = values.item_type;
+      console.log('🔄 Type change check:', { oldItemType, newItemType });
+
       let detailCostCategoryId = null;
       
       // Validate detail_cost_category_id if provided
@@ -1022,7 +1101,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       
       const updateData = {
         ...values,
-        detail_cost_category_id: detailCostCategoryId
+        detail_cost_category_id: detailCostCategoryId,
+        item_type: values.item_type || currentWorkItem.item_type
       };
       
       console.log('💾 Final update data:', updateData);
@@ -1030,6 +1110,115 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       if (result.error) {
         throw new Error(result.error);
       }
+
+      // If work type changed, update all linked materials
+      if (oldItemType !== newItemType) {
+        console.log('🔗 Work type changed, updating linked materials');
+        
+        // Get all links for this position
+        const positionLinks = await workMaterialLinksApi.getLinksByPosition(position.id);
+        if (!positionLinks.error && positionLinks.data) {
+          // Find links associated with this work
+          const workLinks = positionLinks.data.filter(link => {
+            if (oldItemType === 'work') {
+              return link.work_boq_item_id === editingWorkId;
+            } else if (oldItemType === 'sub_work') {
+              return link.sub_work_boq_item_id === editingWorkId;
+            }
+            return false;
+          });
+
+          console.log('🔍 Found links to update:', workLinks.length);
+
+          // Update each link
+          for (const link of workLinks) {
+            const newLinkData: any = {
+              client_position_id: link.client_position_id,
+              material_quantity_per_work: link.material_quantity_per_work,
+              usage_coefficient: link.usage_coefficient
+            };
+
+            // Set the correct work field based on new type and material type
+            const materialId = link.material_boq_item_id || link.sub_material_boq_item_id;
+            const isMaterialSub = !!link.sub_material_boq_item_id;
+
+            if (newItemType === 'work') {
+              // Regular work
+              newLinkData.work_boq_item_id = editingWorkId;
+              if (isMaterialSub) {
+                newLinkData.sub_material_boq_item_id = materialId;
+              } else {
+                newLinkData.material_boq_item_id = materialId;
+              }
+            } else if (newItemType === 'sub_work') {
+              // Sub-work  
+              newLinkData.sub_work_boq_item_id = editingWorkId;
+              if (isMaterialSub) {
+                newLinkData.sub_material_boq_item_id = materialId;
+              } else {
+                newLinkData.material_boq_item_id = materialId;
+              }
+            }
+
+            console.log('🔄 Updating link:', { oldLink: link, newLinkData });
+
+            // Delete old link and create new one
+            await workMaterialLinksApi.deleteLink(link.id);
+            await workMaterialLinksApi.createLink(newLinkData);
+          }
+
+          console.log('✅ Updated all material links for type change');
+        }
+      }
+
+      // Update linked materials in the background using setTimeout to avoid blocking UI
+      setTimeout(async () => {
+        try {
+          console.log('🔄 Background: Updating linked materials for work:', editingWorkId);
+          const positionLinksResult = await workMaterialLinksApi.getLinksByPosition(position.id);
+          if (!positionLinksResult.error && positionLinksResult.data) {
+            const linkedMaterials = positionLinksResult.data.filter(link => {
+              return (link.work_boq_item_id === editingWorkId) ||
+                     (link.sub_work_boq_item_id === editingWorkId);
+            });
+
+            for (const link of linkedMaterials) {
+              const materialId = link.material_boq_item_id || link.sub_material_boq_item_id;
+              if (!materialId) continue;
+
+              const material = position.boq_items?.find(item => item.id === materialId);
+              if (!material) continue;
+
+              const workQuantity = values.quantity || 0;
+              const consumptionCoef = material.consumption_coefficient || 
+                                     link.material_quantity_per_work || 1;
+              const conversionCoef = material.conversion_coefficient || 
+                                    link.usage_coefficient || 1;
+              const newQuantity = workQuantity * consumptionCoef * conversionCoef;
+
+              const unitRate = material.unit_rate || 0;
+              let newTotalAmount = newQuantity * unitRate;
+
+              if (material.delivery_price_type === 'amount' && material.delivery_amount > 0) {
+                newTotalAmount += (material.delivery_amount * newQuantity);
+              } else if (material.delivery_price_type === 'not_included' && material.delivery_amount > 0) {
+                newTotalAmount += (material.delivery_amount * newQuantity);
+              }
+
+              await boqApi.update(materialId, {
+                quantity: newQuantity,
+                total_amount: newTotalAmount
+              });
+            }
+
+            if (linkedMaterials.length > 0) {
+              console.log('✅ Background: Updated', linkedMaterials.length, 'linked materials');
+            }
+          }
+        } catch (error) {
+          console.error('❌ Background: Error updating linked materials:', error);
+        }
+      }, 100); // Small delay to let the UI update first
       
       console.log('✅ Work updated successfully');
       message.success('Работа обновлена');
@@ -1042,7 +1231,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     } finally {
       setLoading(false);
     }
-  }, [editingWorkId, workEditForm, onUpdate]);
+  }, [editingWorkId, workEditForm, onUpdate, position.boq_items, position.id]);
 
   // Cancel work inline edit
   const handleCancelWorkEdit = useCallback(() => {
@@ -1326,10 +1515,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       minWidth: 100,
       align: 'right',
       render: (_, record) => {
-        // Используем total_amount из БД - там уже учтена доставка
-        const total = record.total_amount || 0;
-        
-        // Получаем дополнительные данные для тултипа
+        // Получаем дополнительные данные для расчета
         let quantity = record.quantity || 0;
         const unitRate = record.unit_rate || 0;
         
@@ -1361,12 +1547,27 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           }
         }
         
+        // Calculate total based on current quantity and unit rate
+        const baseTotal = quantity * unitRate;
+        let total = baseTotal;
+        
+        // Add delivery costs for materials
+        if ((record.item_type === 'material' || record.item_type === 'sub_material')) {
+          const deliveryType = record.delivery_price_type || 'included';
+          const deliveryAmount = record.delivery_amount || 0;
+          
+          if (deliveryType === 'amount' && deliveryAmount > 0) {
+            total = baseTotal + (deliveryAmount * quantity);
+          } else if (deliveryType === 'not_included' && deliveryAmount > 0) {
+            total = baseTotal + (deliveryAmount * quantity);
+          }
+        }
+        
         // Create tooltip content for materials with delivery
         let tooltipContent = null;
         if ((record.item_type === 'material' || record.item_type === 'sub_material')) {
           const deliveryType = record.delivery_price_type || 'included';
           const deliveryAmount = record.delivery_amount || 0;
-          const baseTotal = quantity * unitRate;
           
           if (deliveryType === 'amount' && record.delivery_amount > 0) {
             const deliveryTotal = record.delivery_amount * quantity;
@@ -1501,375 +1702,405 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     }
   }, [works, editForm]);
 
-  // Work Edit Row (inline editing)
+  // Work Edit Row (inline editing) - Perfect pixel alignment with table headers
   const WorkEditRow = ({ item }: { item: BOQItemWithLibrary }) => (
     <tr>
-      <td colSpan={10} style={{ padding: 0 }}>
+      <td colSpan={11} style={{ padding: 0 }}>
         <Form
           form={workEditForm}
           layout="vertical"
           onFinish={handleSaveWorkEdit}
           className="w-full"
-          style={{ padding: '12px', backgroundColor: '#e6f7ff' }}
+          style={{ 
+            padding: '16px', 
+            backgroundColor: '#f0f8ff', 
+            borderRadius: '6px',
+            border: '1px solid #e1e5e9',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
+          }}
         >
-          <Row gutter={16} align="middle">
-            <Col xs={3} sm={2}>
-              <Text className="font-mono text-xs">{item.item_number}</Text>
+          {/* Single Row: Type, Name, Unit, Quantity, Price, Total, Category */}
+          <Row gutter={16}>
+            <Col span={3}>
+              <Form.Item 
+                name="item_type"
+                label="Тип" 
+                className="mb-3"
+                rules={[{ required: true, message: 'Выберите тип' }]}
+              >
+                <Select size="small" placeholder="Тип">
+                  <Select.Option value="work">
+                    <Tag icon={<BuildOutlined />} color="orange" className="text-xs mr-0">
+                      Работа
+                    </Tag>
+                  </Select.Option>
+                  <Select.Option value="sub_work">
+                    <Tag icon={<BuildOutlined />} color="purple" className="text-xs mr-0">
+                      Суб-раб
+                    </Tag>
+                  </Select.Option>
+                </Select>
+              </Form.Item>
             </Col>
-            <Col xs={3} sm={2}>
-              {item.item_type === 'sub_work' ? (
-                <Tag icon={<BuildOutlined />} color="volcano">Суб-раб</Tag>
-              ) : (
-                <Tag icon={<BuildOutlined />} color="green">Работа</Tag>
-              )}
-            </Col>
-            <Col xs={24} sm={8} md={6}>
+            <Col xs={24} sm={8}>
               <Form.Item
                 name="description"
-                className="mb-0"
-                rules={[{ required: true, message: 'Обязательно' }]}
+                label="Наименование"
+                className="mb-3"
+                rules={[{ required: true, message: 'Введите наименование' }]}
               >
-                <Input placeholder="Наименование работы" />
+                <Input placeholder="Наименование работы" size="small" />
               </Form.Item>
             </Col>
-            <Col xs={8} sm={4} md={3}>
-              <Form.Item
-                name="quantity"
-                className="mb-0"
-                rules={[{ required: true, message: 'Кол-во' }]}
-              >
-                <DecimalInput 
-                  placeholder="Кол-во" 
-                  min={0}
-                  precision={2}
-                  className="w-full"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={8} sm={4} md={3}>
+            <Col xs={12} sm={3}>
               <Form.Item
                 name="unit"
-                className="mb-0"
-                rules={[{ required: true, message: 'Ед.' }]}
+                label="Единица измерения"
+                className="mb-3"
+                rules={[{ required: true, message: 'Введите единицу' }]}
               >
-                <Input placeholder="Ед." />
+                <Input placeholder="м², шт" size="small" />
               </Form.Item>
             </Col>
-            <Col xs={8} sm={4} md={3}>
+            <Col xs={12} sm={3}>
               <Form.Item
-                name="unit_rate"
-                className="mb-0"
-                rules={[{ required: true, message: 'Цена' }]}
+                name="quantity"
+                label="Количество"
+                className="mb-3"
+                rules={[{ required: true, message: 'Введите количество' }]}
               >
                 <DecimalInput 
-                  placeholder="Цена" 
+                  placeholder="0.00" 
                   min={0}
                   precision={2}
-                  className="w-full"
+                  size="small"
                 />
               </Form.Item>
             </Col>
-            <Col xs={24} sm={12} md={6}>
+            <Col xs={12} sm={3}>
+              <Form.Item
+                name="unit_rate"
+                label="Цена за единицу"
+                className="mb-3"
+                rules={[{ required: true, message: 'Введите цену' }]}
+              >
+                <DecimalInput 
+                  placeholder="0.00" 
+                  min={0}
+                  precision={2}
+                  size="small"
+                  suffix="₽"
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={12} sm={3}>
+              <Form.Item label="Сумма" className="mb-3">
+                <div className="h-6 flex items-center font-semibold text-green-600 text-sm">
+                  {formatCurrency(
+                    (workEditForm.getFieldValue('quantity') || 0) * 
+                    (workEditForm.getFieldValue('unit_rate') || 0)
+                  )}
+                </div>
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={7}>
               <Form.Item
                 name="detail_cost_category_id"
-                className="mb-0"
-                getValueFromEvent={(value) => value}
+                label="Категория затрат"
+                className="mb-3"
+                rules={[{ required: true, message: 'Выберите категорию' }]}
               >
                 <CostDetailCascadeSelector
                   placeholder="Категория затрат"
-                  onChange={(value, display) => {
-                    workEditForm.setFieldValue('detail_cost_category_id', value);
-                    workEditForm.setFieldValue('cost_category_display', display);
-                  }}
+                  size="small"
+                  style={{ width: '100%' }}
                 />
               </Form.Item>
             </Col>
-            <Col xs={12} sm={4} md={3}>
-              <Text strong className="text-green-600">
-                {Math.round((workEditForm.getFieldValue('quantity') || 0) * 
-                  (workEditForm.getFieldValue('unit_rate') || 0)).toLocaleString('ru-RU')} ₽
-              </Text>
-            </Col>
-            <Col xs={12} sm={6} md={4}>
-              <Space>
-                <Button type="primary" htmlType="submit" icon={<SaveOutlined />} size="small">
-                  Сохранить
-                </Button>
-                <Button 
-                  icon={<CloseOutlined />} 
-                  onClick={handleCancelWorkEdit}
-                  size="small"
-                >
-                  Отмена
-                </Button>
-              </Space>
-            </Col>
           </Row>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
+            <Button 
+              type="default" 
+              icon={<CloseOutlined />} 
+              onClick={handleCancelWorkEdit}
+              size="small"
+            >
+              Отмена
+            </Button>
+            <Button 
+              type="primary" 
+              htmlType="submit" 
+              icon={<SaveOutlined />} 
+              size="small"
+            >
+              Сохранить
+            </Button>
+          </div>
         </Form>
       </td>
     </tr>
   );
 
-  // Material Edit Row (inline editing) with improved responsive layout
+  // Material Edit Row (inline editing) - Perfect pixel alignment with table headers
   const MaterialEditRow = ({ item }: { item: BOQItemWithLibrary }) => (
     <tr>
-      <td colSpan={10} style={{ padding: 0 }}>
+      <td colSpan={11} style={{ padding: 0 }}>
         <Form
           form={editForm}
           layout="vertical"
           onFinish={handleSaveInlineEdit}
           className="w-full"
-          style={{ padding: '12px', backgroundColor: '#f0f8ff', borderRadius: '4px' }}
+          style={{ 
+            padding: '16px', 
+            backgroundColor: '#f0f8ff', 
+            borderRadius: '6px',
+            border: '1px solid #e1e5e9',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
+          }}
         >
-          {/* Main edit row */}
-          <Row gutter={[12, 8]} className="w-full">
-            <Col xs={24} sm={2} md={2} lg={2}>
-              <div className="flex items-center h-8">
-                <Text className="font-mono text-xs">{item.item_number}</Text>
-              </div>
-            </Col>
-            <Col xs={24} sm={3} md={3} lg={2}>
-              <div className="flex items-center h-8">
-                {item.item_type === 'sub_material' ? (
-                  <Tag icon={<ToolOutlined />} color="purple">Суб-мат</Tag>
-                ) : (
-                  <Tag icon={<ToolOutlined />} color="blue">Материал</Tag>
-                )}
-              </div>
-            </Col>
-            <Col xs={24} sm={8} md={6} lg={6}>
-              <Form.Item
-                name="description"
-                className="mb-0"
-                rules={[{ required: true, message: 'Обязательно' }]}
+          {/* Row 1: Type, Name, Work Link, Category */}
+          <Row gutter={16}>
+            <Col xs={24} sm={3}>
+              <Form.Item 
+                name="item_type"
+                label="Тип" 
+                className="mb-3"
+                rules={[{ required: true, message: 'Выберите тип' }]}
               >
-                <Input placeholder="Наименование" size="small" />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={4} md={3} lg={3}>
-              <Form.Item
-                name="quantity"
-                className="mb-0"
-                rules={[{ required: true, message: 'Кол-во' }]}
-              >
-                <DecimalInput 
-                  placeholder="Кол-во" 
-                  min={0}
-                  precision={2}
-                  className="w-full"
-                  size="small"
-                  disabled={!!editForm.getFieldValue('work_id')}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={4} md={3} lg={2}>
-              <Form.Item
-                name="unit"
-                className="mb-0"
-                rules={[{ required: true, message: 'Ед.' }]}
-              >
-                <Input placeholder="Ед." size="small" />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={4} md={3} lg={3}>
-              <Form.Item
-                name="unit_rate"
-                className="mb-0"
-                rules={[{ required: true, message: 'Цена' }]}
-              >
-                <DecimalInput 
-                  placeholder="Цена" 
-                  min={0}
-                  precision={2}
-                  className="w-full"
-                  size="small"
-                  formatter={value => {
-                    const num = parseFloat(`${value}`);
-                    if (!isNaN(num)) {
-                      return num.toLocaleString('ru-RU', {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 2
-                      });
-                    }
-                    return `${value}`;
-                  }}
-                  parser={value => value!.replace(/\s/g, '').replace(',', '.')}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={6} md={4} lg={3}>
-              <div className="flex items-center h-8">
-                <Text strong className="text-green-600 whitespace-nowrap">
-                  {Math.round((editForm.getFieldValue('quantity') || 0) * 
-                    (editForm.getFieldValue('unit_rate') || 0)).toLocaleString('ru-RU')} ₽
-                </Text>
-              </div>
-            </Col>
-            <Col xs={12} sm={6} md={4} lg={3}>
-              <Space size="small" className="flex justify-end">
-                <Button type="primary" htmlType="submit" icon={<SaveOutlined />} size="small">
-                  Сохранить
-                </Button>
-                <Button 
-                  icon={<CloseOutlined />} 
-                  onClick={handleCancelInlineEdit}
-                  size="small"
-                >
-                  Отмена
-                </Button>
-              </Space>
-            </Col>
-          </Row>
-          {/* Second row for cost category */}
-          <Row gutter={[12, 8]} className="w-full mt-2">
-            <Col xs={24} sm={16} md={14} lg={12}>
-              <Form.Item
-                name="detail_cost_category_id"
-                className="mb-2"
-                getValueFromEvent={(value) => value}
-              >
-                <CostDetailCascadeSelector
-                  placeholder="Категория затрат"
-                  onChange={(value, display) => {
-                    editForm.setFieldValue('detail_cost_category_id', value);
-                    editForm.setFieldValue('cost_category_display', display);
-                  }}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          
-          {/* Additional fields for materials - work linking */}
-          {works.length > 0 && (
-            <Row gutter={[12, 8]} className="w-full mt-3 pt-3 border-t border-blue-200">
-              <Col xs={24} sm={12} md={10} lg={8}>
-                <Form.Item
-                  name="work_id"
-                  className="mb-0"
-                  label={<Text strong>Привязать к работе</Text>}
-                >
-                  <Select 
-                    placeholder="Выберите работу" 
-                    allowClear
-                    size="small"
-                    className="w-full"
-                    onChange={handleWorkSelectionChange}
-                    optionFilterProp="children"
-                    showSearch
-                  >
-                    {works.map(work => (
-                      <Select.Option key={work.id} value={work.id}>
-                        {work.item_type === 'sub_work' ? '[СУБ] ' : ''}{work.description} (Объем: {work.quantity} {work.unit})
-                      </Select.Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col xs={12} sm={6} md={7} lg={4}>
-                <Form.Item
-                  name="consumption_coefficient"
-                  className="mb-0"
-                  label={
-                    <Space size={4}>
-                      <Text strong>Коэф. расхода</Text>
-                      <Tooltip title="Значение коэфф. расхода не может быть менее 1,00. При вводе значения менее 1 оно будет автоматически заменено на 1">
-                        <QuestionCircleOutlined style={{ color: '#8c8c8c', fontSize: '12px' }} />
-                      </Tooltip>
-                    </Space>
-                  }
-                >
-                  <DecimalInput 
-                    min={1}
-                    max={9999}
-                    precision={4} 
-                    className="w-full"
-                    size="small"
-                    onChange={handleCoefficientChange}
-                    placeholder="1.0000"
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={12} sm={6} md={7} lg={4}>
-                <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
-                  prevValues.work_id !== currentValues.work_id
-                }>
-                  {({ getFieldValue }) => (
-                    <Form.Item
-                      name="conversion_coefficient"
-                      className="mb-0"
-                      label={
-                        <Tooltip title={!getFieldValue('work_id') ? 'Доступно только при привязке к работе' : 'Коэффициент перевода единиц измерения'}>
-                          <Text strong className={!getFieldValue('work_id') ? 'text-gray-400' : ''}>
-                            Коэф. перевода
-                          </Text>
-                        </Tooltip>
-                      }
-                    >
-                      <DecimalInput 
-                        min={0.01}
-                        max={9999}
-                        precision={4} 
-                        className="w-full"
-                        size="small"
-                        disabled={!getFieldValue('work_id')}
-                        onChange={handleCoefficientChange}
-                        placeholder="1.0000"
-                      />
-                    </Form.Item>
-                  )}
-                </Form.Item>
-              </Col>
-            </Row>
-          )}
-          
-          {/* Delivery fields for materials and sub-materials */}
-          <Row gutter={[12, 8]} className="w-full mt-3 pt-3 border-t border-blue-200">
-            <Col xs={12} sm={8} md={6} lg={4}>
-              <Form.Item
-                name="delivery_price_type"
-                label={<Text strong>Тип доставки</Text>}
-                className="mb-0"
-              >
-                <Select
-                  placeholder="Тип доставки"
-                  style={{ width: '100%' }}
-                  size="small"
-                >
-                  <Select.Option value="included">Включена</Select.Option>
-                  <Select.Option value="not_included">Не включена (3%)</Select.Option>
-                  <Select.Option value="amount">Фиксированная сумма</Select.Option>
+                <Select size="small" placeholder="Тип">
+                  <Select.Option value="material">
+                    <Tag icon={<ToolOutlined />} color="blue" className="text-xs mr-0">
+                      Материал
+                    </Tag>
+                  </Select.Option>
+                  <Select.Option value="sub_material">
+                    <Tag icon={<ToolOutlined />} color="lime" className="text-xs mr-0">
+                      Суб-мат
+                    </Tag>
+                  </Select.Option>
                 </Select>
               </Form.Item>
             </Col>
-            <Col xs={12} sm={8} md={6} lg={4}>
+            <Col xs={24} sm={8}>
               <Form.Item
-                noStyle
-                shouldUpdate={(prevValues, currentValues) => 
-                  prevValues.delivery_price_type !== currentValues.delivery_price_type
-                }
+                name="description"
+                label="Наименование"
+                className="mb-3"
+                rules={[{ required: true, message: 'Введите наименование' }]}
               >
-                {({ getFieldValue }) => {
-                  const deliveryType = getFieldValue('delivery_price_type');
-                  return (
-                    <Form.Item
-                      name="delivery_amount"
-                      label={<Text strong>Сумма доставки</Text>}
-                      className="mb-0"
-                    >
-                      <DecimalInput
-                        min={0}
-                        precision={2}
-                        placeholder="0.00"
-                        disabled={deliveryType !== 'amount'}
-                        style={{ width: '100%' }}
-                        size="small"
-                      />
-                    </Form.Item>
-                  );
-                }}
+                <Input placeholder="Наименование материала" size="small" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={6}>
+              <Form.Item
+                name="work_id"
+                label="Привязка к работе"
+                className="mb-3"
+              >
+                <Select
+                  placeholder="Выберите работу"
+                  allowClear
+                  size="small"
+                  showSearch
+                  onChange={handleWorkSelectionChange}
+                  filterOption={(input, option) =>
+                    (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                  }
+                >
+                  {works.map((work) => (
+                    <Select.Option key={work.id} value={work.id}>
+                      {work.description}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={7}>
+              <Form.Item
+                name="detail_cost_category_id"
+                label="Категория затрат"
+                className="mb-3"
+                rules={[{ required: true, message: 'Выберите категорию' }]}
+              >
+                <CostDetailCascadeSelector
+                  placeholder="Категория"
+                  size="small"
+                  style={{ width: '100%' }}
+                />
               </Form.Item>
             </Col>
           </Row>
+
+          {/* Row 2: Unit, Quantity, Conversion Coef, Consumption Coef */}
+          <Row gutter={16}>
+            <Col xs={12} sm={6}>
+              <Form.Item
+                name="unit"
+                label="Единица измерения"
+                className="mb-3"
+                rules={[{ required: true, message: 'Введите единицу' }]}
+              >
+                <Input placeholder="м², шт" size="small" />
+              </Form.Item>
+            </Col>
+            <Col xs={12} sm={6}>
+              <Form.Item noStyle shouldUpdate={(prev, curr) => prev.work_id !== curr.work_id}>
+                {({ getFieldValue }) => (
+                  <Form.Item
+                    name="quantity"
+                    label="Количество"
+                    className="mb-3"
+                    rules={[{ required: true, message: 'Введите количество' }]}
+                  >
+                    <DecimalInput 
+                      placeholder="0.00" 
+                      min={0}
+                      precision={2}
+                      size="small"
+                      disabled={!!getFieldValue('work_id')}
+                    />
+                  </Form.Item>
+                )}
+              </Form.Item>
+            </Col>
+            <Col xs={12} sm={6}>
+              <Form.Item noStyle shouldUpdate={(prev, curr) => prev.work_id !== curr.work_id}>
+                {({ getFieldValue }) => (
+                  <Form.Item
+                    name="conversion_coefficient"
+                    label="Коэф. перевода"
+                    className="mb-3"
+                  >
+                    <DecimalInput 
+                      placeholder="1.00" 
+                      min={0}
+                      precision={4}
+                      size="small"
+                      disabled={!getFieldValue('work_id')}
+                      onChange={handleCoefficientChange}
+                    />
+                  </Form.Item>
+                )}
+              </Form.Item>
+            </Col>
+            <Col xs={12} sm={6}>
+              <Form.Item
+                name="consumption_coefficient"
+                label="Коэф. расхода"
+                className="mb-3"
+              >
+                <DecimalInput 
+                  placeholder="1.00" 
+                  min={0}
+                  precision={4}
+                  size="small"
+                  onChange={handleCoefficientChange}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* Row 3: Price, Delivery, Delivery Amount (conditional), Total */}
+          <Row gutter={16}>
+            <Col xs={12} sm={6}>
+              <Form.Item
+                name="unit_rate"
+                label="Цена за единицу"
+                className="mb-3"
+                rules={[{ required: true, message: 'Введите цену' }]}
+              >
+                <DecimalInput 
+                  placeholder="0.00" 
+                  min={0}
+                  precision={2}
+                  size="small"
+                  suffix="₽"
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={12} sm={6}>
+              <Form.Item
+                name="delivery_price_type"
+                label="Доставка"
+                className="mb-3"
+                initialValue="included"
+              >
+                <Select placeholder="Тип доставки" size="small">
+                  <Select.Option value="included">Включена</Select.Option>
+                  <Select.Option value="not_included">Не включена (3%)</Select.Option>
+                  <Select.Option value="amount">Фикс. сумма</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            {/* Conditional Delivery Amount field */}
+            <Form.Item noStyle shouldUpdate={(prev, curr) => prev.delivery_price_type !== curr.delivery_price_type}>
+              {({ getFieldValue }) => {
+                const deliveryType = getFieldValue('delivery_price_type');
+                return deliveryType === 'amount' ? (
+                  <Col xs={12} sm={6}>
+                    <Form.Item
+                      name="delivery_amount"
+                      label="Сумма доставки"
+                      className="mb-3"
+                    >
+                      <DecimalInput 
+                        placeholder="0.00" 
+                        min={0}
+                        precision={2}
+                        size="small"
+                        suffix="₽"
+                      />
+                    </Form.Item>
+                  </Col>
+                ) : null;
+              }}
+            </Form.Item>
+            <Col xs={12} sm={6}>
+              <Form.Item label="Сумма" className="mb-3">
+                <div className="h-6 flex items-center font-semibold text-green-600 text-sm">
+                  {(() => {
+                    const quantity = editForm.getFieldValue('quantity') || 0;
+                    const unitRate = editForm.getFieldValue('unit_rate') || 0;
+                    const deliveryType = editForm.getFieldValue('delivery_price_type') || 'included';
+                    const deliveryAmount = editForm.getFieldValue('delivery_amount') || 0;
+                    
+                    let baseTotal = quantity * unitRate;
+                    let deliveryCost = 0;
+                    
+                    if (deliveryType === 'not_included') {
+                      deliveryCost = baseTotal * 0.03;
+                    } else if (deliveryType === 'amount') {
+                      deliveryCost = deliveryAmount;
+                    }
+                    
+                    return formatCurrency(baseTotal + deliveryCost);
+                  })()}
+                </div>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
+            <Button 
+              type="default" 
+              icon={<CloseOutlined />} 
+              onClick={handleCancelInlineEdit}
+              size="small"
+            >
+              Отмена
+            </Button>
+            <Button 
+              type="primary" 
+              htmlType="submit" 
+              icon={<SaveOutlined />} 
+              size="small"
+            >
+              Сохранить
+            </Button>
+          </div>
         </Form>
       </td>
     </tr>
@@ -1986,6 +2217,62 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             />
           </Form.Item>
         </Col>
+        {/* Add delivery fields for materials and sub-materials in main row */}
+        <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}>
+          {({ getFieldValue }) => {
+            const isMaterial = getFieldValue('type') === 'material' || getFieldValue('type') === 'sub_material';
+            return isMaterial ? (
+              <>
+                <Col xs={8} sm={4} md={3} lg={3}>
+                  <Form.Item
+                    name="delivery_price_type"
+                    label={<Text strong>Доставка</Text>}
+                    initialValue="included"
+                    className="mb-0"
+                  >
+                    <Select
+                      placeholder="Доставка"
+                      style={{ width: '100%' }}
+                      size="small"
+                    >
+                      <Select.Option value="included">Включена</Select.Option>
+                      <Select.Option value="not_included">Не включена (3%)</Select.Option>
+                      <Select.Option value="amount">Фикс. сумма</Select.Option>
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col xs={8} sm={4} md={3} lg={2}>
+                  <Form.Item
+                    noStyle
+                    shouldUpdate={(prevValues, currentValues) => 
+                      prevValues.delivery_price_type !== currentValues.delivery_price_type
+                    }
+                  >
+                    {({ getFieldValue }) => {
+                      const deliveryType = getFieldValue('delivery_price_type');
+                      return (
+                        <Form.Item
+                          name="delivery_amount"
+                          label={<Text strong>Сумма</Text>}
+                          className="mb-0"
+                        >
+                          <DecimalInput
+                            min={0}
+                            precision={2}
+                            placeholder="0.00"
+                            disabled={deliveryType !== 'amount'}
+                            style={{ width: '100%' }}
+                            size="small"
+                          />
+                        </Form.Item>
+                      );
+                    }}
+                  </Form.Item>
+                </Col>
+              </>
+            ) : null;
+          }}
+        </Form.Item>
         <Col xs={24} sm={12} md={6} lg={5}>
           <Form.Item
             name="detail_cost_category_id"
@@ -1996,6 +2283,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             <CostDetailCascadeSelector
               placeholder="Выберите категорию"
               style={{ width: '100%' }}
+              size="small"
               onChange={(value, display) => {
                 quickAddForm.setFieldValue('detail_cost_category_id', value);
                 quickAddForm.setFieldValue('cost_category_display', display);
@@ -2148,58 +2436,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                       />
                     </Form.Item>
                   )}
-                </Form.Item>
-              </Col>
-              <Col xs={12} sm={6} md={3} lg={2}>
-                <Form.Item
-                  name="delivery_price_type"
-                  label={<Text strong>Доставка</Text>}
-                  initialValue="included"
-                  className="mb-0"
-                >
-                  <Select
-                    placeholder="Тип"
-                    style={{ width: '100%' }}
-                    size="small"
-                  >
-                    <Select.Option value="included">Включена</Select.Option>
-                    <Select.Option value="not_included">Не включена (3%)</Select.Option>
-                    <Select.Option value="amount">Сумма</Select.Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col xs={12} sm={6} md={3} lg={2}>
-                <Form.Item
-                  noStyle
-                  shouldUpdate={(prevValues, currentValues) => 
-                    prevValues.delivery_price_type !== currentValues.delivery_price_type
-                  }
-                >
-                  {({ getFieldValue }) => {
-                    const deliveryType = getFieldValue('delivery_price_type');
-                    return (
-                      <Form.Item
-                        name="delivery_amount"
-                        label={<Text strong>Сумма</Text>}
-                        className="mb-0"
-                        rules={[
-                          {
-                            required: deliveryType === 'amount',
-                            message: 'Сумма'
-                          }
-                        ]}
-                      >
-                        <DecimalInput
-                          min={0}
-                          precision={2}
-                          placeholder="0.00"
-                          disabled={deliveryType !== 'amount'}
-                          style={{ width: '100%' }}
-                          size="small"
-                        />
-                      </Form.Item>
-                    );
-                  }}
                 </Form.Item>
               </Col>
             </Row>
@@ -2751,4 +2987,13 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   );
 };
 
-export default ClientPositionCardStreamlined;
+export default React.memo(ClientPositionCardStreamlined, (prevProps, nextProps) => {
+  // Custom comparison to prevent unnecessary re-renders
+  return (
+    prevProps.position.id === nextProps.position.id &&
+    prevProps.position.boq_items?.length === nextProps.position.boq_items?.length &&
+    prevProps.works.length === nextProps.works.length &&
+    prevProps.loading === nextProps.loading &&
+    JSON.stringify(prevProps.position.updated_at) === JSON.stringify(nextProps.position.updated_at)
+  );
+});
