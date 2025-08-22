@@ -45,8 +45,22 @@ import CostDetailCascadeSelector from '../common/CostDetailCascadeSelector';
 import CostCategoryDisplay from './CostCategoryDisplay';
 import type { 
   BOQItemWithLibrary,
-  BOQItemInsert
+  BOQItemInsert,
+  ClientPositionType
 } from '../../lib/supabase/types';
+import {
+  canContainBOQItems,
+  getVisualIndent,
+  getIndentByLevel,
+  getPositionCSSClass,
+  getPositionColors,
+  getFontWeight,
+  getTextSize,
+  getTagColor,
+  isStructuralPosition,
+  POSITION_ICONS,
+  POSITION_LABELS
+} from '../../utils/clientPositionHierarchy';
 
 const { Title, Text } = Typography;
 
@@ -104,6 +118,19 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const worksCount = position.boq_items?.filter(item => item.item_type === 'work' || item.item_type === 'sub_work').length || 0;
   const totalCost = position.total_position_cost || 0;
   const [localWorks, setLocalWorks] = useState<BOQItemWithLibrary[]>([]);
+  
+  // Position hierarchy properties
+  const positionType: ClientPositionType = position.position_type || 'executable';
+  const hierarchyLevel = position.hierarchy_level || 6;
+  const canAddItems = canContainBOQItems(positionType);
+  const isStructural = isStructuralPosition(positionType);
+  const positionIcon = POSITION_ICONS[positionType];
+  const positionLabel = POSITION_LABELS[positionType];
+  const visualIndent = getIndentByLevel(hierarchyLevel);
+  const positionColors = getPositionColors(positionType);
+  const fontWeight = getFontWeight(positionType);
+  const textSize = getTextSize(positionType);
+  const tagColor = getTagColor(positionType);
   
   // Create stable dependency for position items
   const positionItemsKey = useMemo(() => {
@@ -2300,106 +2327,148 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         bodyStyle={{ padding: 0 }}
         style={{ 
           borderRadius: '8px',
-          border: isExpanded ? '1px solid #bfdbfe' : '1px solid #e5e7eb',
-          width: '100%'
+          borderTop: isExpanded ? '1px solid #bfdbfe' : '1px solid #e5e7eb',
+          borderRight: isExpanded ? '1px solid #bfdbfe' : '1px solid #e5e7eb',
+          borderBottom: isExpanded ? '1px solid #bfdbfe' : '1px solid #e5e7eb',
+          borderLeft: `4px solid ${positionColors.border}`,
+          width: '100%',
+          background: positionColors.background,
+          color: positionColors.text
         }}
       >
-        {/* Header with improved responsive layout */}
+        {/* Header with compact responsive layout */}
         <div 
-          className="p-4 border-b cursor-pointer hover:bg-gray-50 transition-colors duration-200"
-          onClick={onToggle}
+          className={`px-4 py-2 border-b transition-colors duration-200 ${
+            canAddItems 
+              ? 'cursor-pointer hover:bg-gray-50' 
+              : 'cursor-default'
+          }`}
+          onClick={canAddItems ? onToggle : undefined}
         >
-          <Row gutter={[16, 8]} align="middle" className="w-full">
+          <Row gutter={[12, 4]} align="middle" className="w-full">
             {/* Icon and Position Number */}
-            <Col xs={24} sm={6} md={4} lg={3}>
+            <Col xs={24} sm={6} md={4} lg={1}>
               <div className="flex items-center gap-2">
-                {isExpanded ? (
-                  <FolderOpenOutlined className="text-xl text-blue-500" />
-                ) : (
-                  <FolderOutlined className="text-xl text-gray-400" />
+                <div className="flex flex-col">
+                  <Tag color={tagColor} className="font-mono">
+                    <span style={{ marginRight: '4px' }}>{positionIcon}</span>
+                    {position.position_number}
+                  </Tag>
+                  {isStructural && (
+                    <Tooltip title="Структурный элемент - нельзя расценивать">
+                      <Tag color="gray" size="small" className="text-xs mt-1 cursor-help">
+                        {positionLabel}
+                      </Tag>
+                    </Tooltip>
+                  )}
+                </div>
+              </div>
+            </Col>
+            
+            {/* Work Name */}
+            <Col xs={24} sm={18} md={14} lg={14}>
+              <div style={{ paddingLeft: `${visualIndent}px` }}>
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <Title 
+                    level={5} 
+                    className={`mb-0 ${textSize} flex-1 min-w-0`}
+                    ellipsis={{ tooltip: position.work_name }}
+                    style={{ 
+                      fontWeight: fontWeight === 'bold' ? '700' : 
+                                 fontWeight === 'semibold' ? '600' : 
+                                 fontWeight === 'medium' ? '500' : '400',
+                      color: positionColors.text,
+                      lineHeight: '1.3',
+                      margin: 0
+                    }}
+                  >
+                    <span style={{ marginRight: '8px', color: '#666', fontSize: '0.9em' }}>{position.item_no}</span>
+                    {position.work_name}
+                  </Title>
+                </div>
+              </div>
+            </Col>
+            
+            {/* Client and GP data - compact row */}
+            <Col xs={24} sm={24} md={8} lg={6}>
+              <div className="flex flex-wrap gap-3 justify-end items-center text-xs">
+                {/* Client data */}
+                {position.volume && (
+                  <Text className="text-xs text-gray-600 whitespace-nowrap">
+                    <span className="text-gray-500 mr-1">Кол-во Заказчика:</span>
+                    <strong>{position.volume}</strong>
+                  </Text>
                 )}
-                <Tag color="blue" className="font-mono">{position.position_number}</Tag>
-              </div>
-            </Col>
-            
-            {/* Work Name with client data */}
-            <Col xs={24} sm={18} md={12} lg={10}>
-              <div>
-                <Title level={5} className="mb-1" ellipsis={{ tooltip: position.work_name }}>
-                  {position.work_name}
-                </Title>
-                <div className="flex flex-wrap gap-3 mt-1">
-                  {position.unit && (
-                    <Tooltip title="Единица измерения">
-                      <Text className="text-xs text-gray-600">
-                        <span className="text-gray-500">Ед.изм:</span> <strong>{position.unit}</strong>
-                      </Text>
-                    </Tooltip>
-                  )}
-                  {position.volume && (
-                    <Tooltip title="Количество">
-                      <Text className="text-xs text-gray-600">
-                        <span className="text-gray-500">Кол-во:</span> <strong>{position.volume}</strong>
-                      </Text>
-                    </Tooltip>
-                  )}
-                  {position.client_note && (
-                    <Tooltip title={`Примечание: ${position.client_note}`}>
-                      <Text className="text-xs text-gray-600">
-                        <QuestionCircleOutlined className="mr-1" />
-                        <span className="text-gray-500">Примечание</span>
-                      </Text>
-                    </Tooltip>
-                  )}
-                </div>
-              </div>
-            </Col>
-            
-            {/* Statistics - responsive layout */}
-            <Col xs={24} sm={24} md={8} lg={8}>
-              <div className="flex flex-wrap gap-4 justify-end items-center">
-                <div className="flex items-center gap-1">
-                  <Text className="text-xs text-gray-500">Кол-во ГП:</Text>
-                  <InputNumber
-                    size="small"
-                    min={0}
-                    value={position.manual_volume ?? undefined}
-                    placeholder="0"
-                    className="w-20"
-                    onChange={(value) => handleManualVolumeChange(value)}
-                    style={{ fontSize: '12px' }}
-                  />
-                </div>
+                {position.unit && (
+                  <Text className="text-xs text-gray-600 whitespace-nowrap">
+                    <span className="text-gray-500 mr-1">Ед. изм:</span>
+                    <strong>{position.unit}</strong>
+                  </Text>
+                )}
+                {position.client_note && (
+                  <Tooltip title={`Примечание Заказчика: ${position.client_note}`}>
+                    <Text className="text-xs text-gray-600 whitespace-nowrap cursor-help">
+                      <span className="text-gray-500 mr-1">Примечание Заказчика:</span>
+                      <QuestionCircleOutlined className="text-gray-500" />
+                    </Text>
+                  </Tooltip>
+                )}
+                
+                {/* Separator between client and GP data */}
+                {(position.unit || position.volume || position.client_note) && canAddItems && (
+                  <div className="border-l border-gray-300 h-4"></div>
+                )}
+                
+                {/* GP data - Quantity always before Note */}
+                {canAddItems && (
+                  <div className="flex items-center gap-1">
+                    <Text className="text-xs text-gray-500">Кол-во ГП:</Text>
+                    <InputNumber
+                      size="small"
+                      min={0}
+                      value={position.manual_volume ?? undefined}
+                      placeholder="0"
+                      className="w-16"
+                      onChange={(value) => handleManualVolumeChange(value)}
+                      style={{ fontSize: '11px' }}
+                    />
+                  </div>
+                )}
+                
+                {/* Separator before GP Note if no GP Quantity but has client data */}
+                {(position.unit || position.volume || position.client_note) && !canAddItems && (
+                  <div className="border-l border-gray-300 h-4"></div>
+                )}
+                
                 <div className="flex items-center gap-1">
                   <Text className="text-xs text-gray-500">Примечание ГП:</Text>
                   <Input
                     size="small"
                     value={position.manual_note ?? undefined}
                     placeholder="Примечание"
-                    className="w-32"
+                    className="w-24"
                     onChange={(e) => handleManualNoteChange(e.target.value)}
-                    style={{ fontSize: '12px' }}
+                    style={{ fontSize: '11px' }}
                   />
-                </div>
-                <div className="whitespace-nowrap">
-                  <Text className="text-gray-600">Работы: </Text>
-                  <Text strong className="text-green-600">{worksCount}</Text>
-                </div>
-                <div className="whitespace-nowrap">
-                  <Text className="text-gray-600">Материалы: </Text>
-                  <Text strong className="text-blue-600">{materialsCount}</Text>
                 </div>
               </div>
             </Col>
             
-            {/* Total Cost */}
+            {/* Total Cost and Statistics */}
             <Col xs={24} sm={24} md={24} lg={3}>
-              <div className="flex justify-end">
-                <div className="text-right">
-                  <Text strong className="text-lg text-green-700 whitespace-nowrap block">
-                    {Math.round(totalCost).toLocaleString('ru-RU')} ₽
-                  </Text>
-                  <Text type="secondary" className="text-xs">Итого</Text>
+              <div className="flex flex-col items-end">
+                <Text strong className="text-lg text-green-700 whitespace-nowrap">
+                  {Math.round(totalCost).toLocaleString('ru-RU')} ₽
+                </Text>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="whitespace-nowrap">
+                    <Text className="text-gray-600 text-xs">Р: </Text>
+                    <Text strong className="text-green-600 text-xs">{worksCount}</Text>
+                  </span>
+                  <span className="whitespace-nowrap">
+                    <Text className="text-gray-600 text-xs">М: </Text>
+                    <Text strong className="text-blue-600 text-xs">{materialsCount}</Text>
+                  </span>
                 </div>
               </div>
             </Col>
@@ -2413,19 +2482,30 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             <div className="mb-4 flex justify-between items-center gap-4">
               {!quickAddMode ? (
                 <>
-                  <Button
-                    type="dashed"
-                    icon={<PlusOutlined />}
-                    onClick={() => setQuickAddMode(true)}
-                    className="flex-1 h-10 border-2 border-dashed border-blue-300 text-blue-600 hover:border-blue-400 hover:text-blue-700 transition-colors duration-200"
-                    style={{ 
-                      borderStyle: 'dashed',
-                      fontSize: '14px',
-                      fontWeight: '500'
-                    }}
-                  >
-                    + Быстрое добавление работы или материала
-                  </Button>
+                  {canAddItems ? (
+                    <Button
+                      type="dashed"
+                      icon={<PlusOutlined />}
+                      onClick={() => setQuickAddMode(true)}
+                      className="flex-1 h-10 border-2 border-dashed border-blue-300 text-blue-600 hover:border-blue-400 hover:text-blue-700 transition-colors duration-200"
+                      style={{ 
+                        borderStyle: 'dashed',
+                        fontSize: '14px',
+                        fontWeight: '500'
+                      }}
+                    >
+                      + Быстрое добавление работы или материала
+                    </Button>
+                  ) : (
+                    <div className="flex-1 h-10 flex items-center justify-center bg-gray-100 rounded-lg border-2 border-dashed border-gray-300">
+                      <Text className="text-gray-500 flex items-center gap-2">
+                        <Tooltip title={positionLabel}>
+                          <span className="text-lg cursor-help">{positionIcon}</span>
+                        </Tooltip>
+                        Структурный элемент - нельзя добавлять работы/материалы
+                      </Text>
+                    </div>
+                  )}
                   {totalItems > 0 && (
                     <div className="flex gap-1">
                       <Tooltip title="Табличный вид">
@@ -2597,7 +2677,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                     <Table.Summary fixed>
                       <Table.Summary.Row style={{ backgroundColor: '#f8f9fa' }}>
                         <Table.Summary.Cell index={0} colSpan={8} align="right">
-                          <Text strong className="text-gray-700">Итого по позиции:</Text>
                         </Table.Summary.Cell>
                         <Table.Summary.Cell index={1} align="right">
                           <div className="whitespace-nowrap">
@@ -2629,16 +2708,25 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             ) : (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
                 <Empty
-                  description="Нет добавленных элементов"
+                  description={canAddItems ? "Нет добавленных элементов" : (
+                    <span className="flex items-center justify-center gap-2">
+                      <Tooltip title={positionLabel}>
+                        <span className="text-lg cursor-help">{positionIcon}</span>
+                      </Tooltip>
+                      Структурный элемент не содержит элементов
+                    </span>
+                  )}
                   className="py-4"
                 >
-                <Button
-                  type="dashed"
-                  icon={<PlusOutlined />}
-                  onClick={() => setQuickAddMode(true)}
-                >
-                  Добавить первый элемент
-                </Button>
+                  {canAddItems && (
+                    <Button
+                      type="dashed"
+                      icon={<PlusOutlined />}
+                      onClick={() => setQuickAddMode(true)}
+                    >
+                      Добавить первый элемент
+                    </Button>
+                  )}
                 </Empty>
               </div>
             )}

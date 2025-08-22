@@ -69,7 +69,7 @@ const TenderBoq: React.FC = () => {
     if (!tenderId) return;
     setLoading(true);
     try {
-      const { data, error } = await boqApi.getByTenderId(tenderId);
+      const { data, error } = await boqApi.getByTenderId(tenderId, {}, { limit: 1000 });
       if (error) throw error;
       setBoqItems(data || []);
     } catch (error) {

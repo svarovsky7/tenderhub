@@ -117,7 +117,7 @@ export const EnhancedBOQManager: React.FC<EnhancedBOQManagerProps> = ({ tenderId
     setLoading(true);
     
     try {
-      const result = await clientPositionsApi.getByTenderId(tenderId);
+      const result = await clientPositionsApi.getByTenderId(tenderId, {}, { limit: 1000 });
       if (result.error) throw new Error(result.error);
       
       const positionsData = result.data || [];

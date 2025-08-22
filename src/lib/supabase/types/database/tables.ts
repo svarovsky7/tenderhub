@@ -133,6 +133,8 @@ export type DatabaseTables = {
       manual_volume: number | null; // Объем, заданный вручную
       manual_note: string | null;   // Примечание ГП (генподряда)
       client_note: string | null; // Примечание из Excel
+      position_type: 'article' | 'section' | 'subsection' | 'header' | 'subheader' | 'executable'; // Тип позиции
+      hierarchy_level: number;    // Уровень иерархии (1-6)
     };
     Insert: {
       id?: string;
@@ -147,6 +149,8 @@ export type DatabaseTables = {
       manual_volume?: number | null; // Объем, заданный вручную
       manual_note?: string | null;   // Примечание ГП (генподряда)
       client_note?: string | null; // Примечание из Excel
+      position_type?: 'article' | 'section' | 'subsection' | 'header' | 'subheader' | 'executable'; // Тип позиции
+      hierarchy_level?: number;   // Уровень иерархии (1-6)
       created_at?: string;
       updated_at?: string;
     };
@@ -163,6 +167,8 @@ export type DatabaseTables = {
       manual_volume?: number | null; // Объем, заданный вручную
       manual_note?: string | null;   // Примечание ГП (генподряда)
       client_note?: string | null; // Примечание из Excel
+      position_type?: 'article' | 'section' | 'subsection' | 'header' | 'subheader' | 'executable'; // Тип позиции
+      hierarchy_level?: number;   // Уровень иерархии (1-6)
       created_at?: string;
       updated_at?: string;
     };

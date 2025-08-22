@@ -35,12 +35,18 @@
       "Bash(touch:*)",
       "Bash(git checkout:*)",
       "Bash(git checkout:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(claude --version)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
     "additionalDirectories": [
       "C:\\Users\\nekrasov.l.m\\AppData\\Roaming\\Claude"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }

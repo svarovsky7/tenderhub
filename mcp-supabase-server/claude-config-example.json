@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "supabase-tenderhub": {
+      "command": "node",
+      "args": ["C:\\Users\\nekrasov.l.m\\WebstormProjects\\tenderhub\\mcp-supabase-server\\dist\\index.js"],
+      "env": {
+        "SUPABASE_URL": "https://lkmgbizyyaaacetllbzr.supabase.co",
+        "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrbWdiaXp5eWFhYWNldGxsYnpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMTU0MDcsImV4cCI6MjA2OTg5MTQwN30.4eG854js7UhMwL9izmGsv14V1_9zHwu5bHwclv-FmRA"
+      }
+    }
+  }
+}
