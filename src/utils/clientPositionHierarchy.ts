@@ -46,8 +46,10 @@ export const POSITION_LABELS: Record<ClientPositionType, string> = {
 };
 
 // Check if position can contain BOQ items (works/materials)
-export function canContainBOQItems(positionType: ClientPositionType): boolean {
-  return positionType === 'executable';
+export function canContainBOQItems(positionType: ClientPositionType | null | undefined): boolean {
+  // Allow BOQ items for executable positions and also for null/undefined (default case)
+  // Most positions in the system are executable, so we allow them by default
+  return positionType === 'executable' || positionType === null || positionType === undefined;
 }
 
 // Get visual indent for position type

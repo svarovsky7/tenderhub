@@ -126,11 +126,14 @@ export const useTenderActions = (
     }
   }, [hideCreateModal, onDataChange]);
 
-  const handleEditTender = useCallback(async (values: TenderUpdate) => {
+  const handleEditTender = useCallback(async (values: TenderUpdate & { id?: string }) => {
     console.log('🚀 handleEditTender called with values:', values);
     
-    if (!editingTender) {
-      console.error('❌ No tender being edited');
+    // Support both modal editing (with editingTender) and inline editing (with id in values)
+    const tenderId = values.id || editingTender?.id;
+    
+    if (!tenderId) {
+      console.error('❌ No tender ID provided for editing');
       return;
     }
 
@@ -150,7 +153,7 @@ export const useTenderActions = (
       };
 
       console.log('📡 Calling tendersApi.update...');
-      const result = await tendersApi.update(editingTender.id!, updates);
+      const result = await tendersApi.update(tenderId, updates);
       
       console.log('📦 Update result:', result);
       
@@ -161,7 +164,11 @@ export const useTenderActions = (
 
       console.log('✅ Tender updated successfully');
       message.success('Тендер обновлен');
-      hideEditModal();
+      
+      // Only hide modal if we were using modal editing
+      if (editingTender) {
+        hideEditModal();
+      }
 
       if (onDataChange) {
         console.log('🔄 Refreshing data...');

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   Table,
@@ -9,7 +9,14 @@ import {
   Typography,
   Tooltip,
   Empty,
-  Progress
+  Progress,
+  Form,
+  Input,
+  DatePicker,
+  InputNumber,
+  Row,
+  Col,
+  Divider
 } from 'antd';
 import {
   PlusOutlined,
@@ -23,6 +30,7 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import ExcelUpload from './ExcelUpload';
 // Note: status-related imports removed as status field was removed from schema
 import type { TenderTableProps, TenderWithSummary } from '../types';
@@ -43,6 +51,10 @@ const TenderTable: React.FC<TenderTableProps> = ({
   console.log('📊 Tenders count:', tenders.length);
   console.log('📄 Pagination:', pagination);
 
+  const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [form] = Form.useForm();
+
   const handleViewTender = (tender: TenderWithSummary) => {
     console.log('👁️ View tender clicked:', tender.id);
     onViewTender(tender);
@@ -50,7 +62,38 @@ const TenderTable: React.FC<TenderTableProps> = ({
 
   const handleEditTender = (tender: TenderWithSummary) => {
     console.log('✏️ Edit tender clicked:', tender.id);
-    onEditTender(tender);
+    setEditingKey(tender.id!);
+    setExpandedRowKeys([tender.id!]);
+    form.setFieldsValue({
+      ...tender,
+      submission_deadline: tender.submission_deadline ? dayjs(tender.submission_deadline) : null
+    });
+  };
+
+  const handleSaveEdit = async (record: TenderWithSummary) => {
+    try {
+      const values = await form.validateFields();
+      console.log('💾 Saving tender edits:', values);
+      
+      const updates = {
+        ...values,
+        id: record.id,
+        submission_deadline: values.submission_deadline?.format('YYYY-MM-DD HH:mm:ss')
+      };
+      
+      await onEditTender(updates);
+      setEditingKey(null);
+      setExpandedRowKeys([]);
+      form.resetFields();
+    } catch (error) {
+      console.error('❌ Edit validation failed:', error);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingKey(null);
+    setExpandedRowKeys([]);
+    form.resetFields();
   };
 
   const handleDeleteTender = (tenderId: string) => {
@@ -272,6 +315,138 @@ const TenderTable: React.FC<TenderTableProps> = ({
     }
   ];
 
+  // Expandable row render function for inline editing
+  const expandedRowRender = (record: TenderWithSummary) => {
+    const isEditing = editingKey === record.id;
+    
+    if (!isEditing) return null;
+    
+    return (
+      <div className="p-4 bg-gray-50">
+        <Form
+          form={form}
+          layout="vertical"
+          className="max-w-4xl"
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="title"
+                label="Название тендера"
+                rules={[{ required: true, message: 'Введите название' }]}
+              >
+                <Input placeholder="Название тендерного проекта" />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item
+                name="tender_number"
+                label="Номер тендера"
+                rules={[{ required: true, message: 'Введите номер' }]}
+              >
+                <Input placeholder="T-2024-001" />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item
+                name="version"
+                label="Версия"
+                rules={[{ required: true, message: 'Укажите версию' }]}
+                tooltip="Увеличьте версию при загрузке нового ВОР"
+              >
+                <InputNumber 
+                  min={1} 
+                  step={1}
+                  precision={0}
+                  placeholder="1" 
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item
+            name="description"
+            label="Описание"
+          >
+            <Input.TextArea rows={3} placeholder="Подробное описание проекта" />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="client_name"
+                label="Заказчик"
+                rules={[{ required: true, message: 'Введите название заказчика' }]}
+              >
+                <Input placeholder="Название организации-заказчика" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="submission_deadline"
+                label="Срок подачи заявки"
+              >
+                <DatePicker 
+                  showTime 
+                  className="w-full"
+                  placeholder="Выберите дату и время"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider orientation="left">Площади</Divider>
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="area_sp"
+                label="Площадь по СП"
+                tooltip="Площадь по строительным правилам"
+              >
+                <InputNumber 
+                  style={{ width: '100%' }}
+                  placeholder="0.00"
+                  suffix="м²"
+                  precision={2}
+                  min={0}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="area_client"
+                label="Площадь от Заказчика"
+                tooltip="Площадь, указанная заказчиком"
+              >
+                <InputNumber 
+                  style={{ width: '100%' }}
+                  placeholder="0.00"
+                  suffix="м²"
+                  precision={2}
+                  min={0}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button onClick={handleCancelEdit}>
+              Отмена
+            </Button>
+            <Button 
+              type="primary" 
+              onClick={() => handleSaveEdit(record)}
+            >
+              Сохранить
+            </Button>
+          </div>
+        </Form>
+      </div>
+    );
+  };
+
   return (
     <Card>
       <Table
@@ -281,6 +456,18 @@ const TenderTable: React.FC<TenderTableProps> = ({
         loading={loading}
         pagination={pagination}
         onChange={onTableChange}
+        expandable={{
+          expandedRowRender,
+          expandedRowKeys,
+          onExpandedRowsChange: (keys) => {
+            // Only allow expansion if we're editing
+            if (editingKey) {
+              setExpandedRowKeys(keys as string[]);
+            }
+          },
+          expandIcon: () => null, // Hide expand icon since we expand programmatically
+          expandRowByClick: false
+        }}
         locale={{
           emptyText: (
             <Empty

@@ -8,7 +8,6 @@ import {
   TenderFilters,
   TenderTable,
   CreateTenderModal,
-  EditTenderModal,
   DeleteTenderModal
 } from './components';
 
@@ -54,9 +53,7 @@ const TendersPage: React.FC = () => {
   const {
     // Modal states
     createModalVisible,
-    editModalVisible,
     deleteModalVisible,
-    editingTender,
     tenderToDelete,
     actionLoading,
     deleteLoading,
@@ -64,8 +61,6 @@ const TendersPage: React.FC = () => {
     // Modal handlers
     showCreateModal,
     hideCreateModal,
-    showEditModal,
-    hideEditModal,
     showDeleteModal,
     hideDeleteModal,
     
@@ -89,10 +84,10 @@ const TendersPage: React.FC = () => {
     }
   };
 
-  // Handle edit tender action from table
-  const handleEditTenderFromTable = (tender: any) => {
-    console.log('✏️ Edit tender requested from table:', tender.id);
-    showEditModal(tender);
+  // Handle edit tender action from table - now handled directly in table with inline editing
+  const handleEditTenderFromTable = async (updates: any) => {
+    console.log('✏️ Edit tender updates from table:', updates);
+    await handleEditTender(updates);
   };
 
   console.log('📊 Current page state:', {
@@ -161,14 +156,6 @@ const TendersPage: React.FC = () => {
           loading={actionLoading}
           onCancel={hideCreateModal}
           onSubmit={handleCreateTender}
-        />
-
-        <EditTenderModal
-          visible={editModalVisible}
-          loading={actionLoading}
-          editingTender={editingTender}
-          onCancel={hideEditModal}
-          onSubmit={handleEditTender}
         />
 
         <DeleteTenderModal

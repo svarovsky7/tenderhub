@@ -33,14 +33,12 @@ import {
   ClearOutlined,
   FormOutlined,
   TableOutlined,
-  GroupOutlined,
   QuestionCircleOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { boqApi, clientPositionsApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import MaterialLinkingModal from './MaterialLinkingModal';
-import GroupedBOQDisplay from './GroupedBOQDisplay';
 import { DecimalInput } from '../common';
 import CostDetailCascadeSelector from '../common/CostDetailCascadeSelector';
 import CostCategoryDisplay from './CostCategoryDisplay';
@@ -104,7 +102,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const [quickAddMode, setQuickAddMode] = useState(false);
   const [linkingModalVisible, setLinkingModalVisible] = useState(false);
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'table' | 'grouped'>('table');
   const [linkingMaterialId, setLinkingMaterialId] = useState<string | null>(null);
   const [linkMaterialModalVisible, setLinkMaterialModalVisible] = useState(false);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
@@ -124,10 +121,19 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   // Position hierarchy properties
   const positionType: ClientPositionType = position.position_type || 'executable';
   const hierarchyLevel = position.hierarchy_level || 6;
-  const canAddItems = canContainBOQItems(positionType);
+  const canAddItems = canContainBOQItems(position.position_type); // Pass raw value to check null/undefined
   const isStructural = isStructuralPosition(positionType);
   const positionIcon = POSITION_ICONS[positionType];
   const positionLabel = POSITION_LABELS[positionType];
+  
+  // Debug logging (commented to reduce console spam)
+  // console.log('🔍 Position click check:', {
+  //   id: position.id,
+  //   position_type: position.position_type,
+  //   positionType,
+  //   canAddItems,
+  //   title: position.title
+  // });
   const visualIndent = getIndentByLevel(hierarchyLevel);
   const positionColors = useMemo(() => getPositionColors(positionType), [positionType]);
   const fontWeight = useMemo(() => getFontWeight(positionType), [positionType]);
@@ -2742,28 +2748,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                       </Text>
                     </div>
                   )}
-                  {totalItems > 0 && (
-                    <div className="flex gap-1">
-                      <Tooltip title="Табличный вид">
-                        <Button
-                          type={viewMode === 'table' ? 'primary' : 'default'}
-                          icon={<TableOutlined />}
-                          onClick={() => setViewMode('table')}
-                        >
-                          Таблица
-                        </Button>
-                      </Tooltip>
-                      <Tooltip title="Группировка по работам">
-                        <Button
-                          type={viewMode === 'grouped' ? 'primary' : 'default'}
-                          icon={<GroupOutlined />}
-                          onClick={() => setViewMode('grouped')}
-                        >
-                          Группы
-                        </Button>
-                      </Tooltip>
-                    </div>
-                  )}
                 </>
               ) : (
                 <div className="w-full" />
@@ -2809,9 +2793,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               </div>
             )}
 
-            {/* Items Display - Table or Grouped */}
+            {/* Items Display - Table */}
             {totalItems > 0 ? (
-              viewMode === 'table' ? (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                   <Table
                   columns={columns}
@@ -2928,19 +2911,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 }}
                   />
                 </div>
-              ) : (
-                <GroupedBOQDisplay 
-                  items={position.boq_items || []}
-                  onEdit={(item) => {
-                    if (item.item_type === 'material') {
-                      handleEditMaterial(item);
-                    } else {
-                      handleEditWork(item);
-                    }
-                  }}
-                  onDelete={handleDeleteItem}
-                />
-              )
             ) : (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
                 <Empty
@@ -2992,8 +2962,9 @@ export default React.memo(ClientPositionCardStreamlined, (prevProps, nextProps) 
   return (
     prevProps.position.id === nextProps.position.id &&
     prevProps.position.boq_items?.length === nextProps.position.boq_items?.length &&
-    prevProps.works.length === nextProps.works.length &&
+    prevProps.works?.length === nextProps.works?.length &&
     prevProps.loading === nextProps.loading &&
+    prevProps.isExpanded === nextProps.isExpanded && // IMPORTANT: Check isExpanded for toggle to work
     JSON.stringify(prevProps.position.updated_at) === JSON.stringify(nextProps.position.updated_at)
   );
 });
