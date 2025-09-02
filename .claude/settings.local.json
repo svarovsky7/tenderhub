@@ -37,13 +37,12 @@
       "Bash(git checkout:*)",
       "Bash(dir:*)",
       "Bash(claude --version)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npm cache clean:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
-    "additionalDirectories": [
-      "C:\\Users\\nekrasov.l.m\\AppData\\Roaming\\Claude"
-    ]
+    "additionalDirectories": []
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [

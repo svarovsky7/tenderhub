@@ -308,3 +308,84 @@ export const boqAnalyticsApi = {
     }
   },
 };
+
+/**
+ * Get summary statistics for a tender's BOQ - simplified version for markup calculations
+ */
+export const getTenderBOQSummary = async (tenderId: string) => {
+  console.log('🚀 [getTenderBOQSummary] Getting summary for tender:', tenderId);
+
+  try {
+    // Get all BOQ items for the tender
+    const { data: boqItems, error } = await supabase
+      .from('boq_items')
+      .select(`
+        id,
+        quantity,
+        unit_rate,
+        total_amount,
+        work_id,
+        material_id,
+        is_subcontract
+      `)
+      .eq('tender_id', tenderId);
+
+    if (error) {
+      console.error('❌ [getTenderBOQSummary] Error fetching BOQ items:', error);
+      throw error;
+    }
+
+    if (!boqItems || boqItems.length === 0) {
+      console.log('📝 [getTenderBOQSummary] No BOQ items found');
+      return {
+        totalMaterialsCost: 0,
+        totalWorksCost: 0,
+        totalSubmaterialsCost: 0,
+        totalSubworksCost: 0,
+        totalCost: 0,
+        itemCount: 0
+      };
+    }
+
+    // Calculate totals
+    let totalMaterialsCost = 0;
+    let totalWorksCost = 0;
+    let totalSubmaterialsCost = 0;
+    let totalSubworksCost = 0;
+
+    for (const item of boqItems) {
+      const amount = item.total_amount || 0;
+      
+      if (item.is_subcontract) {
+        if (item.material_id) {
+          totalSubmaterialsCost += amount;
+        } else if (item.work_id) {
+          totalSubworksCost += amount;
+        }
+      } else {
+        if (item.material_id) {
+          totalMaterialsCost += amount;
+        } else if (item.work_id) {
+          totalWorksCost += amount;
+        }
+      }
+    }
+
+    const totalCost = totalMaterialsCost + totalWorksCost + totalSubmaterialsCost + totalSubworksCost;
+
+    const summary = {
+      totalMaterialsCost,
+      totalWorksCost,
+      totalSubmaterialsCost,
+      totalSubworksCost,
+      totalCost,
+      itemCount: boqItems.length
+    };
+
+    console.log('✅ [getTenderBOQSummary] Summary calculated:', summary);
+    return summary;
+  } catch (error) {
+    console.error('💥 [getTenderBOQSummary] Unexpected error:', error);
+    throw error;
+  }
+};

@@ -200,10 +200,13 @@ export const calculateMarkupFinancials = (
   const worksAfter16 = worksBaseWithMechanization * (safeMarkup.works_16_markup / 100);
   console.log('💼 [Этап 1] (Работы ПЗ + Механизация) * Работы 1,6%:', worksBaseWithMechanization, '*', safeMarkup.works_16_markup + '%', '=', worksAfter16);
   
-  // ЭТАП 2: Применяем "Работы РОСТ" к сумме (Результат Этапа 1 + МБП+ГСМ)
-  const worksAfter16WithMbp = worksAfter16 + mbpGsmCost;
-  const worksWithGrowth = worksAfter16WithMbp * (1 + safeMarkup.works_cost_growth / 100);
-  console.log('📈 [Этап 2] (Работы 1,6 + МБП+ГСМ) * Работы РОСТ%:', worksAfter16WithMbp, '* (1 +', safeMarkup.works_cost_growth + '%)', '=', worksWithGrowth);
+  // ЭТАП 2: Применяем "Работы РОСТ" к сумме (Работы ПЗ + Работы 1,6 + Служба механизации + МБП+ГСМ)
+  const worksGrowthBase = baseCosts.works + worksAfter16 + mechanizationServiceCost + mbpGsmCost;
+  const worksGrowthAmount = worksGrowthBase * (safeMarkup.works_cost_growth / 100);
+  const worksWithGrowth = worksGrowthBase + worksGrowthAmount;
+  console.log('📈 [Этап 2] (Работы ПЗ + Работы 1,6 + Служба механизации + МБП+ГСМ) * Работы РОСТ%:', 
+    '(' + baseCosts.works.toFixed(2), '+', worksAfter16.toFixed(2), '+', mechanizationServiceCost.toFixed(2), '+', mbpGsmCost.toFixed(2) + ')', 
+    '*', safeMarkup.works_cost_growth + '%', '=', worksGrowthAmount, '→ Итого:', worksWithGrowth);
   
   // ЭТАП для МАТЕРИАЛОВ: Применяем "Рост стоимости материалов" к Материалам ПЗ
   const materialsGrowthAmount = baseCosts.materials * (safeMarkup.materials_cost_growth / 100);
@@ -223,10 +226,13 @@ export const calculateMarkupFinancials = (
   // Добавляем все дополнительные службы к общему итогу
   const subtotalAfterGrowth = materialsWithGrowth + worksWithGrowth + submaterialsWithGrowth + subworksWithGrowth + mbpGsmCost + warrantyPeriodCost;
   
-  // НЕПРЕДВИДЕННЫЕ ЗАТРАТЫ: Применяем % к (Работы 1,6 + МБП+ГСМ + Материалы ПЗ)
-  const contingencyBase = worksAfter16 + mbpGsmCost + baseCosts.materials;
+  // НЕПРЕДВИДЕННЫЕ ЗАТРАТЫ: Применяем % к (Работы ПЗ + Материалы ПЗ + МБП+ГСМ + Служба механизации + Работы РОСТ (результат) + Материалы РОСТ (результат) + Работы 1,6)
+  const contingencyBase = baseCosts.works + baseCosts.materials + mbpGsmCost + mechanizationServiceCost + worksGrowthAmount + materialsGrowthAmount + worksAfter16;
   const contingencyCost = contingencyBase * (safeMarkup.contingency_costs / 100);
-  console.log('⚠️ [Непредвиденные] (Работы 1,6 + МБП+ГСМ + Материалы ПЗ) * Непредвиденные%:', '(' + worksAfter16.toFixed(2), '+', mbpGsmCost.toFixed(2), '+', baseCosts.materials.toFixed(2) + ')', '*', safeMarkup.contingency_costs + '%', '=', contingencyCost.toFixed(2));
+  console.log('⚠️ [Непредвиденные] (Работы ПЗ + Материалы ПЗ + МБП+ГСМ + Служба механизации + Работы РОСТ (результат) + Материалы РОСТ (результат) + Работы 1,6) * Непредвиденные%:', 
+    '(' + baseCosts.works.toFixed(2), '+', baseCosts.materials.toFixed(2), '+', mbpGsmCost.toFixed(2), '+', 
+    mechanizationServiceCost.toFixed(2), '+', worksGrowthAmount.toFixed(2), '+', materialsGrowthAmount.toFixed(2), '+',
+    worksAfter16.toFixed(2) + ')', '*', safeMarkup.contingency_costs + '%', '=', contingencyCost.toFixed(2));
   
   const subtotalWithContingency = subtotalAfterGrowth + contingencyCost;
   
@@ -238,26 +244,41 @@ export const calculateMarkupFinancials = (
   const overheadSubcontract = subcontractBase * (safeMarkup.overhead_subcontract / 100);
   console.log('🏗️ [ООЗ Субподряд] (Субматериалы РОСТ + Субработы РОСТ) * ООЗ субподряд%:', '(' + submaterialsWithGrowth.toFixed(2), '+', subworksWithGrowth.toFixed(2) + ')', '*', safeMarkup.overhead_subcontract + '%', '=', overheadSubcontract.toFixed(2));
   
-  // ООЗ СОБСТВЕННЫЕ СИЛЫ: Применяем % к (Работы РОСТ + Материалы РОСТ + Непредвиденные - Работы 1,6 - Материалы ПЗ - МБП)
-  const overheadOwnForcesBase = worksWithGrowth + materialsWithGrowth + contingencyCost - worksAfter16 - baseCosts.materials - mbpGsmCost;
+  // ООЗ СОБСТВЕННЫЕ СИЛЫ: Применяем % к (Работы ПЗ + Служба механизации + Работы 1,6 + Материалы ПЗ + МБП+ГСМ + Материалы РОСТ (результат) + Работы РОСТ (результат) + Непредвиденные)
+  const overheadOwnForcesBase = baseCosts.works + mechanizationServiceCost + worksAfter16 + baseCosts.materials + mbpGsmCost + materialsGrowthAmount + worksGrowthAmount + contingencyCost;
   const overheadOwnForces = overheadOwnForcesBase * (safeMarkup.overhead_own_forces / 100);
-  console.log('🏭 [ООЗ Собств. силы] (Работы РОСТ + Материалы РОСТ + Непредвиденные - Работы 1,6 - Материалы ПЗ - МБП) * ООЗ%:', '(' + worksWithGrowth.toFixed(2), '+', materialsWithGrowth.toFixed(2), '+', contingencyCost.toFixed(2), '-', worksAfter16.toFixed(2), '-', baseCosts.materials.toFixed(2), '-', mbpGsmCost.toFixed(2) + ')', '*', safeMarkup.overhead_own_forces + '%', '=', overheadOwnForces.toFixed(2));
+  console.log('🏭 [ООЗ Собств. силы] (Работы ПЗ + Служба механизации + Работы 1,6 + Материалы ПЗ + МБП+ГСМ + Материалы РОСТ (результат) + Работы РОСТ (результат) + Непредвиденные) * ООЗ%:', 
+    '(' + baseCosts.works.toFixed(2), '+', mechanizationServiceCost.toFixed(2), '+', worksAfter16.toFixed(2), '+', baseCosts.materials.toFixed(2), '+', 
+    mbpGsmCost.toFixed(2), '+', materialsGrowthAmount.toFixed(2), '+', worksGrowthAmount.toFixed(2), '+', 
+    contingencyCost.toFixed(2) + ')', '*', safeMarkup.overhead_own_forces + '%', '=', overheadOwnForces.toFixed(2));
   
   const subtotalWithOverhead = subtotalWithContingency + overheadOwnForces + overheadSubcontract;
   
-  // ОФЗ (общефирменные затраты): Применяем % к ООЗ собственных сил
-  const generalCosts = overheadOwnForces * (safeMarkup.general_costs_without_subcontract / 100);
-  console.log('🏢 [ОФЗ] ООЗ собств. силы * ОФЗ%:', overheadOwnForces.toFixed(2), '*', safeMarkup.general_costs_without_subcontract + '%', '=', generalCosts.toFixed(2));
+  // ОФЗ (общефирменные затраты): Применяем % к (Работы ПЗ + Служба механизации + Работы 1,6 + Материалы ПЗ + МБП+ГСМ + Материалы РОСТ + Работы РОСТ + Непредвиденные + ООЗ собств. силы)
+  const generalCostsBase = baseCosts.works + mechanizationServiceCost + worksAfter16 + baseCosts.materials + mbpGsmCost + materialsGrowthAmount + worksGrowthAmount + contingencyCost + overheadOwnForces;
+  const generalCosts = generalCostsBase * (safeMarkup.general_costs_without_subcontract / 100);
+  console.log('🏢 [ОФЗ] (Работы ПЗ + Служба механизации + Работы 1,6 + Материалы ПЗ + МБП+ГСМ + Материалы РОСТ + Работы РОСТ + Непредвиденные + ООЗ собств. силы) * ОФЗ%:', 
+    '(' + baseCosts.works.toFixed(2), '+', mechanizationServiceCost.toFixed(2), '+', worksAfter16.toFixed(2), '+', baseCosts.materials.toFixed(2), '+', 
+    mbpGsmCost.toFixed(2), '+', materialsGrowthAmount.toFixed(2), '+', worksGrowthAmount.toFixed(2), '+', 
+    contingencyCost.toFixed(2), '+', overheadOwnForces.toFixed(2) + ')', '*', safeMarkup.general_costs_without_subcontract + '%', '=', generalCosts.toFixed(2));
   
   const subtotalWithGeneralCosts = subtotalWithOverhead + generalCosts;
   
-  // ПРИБЫЛЬ СОБСТВЕННЫХ СИЛ: Применяем % к ОФЗ
-  const profitOwnForces = generalCosts * (safeMarkup.profit_own_forces / 100);
-  console.log('💰 [Прибыль собств. силы] ОФЗ * Прибыль%:', generalCosts.toFixed(2), '*', safeMarkup.profit_own_forces + '%', '=', profitOwnForces.toFixed(2));
+  // ПРИБЫЛЬ СОБСТВЕННЫХ СИЛ: Применяем % к (все компоненты ОФЗ + результат ОФЗ)
+  const profitOwnForcesBase = baseCosts.works + mechanizationServiceCost + worksAfter16 + baseCosts.materials + mbpGsmCost + materialsGrowthAmount + worksGrowthAmount + contingencyCost + overheadOwnForces + generalCosts;
+  const profitOwnForces = profitOwnForcesBase * (safeMarkup.profit_own_forces / 100);
+  console.log('💰 [Прибыль собств. силы] (Работы ПЗ + Служба механизации + Работы 1,6 + Материалы ПЗ + МБП+ГСМ + Материалы РОСТ + Работы РОСТ + Непредвиденные + ООЗ собств. силы + ОФЗ) * Прибыль%:', 
+    '(' + baseCosts.works.toFixed(2), '+', mechanizationServiceCost.toFixed(2), '+', worksAfter16.toFixed(2), '+', baseCosts.materials.toFixed(2), '+', 
+    mbpGsmCost.toFixed(2), '+', materialsGrowthAmount.toFixed(2), '+', worksGrowthAmount.toFixed(2), '+', 
+    contingencyCost.toFixed(2), '+', overheadOwnForces.toFixed(2), '+', generalCosts.toFixed(2) + ')', '*', safeMarkup.profit_own_forces + '%', '=', profitOwnForces.toFixed(2));
   
-  // ПРИБЫЛЬ СУБПОДРЯДА: Применяем % к ООЗ Субподряд
-  const profitSubcontract = overheadSubcontract * (safeMarkup.profit_subcontract / 100);
-  console.log('💰 [Прибыль субподряд] ООЗ Субподряд * Прибыль%:', overheadSubcontract.toFixed(2), '*', safeMarkup.profit_subcontract + '%', '=', profitSubcontract.toFixed(2));
+  // ПРИБЫЛЬ СУБПОДРЯДА: Применяем % к сумме (Субматериалы РОСТ + Субработы РОСТ + ООЗ субподряда)
+  // База для расчета: полные суммы субматериалов и субработ с ростом + ООЗ субподряда
+  const subcontractProfitBase = submaterialsWithGrowth + subworksWithGrowth + overheadSubcontract;
+  const profitSubcontract = subcontractProfitBase * (safeMarkup.profit_subcontract / 100);
+  console.log('💰 [Прибыль субподряд] (Субматериалы РОСТ + Субработы РОСТ + ООЗ Субподряд) * Прибыль%:', 
+    '(' + submaterialsWithGrowth.toFixed(2), '+', subworksWithGrowth.toFixed(2), '+', 
+    overheadSubcontract.toFixed(2) + ')', '*', safeMarkup.profit_subcontract + '%', '=', profitSubcontract.toFixed(2));
   
   const totalProfit = profitOwnForces + profitSubcontract;
   const totalCostWithProfit = subtotalWithGeneralCosts + totalProfit;

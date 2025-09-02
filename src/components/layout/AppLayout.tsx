@@ -14,6 +14,7 @@ import {
   SearchOutlined,
   DollarOutlined,
   LineChartOutlined,
+  CalculatorOutlined,
 } from '@ant-design/icons';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import ConnectionStatus from './ConnectionStatus';
@@ -111,6 +112,12 @@ const AppLayout: React.FC = () => {
       icon: <LineChartOutlined />,
       label: <Link to="/financial">Финансовые показатели</Link>,
       path: '/financial',
+    },
+    {
+      key: 'tender-markup',
+      icon: <CalculatorOutlined />,
+      label: <Link to="/tender-markup">Накрутки тендера</Link>,
+      path: '/tender-markup',
     },
     {
       key: 'admin',

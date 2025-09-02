@@ -170,6 +170,14 @@ const BOQPageSimplified: React.FC = () => {
                   </Title>
                 </div>
                 <Space>
+                  {selectedTenderId && (
+                    <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
+                      <Text className="text-xs text-gray-600">Общая стоимость</Text>
+                      <div className="text-xl font-bold text-green-700">
+                        {Math.round(boqStats.totalCost).toLocaleString('ru-RU')} ₽
+                      </div>
+                    </div>
+                  )}
                   <Button 
                     icon={<FolderOpenOutlined />}
                     onClick={() => navigate('/tenders')}
@@ -188,14 +196,14 @@ const BOQPageSimplified: React.FC = () => {
 
               {/* Tender Selection */}
               <div className="bg-blue-50 rounded-lg p-4">
-                <Row gutter={16} align="middle">
-                  <Col span={14}>
-                    <div className="flex items-center gap-3">
-                      <Text strong>Тендер:</Text>
+                <Row gutter={[16, 16]} align="middle">
+                  <Col xs={24} lg={14}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Text strong className="whitespace-nowrap">Тендер:</Text>
                       <Select
                         value={selectedTenderId}
                         onChange={handleTenderChange}
-                        className="flex-1"
+                        style={{ minWidth: '280px', maxWidth: '400px' }}
                         placeholder="Выберите тендер"
                         loading={tendersLoading}
                         showSearch
@@ -227,7 +235,7 @@ const BOQPageSimplified: React.FC = () => {
                             }
                           }
                         }}
-                        className="w-32"
+                        style={{ width: '120px' }}
                         placeholder="Версия"
                         size="large"
                         disabled={!selectedTenderId || availableVersions.length <= 1}
@@ -240,90 +248,71 @@ const BOQPageSimplified: React.FC = () => {
                       </Select>
                     </div>
                   </Col>
-                  <Col span={10}>
+                  <Col xs={24} lg={10}>
                     {selectedTender && (
-                      <div className="text-right">
-                        <div className="flex items-center justify-end gap-4 text-sm mb-2">
-                          <span><strong>Клиент:</strong> {selectedTender.client_name}</span>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-3">
+                          <span className="text-sm whitespace-nowrap">
+                            <strong>Клиент:</strong> {selectedTender.client_name}
+                          </span>
                           <Button 
                             type="link"
                             onClick={handleNavigateToTender}
                             icon={<DashboardOutlined />}
                             size="small"
+                            className="whitespace-nowrap"
                           >
                             Детали тендера
                           </Button>
                         </div>
-                        <div className="flex items-center justify-end gap-4 text-sm">
-                          <span>
-                            <strong>Площадь по СП:</strong> {selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 2) + ' м²' : '—'}
+                        <div className="flex flex-wrap items-center justify-end gap-3 text-sm">
+                          <span className="whitespace-nowrap">
+                            <strong>СП:</strong> {selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}
                           </span>
-                          <span>
-                            <strong>Площадь от Заказчика:</strong> {selectedTender.area_client ? formatQuantity(selectedTender.area_client, 2) + ' м²' : '—'}
+                          <span className="whitespace-nowrap">
+                            <strong>Заказчик:</strong> {selectedTender.area_client ? formatQuantity(selectedTender.area_client, 0) + ' м²' : '—'}
                           </span>
-                          <span>
-                            <strong>Дедлайн:</strong> {selectedTender.submission_deadline ? dayjs(selectedTender.submission_deadline).format('DD.MM.YYYY HH:mm') : '—'}
+                          <span className="whitespace-nowrap">
+                            <strong>Дедлайн:</strong> {selectedTender.submission_deadline ? dayjs(selectedTender.submission_deadline).format('DD.MM.YY') : '—'}
                           </span>
                         </div>
                       </div>
                     )}
                   </Col>
                 </Row>
+                
+                {/* Compact stats row - only when tender is selected */}
+                {selectedTenderId && (
+                  <div className="mt-3 pt-3 border-t border-blue-100">
+                    <div className="flex flex-wrap gap-4 text-sm">
+                      <div className="flex items-center gap-2">
+                        <FolderOpenOutlined className="text-blue-500" />
+                        <span>
+                          <Text type="secondary">Позиций:</Text>
+                          <Text strong className="ml-1">{boqStats.positionsCount}</Text>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <BuildOutlined className="text-orange-500" />
+                        <span>
+                          <Text type="secondary">Работ:</Text>
+                          <Text strong className="ml-1">{boqStats.totalWorks}</Text>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <ToolOutlined className="text-purple-500" />
+                        <span>
+                          <Text type="secondary">Материалов:</Text>
+                          <Text strong className="ml-1">{boqStats.totalMaterials}</Text>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
-
-        {/* Quick Stats */}
-        {selectedTenderId && (
-          <div className="px-6 py-4 bg-white border-b">
-            <div className="max-w-7xl mx-auto">
-              <Row gutter={16}>
-                <Col xs={24} sm={6}>
-                  <Card bordered={false} className="bg-blue-50">
-                    <Statistic
-                      title="Позиций заказчика"
-                      value={boqStats.positionsCount}
-                      prefix={<FolderOpenOutlined />}
-                    />
-                  </Card>
-                </Col>
-                <Col xs={24} sm={6}>
-                  <Card bordered={false} className="bg-green-50">
-                    <Statistic
-                      title="Работ"
-                      value={boqStats.totalWorks}
-                      prefix={<BuildOutlined />}
-                    />
-                  </Card>
-                </Col>
-                <Col xs={24} sm={6}>
-                  <Card bordered={false} className="bg-purple-50">
-                    <Statistic
-                      title="Материалов"
-                      value={boqStats.totalMaterials}
-                      prefix={<ToolOutlined />}
-                    />
-                  </Card>
-                </Col>
-                <Col xs={24} sm={6}>
-                  <Card bordered={false} className="bg-orange-50">
-                    <Statistic
-                      title="Общая стоимость"
-                      value={boqStats.totalCost}
-                      precision={0}
-                      suffix="₽"
-                      formatter={(value) => {
-                        const num = Math.round(Number(value));
-                        return num.toLocaleString('ru-RU');
-                      }}
-                    />
-                  </Card>
-                </Col>
-              </Row>
-            </div>
-          </div>
-        )}
 
 
         {/* Main Content */}

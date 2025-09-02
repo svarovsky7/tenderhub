@@ -21,6 +21,36 @@ export interface TenderMarkupPercentages {
   // Дополнительная информация
   notes?: string;                    // Примечания
   is_active: boolean;                // Активность записи
+  template_id?: string;              // Ссылка на шаблон (опционально)
+  
+  // Метки времени
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MarkupTemplate {
+  id: string;
+  
+  // Метаданные шаблона
+  name: string;                      // Название шаблона
+  description?: string;              // Описание шаблона
+  is_default: boolean;               // Шаблон по умолчанию
+  
+  // Проценты накруток
+  works_16_markup: number;
+  mechanization_service: number;
+  mbp_gsm: number;
+  warranty_period: number;
+  works_cost_growth: number;
+  materials_cost_growth: number;
+  subcontract_works_cost_growth: number;
+  subcontract_materials_cost_growth: number;
+  contingency_costs: number;
+  overhead_own_forces: number;
+  overhead_subcontract: number;
+  general_costs_without_subcontract: number;
+  profit_own_forces: number;
+  profit_subcontract: number;
   
   // Метки времени
   created_at: string;
@@ -64,6 +94,47 @@ export interface UpdateTenderMarkupPercentages {
   profit_subcontract?: number;
   notes?: string;
   is_active?: boolean;
+  template_id?: string;
+}
+
+export interface CreateMarkupTemplate {
+  name: string;
+  description?: string;
+  is_default?: boolean;
+  works_16_markup?: number;
+  mechanization_service?: number;
+  mbp_gsm?: number;
+  warranty_period?: number;
+  works_cost_growth?: number;
+  materials_cost_growth?: number;
+  subcontract_works_cost_growth?: number;
+  subcontract_materials_cost_growth?: number;
+  contingency_costs?: number;
+  overhead_own_forces?: number;
+  overhead_subcontract?: number;
+  general_costs_without_subcontract?: number;
+  profit_own_forces?: number;
+  profit_subcontract?: number;
+}
+
+export interface UpdateMarkupTemplate {
+  name?: string;
+  description?: string;
+  is_default?: boolean;
+  works_16_markup?: number;
+  mechanization_service?: number;
+  mbp_gsm?: number;
+  warranty_period?: number;
+  works_cost_growth?: number;
+  materials_cost_growth?: number;
+  subcontract_works_cost_growth?: number;
+  subcontract_materials_cost_growth?: number;
+  contingency_costs?: number;
+  overhead_own_forces?: number;
+  overhead_subcontract?: number;
+  general_costs_without_subcontract?: number;
+  profit_own_forces?: number;
+  profit_subcontract?: number;
 }
 
 // Значения по умолчанию

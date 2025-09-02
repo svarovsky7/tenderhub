@@ -108,10 +108,10 @@ const markupFields = [
     key: 'works_cost_growth',
     name: 'works_cost_growth',
     label: 'Рост стоимости работ',
-    tooltip: 'Расчет: (Работы 1,6 + МБП+ГСМ) × процент. Процент роста стоимости работ',
+    tooltip: 'Расчет: (Работы ПЗ + Работы 1,6 + Служба механизации + МБП+ГСМ) × процент. Процент роста стоимости работ',
     max: 100,
     suffix: '%',
-    baseType: 'worksAfter16WithMbp',
+    baseType: 'worksGrowthBase',
     calculationType: 'percentage'
   },
   {
@@ -148,7 +148,7 @@ const markupFields = [
     key: 'contingency_costs',
     name: 'contingency_costs',
     label: 'Непредвиденные затраты',
-    tooltip: 'Расчет: (Работы 1,6 + МБП+ГСМ + Материалы ПЗ) × процент. Резерв на непредвиденные ситуации',
+    tooltip: 'Расчет: (Работы ПЗ + Материалы ПЗ + МБП+ГСМ + Служба механизации + Работы РОСТ + Материалы РОСТ + Работы 1,6) × процент. Резерв на непредвиденные ситуации',
     max: 20,
     suffix: '%',
     baseType: 'contingencyBaseNew',
@@ -158,7 +158,7 @@ const markupFields = [
     key: 'overhead_own_forces',
     name: 'overhead_own_forces',
     label: 'ООЗ собств. силы',
-    tooltip: 'Расчет: (Работы РОСТ + Материалы РОСТ + Непредвиденные - Работы 1,6 - Материалы ПЗ - МБП) × процент. Общехозяйственные затраты собственными силами',
+    tooltip: 'Расчет: (Работы ПЗ + Служба механизации + Работы 1,6 + Материалы ПЗ + МБП+ГСМ + Материалы РОСТ + Работы РОСТ + Непредвиденные) × процент. Общехозяйственные затраты собственными силами',
     max: 50,
     suffix: '%',
     baseType: 'ownForcesBaseNew',
@@ -178,30 +178,30 @@ const markupFields = [
     key: 'general_costs_without_subcontract',
     name: 'general_costs_without_subcontract',
     label: 'ОФЗ (Без субподряда)',
-    tooltip: 'Расчет: ООЗ собств. силы × процент. Общефирменные затраты без субподряда',
+    tooltip: 'Расчет: (Работы ПЗ + Служба механизации + Работы 1,6 + Материалы ПЗ + МБП+ГСМ + Материалы РОСТ + Работы РОСТ + Непредвиденные + ООЗ собств. силы) × процент. Общефирменные затраты без субподряда',
     max: 30,
     suffix: '%',
-    baseType: 'overheadOwnForces',
+    baseType: 'generalCostsBase',
     calculationType: 'percentage'
   },
   {
     key: 'profit_own_forces',
     name: 'profit_own_forces',
     label: 'Прибыль собств. силы',
-    tooltip: 'Расчет: ОФЗ × процент. Прибыль от работ собственными силами',
+    tooltip: 'Расчет: (Работы ПЗ + Служба механизации + Работы 1,6 + Материалы ПЗ + МБП+ГСМ + Материалы РОСТ + Работы РОСТ + Непредвиденные + ООЗ собств. силы + ОФЗ) × процент. Прибыль от работ собственными силами',
     max: 50,
     suffix: '%',
-    baseType: 'generalCosts',
+    baseType: 'profitOwnForcesBase',
     calculationType: 'percentage'
   },
   {
     key: 'profit_subcontract',
     name: 'profit_subcontract',
     label: 'Прибыль Субподряд',
-    tooltip: 'Расчет: ООЗ Субподряд × процент. Прибыль от субподрядных работ',
+    tooltip: 'Расчет: (Субматериалы РОСТ + Субработы РОСТ + ООЗ Субподряд) × процент. Прибыль от субподрядных работ',
     max: 50,
     suffix: '%',
-    baseType: 'overheadSubcontract',
+    baseType: 'subcontractProfitBase',
     calculationType: 'percentage'
   }
 ];
@@ -319,26 +319,50 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
       ? worksWithMechanization * (formValues['works_16_markup'] / 100)
       : 0;
     
+    // Рассчитываем росты для использования в непредвиденных
+    const worksGrowthBase = baseCosts.works + works16Result + mechanizationServiceCost + mbpGsmCost;
+    const worksGrowthAmount = formValues['works_cost_growth']
+      ? worksGrowthBase * (formValues['works_cost_growth'] / 100)
+      : 0;
+    const worksWithGrowth = worksGrowthBase + worksGrowthAmount;
+    
+    const materialsGrowthAmount = formValues['materials_cost_growth']
+      ? baseCosts.materials * (formValues['materials_cost_growth'] / 100)
+      : 0;
+    const materialsWithGrowth = baseCosts.materials + materialsGrowthAmount;
+    
     // Рассчитываем непредвиденные затраты для использования в ООЗ
     const contingencyCost = formValues['contingency_costs']
-      ? (works16Result + mbpGsmCost + baseCosts.materials) * (formValues['contingency_costs'] / 100)
+      ? (baseCosts.works + baseCosts.materials + mbpGsmCost + mechanizationServiceCost + worksGrowthAmount + materialsGrowthAmount + works16Result) * (formValues['contingency_costs'] / 100)
       : 0;
 
     // Рассчитываем ООЗ собств. силы для использования в ОФЗ
-    const overheadOwnForcesBase = (calculatedFinancials.worksWithGrowth || 0) + (calculatedFinancials.materialsWithGrowth || 0) + contingencyCost - works16Result - baseCosts.materials - mbpGsmCost;
+    const overheadOwnForcesBase = baseCosts.works + mechanizationServiceCost + works16Result + baseCosts.materials + mbpGsmCost + materialsGrowthAmount + worksGrowthAmount + contingencyCost;
     const overheadOwnForcesCost = formValues['overhead_own_forces']
       ? overheadOwnForcesBase * (formValues['overhead_own_forces'] / 100)
       : 0;
 
     // Рассчитываем ОФЗ для использования в прибыли собственных сил
+    const generalCostsBase = baseCosts.works + mechanizationServiceCost + works16Result + baseCosts.materials + mbpGsmCost + materialsGrowthAmount + worksGrowthAmount + contingencyCost + overheadOwnForcesCost;
     const generalCostsCost = formValues['general_costs_without_subcontract']
-      ? overheadOwnForcesCost * (formValues['general_costs_without_subcontract'] / 100)
+      ? generalCostsBase * (formValues['general_costs_without_subcontract'] / 100)
       : 0;
 
     // Рассчитываем ООЗ Субподряд для использования в прибыли субподряда
     const overheadSubcontractCost = formValues['overhead_subcontract']
       ? ((calculatedFinancials.submaterialsWithGrowth || 0) + (calculatedFinancials.subworksWithGrowth || 0)) * (formValues['overhead_subcontract'] / 100)
       : 0;
+    
+    // Рассчитываем базу для прибыли собственных сил
+    const profitOwnForcesBase = baseCosts.works + mechanizationServiceCost + works16Result + baseCosts.materials + mbpGsmCost + materialsGrowthAmount + worksGrowthAmount + contingencyCost + overheadOwnForcesCost + generalCostsCost;
+    
+    // Рассчитываем базу для прибыли субподряда
+    // База = Субматериалы РОСТ (полная сумма) + Субработы РОСТ (полная сумма) + ООЗ субподряда
+    const submaterialsGrowthAmount = baseCosts.submaterials * ((formValues['subcontract_materials_cost_growth'] || 0) / 100);
+    const subworksGrowthAmount = baseCosts.subworks * ((formValues['subcontract_works_cost_growth'] || 0) / 100);
+    const submaterialsWithGrowth = baseCosts.submaterials + submaterialsGrowthAmount;
+    const subworksWithGrowth = baseCosts.subworks + subworksGrowthAmount;
+    const subcontractProfitBase = submaterialsWithGrowth + subworksWithGrowth + overheadSubcontractCost;
 
     const baseValues = {
       works: baseCosts.works,
@@ -346,16 +370,20 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
       submaterials: baseCosts.submaterials,
       subworks: baseCosts.subworks,
       worksWithMechanization: worksWithMechanization, // База для "Работы 1,6"
-      worksAfter16WithMbp: works16Result + mbpGsmCost, // База для "Рост стоимости работ"
+      worksGrowthBase: baseCosts.works + works16Result + mechanizationServiceCost + mbpGsmCost, // База для "Рост стоимости работ": Работы ПЗ + Работы 1,6 + Служба механизации + МБП+ГСМ
+      worksAfter16WithMbp: works16Result + mbpGsmCost, // Старая база (для совместимости)
       worksAfter16: calculatedFinancials.worksAfter16 || 0,
       subtotalAfterGrowth: calculatedFinancials.subtotalAfterGrowth || 0,
       contingencyBase: (calculatedFinancials.worksWithGrowth || 0) + (calculatedFinancials.materialsWithGrowth || 0),
-      contingencyBaseNew: works16Result + mbpGsmCost + baseCosts.materials, // Новая база для непредвиденных: Работы 1,6 + МБП + Материалы ПЗ
+      contingencyBaseNew: baseCosts.works + baseCosts.materials + mbpGsmCost + mechanizationServiceCost + worksGrowthAmount + materialsGrowthAmount + works16Result, // Новая база для непредвиденных: Работы ПЗ + Материалы ПЗ + МБП+ГСМ + Служба механизации + Работы РОСТ (результат) + Материалы РОСТ (результат) + Работы 1,6
       ownForcesBase: (calculatedFinancials.materialsWithGrowth || 0) + (calculatedFinancials.worksWithGrowth || 0),
-      ownForcesBaseNew: (calculatedFinancials.worksWithGrowth || 0) + (calculatedFinancials.materialsWithGrowth || 0) + contingencyCost - works16Result - baseCosts.materials - mbpGsmCost, // Новая база для ООЗ собств. силы
+      ownForcesBaseNew: baseCosts.works + mechanizationServiceCost + works16Result + baseCosts.materials + mbpGsmCost + materialsGrowthAmount + worksGrowthAmount + contingencyCost, // Новая база для ООЗ собств. силы: Работы ПЗ + Служба механизации + Работы 1,6 + Материалы ПЗ + МБП+ГСМ + Материалы РОСТ (результат) + Работы РОСТ (результат) + Непредвиденные
       overheadOwnForces: overheadOwnForcesCost, // ООЗ собств. силы для расчета ОФЗ
+      generalCostsBase: generalCostsBase, // База для ОФЗ: все компоненты ООЗ + результат ООЗ
       generalCosts: generalCostsCost, // ОФЗ для расчета прибыли собственных сил
-      overheadSubcontract: overheadSubcontractCost, // ООЗ Субподряд для расчета прибыли субподряда
+      profitOwnForcesBase: profitOwnForcesBase, // База для прибыли собств. сил: все компоненты ОФЗ + результат ОФЗ
+      overheadSubcontract: overheadSubcontractCost, // ООЗ Субподряд для расчета прибыли субподряда (старая формула)
+      subcontractProfitBase: subcontractProfitBase, // Новая база для прибыли субподряда
       subcontractBase: (calculatedFinancials.submaterialsWithGrowth || 0) + (calculatedFinancials.subworksWithGrowth || 0),
       subcontractBaseOriginal: baseCosts.submaterials + baseCosts.subworks // Базовые ПЗ для ООЗ субподряда
     };

@@ -24,6 +24,15 @@ npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 - ESLint: `npm run lint`
 - Manual testing in dev server
 
+## MCP (Model Context Protocol) Integration
+
+**Supabase MCP Server** is configured for direct database access:
+- Config location: `C:\Users\odintsov.a.a\AppData\Roaming\Claude\mcp.json`
+- Available after Claude Code restart
+- Check connection: `/mcp list`
+- Provides tools: `mcp__supabase__*` for CRUD operations
+- See `MCP_SETUP.md` for troubleshooting
+
 ## Tech Stack
 
 - **Frontend**: React 19.1.0, TypeScript 5.8.3, Vite 7.0.4
@@ -64,6 +73,7 @@ ALWAYS verify schema before ANY database work
 - `work_material_links` - M2M relationships between works and materials
 - `cost_categories` & `detail_cost_categories` - Cost categorization system
 - `location` - Geographic locations for costs
+- `tender_markup` & `markup_templates` - Tender markup configuration
 
 ### API Layer (`src/lib/supabase/api/`)
 Modular domain-specific modules (all < 600 lines):
@@ -78,6 +88,7 @@ Modular domain-specific modules (all < 600 lines):
   - `cost-structure.ts` & `cost-structure-fixed.ts` - Cost structures
   - `tender-construction-costs.ts` - Tender-specific costs
   - `import-costs.ts` - Cost data import
+- `tender-markup.ts` - Markup management
 - `users.ts` - User management
 - `work-materials-management.ts` - Combined work-material operations
 - Real-time subscriptions ready but disabled
@@ -123,6 +134,7 @@ src/pages/                # Route components
 - `/libraries/materials` - Materials library
 - `/libraries/works` - Works library
 - `/admin/*` - Admin pages
+- `/financial-indicators` - Financial indicators management
 
 ## Critical Implementation Rules
 
@@ -224,9 +236,11 @@ try {
 
 Create `.env.local`:
 ```
-VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_URL=https://lkmgbizyyaaacetllbzr.supabase.co
 VITE_SUPABASE_ANON_KEY=your_anon_key_here
 ```
+
+**GitHub MCP Server** is also configured (see package.json devDependencies)
 
 ## Vite Configuration
 - Dev server: port 5173, host enabled
@@ -235,10 +249,11 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 
 ## TypeScript Configuration
 - **Project References**: Root tsconfig.json references tsconfig.app.json (src/) and tsconfig.node.json (config files)
-- **Strict Mode**: All strict checks enabled
+- **Strict Mode**: All strict checks enabled (including noUnusedLocals, noUnusedParameters)
 - **Target**: ES2022 with ESNext modules and bundler resolution
 - **Type Safety**: Modular database types in `src/lib/supabase/types/database/`
 - **Path Resolution**: Configured for absolute imports from src/
+- **Build Info**: `.tsbuildinfo` stored in `node_modules/.tmp/`
 
 ## Current Status
 
@@ -256,6 +271,7 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - React Query caching for performance
 - Visual amount rounding in UI (whole numbers)
 - Automatic total_amount calculation including delivery
+- Tender markup management with templates
 
 ### ⚠️ Disabled
 - Authentication (no login)
@@ -269,11 +285,16 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - Drag-drop slow with many items
 - Some Ant Design React 19 warnings (patches applied)
 
-### Recent Improvements (December 2024)
+### Recent Improvements (December 2024 - January 2025)
 - Fixed total_amount calculation to include delivery costs
 - Added "(3%)" labels for "not included" delivery type
 - Implemented visual rounding to whole numbers in UI
 - Database trigger for automatic delivery amount calculation
+- Added tender markup functionality with templates
+- Improved inline editing for BOQ items
+- Added version and area fields to tenders
+- Fixed infinite render loops in material synchronization
+- Optimized financial calculations and cost percentage handling
 
 ## Important Notes
 
@@ -299,6 +320,39 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
    - Commit with descriptive emoji prefixes (🎯, ✨, 🚀, etc.)
    - Push to origin/main after testing
 
+## Project File Structure
+```
+TenderHUB/
+├── src/
+│   ├── components/         # UI components
+│   │   ├── tender/        # BOQ-specific (40+ components)
+│   │   ├── common/        # Shared components
+│   │   ├── admin/         # Admin interfaces
+│   │   ├── financial/     # Financial indicators components
+│   │   └── layout/        # Layout components (AppLayout)
+│   ├── lib/supabase/      # Database layer
+│   │   ├── api/          # API modules (<600 lines each)
+│   │   │   └── boq/      # BOQ split: crud, hierarchy, bulk, analytics, queries
+│   │   └── types/        # TypeScript types (modular)
+│   │       └── database/ # Database schema types
+│   ├── pages/            # Route components (lazy-loaded)
+│   │   ├── admin/        # Admin pages
+│   │   └── TendersPage/  # Tender page with components
+│   ├── hooks/            # Custom React hooks
+│   │   ├── useAuth.ts    # Auth hook (currently disabled)
+│   │   └── useBOQManagement.ts # BOQ state management
+│   └── utils/            # Utilities
+├── supabase/
+│   └── schemas/
+│       └── prod.sql      # 🚨 SOURCE OF TRUTH for DB schema (7000+ lines)
+├── .env.local            # Environment variables
+├── vite.config.ts        # Vite configuration
+├── tailwind.config.js    # Tailwind CSS config
+├── tsconfig.json         # TypeScript project references
+├── tsconfig.app.json     # TypeScript app config
+└── package.json          # Dependencies & scripts
+```
+
 ## Specialized Agents Available
 
 When working with complex tasks, consider using these specialized agents via the Task tool:
@@ -310,5 +364,12 @@ When working with complex tasks, consider using these specialized agents via the
 - **database-optimizer**: For performance tuning, indexing strategies, or query optimization
 - **debugger**: For troubleshooting errors, test failures, or unexpected behavior
 - **docs-architect**: For creating comprehensive technical documentation
+
+## Git State Context
+
+When starting a conversation, check the git status which shows:
+- Current branch (usually `main`)
+- Modified/staged files
+- Recent commits with descriptive emoji prefixes
 
 Remember: This is a simplified dev environment. Production will require authentication, RLS, and security features.

@@ -26,6 +26,8 @@ const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 const WorkMaterialsPage = React.lazy(() => import('./pages/WorkMaterialsPage'));
 const FinancialIndicatorsPage = React.lazy(() => import('./pages/FinancialIndicatorsPage'));
 const TestMarkupTable = React.lazy(() => import('./pages/admin/TestMarkupTable'));
+const MarkupTablesSetup = React.lazy(() => import('./pages/admin/MarkupTablesSetup'));
+const TenderMarkupPage = React.lazy(() => import('./pages/TenderMarkupPage'));
 
 function App() {
   // Initialize connection monitoring on app start
@@ -146,6 +148,24 @@ function App() {
               } 
             />
 
+            {/* Tender Markup Management */}
+            <Route 
+              path="tender-markup" 
+              element={
+                <React.Suspense fallback={<div>Загрузка...</div>}>
+                  <TenderMarkupPage />
+                </React.Suspense>
+              } 
+            />
+            <Route 
+              path="tender-markup/:tenderId" 
+              element={
+                <React.Suspense fallback={<div>Загрузка...</div>}>
+                  <TenderMarkupPage />
+                </React.Suspense>
+              } 
+            />
+
             {/* Admin routes */}
             <Route path="admin">
               <Route
@@ -193,6 +213,14 @@ function App() {
                 element={
                   <React.Suspense fallback={<div>Загрузка...</div>}>
                     <TestMarkupTable />
+                  </React.Suspense>
+                } 
+              />
+              <Route
+                path="markup-tables-setup"
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <MarkupTablesSetup />
                   </React.Suspense>
                 } 
               />

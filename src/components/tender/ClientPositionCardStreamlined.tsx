@@ -1708,8 +1708,32 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     }
   }, [works, editForm]);
 
-  // Work Edit Row (inline editing) - Perfect pixel alignment with table headers
-  const WorkEditRow = ({ item }: { item: BOQItemWithLibrary }) => (
+  // Work Edit Row (inline editing) - With column headers
+  const WorkEditRow = ({ item }: { item: BOQItemWithLibrary }) => {
+    // Determine background color based on item type
+    const getEditBackgroundColor = () => {
+      switch(item.item_type) {
+        case 'work':
+          return 'rgba(254, 215, 170, 0.3)'; // Orange for work (fed7aa with opacity)
+        case 'sub_work':
+          return 'rgba(233, 213, 255, 0.3)'; // Purple for sub-work (e9d5ff with opacity)
+        default:
+          return '#f0f8ff';
+      }
+    };
+
+    const getBorderColor = () => {
+      switch(item.item_type) {
+        case 'work':
+          return '#fb923c'; // Orange border
+        case 'sub_work':
+          return '#c084fc'; // Purple border
+        default:
+          return '#1890ff';
+      }
+    };
+
+    return (
     <tr>
       <td colSpan={11} style={{ padding: 0 }}>
         <Form
@@ -1718,178 +1742,218 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           onFinish={handleSaveWorkEdit}
           className="w-full"
           style={{ 
-            padding: '16px', 
-            backgroundColor: '#f0f8ff', 
-            borderRadius: '6px',
-            border: '1px solid #e1e5e9',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
+            padding: '12px', 
+            backgroundColor: getEditBackgroundColor(), 
+            borderRadius: '4px',
+            border: `2px solid ${getBorderColor()}`,
+            boxShadow: `0 2px 4px ${getBorderColor()}33`
           }}
         >
-          {/* Single Row: Type, Name, Unit, Quantity, Price, Total, Category */}
-          <Row gutter={16}>
-            <Col span={3}>
-              <Form.Item 
-                name="item_type"
-                label="Тип" 
-                className="mb-3"
-                rules={[{ required: true, message: 'Выберите тип' }]}
-              >
-                <Select size="small" placeholder="Тип">
-                  <Select.Option value="work">
-                    <Tag icon={<BuildOutlined />} color="orange" className="text-xs mr-0">
-                      Работа
-                    </Tag>
-                  </Select.Option>
-                  <Select.Option value="sub_work">
-                    <Tag icon={<BuildOutlined />} color="purple" className="text-xs mr-0">
-                      Суб-раб
-                    </Tag>
-                  </Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={8}>
-              <Form.Item
-                name="description"
-                label="Наименование"
-                className="mb-3"
-                rules={[{ required: true, message: 'Введите наименование' }]}
-              >
-                <Input placeholder="Наименование работы" size="small" />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={3}>
-              <Form.Item
-                name="unit"
-                label="Единица измерения"
-                className="mb-3"
-                rules={[{ required: true, message: 'Введите единицу' }]}
-              >
-                <Input placeholder="м², шт" size="small" />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={3}>
-              <Form.Item
-                name="quantity"
-                label="Количество"
-                className="mb-3"
-                rules={[{ required: true, message: 'Введите количество' }]}
-              >
-                <DecimalInput 
-                  placeholder="0.00" 
-                  min={0}
-                  precision={2}
-                  size="small"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={3}>
-              <Form.Item
-                name="unit_rate"
-                label="Цена за единицу"
-                className="mb-3"
-                rules={[{ required: true, message: 'Введите цену' }]}
-              >
-                <DecimalInput 
-                  placeholder="0.00" 
-                  min={0}
-                  precision={2}
-                  size="small"
-                  suffix="₽"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={3}>
-              <Form.Item label="Сумма" className="mb-3">
-                <div className="h-6 flex items-center font-semibold text-green-600 text-sm">
-                  {formatCurrency(
-                    (workEditForm.getFieldValue('quantity') || 0) * 
-                    (workEditForm.getFieldValue('unit_rate') || 0)
-                  )}
-                </div>
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={7}>
-              <Form.Item
-                name="detail_cost_category_id"
-                label="Категория затрат"
-                className="mb-3"
-                rules={[{ required: true, message: 'Выберите категорию' }]}
-              >
-                <CostDetailCascadeSelector
-                  placeholder="Категория затрат"
-                  size="small"
-                  style={{ width: '100%' }}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
+          {/* First row with main fields */}
+          <div className="flex items-end gap-2 mb-3">
+            {/* Type */}
+            <Form.Item 
+              name="item_type"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Тип</span>}
+              className="mb-0"
+              style={{ width: '110px' }}
+              rules={[{ required: true, message: 'Тип' }]}
+            >
+              <Select size="small" placeholder="Тип">
+                <Select.Option value="work">Работа</Select.Option>
+                <Select.Option value="sub_work">Суб-работа</Select.Option>
+              </Select>
+            </Form.Item>
 
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
-            <Button 
-              type="default" 
-              icon={<CloseOutlined />} 
-              onClick={handleCancelWorkEdit}
-              size="small"
+            {/* Name - расширен */}
+            <Form.Item
+              name="description"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Наименование</span>}
+              className="mb-0 flex-1"
+              style={{ minWidth: '300px' }}
+              rules={[{ required: true, message: 'Наименование' }]}
             >
-              Отмена
-            </Button>
-            <Button 
-              type="primary" 
-              htmlType="submit" 
-              icon={<SaveOutlined />} 
-              size="small"
+              <Input.TextArea 
+                placeholder="Наименование работы" 
+                size="small" 
+                autoSize={{ minRows: 1, maxRows: 2 }}
+                style={{ resize: 'none' }}
+              />
+            </Form.Item>
+
+            {/* Quantity - поменяли местами с единицами */}
+            <Form.Item
+              name="quantity"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Количество</span>}
+              className="mb-0"
+              style={{ width: '100px' }}
+              rules={[{ required: true, message: 'Кол-во' }]}
             >
-              Сохранить
-            </Button>
+              <DecimalInput 
+                placeholder="0.00" 
+                min={0}
+                precision={2}
+                size="small"
+              />
+            </Form.Item>
+
+            {/* Unit - поменяли местами с количеством */}
+            <Form.Item
+              name="unit"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Ед. изм.</span>}
+              className="mb-0"
+              style={{ width: '80px' }}
+              rules={[{ required: true, message: 'Ед.' }]}
+            >
+              <Input placeholder="шт" size="small" />
+            </Form.Item>
+
+            {/* Price */}
+            <Form.Item
+              name="unit_rate"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Цена за ед.</span>}
+              className="mb-0"
+              style={{ width: '120px' }}
+              rules={[{ required: true, message: 'Цена' }]}
+            >
+              <DecimalInput 
+                placeholder="0.00" 
+                min={0}
+                precision={2}
+                size="small"
+                suffix="₽"
+              />
+            </Form.Item>
+
+            {/* Total - стандартный шрифт */}
+            <Form.Item 
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Сумма</span>}
+              className="mb-0"
+              style={{ width: '140px' }}
+            >
+              <div style={{ 
+                height: '24px', 
+                padding: '0 8px',
+                background: '#f5f5f5',
+                borderRadius: '2px',
+                display: 'flex',
+                alignItems: 'center',
+                fontSize: '14px',
+                fontWeight: 'normal',
+                color: '#000'
+              }}>
+                {formatCurrency(
+                  (workEditForm.getFieldValue('quantity') || 0) * 
+                  (workEditForm.getFieldValue('unit_rate') || 0)
+                )}
+              </div>
+            </Form.Item>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2" style={{ paddingBottom: '2px' }}>
+              <Button 
+                type="default" 
+                icon={<CloseOutlined />} 
+                onClick={handleCancelWorkEdit}
+                size="large"
+                danger
+                style={{ height: '36px', fontSize: '14px' }}
+              >
+                Отмена
+              </Button>
+              <Button 
+                type="primary" 
+                htmlType="submit" 
+                icon={<SaveOutlined />} 
+                size="large"
+                style={{ height: '36px', fontSize: '14px' }}
+              >
+                Сохранить
+              </Button>
+            </div>
+          </div>
+
+          {/* Second row with category */}
+          <div className="flex items-end gap-2">
+            <Form.Item
+              name="detail_cost_category_id"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Категория затрат</span>}
+              className="mb-0"
+              style={{ width: '100%' }}
+              rules={[{ required: true, message: 'Выберите категорию затрат' }]}
+            >
+              <CostDetailCascadeSelector
+                placeholder="Выберите категорию затрат"
+                size="small"
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
           </div>
         </Form>
       </td>
     </tr>
-  );
+    );
+  };
 
-  // Material Edit Row (inline editing) - Perfect pixel alignment with table headers
-  const MaterialEditRow = ({ item }: { item: BOQItemWithLibrary }) => (
+  // Material Edit Row (inline editing) - Compact two-row layout
+  const MaterialEditRow = ({ item }: { item: BOQItemWithLibrary }) => {
+    // Determine background color based on item type and link status
+    const getEditBackgroundColor = () => {
+      switch(item.item_type) {
+        case 'material':
+          return item.work_link ? 'rgba(191, 219, 254, 0.3)' : 'rgba(219, 234, 254, 0.3)'; // Blue shades for material
+        case 'sub_material':
+          return 'rgba(187, 247, 208, 0.3)'; // Green for sub-material (bbf7d0 with opacity)
+        default:
+          return '#fff5f0';
+      }
+    };
+
+    const getBorderColor = () => {
+      switch(item.item_type) {
+        case 'material':
+          return '#60a5fa'; // Blue border
+        case 'sub_material':
+          return '#34d399'; // Green border
+        default:
+          return '#ff7a45';
+      }
+    };
+
+    return (
     <tr>
       <td colSpan={11} style={{ padding: 0 }}>
         <Form
           form={editForm}
-          layout="vertical"
+          layout="horizontal"
           onFinish={handleSaveInlineEdit}
           className="w-full"
           style={{ 
-            padding: '16px', 
-            backgroundColor: '#f0f8ff', 
+            padding: '12px 16px', 
+            backgroundColor: getEditBackgroundColor(), 
             borderRadius: '6px',
-            border: '1px solid #e1e5e9',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
+            border: `2px solid ${getBorderColor()}`,
+            boxShadow: `0 2px 4px ${getBorderColor()}33`
           }}
         >
-          {/* Row 1: Type, Name, Work Link, Category */}
+          {/* Row 1: Main fields in single line */}
           <Row gutter={16}>
             <Col xs={24} sm={3}>
+              {/* Type */}
               <Form.Item 
                 name="item_type"
-                label="Тип" 
+                label="Тип"
                 className="mb-3"
-                rules={[{ required: true, message: 'Выберите тип' }]}
+                rules={[{ required: true, message: 'Тип' }]}
               >
                 <Select size="small" placeholder="Тип">
-                  <Select.Option value="material">
-                    <Tag icon={<ToolOutlined />} color="blue" className="text-xs mr-0">
-                      Материал
-                    </Tag>
-                  </Select.Option>
-                  <Select.Option value="sub_material">
-                    <Tag icon={<ToolOutlined />} color="lime" className="text-xs mr-0">
-                      Суб-мат
-                    </Tag>
-                  </Select.Option>
+                  <Select.Option value="material">Материал</Select.Option>
+                  <Select.Option value="sub_material">Суб-мат</Select.Option>
                 </Select>
               </Form.Item>
             </Col>
             <Col xs={24} sm={8}>
+              {/* Name */}
               <Form.Item
                 name="description"
                 label="Наименование"
@@ -2110,7 +2174,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         </Form>
       </td>
     </tr>
-  );
+    );
+  };
 
   // Quick add row with improved responsive layout
   const QuickAddRow = () => (
@@ -2736,7 +2801,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                         fontWeight: '500'
                       }}
                     >
-                      + Быстрое добавление работы или материала
+                      Добавить работу или материал
                     </Button>
                   ) : (
                     <div className="flex-1 h-10 flex items-center justify-center bg-gray-100 rounded-lg border-2 border-dashed border-gray-300">
