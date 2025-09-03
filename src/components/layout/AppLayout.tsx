@@ -24,9 +24,10 @@ const { Title } = Typography;
 
 interface MenuItem {
   key: string;
-  icon: React.ReactNode;
-  label: React.ReactNode;
-  path: string;
+  icon?: React.ReactNode;
+  label?: React.ReactNode;
+  path?: string;
+  type?: 'divider';
   children?: MenuItem[];
 }
 
@@ -35,6 +36,65 @@ const AppLayout: React.FC = () => {
   const [openKeys, setOpenKeys] = useState<string[]>(['libraries', 'construction-costs', 'admin']);
   const location = useLocation();
 
+  // Add styles for dropdown menus when collapsed and smooth animations
+  React.useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .ant-menu-submenu-popup {
+        background-color: #ffffff !important;
+        opacity: 1 !important;
+      }
+      .ant-menu-submenu-popup .ant-menu {
+        background-color: #ffffff !important;
+        opacity: 1 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+      }
+      .ant-menu-submenu-popup .ant-menu-item {
+        opacity: 1 !important;
+      }
+      .ant-menu-vertical.ant-menu-sub {
+        background-color: #ffffff !important;
+        opacity: 1 !important;
+      }
+      .ant-menu-sub.ant-menu-inline {
+        background-color: #ffffff !important;
+      }
+      /* Override Ant Design's default slow animations */
+      .ant-motion-collapse {
+        transition-duration: 0.2s !important;
+      }
+      .ant-menu-inline .ant-menu-submenu-title {
+        transition: all 0.2s;
+      }
+      .ant-menu-submenu-arrow {
+        transition: transform 0.2s ease;
+      }
+      /* Fix double flash on hover for collapsed menu */
+      .ant-menu-inline-collapsed .ant-menu-submenu-popup {
+        animation: none !important;
+      }
+      .ant-menu-inline-collapsed .ant-menu-submenu-popup-hidden {
+        display: none !important;
+      }
+      /* Disable Ant Design's fade animations for popup menus */
+      .ant-menu-submenu-popup.ant-slide-up-enter,
+      .ant-menu-submenu-popup.ant-slide-up-enter-active {
+        animation: none !important;
+        opacity: 1 !important;
+      }
+      .ant-menu-submenu-popup.ant-slide-up-leave,
+      .ant-menu-submenu-popup.ant-slide-up-leave-active {
+        animation: none !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   // Menu items configuration
   const menuItems: MenuItem[] = [
     {
@@ -42,12 +102,6 @@ const AppLayout: React.FC = () => {
       icon: <DashboardOutlined />,
       label: <Link to="/dashboard">Дашборд</Link>,
       path: '/dashboard',
-    },
-    {
-      key: 'tenders',
-      icon: <FileTextOutlined />,
-      label: <Link to="/tenders">Тендеры</Link>,
-      path: '/tenders',
     },
     {
       key: 'boq',
@@ -99,12 +153,6 @@ const AppLayout: React.FC = () => {
           label: <Link to="/construction-costs/management">Структура затрат</Link>,
           path: '/construction-costs/management',
         },
-        {
-          key: 'cost-edit',
-          icon: null,
-          label: <Link to="/construction-costs/edit">Редактирование</Link>,
-          path: '/construction-costs/edit',
-        },
       ],
     },
     {
@@ -112,6 +160,12 @@ const AppLayout: React.FC = () => {
       icon: <LineChartOutlined />,
       label: <Link to="/financial">Финансовые показатели</Link>,
       path: '/financial',
+    },
+    {
+      key: 'commercial-costs',
+      icon: <DollarOutlined />,
+      label: <Link to="/commercial-costs">Коммерческие стоимости</Link>,
+      path: '/commercial-costs',
     },
     {
       key: 'tender-markup',
@@ -125,6 +179,22 @@ const AppLayout: React.FC = () => {
       label: 'Администрирование',
       path: '/admin',
       children: [
+        {
+          key: 'tenders',
+          icon: null,
+          label: <Link to="/tenders">Тендеры</Link>,
+          path: '/tenders',
+        },
+        {
+          key: 'cost-edit',
+          icon: null,
+          label: <Link to="/construction-costs/edit">Редактирование Затрат</Link>,
+          path: '/construction-costs/edit',
+        },
+        {
+          type: 'divider',
+          key: 'admin-divider',
+        },
         {
           key: 'users',
           icon: null,
@@ -146,13 +216,24 @@ const AppLayout: React.FC = () => {
     const pathname = location.pathname;
     console.log('🚀 [getCurrentMenuKey] called with pathname:', pathname);
     
+    // Special handling for paths now under admin
+    if (pathname.startsWith('/tenders') || pathname.startsWith('/tender/')) {
+      console.log('✅ [getCurrentMenuKey] Found tenders match under admin');
+      return ['tenders'];
+    }
+    
+    if (pathname.startsWith('/construction-costs/edit')) {
+      console.log('✅ [getCurrentMenuKey] Found cost-edit match under admin');
+      return ['cost-edit'];
+    }
+    
     // Find matching menu item and parent keys
     const findMenuKeys = (items: MenuItem[], parentKey?: string): { selectedKey: string | null, parentKey: string | null } => {
       for (const item of items) {
         // Check children first for more specific matches
         if (item.children) {
           for (const child of item.children) {
-            if (pathname.startsWith(child.path)) {
+            if (child.type !== 'divider' && child.path && pathname.startsWith(child.path)) {
               console.log('✅ [getCurrentMenuKey] Found child match:', child.key, 'Parent:', item.key);
               return { selectedKey: child.key, parentKey: item.key };
             }
@@ -160,7 +241,7 @@ const AppLayout: React.FC = () => {
         }
         
         // Then check parent item
-        if (pathname.startsWith(item.path)) {
+        if (item.path && pathname.startsWith(item.path)) {
           console.log('✅ [getCurrentMenuKey] Found parent match:', item.key);
           return { selectedKey: item.key, parentKey: null };
         }
@@ -183,16 +264,29 @@ const AppLayout: React.FC = () => {
     const pathname = location.pathname;
     const newOpenKeys: string[] = [...openKeys];
     
-    // Check if we need to open a parent menu
-    for (const item of menuItems) {
-      if (item.children) {
-        for (const child of item.children) {
-          if (pathname.startsWith(child.path)) {
-            if (!newOpenKeys.includes(item.key)) {
-              newOpenKeys.push(item.key);
-              console.log('✅ [useEffect] Auto-opening parent menu:', item.key);
+    // Special handling for paths now under admin
+    if (pathname.startsWith('/tenders') || pathname.startsWith('/tender/')) {
+      if (!newOpenKeys.includes('admin')) {
+        newOpenKeys.push('admin');
+        console.log('✅ [useEffect] Auto-opening admin menu for tenders');
+      }
+    } else if (pathname.startsWith('/construction-costs/edit')) {
+      if (!newOpenKeys.includes('admin')) {
+        newOpenKeys.push('admin');
+        console.log('✅ [useEffect] Auto-opening admin menu for cost edit');
+      }
+    } else {
+      // Check if we need to open a parent menu
+      for (const item of menuItems) {
+        if (item.children) {
+          for (const child of item.children) {
+            if (child.type !== 'divider' && child.path && pathname.startsWith(child.path)) {
+              if (!newOpenKeys.includes(item.key)) {
+                newOpenKeys.push(item.key);
+                console.log('✅ [useEffect] Auto-opening parent menu:', item.key);
+              }
+              break;
             }
-            break;
           }
         }
       }
@@ -216,6 +310,7 @@ const AppLayout: React.FC = () => {
       const segment = pathSegments[0];
       switch (segment) {
         case 'tenders':
+          breadcrumbItems.push({ title: <span>Администрирование</span> });
           breadcrumbItems.push({ title: <span>Тендеры</span> });
           break;
         case 'boq':
@@ -232,14 +327,24 @@ const AppLayout: React.FC = () => {
           }
           break;
         case 'construction-costs':
-          breadcrumbItems.push({ title: <span>Затраты на строительство</span> });
-          if (pathSegments[1] === 'tender') {
-            breadcrumbItems.push({ title: <span>Затраты тендера</span> });
-          } else if (pathSegments[1] === 'management') {
-            breadcrumbItems.push({ title: <span>Структура затрат</span> });
-          } else if (pathSegments[1] === 'edit') {
-            breadcrumbItems.push({ title: <span>Редактирование</span> });
+          if (pathSegments[1] === 'edit') {
+            // Special handling for edit page - it's now under admin
+            breadcrumbItems.push({ title: <span>Администрирование</span> });
+            breadcrumbItems.push({ title: <span>Редактирование Затрат</span> });
+          } else {
+            breadcrumbItems.push({ title: <span>Затраты на строительство</span> });
+            if (pathSegments[1] === 'tender') {
+              breadcrumbItems.push({ title: <span>Затраты тендера</span> });
+            } else if (pathSegments[1] === 'management') {
+              breadcrumbItems.push({ title: <span>Структура затрат</span> });
+            }
           }
+          break;
+        case 'financial':
+          breadcrumbItems.push({ title: <span>Финансовые показатели</span> });
+          break;
+        case 'commercial-costs':
+          breadcrumbItems.push({ title: <span>Коммерческие стоимости</span> });
           break;
         case 'admin':
           breadcrumbItems.push({ title: <span>Администрирование</span> });
@@ -314,11 +419,15 @@ const AppLayout: React.FC = () => {
             key: item.key,
             icon: item.icon,
             label: item.label,
-            children: item.children?.map(child => ({
-              key: child.key,
-              icon: child.icon,
-              label: child.label,
-            })),
+            children: item.children?.map(child => 
+              child.type === 'divider' 
+                ? { type: 'divider', key: child.key }
+                : {
+                    key: child.key,
+                    icon: child.icon,
+                    label: child.label,
+                  }
+            ),
           }))}
         />
       </Sider>

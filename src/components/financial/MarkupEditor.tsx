@@ -258,26 +258,60 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
     }
   };
 
-  const calculateFinancials = useCallback(() => {
+  // Internal calculation function that doesn't notify parent
+  const calculateFinancialsInternal = useCallback(() => {
     if (!markupData) return;
     
-    console.log('🚀 [MarkupEditor] Calculating financials with markup:', markupData);
+    console.log('🚀 [MarkupEditor] Internal calculation with markup:', markupData);
+    
+    const financials = calculateMarkupFinancials(baseCosts, markupData);
+    setCalculatedFinancials(financials);
+    
+    console.log('✅ [MarkupEditor] Internal calculation completed:', financials);
+  }, [baseCosts, markupData]);
+
+  // Function to calculate and notify parent (for form changes and manual refresh)
+  const calculateAndNotifyParent = useCallback(() => {
+    if (!markupData) return;
+    
+    console.log('🚀 [MarkupEditor] Calculating and notifying parent');
     
     const financials = calculateMarkupFinancials(baseCosts, markupData);
     setCalculatedFinancials(financials);
     
     if (onMarkupChange) {
-      onMarkupChange(financials);
+      // Вычисляем итоговую коммерческую стоимость
+      const formValues = form.getFieldsValue();
+      const totalCommercialPrice = markupFields.reduce((sum, field) => {
+        if (field.isBaseInfo) {
+          // Для базовых затрат берем их значения
+          switch (field.baseType) {
+            case 'materials': return sum + baseCosts.materials;
+            case 'works': return sum + baseCosts.works;
+            case 'submaterials': return sum + baseCosts.submaterials;
+            case 'subworks': return sum + baseCosts.subworks;
+            default: return sum;
+          }
+        } else {
+          // Для процентных строк берем рассчитанное значение
+          return sum + calculateMarkupCost(field, formValues);
+        }
+      }, 0);
+
+      onMarkupChange({
+        ...financials,
+        totalCommercialPrice
+      });
     }
     
-    console.log('✅ [MarkupEditor] Financials calculated:', financials);
-  }, [baseCosts, markupData, onMarkupChange]);
+    console.log('✅ [MarkupEditor] Parent notified with financials:', financials);
+  }, [baseCosts, markupData, onMarkupChange, form]);
 
   useEffect(() => {
     if (markupData && baseCosts.materials >= 0) {
-      calculateFinancials();
+      calculateFinancialsInternal(); // Don't notify parent on dependency changes
     }
-  }, [calculateFinancials, markupData, baseCosts]);
+  }, [calculateFinancialsInternal]);
 
 
   const handleRefreshCalculation = () => {
@@ -286,15 +320,13 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
       console.log('🔄 [MarkupEditor] Принудительное обновление расчета');
       
       const tempMarkupData = { ...markupData, ...values };
-      const financials = calculateMarkupFinancials(baseCosts, tempMarkupData);
-      setCalculatedFinancials(financials);
+      setMarkupData(tempMarkupData);
       
-      if (onMarkupChange) {
-        onMarkupChange(financials);
-      }
+      // Force calculation with parent notification
+      calculateAndNotifyParent();
       
       message.success('Расчет обновлен');
-      console.log('✅ [MarkupEditor] Расчет принудительно обновлен:', financials);
+      console.log('✅ [MarkupEditor] Расчет принудительно обновлен');
     }
   };
 
@@ -402,12 +434,35 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
   const handleFormChange = () => {
     const values = form.getFieldsValue();
     if (markupData && values) {
+      // Update markup data with new values for calculations
       const tempMarkupData = { ...markupData, ...values };
+      
+      // Calculate and notify parent immediately with form changes
       const financials = calculateMarkupFinancials(baseCosts, tempMarkupData);
       setCalculatedFinancials(financials);
       
       if (onMarkupChange) {
-        onMarkupChange(financials);
+        // Вычисляем итоговую коммерческую стоимость
+        const totalCommercialPrice = markupFields.reduce((sum, field) => {
+          if (field.isBaseInfo) {
+            // Для базовых затрат берем их значения
+            switch (field.baseType) {
+              case 'materials': return sum + baseCosts.materials;
+              case 'works': return sum + baseCosts.works;
+              case 'submaterials': return sum + baseCosts.submaterials;
+              case 'subworks': return sum + baseCosts.subworks;
+              default: return sum;
+            }
+          } else {
+            // Для процентных строк берем рассчитанное значение
+            return sum + calculateMarkupCost(field, values);
+          }
+        }, 0);
+
+        onMarkupChange({
+          ...financials,
+          totalCommercialPrice
+        });
       }
 
       // Автоматическое сохранение с задержкой 2 секунды
@@ -427,7 +482,7 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
           
           const updateData: UpdateTenderMarkupPercentages = values;
           const updatedData = await updateTenderMarkup(markupData.id, updateData);
-          setMarkupData(updatedData);
+          // Don't call setMarkupData here to avoid triggering the useEffect
           console.log('✅ [MarkupEditor] Auto-save successful:', updatedData);
         } catch (error) {
           console.error('❌ [MarkupEditor] Auto-save error:', error);
@@ -755,175 +810,6 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
         </Row>
       </Form>
 
-      {/* Итоговый расчет */}
-      {calculatedFinancials && (
-        <Card 
-          style={{ 
-            marginTop: 20, 
-            borderRadius: 16,
-            background: '#ffffff',
-            border: '1px solid #f0f0f0',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
-          }}
-        >
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            marginBottom: 24
-          }}>
-            <Title level={4} style={{ 
-              margin: 0, 
-              color: '#262626',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8
-            }}>
-              <CalculatorOutlined style={{ color: '#1890ff' }} />
-              Итоговый расчет стоимости
-            </Title>
-            
-            {tenderData?.area_sp && (
-              <Text type="secondary" style={{ fontSize: 13 }}>
-                Площадь: <Text strong>{tenderData.area_sp.toLocaleString('ru-RU')} м²</Text>
-              </Text>
-            )}
-          </div>
-          
-          {/* Основные компоненты */}
-          <div style={{ 
-            background: '#fafafa', 
-            borderRadius: 12, 
-            padding: 20,
-            marginBottom: 20 
-          }}>
-            <Text strong style={{ fontSize: 14, color: '#595959', marginBottom: 12, display: 'block' }}>
-              💼 Основные затраты с накрутками
-            </Text>
-            <Row gutter={[16, 12]}>
-              <Col xs={12} sm={6}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: '#52c41a' }}>
-                    {Math.round(calculatedFinancials.materialsWithGrowth).toLocaleString('ru-RU')} ₽
-                  </div>
-                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Материалы</div>
-                </div>
-              </Col>
-              <Col xs={12} sm={6}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: '#1890ff' }}>
-                    {Math.round(calculatedFinancials.worksWithGrowth).toLocaleString('ru-RU')} ₽
-                  </div>
-                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Работы</div>
-                </div>
-              </Col>
-              <Col xs={12} sm={6}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: '#fa8c16' }}>
-                    {Math.round(calculatedFinancials.submaterialsWithGrowth).toLocaleString('ru-RU')} ₽
-                  </div>
-                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Субматериалы</div>
-                </div>
-              </Col>
-              <Col xs={12} sm={6}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: '#eb2f96' }}>
-                    {Math.round(calculatedFinancials.subworksWithGrowth).toLocaleString('ru-RU')} ₽
-                  </div>
-                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Субработы</div>
-                </div>
-              </Col>
-            </Row>
-          </div>
-
-          {/* Дополнительные затраты */}
-          <div style={{ 
-            background: '#f6f6f6', 
-            borderRadius: 12, 
-            padding: 20,
-            marginBottom: 20 
-          }}>
-            <Text strong style={{ fontSize: 14, color: '#595959', marginBottom: 12, display: 'block' }}>
-              📊 Дополнительные затраты
-            </Text>
-            <Row gutter={[16, 12]}>
-              <Col xs={8}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: '#faad14' }}>
-                    {Math.round(calculatedFinancials.contingencyCost).toLocaleString('ru-RU')} ₽
-                  </div>
-                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Непредвиденные</div>
-                </div>
-              </Col>
-              <Col xs={8}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: '#722ed1' }}>
-                    {Math.round(calculatedFinancials.overheadOwnForces + calculatedFinancials.overheadSubcontract).toLocaleString('ru-RU')} ₽
-                  </div>
-                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>ООЗ</div>
-                </div>
-              </Col>
-              <Col xs={8}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: '#f5222d' }}>
-                    {Math.round(calculatedFinancials.totalProfit).toLocaleString('ru-RU')} ₽
-                  </div>
-                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>Прибыль</div>
-                </div>
-              </Col>
-            </Row>
-          </div>
-
-          {/* Итоговая стоимость */}
-          <div style={{ 
-            background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)', 
-            borderRadius: 16,
-            padding: 24,
-            textAlign: 'center',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              width: '100px',
-              height: '100px',
-              background: 'rgba(255,255,255,0.1)',
-              borderRadius: '50%',
-              transform: 'translate(30px, -30px)'
-            }} />
-            
-            <div style={{ position: 'relative', zIndex: 1 }}>
-              <div style={{ 
-                color: 'rgba(255,255,255,0.9)', 
-                fontSize: 16, 
-                marginBottom: 8,
-                fontWeight: 500
-              }}>
-                Итоговая стоимость тендера
-              </div>
-              <div style={{ 
-                color: 'white', 
-                fontSize: 32, 
-                fontWeight: 'bold',
-                lineHeight: 1,
-                marginBottom: 8
-              }}>
-                {Math.round(totalCalculatedCosts).toLocaleString('ru-RU')} ₽
-              </div>
-              {tenderData?.area_sp && (
-                <div style={{ 
-                  color: 'rgba(255,255,255,0.85)', 
-                  fontSize: 14
-                }}>
-                  {Math.round(totalCalculatedCosts / tenderData.area_sp).toLocaleString('ru-RU')} ₽/м²
-                </div>
-              )}
-            </div>
-          </div>
-        </Card>
-      )}
     </Card>
   );
 };

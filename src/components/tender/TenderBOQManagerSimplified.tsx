@@ -11,13 +11,13 @@ import {
   Typography,
   Card
 } from 'antd';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, FolderOpenOutlined, BuildOutlined, ToolOutlined } from '@ant-design/icons';
 import { clientPositionsApi, boqApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import ClientPositionCardStreamlined from './ClientPositionCardStreamlined';
 import type { ClientPositionInsert, ClientPositionType } from '../../lib/supabase/types';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 interface TenderBOQManagerSimplifiedProps {
   tenderId: string;
@@ -46,7 +46,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
   tenderId,
   onStatsUpdate 
 }) => {
-  console.log('🚀 TenderBOQManagerSimplified rendered for tender:', tenderId);
+  console.log('🚀 TenderBOQManagerSimplified MOUNTED/RENDERED for tender:', tenderId, 'at', new Date().toISOString());
 
   // Sort positions by position number only (preserving Excel file order)
   const sortPositionsByNumber = useCallback((positions: ClientPositionWithStats[]): ClientPositionWithStats[] => {
@@ -61,6 +61,14 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
   const [expandedPositions, setExpandedPositions] = useState<Set<string>>(new Set());
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [form] = Form.useForm();
+  
+  // Track component lifecycle
+  useEffect(() => {
+    console.log('🟢 TenderBOQManagerSimplified MOUNTED for tender:', tenderId);
+    return () => {
+      console.log('🔴 TenderBOQManagerSimplified UNMOUNTING for tender:', tenderId);
+    };
+  }, []);
 
   // Calculate and update stats
   const updateStats = useCallback((positionsList: ClientPositionWithStats[]) => {
@@ -81,7 +89,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
 
     console.log('📊 Stats calculated:', stats);
     onStatsUpdate?.(stats);
-  }, [onStatsUpdate]);
+  }, []);
 
   // Load positions
   const loadPositions = useCallback(async () => {
@@ -93,6 +101,16 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
         throw new Error(result.error);
       }
       console.log('✅ Positions loaded:', result.data?.length);
+      
+      // Debug: Check if manual fields are loaded
+      if (result.data && result.data.length > 0) {
+        console.log('🔍 First position data:', {
+          id: result.data[0].id,
+          manual_volume: result.data[0].manual_volume,
+          manual_note: result.data[0].manual_note,
+          work_name: result.data[0].work_name
+        });
+      }
       
       // Load BOQ items for each position with work-material links
       const positionsWithItems = await Promise.all(
@@ -218,7 +236,10 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
             boq_items: processedItems,
             materials_count: items.filter(item => item.item_type === 'material').length,
             works_count: items.filter(item => item.item_type === 'work').length,
-            total_position_cost: calculatedTotal
+            total_position_cost: calculatedTotal,
+            // Ensure manual fields are preserved
+            manual_volume: pos.manual_volume,
+            manual_note: pos.manual_note
           };
         })
       );
@@ -232,7 +253,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [tenderId, updateStats]);
+  }, [tenderId]);
 
   useEffect(() => {
     loadPositions();
@@ -291,16 +312,53 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
   return (
     <div className="w-full">
       {/* Header */}
-      <Card className="shadow-sm mb-4 w-full">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-          <Title level={4} className="mb-0">
-            Позиции заказчика
-          </Title>
-          <Space className="flex-shrink-0">
+      <Card className="shadow-sm mb-3 w-full" bodyStyle={{ padding: '10px 16px' }}>
+        <div className="flex flex-col">
+          <div className="flex flex-col sm:flex-row sm:justify-between items-center gap-3">
+            {/* Statistics */}
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <FolderOpenOutlined className="text-blue-500" style={{ fontSize: 16 }} />
+                <div className="flex items-baseline gap-1">
+                  <Text type="secondary" className="text-xs" style={{ cursor: 'default' }}>Позиций:</Text>
+                  <Text strong className="text-sm" style={{ cursor: 'default' }}>{positions.length}</Text>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <BuildOutlined className="text-orange-500" style={{ fontSize: 16 }} />
+                <div className="flex items-baseline gap-1">
+                  <Text type="secondary" className="text-xs" style={{ cursor: 'default' }}>Работ:</Text>
+                  <Text strong className="text-sm" style={{ cursor: 'default' }}>
+                    {positions.reduce((sum, pos) => 
+                      sum + (pos.boq_items?.filter(item => 
+                        item.item_type === 'work' || item.item_type === 'sub_work'
+                      ).length || 0), 0
+                    )}
+                  </Text>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <ToolOutlined className="text-purple-500" style={{ fontSize: 16 }} />
+                <div className="flex items-baseline gap-1">
+                  <Text type="secondary" className="text-xs" style={{ cursor: 'default' }}>Материалов:</Text>
+                  <Text strong className="text-sm" style={{ cursor: 'default' }}>
+                    {positions.reduce((sum, pos) => 
+                      sum + (pos.boq_items?.filter(item => 
+                        item.item_type === 'material' || item.item_type === 'sub_material'
+                      ).length || 0), 0
+                    )}
+                  </Text>
+                </div>
+              </div>
+            </div>
+            
+            {/* Buttons */}
+            <Space className="flex-shrink-0 flex items-center" size="small">
             <Button 
               icon={<ReloadOutlined />} 
               onClick={loadPositions}
               loading={loading}
+              size="middle"
             >
               Обновить
             </Button>
@@ -308,11 +366,12 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => setCreateModalVisible(true)}
-              size="large"
+              size="middle"
             >
               Новая позиция
             </Button>
           </Space>
+          </div>
         </div>
       </Card>
 

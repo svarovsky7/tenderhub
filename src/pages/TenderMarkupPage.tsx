@@ -9,9 +9,8 @@ import { TenderMarkupManager } from '../components/tender/TenderMarkupManager';
 import { MarkupTemplatesManager } from '../components/tender/MarkupTemplatesManager';
 
 const { Title } = Typography;
-const { TabPane } = Tabs;
 
-export const TenderMarkupPage: React.FC = () => {
+const TenderMarkupPage: React.FC = () => {
   const navigate = useNavigate();
   const { tenderId: routeTenderId } = useParams<{ tenderId?: string }>();
   const [selectedTenderId, setSelectedTenderId] = useState<string | undefined>(routeTenderId);
@@ -84,14 +83,13 @@ export const TenderMarkupPage: React.FC = () => {
                   onChange={handleTenderChange}
                   loading={isLoadingTenders}
                   showSearch
-                  optionFilterProp="children"
+                  optionFilterProp="label"
                   filterOption={(input, option) =>
                     (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                   }
                   options={tenders.map(tender => ({
-                    label: `${tender.name} (${tender.tender_number || 'Без номера'})`,
-                    value: tender.id,
-                    description: tender.description
+                    label: `${tender.title} (${tender.tender_number || 'Без номера'})`,
+                    value: tender.id
                   }))}
                 />
               )}
@@ -103,7 +101,7 @@ export const TenderMarkupPage: React.FC = () => {
                 description={
                   <Space direction="vertical" size="small">
                     <div>
-                      <strong>Название:</strong> {selectedTender.name}
+                      <strong>Название:</strong> {selectedTender.title}
                     </div>
                     {selectedTender.tender_number && (
                       <div>
@@ -137,52 +135,54 @@ export const TenderMarkupPage: React.FC = () => {
           activeKey={activeTab} 
           onChange={setActiveTab}
           size="large"
-        >
-          <TabPane
-            tab={
-              <span>
-                <DashboardOutlined />
-                Накрутки тендера
-              </span>
-            }
-            key="tender"
-          >
-            {selectedTenderId ? (
-              isLoadingBOQ ? (
-                <div className="text-center py-12">
-                  <Spin size="large" tip="Загрузка данных тендера..." />
-                </div>
-              ) : (
-                <TenderMarkupManager
-                  tenderId={selectedTenderId}
-                  tenderName={selectedTender?.name}
-                  baseCosts={baseCosts}
-                />
+          items={[
+            {
+              label: (
+                <span>
+                  <DashboardOutlined />
+                  Накрутки тендера
+                </span>
+              ),
+              key: "tender",
+              children: (
+                selectedTenderId ? (
+                  isLoadingBOQ ? (
+                    <div className="text-center py-12">
+                      <Spin size="large" tip="Загрузка данных тендера..." />
+                    </div>
+                  ) : (
+                    <TenderMarkupManager
+                      tenderId={selectedTenderId}
+                      tenderName={selectedTender?.title}
+                      baseCosts={baseCosts}
+                    />
+                  )
+                ) : (
+                  <Alert
+                    message="Выберите тендер"
+                    description="Пожалуйста, выберите тендер из списка выше для управления его накрутками"
+                    type="warning"
+                    showIcon
+                    className="mt-4"
+                  />
+                )
               )
-            ) : (
-              <Alert
-                message="Выберите тендер"
-                description="Пожалуйста, выберите тендер из списка выше для управления его накрутками"
-                type="warning"
-                showIcon
-                className="mt-4"
-              />
-            )}
-          </TabPane>
-
-          <TabPane
-            tab={
-              <span>
-                <FileTextOutlined />
-                Шаблоны накруток
-              </span>
+            },
+            {
+              label: (
+                <span>
+                  <FileTextOutlined />
+                  Шаблоны накруток
+                </span>
+              ),
+              key: "templates",
+              children: <MarkupTemplatesManager />
             }
-            key="templates"
-          >
-            <MarkupTemplatesManager />
-          </TabPane>
-        </Tabs>
+          ]}
+        />
       </Card>
     </div>
   );
 };
+
+export default TenderMarkupPage;

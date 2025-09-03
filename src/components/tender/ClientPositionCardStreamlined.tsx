@@ -27,6 +27,7 @@ import {
   DeleteOutlined,
   SaveOutlined,
   CloseOutlined,
+  CheckOutlined,
   BuildOutlined,
   ToolOutlined,
   LinkOutlined,
@@ -95,6 +96,12 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   tenderId
 }) => {
   // console.log('🚀 ClientPositionCardStreamlined rendered:', position.id);
+  console.log('📦 Position props received:', {
+    id: position.id,
+    manual_volume: position.manual_volume,
+    manual_note: position.manual_note,
+    work_name: position.work_name?.substring(0, 30)
+  });
   
   
   const [loading, setLoading] = useState(false);
@@ -117,6 +124,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const worksCount = position.boq_items?.filter(item => item.item_type === 'work' || item.item_type === 'sub_work').length || 0;
   const totalCost = position.total_position_cost || 0;
   const [localWorks, setLocalWorks] = useState<BOQItemWithLibrary[]>([]);
+  const [tempManualVolume, setTempManualVolume] = useState<number | null>(position.manual_volume ?? null);
+  const [tempManualNote, setTempManualNote] = useState<string>(position.manual_note ?? '');
   
   // Position hierarchy properties
   const positionType: ClientPositionType = position.position_type || 'executable';
@@ -170,6 +179,16 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       return prevWorks;
     });
   }, [positionItemsKey]);
+  
+  // Update temp manual volume when position changes
+  useEffect(() => {
+    setTempManualVolume(position.manual_volume ?? null);
+  }, [position.manual_volume]);
+  
+  // Update temp manual note when position changes
+  useEffect(() => {
+    setTempManualNote(position.manual_note ?? '');
+  }, [position.manual_note]);
   
   const works = localWorks;
   // console.log('🔧 Current works for linking:', works.length, works.map(w => ({ id: w.id, desc: w.description })));
@@ -260,17 +279,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     }
   }, [position.id, onUpdate]);
 
-  const manualNoteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Очистка таймаута при размонтировании
-  useEffect(() => {
-    return () => {
-      if (manualNoteTimeoutRef.current) {
-        clearTimeout(manualNoteTimeoutRef.current);
-      }
-    };
-  }, []);
-
   // Отключаем все MediaQueryList listeners для предотвращения infinite loops
   useEffect(() => {
     const originalMatchMedia = window.matchMedia;
@@ -294,32 +302,24 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     };
   }, []);
 
-  const handleManualNoteChange = useCallback((value: string) => {
+  const handleManualNoteChange = useCallback(async (value: string) => {
     console.log('✏️ handleManualNoteChange called:', { positionId: position.id, value });
     
-    // Очищаем предыдущий таймаут
-    if (manualNoteTimeoutRef.current) {
-      clearTimeout(manualNoteTimeoutRef.current);
-    }
-    
-    // Устанавливаем новый таймаут с задержкой 800мс
-    manualNoteTimeoutRef.current = setTimeout(async () => {
-      try {
-        const result = await clientPositionsApi.update(position.id, { manual_note: value || null });
-        
-        if (result.error) {
-          console.error('❌ Manual note update failed:', result.error);
-          message.error('Ошибка сохранения примечания ГП');
-        } else {
-          console.log('✅ Manual note updated successfully');
-          message.success('Примечание ГП обновлено');
-          onUpdate(); // Обновляем родительский компонент
-        }
-      } catch (error) {
-        console.error('💥 Manual note update exception:', error);
+    try {
+      const result = await clientPositionsApi.update(position.id, { manual_note: value || null });
+      
+      if (result.error) {
+        console.error('❌ Manual note update failed:', result.error);
         message.error('Ошибка сохранения примечания ГП');
+      } else {
+        console.log('✅ Manual note updated successfully');
+        message.success('Примечание ГП обновлено');
+        onUpdate(); // Обновляем родительский компонент
       }
-    }, 800);
+    } catch (error) {
+      console.error('💥 Manual note update exception:', error);
+      message.error('Ошибка сохранения примечания ГП');
+    }
   }, [position.id, onUpdate]);
 
   const handleDeleteItem = useCallback(async (itemId: string) => {
@@ -1848,6 +1848,22 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 )}
               </div>
             </Form.Item>
+          </div>
+
+          {/* Second row with category and action buttons */}
+          <div className="flex items-end gap-2">
+            <Form.Item
+              name="detail_cost_category_id"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Категория затрат</span>}
+              className="mb-0 flex-1"
+              rules={[{ required: true, message: 'Выберите категорию затрат' }]}
+            >
+              <CostDetailCascadeSelector
+                placeholder="Выберите категорию затрат"
+                size="small"
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
 
             {/* Action Buttons */}
             <div className="flex gap-2" style={{ paddingBottom: '2px' }}>
@@ -1871,23 +1887,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 Сохранить
               </Button>
             </div>
-          </div>
-
-          {/* Second row with category */}
-          <div className="flex items-end gap-2">
-            <Form.Item
-              name="detail_cost_category_id"
-              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Категория затрат</span>}
-              className="mb-0"
-              style={{ width: '100%' }}
-              rules={[{ required: true, message: 'Выберите категорию затрат' }]}
-            >
-              <CostDetailCascadeSelector
-                placeholder="Выберите категорию затрат"
-                size="small"
-                style={{ width: '100%' }}
-              />
-            </Form.Item>
           </div>
         </Form>
       </td>
@@ -1925,251 +1924,281 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       <td colSpan={11} style={{ padding: 0 }}>
         <Form
           form={editForm}
-          layout="horizontal"
+          layout="vertical"
           onFinish={handleSaveInlineEdit}
           className="w-full"
           style={{ 
-            padding: '12px 16px', 
+            padding: '12px', 
             backgroundColor: getEditBackgroundColor(), 
-            borderRadius: '6px',
+            borderRadius: '4px',
             border: `2px solid ${getBorderColor()}`,
             boxShadow: `0 2px 4px ${getBorderColor()}33`
           }}
         >
-          {/* Row 1: Main fields in single line */}
-          <Row gutter={16}>
-            <Col xs={24} sm={3}>
-              {/* Type */}
-              <Form.Item 
-                name="item_type"
-                label="Тип"
-                className="mb-3"
-                rules={[{ required: true, message: 'Тип' }]}
-              >
-                <Select size="small" placeholder="Тип">
-                  <Select.Option value="material">Материал</Select.Option>
-                  <Select.Option value="sub_material">Суб-мат</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={8}>
-              {/* Name */}
-              <Form.Item
-                name="description"
-                label="Наименование"
-                className="mb-3"
-                rules={[{ required: true, message: 'Введите наименование' }]}
-              >
-                <Input placeholder="Наименование материала" size="small" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={6}>
-              <Form.Item
-                name="work_id"
-                label="Привязка к работе"
-                className="mb-3"
-              >
-                <Select
-                  placeholder="Выберите работу"
-                  allowClear
-                  size="small"
-                  showSearch
-                  onChange={handleWorkSelectionChange}
-                  filterOption={(input, option) =>
-                    (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
-                  }
-                >
-                  {works.map((work) => (
-                    <Select.Option key={work.id} value={work.id}>
-                      {work.description}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={7}>
-              <Form.Item
-                name="detail_cost_category_id"
-                label="Категория затрат"
-                className="mb-3"
-                rules={[{ required: true, message: 'Выберите категорию' }]}
-              >
-                <CostDetailCascadeSelector
-                  placeholder="Категория"
-                  size="small"
-                  style={{ width: '100%' }}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
+          {/* Single row with all main fields - compact table-like layout */}
+          <div className="flex items-end gap-2 mb-3">
+            {/* Type - expanded */}
+            <Form.Item 
+              name="item_type"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Тип</span>}
+              className="mb-0"
+              style={{ width: '110px' }}
+              rules={[{ required: true, message: 'Тип' }]}
+            >
+              <Select size="small" placeholder="Тип">
+                <Select.Option value="material">Материал</Select.Option>
+                <Select.Option value="sub_material">Суб-мат</Select.Option>
+              </Select>
+            </Form.Item>
 
-          {/* Row 2: Unit, Quantity, Conversion Coef, Consumption Coef */}
-          <Row gutter={16}>
-            <Col xs={12} sm={6}>
-              <Form.Item
-                name="unit"
-                label="Единица измерения"
-                className="mb-3"
-                rules={[{ required: true, message: 'Введите единицу' }]}
+            {/* Name - expanded to full width */}
+            <Form.Item
+              name="description"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Наименование</span>}
+              className="mb-0 flex-1"
+              style={{ minWidth: '200px' }}
+              rules={[{ required: true, message: 'Наименование' }]}
+            >
+              <Input.TextArea 
+                placeholder="Наименование материала" 
+                size="small" 
+                autoSize={{ minRows: 1, maxRows: 2 }}
+                style={{ resize: 'none' }}
+              />
+            </Form.Item>
+
+            {/* Work Link */}
+            <Form.Item
+              name="work_id"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Привязка к работе</span>}
+              className="mb-0"
+              style={{ width: '180px' }}
+            >
+              <Select
+                placeholder="Работа"
+                allowClear
+                size="small"
+                showSearch
+                onChange={handleWorkSelectionChange}
+                filterOption={(input, option) =>
+                  (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                }
               >
-                <Input placeholder="м², шт" size="small" />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={6}>
-              <Form.Item noStyle shouldUpdate={(prev, curr) => prev.work_id !== curr.work_id}>
-                {({ getFieldValue }) => (
+                {works.map((work) => (
+                  <Select.Option key={work.id} value={work.id}>
+                    {work.description}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            {/* Consumption Coefficient */}
+            <Form.Item
+              name="consumption_coefficient"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>К.расх</span>}
+              className="mb-0"
+              style={{ width: '70px' }}
+            >
+              <DecimalInput 
+                placeholder="1.00" 
+                min={0}
+                precision={4}
+                size="small"
+                onChange={handleCoefficientChange}
+                style={{ textAlign: 'center' }}
+              />
+            </Form.Item>
+
+            {/* Conversion Coefficient */}
+            <Form.Item noStyle shouldUpdate={(prev, curr) => prev.work_id !== curr.work_id}>
+              {({ getFieldValue }) => (
+                <Form.Item
+                  name="conversion_coefficient"
+                  label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>К.перев</span>}
+                  className="mb-0"
+                  style={{ width: '70px' }}
+                >
+                  <DecimalInput 
+                    placeholder="1.00" 
+                    min={0}
+                    precision={4}
+                    size="small"
+                    disabled={!getFieldValue('work_id')}
+                    onChange={handleCoefficientChange}
+                    style={{ textAlign: 'center' }}
+                  />
+                </Form.Item>
+              )}
+            </Form.Item>
+
+            {/* Quantity */}
+            <Form.Item noStyle shouldUpdate={(prev, curr) => prev.work_id !== curr.work_id}>
+              {({ getFieldValue }) => (
+                <Form.Item
+                  name="quantity"
+                  label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Кол-во</span>}
+                  className="mb-0"
+                  style={{ width: '75px' }}
+                  rules={[{ required: true, message: 'Кол-во' }]}
+                >
+                  <DecimalInput 
+                    placeholder="0.00" 
+                    min={0}
+                    precision={2}
+                    size="small"
+                    disabled={!!getFieldValue('work_id')}
+                    style={{ textAlign: 'center' }}
+                  />
+                </Form.Item>
+              )}
+            </Form.Item>
+
+            {/* Unit - moved after Quantity */}
+            <Form.Item
+              name="unit"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Ед. изм.</span>}
+              className="mb-0"
+              style={{ width: '80px' }}
+              rules={[{ required: true, message: 'Ед.' }]}
+            >
+              <Input placeholder="шт" size="small" style={{ textAlign: 'center' }} />
+            </Form.Item>
+
+            {/* Price */}
+            <Form.Item
+              name="unit_rate"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Цена</span>}
+              className="mb-0"
+              style={{ width: '90px' }}
+              rules={[{ required: true, message: 'Цена' }]}
+            >
+              <DecimalInput 
+                placeholder="0.00" 
+                min={0}
+                precision={2}
+                size="small"
+                suffix="₽"
+                style={{ textAlign: 'center' }}
+              />
+            </Form.Item>
+
+            {/* Delivery */}
+            <Form.Item
+              name="delivery_price_type"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Доставка</span>}
+              className="mb-0"
+              style={{ width: '120px' }}
+              initialValue="included"
+            >
+              <Select placeholder="Тип" size="small" style={{ textAlign: 'center' }}>
+                <Select.Option value="included">Включена</Select.Option>
+                <Select.Option value="not_included">Не вкл. (3%)</Select.Option>
+                <Select.Option value="amount">Фикс. сумма</Select.Option>
+              </Select>
+            </Form.Item>
+
+            {/* Conditional Delivery Amount field */}
+            <Form.Item noStyle shouldUpdate={(prev, curr) => prev.delivery_price_type !== curr.delivery_price_type}>
+              {({ getFieldValue }) => {
+                const deliveryType = getFieldValue('delivery_price_type');
+                return deliveryType === 'amount' ? (
                   <Form.Item
-                    name="quantity"
-                    label="Количество"
-                    className="mb-3"
-                    rules={[{ required: true, message: 'Введите количество' }]}
+                    name="delivery_amount"
+                    label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Сум.дост</span>}
+                    className="mb-0"
+                    style={{ width: '80px' }}
                   >
                     <DecimalInput 
                       placeholder="0.00" 
                       min={0}
                       precision={2}
                       size="small"
-                      disabled={!!getFieldValue('work_id')}
+                      suffix="₽"
+                      style={{ textAlign: 'center' }}
                     />
                   </Form.Item>
-                )}
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={6}>
-              <Form.Item noStyle shouldUpdate={(prev, curr) => prev.work_id !== curr.work_id}>
-                {({ getFieldValue }) => (
-                  <Form.Item
-                    name="conversion_coefficient"
-                    label="Коэф. перевода"
-                    className="mb-3"
-                  >
-                    <DecimalInput 
-                      placeholder="1.00" 
-                      min={0}
-                      precision={4}
-                      size="small"
-                      disabled={!getFieldValue('work_id')}
-                      onChange={handleCoefficientChange}
-                    />
-                  </Form.Item>
-                )}
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={6}>
-              <Form.Item
-                name="consumption_coefficient"
-                label="Коэф. расхода"
-                className="mb-3"
-              >
-                <DecimalInput 
-                  placeholder="1.00" 
-                  min={0}
-                  precision={4}
-                  size="small"
-                  onChange={handleCoefficientChange}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          {/* Row 3: Price, Delivery, Delivery Amount (conditional), Total */}
-          <Row gutter={16}>
-            <Col xs={12} sm={6}>
-              <Form.Item
-                name="unit_rate"
-                label="Цена за единицу"
-                className="mb-3"
-                rules={[{ required: true, message: 'Введите цену' }]}
-              >
-                <DecimalInput 
-                  placeholder="0.00" 
-                  min={0}
-                  precision={2}
-                  size="small"
-                  suffix="₽"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={6}>
-              <Form.Item
-                name="delivery_price_type"
-                label="Доставка"
-                className="mb-3"
-                initialValue="included"
-              >
-                <Select placeholder="Тип доставки" size="small">
-                  <Select.Option value="included">Включена</Select.Option>
-                  <Select.Option value="not_included">Не включена (3%)</Select.Option>
-                  <Select.Option value="amount">Фикс. сумма</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            {/* Conditional Delivery Amount field */}
-            <Form.Item noStyle shouldUpdate={(prev, curr) => prev.delivery_price_type !== curr.delivery_price_type}>
-              {({ getFieldValue }) => {
-                const deliveryType = getFieldValue('delivery_price_type');
-                return deliveryType === 'amount' ? (
-                  <Col xs={12} sm={6}>
-                    <Form.Item
-                      name="delivery_amount"
-                      label="Сумма доставки"
-                      className="mb-3"
-                    >
-                      <DecimalInput 
-                        placeholder="0.00" 
-                        min={0}
-                        precision={2}
-                        size="small"
-                        suffix="₽"
-                      />
-                    </Form.Item>
-                  </Col>
                 ) : null;
               }}
             </Form.Item>
-            <Col xs={12} sm={6}>
-              <Form.Item label="Сумма" className="mb-3">
-                <div className="h-6 flex items-center font-semibold text-green-600 text-sm">
-                  {(() => {
-                    const quantity = editForm.getFieldValue('quantity') || 0;
-                    const unitRate = editForm.getFieldValue('unit_rate') || 0;
-                    const deliveryType = editForm.getFieldValue('delivery_price_type') || 'included';
-                    const deliveryAmount = editForm.getFieldValue('delivery_amount') || 0;
-                    
-                    let baseTotal = quantity * unitRate;
-                    let deliveryCost = 0;
-                    
-                    if (deliveryType === 'not_included') {
-                      deliveryCost = baseTotal * 0.03;
-                    } else if (deliveryType === 'amount') {
-                      deliveryCost = deliveryAmount;
-                    }
-                    
-                    return formatCurrency(baseTotal + deliveryCost);
-                  })()}
-                </div>
-              </Form.Item>
-            </Col>
-          </Row>
 
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
-            <Button 
-              type="default" 
-              icon={<CloseOutlined />} 
-              onClick={handleCancelInlineEdit}
-              size="small"
+            {/* Total - adaptive width */}
+            <Form.Item 
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Сумма</span>}
+              className="mb-0"
+              style={{ minWidth: '120px', maxWidth: '200px' }}
             >
-              Отмена
-            </Button>
-            <Button 
-              type="primary" 
-              htmlType="submit" 
-              icon={<SaveOutlined />} 
-              size="small"
+              <div style={{ 
+                height: '24px', 
+                padding: '0 8px',
+                background: '#f5f5f5',
+                borderRadius: '2px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px',
+                fontWeight: 'normal',
+                color: '#000',
+                whiteSpace: 'nowrap'
+              }}>
+                {(() => {
+                  const quantity = editForm.getFieldValue('quantity') || 0;
+                  const unitRate = editForm.getFieldValue('unit_rate') || 0;
+                  const deliveryType = editForm.getFieldValue('delivery_price_type') || 'included';
+                  const deliveryAmount = editForm.getFieldValue('delivery_amount') || 0;
+                  
+                  let baseTotal = quantity * unitRate;
+                  let deliveryCost = 0;
+                  
+                  if (deliveryType === 'not_included') {
+                    deliveryCost = baseTotal * 0.03;
+                  } else if (deliveryType === 'amount') {
+                    deliveryCost = deliveryAmount * quantity;
+                  }
+                  
+                  return formatCurrency(baseTotal + deliveryCost);
+                })()}
+              </div>
+            </Form.Item>
+          </div>
+
+          {/* Second row: Category field and action buttons */}
+          <div className="flex items-end gap-2">
+            <Form.Item
+              name="detail_cost_category_id"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Категория затрат</span>}
+              className="mb-0 flex-1"
+              rules={[{ required: true, message: 'Выберите категорию затрат' }]}
             >
-              Сохранить
-            </Button>
+              <CostDetailCascadeSelector
+                placeholder="Выберите категорию затрат"
+                size="small"
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2" style={{ paddingBottom: '2px' }}>
+              <Button 
+                type="default" 
+                icon={<CloseOutlined />} 
+                onClick={handleCancelInlineEdit}
+                size="large"
+                danger
+                style={{ height: '36px', fontSize: '14px' }}
+              >
+                Отмена
+              </Button>
+              <Button 
+                type="primary" 
+                htmlType="submit" 
+                icon={<CheckOutlined />} 
+                size="large"
+                loading={loading}
+                style={{ height: '36px', fontSize: '14px' }}
+              >
+                Сохранить
+              </Button>
+            </div>
           </div>
         </Form>
       </td>
@@ -2177,215 +2206,119 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     );
   };
 
-  // Quick add row with improved responsive layout
-  const QuickAddRow = () => (
+  // State for quick add form type
+  const [quickAddFormType, setQuickAddFormType] = useState<string>('work');
+  
+  // Quick add row with table-like layout matching edit forms
+  const QuickAddRow = () => {
+    // Determine background color based on type
+    const getAddBackgroundColor = () => {
+      switch(quickAddFormType) {
+        case 'work':
+          return 'rgba(254, 215, 170, 0.2)'; // Light orange for work
+        case 'sub_work':
+          return 'rgba(233, 213, 255, 0.2)'; // Light purple for sub-work
+        case 'material':
+          return 'rgba(219, 234, 254, 0.2)'; // Light blue for material
+        case 'sub_material':
+          return 'rgba(187, 247, 208, 0.2)'; // Light green for sub-material
+        default:
+          return '#f9f9f9';
+      }
+    };
+
+    const getBorderColor = () => {
+      switch(quickAddFormType) {
+        case 'work':
+          return '#fb923c'; // Orange border
+        case 'sub_work':
+          return '#c084fc'; // Purple border
+        case 'material':
+          return '#60a5fa'; // Blue border
+        case 'sub_material':
+          return '#34d399'; // Green border
+        default:
+          return '#d9d9d9';
+      }
+    };
+
+    return (
     <Form
       form={quickAddForm}
       layout="vertical"
       onFinish={handleQuickAdd}
       className="w-full"
+      style={{ 
+        padding: '12px', 
+        backgroundColor: getAddBackgroundColor(), 
+        borderRadius: '4px',
+        border: `2px solid ${getBorderColor()}`,
+        boxShadow: `0 2px 4px ${getBorderColor()}33`,
+        marginBottom: '16px'
+      }}
     >
-      {/* Main add row */}
-      <Row gutter={[12, 8]} className="w-full">
-        <Col xs={24} sm={6} md={4} lg={3}>
-          <Form.Item
-            name="type"
-            initialValue="work"
-            className="mb-0"
-            label={<Text strong>Тип</Text>}
-          >
-            <Select className="w-full" size="small">
-              <Select.Option value="work">Работа</Select.Option>
-              <Select.Option value="material">Материал</Select.Option>
-              <Select.Option value="sub_work">Суб-раб</Select.Option>
-              <Select.Option value="sub_material">Суб-мат</Select.Option>
-            </Select>
-          </Form.Item>
-        </Col>
-        <Col xs={24} sm={12} md={8} lg={7}>
-          <Form.Item
-            name="description"
-            className="mb-0"
-            label={<Text strong>Наименование</Text>}
-            rules={[{ required: true, message: 'Обязательно' }]}
-          >
-            <Input placeholder="Наименование" size="small" />
-          </Form.Item>
-        </Col>
-        <Col xs={12} sm={6} md={3} lg={3}>
-          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
-            prevValues.type !== currentValues.type || prevValues.work_id !== currentValues.work_id
-          }>
-            {({ getFieldValue }) => {
-              const isMaterial = getFieldValue('type') === 'material' || getFieldValue('type') === 'sub_material';
-              const hasWorkSelected = !!getFieldValue('work_id');
-              const showTooltip = isMaterial && hasWorkSelected;
-              
-              return (
-                <Form.Item
-                  name="quantity"
-                  className="mb-0"
-                  label={
-                    <Space size={4}>
-                      <Text strong>Кол-во</Text>
-                      {showTooltip && (
-                        <Tooltip title="Количество рассчитывается автоматически: Объём работы × Коэф. расхода × Коэф. перевода">
-                          <QuestionCircleOutlined style={{ color: '#1890ff', fontSize: '12px', cursor: 'help' }} />
-                        </Tooltip>
-                      )}
-                    </Space>
-                  }
-                  rules={[{ required: true, message: 'Кол-во' }]}
-                >
-                  <DecimalInput 
-                    placeholder="Кол-во" 
-                    min={0}
-                    precision={4}
-                    className="w-full"
-                    size="small"
-                    disabled={showTooltip}
-                    style={showTooltip ? { backgroundColor: '#f5f5f5' } : {}}
-                  />
-                </Form.Item>
-              );
-            }}
-          </Form.Item>
-        </Col>
-        <Col xs={12} sm={6} md={3} lg={2}>
-          <Form.Item
-            name="unit"
-            className="mb-0"
-            label={<Text strong>Ед.</Text>}
-            rules={[{ required: true, message: 'Ед.' }]}
-          >
-            <Input placeholder="Ед." size="small" />
-          </Form.Item>
-        </Col>
-        <Col xs={12} sm={6} md={3} lg={3}>
-          <Form.Item
-            name="unit_rate"
-            className="mb-0"
-            label={<Text strong>Цена</Text>}
-            rules={[{ required: true, message: 'Цена' }]}
-          >
-            <DecimalInput 
-              placeholder="Цена" 
-              min={0}
-              precision={2}
-              className="w-full"
-              size="small"
-              formatter={value => {
-                const num = parseFloat(`${value}`);
-                if (!isNaN(num)) {
-                  return num.toLocaleString('ru-RU', {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 2
-                  });
-                }
-                return `${value}`;
-              }}
-              parser={value => value!.replace(/\s/g, '').replace(',', '.')}
-            />
-          </Form.Item>
-        </Col>
-        {/* Add delivery fields for materials and sub-materials in main row */}
-        <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}>
-          {({ getFieldValue }) => {
-            const isMaterial = getFieldValue('type') === 'material' || getFieldValue('type') === 'sub_material';
-            return isMaterial ? (
-              <>
-                <Col xs={8} sm={4} md={3} lg={3}>
-                  <Form.Item
-                    name="delivery_price_type"
-                    label={<Text strong>Доставка</Text>}
-                    initialValue="included"
-                    className="mb-0"
-                  >
-                    <Select
-                      placeholder="Доставка"
-                      style={{ width: '100%' }}
-                      size="small"
-                    >
-                      <Select.Option value="included">Включена</Select.Option>
-                      <Select.Option value="not_included">Не включена (3%)</Select.Option>
-                      <Select.Option value="amount">Фикс. сумма</Select.Option>
-                    </Select>
-                  </Form.Item>
-                </Col>
-                <Col xs={8} sm={4} md={3} lg={2}>
-                  <Form.Item
-                    noStyle
-                    shouldUpdate={(prevValues, currentValues) => 
-                      prevValues.delivery_price_type !== currentValues.delivery_price_type
-                    }
-                  >
-                    {({ getFieldValue }) => {
-                      const deliveryType = getFieldValue('delivery_price_type');
-                      return (
-                        <Form.Item
-                          name="delivery_amount"
-                          label={<Text strong>Сумма</Text>}
-                          className="mb-0"
-                        >
-                          <DecimalInput
-                            min={0}
-                            precision={2}
-                            placeholder="0.00"
-                            disabled={deliveryType !== 'amount'}
-                            style={{ width: '100%' }}
-                            size="small"
-                          />
-                        </Form.Item>
-                      );
-                    }}
-                  </Form.Item>
-                </Col>
-              </>
-            ) : null;
-          }}
-        </Form.Item>
-        <Col xs={24} sm={12} md={6} lg={5}>
-          <Form.Item
-            name="detail_cost_category_id"
-            className="mb-0"
-            label={<Text strong>Категория затрат</Text>}
-            getValueFromEvent={(value) => value}
-          >
-            <CostDetailCascadeSelector
-              placeholder="Выберите категорию"
-              style={{ width: '100%' }}
-              size="small"
-              onChange={(value, display) => {
-                quickAddForm.setFieldValue('detail_cost_category_id', value);
-                quickAddForm.setFieldValue('cost_category_display', display);
-              }}
-            />
-          </Form.Item>
-        </Col>
-      </Row>
-      
-      {/* Additional fields for materials and sub-materials - work linking */}
-      <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}>
-        {({ getFieldValue }) =>
-          (getFieldValue('type') === 'material' || getFieldValue('type') === 'sub_material') && works.length > 0 && (
+      <Form.Item 
+        noStyle
+        shouldUpdate
+      >
+        {({ getFieldValue }) => {
+          const currentType = getFieldValue('type') || 'work';
+          if (currentType !== quickAddFormType) {
+            setQuickAddFormType(currentType);
+          }
+          const isWork = currentType === 'work' || currentType === 'sub_work';
+          const isMaterial = currentType === 'material' || currentType === 'sub_material';
+
+          return (
             <>
-            <Row gutter={[12, 8]} className="w-full mt-3 pt-3 border-t border-blue-200">
-              <Col xs={12} sm={12} md={5} lg={4}>
+            {/* Main fields row - adapted for both works and materials */}
+            <div className="flex items-end gap-2 mb-3">
+              {/* Type */}
+              <Form.Item
+                name="type"
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Тип</span>}
+                className="mb-0"
+                initialValue="work"
+                style={{ width: '110px' }}
+              >
+                <Select size="small" placeholder="Тип" onChange={setQuickAddFormType}>
+                  <Select.Option value="work">Работа</Select.Option>
+                  <Select.Option value="sub_work">Суб-работа</Select.Option>
+                  <Select.Option value="material">Материал</Select.Option>
+                  <Select.Option value="sub_material">Суб-мат</Select.Option>
+                </Select>
+              </Form.Item>
+
+              {/* Name - expands to fill available space */}
+              <Form.Item
+                name="description"
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Наименование</span>}
+                className="mb-0 flex-1"
+                style={{ minWidth: '200px' }}
+                rules={[{ required: true, message: 'Наименование' }]}
+              >
+                <Input.TextArea 
+                  placeholder={isWork ? "Наименование работы" : "Наименование материала"}
+                  size="small"
+                  autoSize={{ minRows: 1, maxRows: 2 }}
+                  style={{ resize: 'none' }}
+                />
+              </Form.Item>
+
+              {/* Work Link - only for materials */}
+              {isMaterial && (
                 <Form.Item
                   name="work_id"
+                  label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Привязка к работе</span>}
                   className="mb-0"
-                  label={<Text strong>Привязать к работе</Text>}
+                  style={{ width: '180px' }}
                 >
-                  <Select 
-                    placeholder={works.length > 0 ? "Выберите работу" : "Сначала добавьте работу"}
+                  <Select
+                    placeholder="Работа"
                     allowClear
                     size="small"
-                    className="w-full"
-                    optionFilterProp="children"
                     showSearch
-                    disabled={works.length === 0}
                     onChange={(workId) => {
-                      console.log('🎯 Work selected in quick add form:', workId);
                       if (!workId) {
                         quickAddForm.setFieldsValue({ quantity: undefined });
                         return;
@@ -2396,46 +2329,67 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                         const conversionCoef = quickAddForm.getFieldValue('conversion_coefficient') || 1;
                         const calculatedQuantity = work.quantity * consumptionCoef * conversionCoef;
                         quickAddForm.setFieldsValue({ quantity: calculatedQuantity });
-                        console.log('📊 Auto-calculated quantity:', calculatedQuantity);
                       }
                     }}
+                    filterOption={(input, option) =>
+                      (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                    }
                   >
-                    {works.map(work => (
+                    {works.map((work) => (
                       <Select.Option key={work.id} value={work.id}>
-                        {work.item_type === 'sub_work' ? '[СУБ] ' : ''}{work.description} (Объем: {work.quantity} {work.unit})
+                        {work.description}
                       </Select.Option>
                     ))}
                   </Select>
                 </Form.Item>
-              </Col>
-              <Col xs={6} sm={6} md={3} lg={2}>
-                <Form.Item noStyle shouldUpdate>
-                  {({ getFieldValue }) => {
-                    const consumptionValue = getFieldValue('consumption_coefficient');
-                    const hasError = consumptionValue && consumptionValue < 1;
-                    
-                    return (
-                      <Form.Item
-                        name="consumption_coefficient"
-                        className="mb-0"
-                        label={
-                          <Space size={4}>
-                            <Text strong>Коэф. расхода</Text>
-                            <Tooltip title="Значение коэфф. расхода не может быть менее 1,00. При вводе значения менее 1 оно будет автоматически заменено на 1">
-                              <QuestionCircleOutlined style={{ color: '#8c8c8c', fontSize: '12px' }} />
-                            </Tooltip>
-                          </Space>
+              )}
+
+              {/* Coefficients - only for materials */}
+              {isMaterial && (
+                <>
+                  <Form.Item
+                    name="consumption_coefficient"
+                    label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>К.расх</span>}
+                    className="mb-0"
+                    initialValue={1}
+                    style={{ width: '70px' }}
+                  >
+                    <DecimalInput 
+                      placeholder="1.00" 
+                      min={0}
+                      precision={4}
+                      size="small"
+                      style={{ textAlign: 'center' }}
+                      onChange={() => {
+                        const workId = quickAddForm.getFieldValue('work_id');
+                        if (!workId) return;
+                        const work = works.find(w => w.id === workId);
+                        if (work && work.quantity) {
+                          const consumptionCoef = quickAddForm.getFieldValue('consumption_coefficient') || 1;
+                          const conversionCoef = quickAddForm.getFieldValue('conversion_coefficient') || 1;
+                          const calculatedQuantity = work.quantity * consumptionCoef * conversionCoef;
+                          quickAddForm.setFieldsValue({ quantity: calculatedQuantity });
                         }
+                      }}
+                    />
+                  </Form.Item>
+
+                  <Form.Item noStyle shouldUpdate={(prev, curr) => prev.work_id !== curr.work_id}>
+                    {({ getFieldValue }) => (
+                      <Form.Item
+                        name="conversion_coefficient"
+                        label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>К.перев</span>}
+                        className="mb-0"
                         initialValue={1}
-                        validateStatus={hasError ? 'error' : ''}
+                        style={{ width: '70px' }}
                       >
                         <DecimalInput 
-                          min={1}
-                          max={9999}
-                          precision={4} 
-                          className="w-full"
+                          placeholder="1.00" 
+                          min={0}
+                          precision={4}
                           size="small"
-                          style={hasError ? { borderColor: '#ff4d4f', boxShadow: '0 0 0 2px rgba(255, 77, 79, 0.2)' } : {}}
+                          disabled={!getFieldValue('work_id')}
+                          style={{ textAlign: 'center' }}
                           onChange={() => {
                             const workId = quickAddForm.getFieldValue('work_id');
                             if (!workId) return;
@@ -2444,101 +2398,160 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                               const consumptionCoef = quickAddForm.getFieldValue('consumption_coefficient') || 1;
                               const conversionCoef = quickAddForm.getFieldValue('conversion_coefficient') || 1;
                               const calculatedQuantity = work.quantity * consumptionCoef * conversionCoef;
-                              
-                              // Check for overflow
-                              const MAX_NUMERIC_VALUE = 99999999.9999;
-                              if (calculatedQuantity > MAX_NUMERIC_VALUE) {
-                                message.warning(`Количество слишком большое: ${calculatedQuantity.toLocaleString('ru-RU')}. Максимум: ${MAX_NUMERIC_VALUE.toLocaleString('ru-RU')}`);
-                                quickAddForm.setFieldsValue({ quantity: MAX_NUMERIC_VALUE });
-                              } else {
-                                quickAddForm.setFieldsValue({ quantity: calculatedQuantity });
-                              }
+                              quickAddForm.setFieldsValue({ quantity: calculatedQuantity });
                             }
                           }}
                         />
                       </Form.Item>
-                    );
-                  }}
-                </Form.Item>
-              </Col>
-              <Col xs={6} sm={6} md={3} lg={2}>
-                <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
-                  prevValues.work_id !== currentValues.work_id
-                }>
-                  {({ getFieldValue }) => (
-                    <Form.Item
-                      name="conversion_coefficient"
-                      className="mb-0"
-                      label={
-                        <Tooltip title={!getFieldValue('work_id') ? 'Доступно только при привязке к работе' : 'Коэффициент перевода единиц измерения'}>
-                          <Text strong className={!getFieldValue('work_id') ? 'text-gray-400' : ''}>
-                            Коэф. перевода
-                          </Text>
-                        </Tooltip>
-                      }
-                      initialValue={1}
-                    >
-                      <DecimalInput 
-                        min={0.01}
-                        max={9999}
-                        precision={4} 
-                        className="w-full"
-                        size="small"
-                        disabled={!getFieldValue('work_id')}
-                        onChange={() => {
-                          const workId = quickAddForm.getFieldValue('work_id');
-                          if (!workId) return;
-                          const work = works.find(w => w.id === workId);
-                          if (work && work.quantity) {
-                            const consumptionCoef = quickAddForm.getFieldValue('consumption_coefficient') || 1;
-                            const conversionCoef = quickAddForm.getFieldValue('conversion_coefficient') || 1;
-                            const calculatedQuantity = work.quantity * consumptionCoef * conversionCoef;
-                            
-                            // Check for overflow
-                            const MAX_NUMERIC_VALUE = 99999999.9999;
-                            if (calculatedQuantity > MAX_NUMERIC_VALUE) {
-                              message.warning(`Количество слишком большое: ${calculatedQuantity.toLocaleString('ru-RU')}. Максимум: ${MAX_NUMERIC_VALUE.toLocaleString('ru-RU')}`);
-                              quickAddForm.setFieldsValue({ quantity: MAX_NUMERIC_VALUE });
-                            } else {
-                              quickAddForm.setFieldsValue({ quantity: calculatedQuantity });
-                            }
-                          }
-                        }}
-                      />
-                    </Form.Item>
-                  )}
-                </Form.Item>
-              </Col>
-            </Row>
-            </>
-          )
-        }
-      </Form.Item>
-      
-      {/* Action buttons - moved to the bottom */}
-      <Row gutter={[12, 8]} className="mt-3">
-        <Col xs={24}>
-          <Form.Item className="mb-0">
-            <Space className="w-full" size="small">
-              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} size="small">
-                Сохранить
-              </Button>
-              <Button 
-                icon={<CloseOutlined />} 
-                size="small"
-                onClick={() => {
-                  setQuickAddMode(false);
-                  quickAddForm.resetFields();
-                }}
+                    )}
+                  </Form.Item>
+                </>
+              )}
+
+              {/* Quantity */}
+              <Form.Item noStyle shouldUpdate={(prev, curr) => prev.work_id !== curr.work_id}>
+                {({ getFieldValue }) => (
+                  <Form.Item
+                    name="quantity"
+                    label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Кол-во</span>}
+                    className="mb-0"
+                    style={{ width: '75px' }}
+                    rules={[{ required: true, message: 'Кол-во' }]}
+                  >
+                    <DecimalInput 
+                      placeholder="0.00" 
+                      min={0}
+                      precision={2}
+                      size="small"
+                      disabled={isMaterial && !!getFieldValue('work_id')}
+                      style={{ textAlign: 'center' }}
+                    />
+                  </Form.Item>
+                )}
+              </Form.Item>
+
+              {/* Unit */}
+              <Form.Item
+                name="unit"
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Ед. изм.</span>}
+                className="mb-0"
+                style={{ width: '80px' }}
+                rules={[{ required: true, message: 'Ед.' }]}
               >
-                Отмена
-              </Button>
-            </Space>
-          </Form.Item>
-        </Col>
-      </Row>
+                <Input placeholder="шт" size="small" style={{ textAlign: 'center' }} />
+              </Form.Item>
+
+              {/* Price */}
+              <Form.Item
+                name="unit_rate"
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Цена</span>}
+                className="mb-0"
+                style={{ width: '90px' }}
+                rules={[{ required: true, message: 'Цена' }]}
+              >
+                <DecimalInput 
+                  placeholder="0.00" 
+                  min={0}
+                  precision={2}
+                  size="small"
+                  suffix="₽"
+                  style={{ textAlign: 'center' }}
+                />
+              </Form.Item>
+
+              {/* Delivery - only for materials */}
+              {isMaterial && (
+                <>
+                  <Form.Item
+                    name="delivery_price_type"
+                    label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Доставка</span>}
+                    className="mb-0"
+                    style={{ width: '120px' }}
+                    initialValue="included"
+                  >
+                    <Select placeholder="Тип" size="small" style={{ textAlign: 'center' }}>
+                      <Select.Option value="included">Включена</Select.Option>
+                      <Select.Option value="not_included">Не вкл. (3%)</Select.Option>
+                      <Select.Option value="amount">Фикс. сумма</Select.Option>
+                    </Select>
+                  </Form.Item>
+
+                  <Form.Item noStyle shouldUpdate={(prev, curr) => prev.delivery_price_type !== curr.delivery_price_type}>
+                    {({ getFieldValue }) => {
+                      const deliveryType = getFieldValue('delivery_price_type');
+                      return deliveryType === 'amount' ? (
+                        <Form.Item
+                          name="delivery_amount"
+                          label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Сум.дост</span>}
+                          className="mb-0"
+                          style={{ width: '80px' }}
+                        >
+                          <DecimalInput 
+                            placeholder="0.00" 
+                            min={0}
+                            precision={2}
+                            size="small"
+                            suffix="₽"
+                            style={{ textAlign: 'center' }}
+                          />
+                        </Form.Item>
+                      ) : null;
+                    }}
+                  </Form.Item>
+                </>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-2" style={{ paddingBottom: '2px' }}>
+                <Button 
+                  type="default" 
+                  icon={<CloseOutlined />} 
+                  onClick={() => {
+                    setQuickAddMode(false);
+                    quickAddForm.resetFields();
+                    setQuickAddFormType('work');
+                  }}
+                  size="large"
+                  danger
+                  style={{ height: '36px', fontSize: '14px' }}
+                >
+                  Отмена
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<CheckOutlined />}
+                  htmlType="submit"
+                  size="large"
+                  style={{ height: '36px', fontSize: '14px' }}
+                >
+                  Добавить
+                </Button>
+              </div>
+            </div>
+
+            {/* Second row: Category field full width */}
+            <div className="flex items-end gap-2">
+              <Form.Item
+                name="detail_cost_category_id"
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Категория затрат</span>}
+                className="mb-0"
+                style={{ width: '100%' }}
+                rules={[{ required: true, message: 'Выберите категорию затрат' }]}
+              >
+                <CostDetailCascadeSelector
+                  placeholder="Выберите категорию затрат"
+                  size="small"
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            </div>
+            </>
+          );
+        }}
+      </Form.Item>
     </Form>
-  );
+    );
+  };
 
   return (
     <>
@@ -2696,68 +2709,123 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               </div>
             </Col>
             
-            {/* Client and GP data - compact row */}
+            {/* Client and GP data - four rows */}
             <Col xs={24} sm={24} md={8} lg={6}>
-              <div className="flex flex-wrap gap-3 justify-end items-center text-xs">
-                {/* Client data */}
-                {position.volume && (
-                  <Text className="text-xs text-gray-600 whitespace-nowrap">
-                    <span className="text-gray-500 mr-1">Кол-во Заказчика:</span>
-                    <strong>{position.volume}</strong>
-                  </Text>
-                )}
-                {position.unit && (
-                  <Text className="text-xs text-gray-600 whitespace-nowrap">
-                    <span className="text-gray-500 mr-1">Ед. изм:</span>
-                    <strong>{position.unit}</strong>
-                  </Text>
-                )}
+              <div className="flex flex-col gap-2">
+                {/* First row - Client note */}
                 {position.client_note && (
-                  <Tooltip title={`Примечание Заказчика: ${position.client_note}`}>
-                    <Text className="text-xs text-gray-600 whitespace-nowrap cursor-help">
-                      <span className="text-gray-500 mr-1">Примечание Заказчика:</span>
-                      <QuestionCircleOutlined className="text-gray-500" />
+                  <div className="flex flex-col gap-1">
+                    <Text className="text-sm text-gray-500 font-semibold">Примечание Заказчика:</Text>
+                    <Text className="text-sm text-gray-700 break-words whitespace-pre-wrap">
+                      <strong>{position.client_note}</strong>
                     </Text>
-                  </Tooltip>
-                )}
-                
-                {/* Separator between client and GP data */}
-                {(position.unit || position.volume || position.client_note) && canAddItems && (
-                  <div className="border-l border-gray-300 h-4"></div>
-                )}
-                
-                {/* GP data - Quantity always before Note */}
-                {canAddItems && (
-                  <div className="flex items-center gap-1">
-                    <Text className="text-xs text-gray-500">Кол-во ГП:</Text>
-                    <InputNumber
-                      size="small"
-                      min={0}
-                      value={position.manual_volume ?? undefined}
-                      placeholder="0"
-                      className="w-16"
-                      onChange={(value) => handleManualVolumeChange(value)}
-                      style={{ fontSize: '11px' }}
-                    />
                   </div>
                 )}
                 
-                {/* Separator before GP Note if no GP Quantity but has client data */}
-                {(position.unit || position.volume || position.client_note) && !canAddItems && (
-                  <div className="border-l border-gray-300 h-4"></div>
+                {/* Second row - GP Note - always show for sections/headers, conditional for executable items */}
+                {(canAddItems ? (
+                  isExpanded ? (
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Text className="text-sm text-gray-500 whitespace-nowrap font-semibold">Примечание ГП:</Text>
+                      <Input
+                        size="middle"
+                        value={tempManualNote ?? undefined}
+                        placeholder="Примечание"
+                        className="flex-1"
+                        style={{ fontSize: '14px' }}
+                        onChange={(e) => setTempManualNote(e.target.value)}
+                        onBlur={() => {
+                          if (tempManualNote !== position.manual_note) {
+                            handleManualNoteChange(tempManualNote);
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    position.manual_note && (
+                      <div className="flex items-center gap-1">
+                        <Text className="text-sm text-gray-500 font-semibold">Примечание ГП:</Text>
+                        <Text className="text-sm text-green-600 flex-1" ellipsis={{ tooltip: position.manual_note }}>
+                          <strong>{position.manual_note}</strong>
+                        </Text>
+                      </div>
+                    )
+                  )
+                ) : (
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <Text className="text-sm text-gray-500 whitespace-nowrap font-semibold">Примечание ГП:</Text>
+                    <Input
+                      size="middle"
+                      value={tempManualNote ?? undefined}
+                      placeholder="Примечание"
+                      className="flex-1"
+                      style={{ fontSize: '14px' }}
+                      onChange={(e) => setTempManualNote(e.target.value)}
+                      onBlur={() => {
+                        if (tempManualNote !== position.manual_note) {
+                          handleManualNoteChange(tempManualNote);
+                        }
+                      }}
+                    />
+                  </div>
+                ))}
+                
+                {/* Third row - Client Quantity */}
+                {position.volume && (
+                  <div className="flex items-center gap-1">
+                    <Text className="text-sm text-gray-500 font-semibold">Кол-во Заказчика:</Text>
+                    <Text className="text-sm text-gray-600">
+                      <strong>{position.volume}</strong>
+                    </Text>
+                    {position.unit && (
+                      <Text className="text-sm text-gray-600 ml-1">
+                        <strong>{position.unit}</strong>
+                      </Text>
+                    )}
+                  </div>
                 )}
                 
-                <div className="flex items-center gap-1">
-                  <Text className="text-xs text-gray-500">Примечание ГП:</Text>
-                  <Input
-                    size="small"
-                    value={position.manual_note ?? undefined}
-                    placeholder="Примечание"
-                    className="w-24"
-                    onChange={(e) => handleManualNoteChange(e.target.value)}
-                    style={{ fontSize: '11px' }}
-                  />
-                </div>
+                {/* Fourth row - GP Quantity - show input when expanded, show value when collapsed if exists */}
+                {canAddItems && (
+                  isExpanded ? (
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Text className="text-sm text-gray-500 font-semibold">Кол-во ГП:</Text>
+                      <InputNumber
+                        size="middle"
+                        min={0}
+                        value={tempManualVolume ?? undefined}
+                        placeholder="0"
+                        className="w-24"
+                        onChange={(value) => setTempManualVolume(value)}
+                        onBlur={() => {
+                          if (tempManualVolume !== position.manual_volume) {
+                            handleManualVolumeChange(tempManualVolume);
+                          }
+                        }}
+                        style={{ fontSize: '14px' }}
+                      />
+                      {position.unit && (
+                        <Text className="text-sm text-gray-600 ml-1">
+                          <strong>{position.unit}</strong>
+                        </Text>
+                      )}
+                    </div>
+                  ) : (
+                    position.manual_volume && (
+                      <div className="flex items-center gap-1">
+                        <Text className="text-sm text-gray-500 font-semibold">Кол-во ГП:</Text>
+                        <Text className="text-sm text-green-600">
+                          <strong>{position.manual_volume}</strong>
+                        </Text>
+                        {position.unit && (
+                          <Text className="text-sm text-green-600 ml-1">
+                            <strong>{position.unit}</strong>
+                          </Text>
+                        )}
+                      </div>
+                    )
+                  )
+                )}
               </div>
             </Col>
             
@@ -2782,8 +2850,12 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           </Row>
         </div>
 
-        {/* Expandable Content */}
-        {isExpanded && (
+        {/* Expandable Content with Animation */}
+        <div 
+          className={`overflow-hidden transition-[max-height,opacity] duration-500 ease-in-out ${
+            isExpanded ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'
+          }`}
+        >
           <div className="p-4 bg-gray-50 min-h-0">
             {/* View Mode Toggle and Quick Add Button */}
             <div className="mb-4 flex justify-between items-center gap-4">
@@ -2820,14 +2892,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             </div>
 
             {/* Quick Add Form */}
-            {quickAddMode && (
-              <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="mb-2">
-                  <Text strong className="text-blue-800">Быстрое добавление</Text>
-                </div>
-                <QuickAddRow />
-              </div>
-            )}
+            {quickAddMode && <QuickAddRow />}
 
             {/* Table Header with Clear All button */}
             {totalItems > 0 && (
@@ -3002,7 +3067,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               </div>
             )}
           </div>
-        )}
+        </div>
       </Card>
 
       {/* Material Linking Modal */}
@@ -3027,6 +3092,8 @@ export default React.memo(ClientPositionCardStreamlined, (prevProps, nextProps) 
   return (
     prevProps.position.id === nextProps.position.id &&
     prevProps.position.boq_items?.length === nextProps.position.boq_items?.length &&
+    prevProps.position.manual_volume === nextProps.position.manual_volume && // Check manual_volume
+    prevProps.position.manual_note === nextProps.position.manual_note && // Check manual_note
     prevProps.works?.length === nextProps.works?.length &&
     prevProps.loading === nextProps.loading &&
     prevProps.isExpanded === nextProps.isExpanded && // IMPORTANT: Check isExpanded for toggle to work

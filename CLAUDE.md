@@ -12,17 +12,18 @@ TenderHub is a construction tender management portal built with React 19, TypeSc
 
 ```bash
 npm install          # Install dependencies
-npm run dev          # Start dev server (http://localhost:5173)
-npm run build        # Production build (tsc -b && vite build)
+npm run dev          # Start dev server (http://localhost:5173, auto-assigns port if busy)
+npm run build        # Production build with TypeScript checking (tsc -b && vite build)
 npm run preview      # Preview production build
-npm run lint         # Run ESLint checks
+npm run lint         # Run ESLint checks (flat config)
 npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 ```
 
 **Testing:** No test suite implemented. Verify through:
-- Type checking: `npm run build`
+- Type checking: `npm run build` (will fail on type errors)
 - ESLint: `npm run lint`
 - Manual testing in dev server
+- Database schema validation against `supabase/schemas/prod.sql`
 
 ## MCP (Model Context Protocol) Integration
 
@@ -32,6 +33,10 @@ npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 - Check connection: `/mcp list`
 - Provides tools: `mcp__supabase__*` for CRUD operations
 - See `MCP_SETUP.md` for troubleshooting
+
+**GitHub MCP Server** is also configured:
+- Provides tools: `mcp__github__*` for repository operations
+- Package: `@modelcontextprotocol/server-github` (devDependency)
 
 ## Tech Stack
 
@@ -240,8 +245,6 @@ VITE_SUPABASE_URL=https://lkmgbizyyaaacetllbzr.supabase.co
 VITE_SUPABASE_ANON_KEY=your_anon_key_here
 ```
 
-**GitHub MCP Server** is also configured (see package.json devDependencies)
-
 ## Vite Configuration
 - Dev server: port 5173, host enabled
 - HMR: overlay disabled, 5s timeout
@@ -291,10 +294,12 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - Implemented visual rounding to whole numbers in UI
 - Database trigger for automatic delivery amount calculation
 - Added tender markup functionality with templates
-- Improved inline editing for BOQ items
-- Added version and area fields to tenders
+- Improved inline editing for BOQ items and works
+- Added version and area fields to tenders (area_sp, area_client)
 - Fixed infinite render loops in material synchronization
 - Optimized financial calculations and cost percentage handling
+- Implemented hierarchical client positions system
+- Enhanced BOQ header UI with inline total cost display
 
 ## Important Notes
 
@@ -311,13 +316,22 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 2. Run `npm install` then `npm run dev`
 3. For DB changes:
    - Modify in Supabase dashboard
-   - Run `npm run db:schema` to export
+   - Run `npm run db:schema` to export schema
    - Update types to match prod.sql
-   - Apply migrations if needed
-4. Always verify against `supabase/schemas/prod.sql`
-5. Test with manual testing + type checking
+   - Apply migrations if needed via Supabase CLI
+4. Always verify against `supabase/schemas/prod.sql` before database operations
+5. Test with:
+   - Type checking: `npm run build`
+   - Linting: `npm run lint`
+   - Manual testing in development server
 6. Git workflow:
-   - Commit with descriptive emoji prefixes (🎯, ✨, 🚀, etc.)
+   - Commit with descriptive emoji prefixes:
+     - 🎯 Feature implementation
+     - ✨ New features
+     - 🚀 Performance improvements
+     - 🐛 Bug fixes
+     - 🎨 UI/UX improvements
+     - 💥 Breaking changes
    - Push to origin/main after testing
 
 ## Project File Structure
@@ -364,6 +378,30 @@ When working with complex tasks, consider using these specialized agents via the
 - **database-optimizer**: For performance tuning, indexing strategies, or query optimization
 - **debugger**: For troubleshooting errors, test failures, or unexpected behavior
 - **docs-architect**: For creating comprehensive technical documentation
+
+## Common Development Tasks
+
+### Running Development Server
+```bash
+npm run dev  # Server will auto-assign port if 5173 is busy
+# Access at http://localhost:5173 (or assigned port)
+```
+
+### Database Operations
+```bash
+# Export current schema from production
+npm run db:schema
+
+# Direct database queries via MCP tools
+# Use mcp__supabase__supabase_query for SELECT
+# Use mcp__supabase__supabase_insert/update/delete for mutations
+```
+
+### Code Quality Checks
+```bash
+npm run build  # TypeScript type checking + production build
+npm run lint   # ESLint checks with flat config
+```
 
 ## Git State Context
 

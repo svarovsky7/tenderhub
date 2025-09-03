@@ -5,3 +5,4 @@ export { default as TenderTable } from './TenderTable';
 export { default as CreateTenderModal } from './CreateTenderModal';
 export { default as DeleteTenderModal } from './DeleteTenderModal';
 export { default as ExcelUpload } from './ExcelUpload';
+export { default as EditableCell } from './EditableCell';

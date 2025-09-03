@@ -1,12 +1,107 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Select, Form, message, Typography, Row, Col } from 'antd';
-import { DollarOutlined, LineChartOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Card, Select, Form, message, Typography, Row, Col, Button, Empty } from 'antd';
+import { DollarOutlined, LineChartOutlined, FolderOpenOutlined, ReloadOutlined, DashboardOutlined, PieChartOutlined, CalculatorOutlined } from '@ant-design/icons';
 import { supabase } from '../lib/supabase/client';
-import { FinancialIndicatorsTab } from '../components/financial/FinancialIndicatorsTab';
 import { MarkupEditor } from '../components/financial/MarkupEditor';
+import { useNavigate } from 'react-router-dom';
+import { formatQuantity } from '../utils/formatters';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
+
+// Компонент круговой диаграммы
+const CircularChart: React.FC<{ 
+  data: { label: string; value: number; color: string }[]; 
+  size?: number; 
+  strokeWidth?: number;
+  showLabels?: boolean;
+}> = ({ data, size = 120, strokeWidth = 8, showLabels = true }) => {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const center = size / 2;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  
+  let accumulatedPercentage = 0;
+  
+  return (
+    <div className="flex flex-col items-center">
+      <div style={{ position: 'relative', width: size, height: size }}>
+        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+          <circle
+            cx={center}
+            cy={center}
+            r={radius}
+            fill="transparent"
+            stroke="#f0f0f0"
+            strokeWidth={strokeWidth}
+          />
+          {data.map((segment, index) => {
+            if (segment.value === 0) return null;
+            
+            const percentage = segment.value / total;
+            const strokeDasharray = `${percentage * circumference} ${circumference}`;
+            const strokeDashoffset = -accumulatedPercentage * circumference;
+            
+            accumulatedPercentage += percentage;
+            
+            return (
+              <circle
+                key={index}
+                cx={center}
+                cy={center}
+                r={radius}
+                fill="transparent"
+                stroke={segment.color}
+                strokeWidth={strokeWidth}
+                strokeDasharray={strokeDasharray}
+                strokeDashoffset={strokeDashoffset}
+                strokeLinecap="round"
+                style={{
+                  transition: 'all 0.6s ease-in-out',
+                  transformOrigin: 'center'
+                }}
+              />
+            );
+          })}
+        </svg>
+        
+        {/* Центральный текст */}
+        <div 
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            textAlign: 'center'
+          }}
+        >
+          <div className="text-lg font-bold text-gray-800">
+            {Math.round(total).toLocaleString('ru-RU')}
+          </div>
+          <div className="text-xs text-gray-500">₽</div>
+        </div>
+      </div>
+      
+      {/* Легенда */}
+      {showLabels && (
+        <div className="mt-3 space-y-1">
+          {data.filter(item => item.value > 0).map((segment, index) => (
+            <div key={index} className="flex items-center gap-2 text-xs">
+              <div 
+                className="w-3 h-3 rounded-full" 
+                style={{ backgroundColor: segment.color }}
+              />
+              <span className="text-gray-700">{segment.label}</span>
+              <span className="font-medium">
+                {((segment.value / total) * 100).toFixed(1)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface Tender {
   id: string;
@@ -15,13 +110,17 @@ interface Tender {
   client_name: string;
   area_sp?: number;
   area_client?: number;
+  version?: number;
 }
 
 const FinancialIndicatorsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [tenders, setTenders] = useState<Tender[]>([]);
+  const [selectedTenderName, setSelectedTenderName] = useState<string | null>(null);
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
   const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isContentVisible, setIsContentVisible] = useState(false);
   const [stats, setStats] = useState({
     actualTotalMaterials: 0,
     actualTotalWorks: 0,
@@ -29,7 +128,32 @@ const FinancialIndicatorsPage: React.FC = () => {
     actualTotalSubworks: 0,
     actualTotalCost: 0
   });
+  const [commercialTotal, setCommercialTotal] = useState(0);
+  const [markupData, setMarkupData] = useState<any>(null);
   const [costsWithCalculations, setCostsWithCalculations] = useState<any[]>([]);
+
+  // Unique tender names for first selector
+  const uniqueTenderNames = useMemo(() => {
+    const nameMap = new Map<string, string>();
+    tenders.forEach(t => {
+      const key = `${t.title}___${t.client_name || ''}`;
+      const displayName = `${t.title} - ${t.client_name || 'Без заказчика'}`;
+      if (!nameMap.has(key)) {
+        nameMap.set(key, displayName);
+      }
+    });
+    return Array.from(nameMap.entries());
+  }, [tenders]);
+
+  // Available versions for selected tender name
+  const availableVersions = useMemo(() => {
+    if (!selectedTenderName) return [];
+    const [title, client] = selectedTenderName.split('___');
+    const filteredTenders = tenders.filter(t => 
+      t.title === title && (t.client_name || '') === client
+    );
+    return [...new Set(filteredTenders.map(t => t.version || 1))].sort((a, b) => b - a);
+  }, [selectedTenderName, tenders]);
 
   useEffect(() => {
     loadTenders();
@@ -39,9 +163,12 @@ const FinancialIndicatorsPage: React.FC = () => {
     if (selectedTenderId) {
       const tender = tenders.find(t => t.id === selectedTenderId);
       setSelectedTender(tender || null);
+      // Trigger content animation
+      setTimeout(() => setIsContentVisible(true), 100);
       calculateFinancialStats();
     } else {
       setSelectedTender(null);
+      setIsContentVisible(false);
     }
   }, [selectedTenderId, tenders]);
 
@@ -50,7 +177,7 @@ const FinancialIndicatorsPage: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('tenders')
-        .select('id, title, tender_number, client_name, area_sp, area_client')
+        .select('id, title, tender_number, client_name, area_sp, area_client, version')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -62,6 +189,60 @@ const FinancialIndicatorsPage: React.FC = () => {
       message.error('Ошибка загрузки тендеров');
     }
   };
+
+  // Handle tender name selection (first step)
+  const handleTenderNameChange = useCallback((value: string) => {
+    console.log('🔄 Tender name selection changed:', value);
+    setSelectedTenderName(value);
+    setSelectedTenderId(null);
+    setSelectedTender(null);
+    setIsContentVisible(false);
+  }, []);
+
+  // Handle version selection (second step) 
+  const handleVersionChange = useCallback((version: number) => {
+    console.log('🔄 Version selected:', version);
+    if (!selectedTenderName) return;
+    
+    const [title, client] = selectedTenderName.split('___');
+    const targetTender = tenders.find(t => 
+      t.title === title && 
+      (t.client_name || '') === client &&
+      (t.version || 1) === version
+    );
+    
+    if (targetTender) {
+      setSelectedTenderId(targetTender.id);
+      // Trigger animation after version is selected
+      setTimeout(() => setIsContentVisible(true), 100);
+    }
+  }, [selectedTenderName, tenders]);
+
+  // Navigate to tender details
+  const handleNavigateToTender = useCallback(() => {
+    if (selectedTenderId) {
+      navigate(`/tenders/${selectedTenderId}`);
+    }
+  }, [selectedTenderId, navigate]);
+
+  // Refresh data
+  const handleRefresh = useCallback(async () => {
+    setLoading(true);
+    message.loading('Обновление данных...', 0.5);
+    
+    // Hide content with animation
+    setIsContentVisible(false);
+    
+    // Reload after animation
+    setTimeout(async () => {
+      await loadTenders();
+      if (selectedTenderId) {
+        await calculateFinancialStats();
+      }
+      setLoading(false);
+      setTimeout(() => setIsContentVisible(true), 100);
+    }, 300);
+  }, [selectedTenderId]);
 
   const calculateFinancialStats = async () => {
     if (!selectedTenderId) return;
@@ -249,153 +430,225 @@ const FinancialIndicatorsPage: React.FC = () => {
 
   const handleMarkupChange = (calculatedFinancials: any) => {
     console.log('🚀 [FinancialIndicatorsPage] Markup changed:', calculatedFinancials);
-    // Remove the state update that was causing infinite loop
-    // The MarkupEditor handles its own calculations now
+    // Обновляем коммерческую общую стоимость из данных MarkupEditor
+    if (calculatedFinancials?.totalCommercialPrice) {
+      setCommercialTotal(calculatedFinancials.totalCommercialPrice);
+    }
+    // Сохраняем данные наценок для построения графиков
+    setMarkupData(calculatedFinancials);
   };
 
   return (
     <div className="w-full min-h-full bg-gray-50">
-      {/* Header */}
-      <div style={{ 
-        background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
-        padding: '24px',
-        borderBottom: '1px solid #e8e8e8',
-        borderRadius: '0 0 16px 16px'
-      }}>
+      <style>
+        {`
+          .financial-page-header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
+            border-radius: 16px 16px 0 0;
+            margin-bottom: 0;
+            padding: 32px;
+            padding-bottom: 32px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+          }
+          .financial-page-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: rotate 30s linear infinite;
+          }
+          @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .financial-page-header > div {
+            position: relative;
+            z-index: 1;
+          }
+          .financial-action-buttons {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+          }
+          .financial-action-btn {
+            height: 42px;
+            padding: 0 24px;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+          }
+        `}
+      </style>
+      
+      {/* Header с градиентом и выбором тендера */}
+      <div className="financial-page-header">
         <div className="max-w-none">
-          <Title level={2} className="mb-2" style={{ color: 'white', margin: 0, marginBottom: 8 }}>
-            <LineChartOutlined className="mr-2" />
-            Финансовые показатели
-          </Title>
-          <Text style={{ color: 'rgba(255, 255, 255, 0.85)' }}>
-            Анализ рентабельности и структуры затрат тендера
-          </Text>
+          {/* Title and buttons row */}
+          <div className="flex justify-between items-start mb-6">
+            <div className="flex-1">
+              <Title level={2} style={{ 
+                color: 'white', 
+                margin: 0, 
+                marginBottom: 8,
+                fontSize: '28px',
+                fontWeight: 600
+              }}>
+                <LineChartOutlined className="mr-3" style={{ fontSize: 24 }} />
+                Финансовые показатели
+              </Title>
+              <Text style={{ 
+                color: 'rgba(255, 255, 255, 0.9)',
+                fontSize: '14px'
+              }}>
+                {selectedTender ? `Заказчик: ${selectedTender.client_name}` : 'Анализ рентабельности и структуры затрат тендера'}
+              </Text>
+            </div>
+            <div className="financial-action-buttons">
+              <Button
+                className="financial-action-btn"
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  color: 'white',
+                  borderColor: 'rgba(255, 255, 255, 0.3)',
+                  fontWeight: 500
+                }}
+                size="large"
+                icon={<FolderOpenOutlined />}
+                onClick={() => navigate('/tenders')}
+              >
+                К тендерам
+              </Button>
+              <Button
+                className="financial-action-btn"
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.95)',
+                  color: '#1890ff',
+                  borderColor: 'rgba(255, 255, 255, 0.3)',
+                  fontWeight: 600
+                }}
+                size="large"
+                icon={<ReloadOutlined />}
+                onClick={handleRefresh}
+                loading={loading}
+              >
+                Обновить
+              </Button>
+            </div>
+          </div>
+
+          {/* Tender Selection */}
+          <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
+            {/* Tender Selection - Left Side */}
+            <div className={`rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
+              <Row gutter={[16, 16]} align="middle">
+                <Col xs={24} lg={selectedTenderId ? 14 : 24}>
+                  <div className="flex flex-col gap-2">
+                    <div className={`flex flex-wrap items-center gap-2 transition-all duration-700 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
+                      <Text strong className="whitespace-nowrap" style={{ color: '#262626', cursor: 'default' }}>Тендер:</Text>
+                      <Select
+                        value={selectedTenderName}
+                        onChange={handleTenderNameChange}
+                        style={{ minWidth: '280px', maxWidth: '400px' }}
+                        placeholder="Выберите тендер"
+                        loading={loading}
+                        showSearch
+                        size="large"
+                        optionFilterProp="children"
+                        filterOption={(input, option) =>
+                          (option?.children as string).toLowerCase().includes(input.toLowerCase())
+                        }
+                      >
+                        {uniqueTenderNames.map(([key, displayName]) => (
+                          <Option key={key} value={key}>
+                            {displayName}
+                          </Option>
+                        ))}
+                      </Select>
+                      <Select
+                        value={selectedTender?.version || undefined}
+                        onChange={handleVersionChange}
+                        style={{ width: '160px' }}
+                        placeholder="Выберите версию"
+                        size="large"
+                        disabled={!selectedTenderName || availableVersions.length === 0}
+                      >
+                        {availableVersions.map(version => (
+                          <Option key={version} value={version}>
+                            Версия {version}
+                          </Option>
+                        ))}
+                      </Select>
+                    </div>
+                    {selectedTender && (
+                      <div className={`transition-all duration-700 ${!isContentVisible ? 'opacity-0' : 'opacity-100'}`}>
+                        <Button 
+                          type="link"
+                          onClick={handleNavigateToTender}
+                          icon={<DashboardOutlined />}
+                          size="small"
+                          className="whitespace-nowrap"
+                        >
+                          Детали тендера
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </Col>
+                {selectedTender && (
+                  <Col xs={24} lg={10} className={`transition-all duration-700 ${isContentVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
+                    <div className="flex flex-col justify-center gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-3">
+                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                          <strong>Название:</strong> {selectedTender.title}
+                        </span>
+                        <span className="text-gray-400" style={{ cursor: 'default' }}>|</span>
+                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                          <strong>Заказчик:</strong> {selectedTender.client_name}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-3">
+                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                          <strong>Площадь по СП:</strong> {selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}
+                        </span>
+                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                          <strong>Площадь Заказчика:</strong> {selectedTender.area_client ? formatQuantity(selectedTender.area_client, 0) + ' м²' : '—'}
+                        </span>
+                      </div>
+                    </div>
+                  </Col>
+                )}
+              </Row>
+            </div>
+            
+            {/* Total Cost - Right Side */}
+            {selectedTenderId && (
+              <div className={`flex flex-col justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
+                <div>
+                  <Text className="text-sm text-gray-600 block mb-1" style={{ cursor: 'default' }}>
+                    {commercialTotal > 0 ? 'Коммерческая стоимость' : 'Общая стоимость'}
+                  </Text>
+                  <div className="text-3xl font-bold text-green-700" style={{ cursor: 'default' }}>
+                    {Math.round(commercialTotal > 0 ? commercialTotal : stats.actualTotalCost).toLocaleString('ru-RU')} ₽
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="p-6 max-w-none">
 
-      {/* Выбор тендера */}
-      <Card 
-        style={{ 
-          marginBottom: 20, 
-          borderRadius: 8,
-          border: '1px solid #f0f0f0'
-        }}
-        size="small"
-      >
-        <div style={{ marginBottom: selectedTender ? 12 : 0 }}>
-          <Text strong style={{ 
-            color: '#2c3e50',
-            fontSize: 14,
-            marginBottom: 8,
-            display: 'block'
-          }}>
-            📊 Выбор тендера для анализа
-          </Text>
-          
-          <Select
-            placeholder="Найдите и выберите тендер"
-            value={selectedTenderId}
-            onChange={setSelectedTenderId}
-            showSearch
-            loading={loading}
-            style={{ 
-              width: '100%'
-            }}
-            size="middle"
-            filterOption={(input, option) => {
-              const tender = tenders.find(t => t.id === option?.value);
-              if (!tender) return false;
-              const searchText = `${tender.tender_number} ${tender.title} ${tender.client_name || ''}`.toLowerCase();
-              return searchText.includes(input.toLowerCase());
-            }}
-          >
-            {tenders.map(tender => (
-              <Option key={tender.id} value={tender.id}>
-                <div style={{ 
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  lineHeight: '1.4',
-                  overflow: 'hidden',
-                  whiteSpace: 'nowrap'
-                }}>
-                  <span style={{ 
-                    fontWeight: 'bold', 
-                    color: '#2c3e50',
-                    fontSize: 15,
-                    flexShrink: 0
-                  }}>
-                    {tender.tender_number}
-                  </span>
-                  <span style={{
-                    color: '#7f8c8d',
-                    fontSize: 14
-                  }}>
-                    •
-                  </span>
-                  <span style={{ 
-                    fontSize: 14, 
-                    color: '#2c3e50',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    minWidth: 0,
-                    flexShrink: 1
-                  }}>
-                    {tender.title}
-                  </span>
-                  {tender.client_name && (
-                    <>
-                      <span style={{
-                        color: '#7f8c8d',
-                        fontSize: 14,
-                        flexShrink: 0
-                      }}>
-                        •
-                      </span>
-                      <span style={{ 
-                        fontSize: 14, 
-                        color: '#7f8c8d',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        minWidth: 0,
-                        flexShrink: 1
-                      }}>
-                        {tender.client_name}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </Option>
-            ))}
-          </Select>
-        </div>
-
-      </Card>
-
       {/* Основной контент */}
       {selectedTenderId ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-          {/* Информация о выбранном тендере */}
-          {selectedTender && (
-            <Card style={{ marginBottom: 16, borderRadius: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <DollarOutlined style={{ fontSize: 16, color: '#1890ff' }} />
-                <div>
-                  <Text strong style={{ fontSize: 16, display: 'block' }}>
-                    {selectedTender.title}
-                  </Text>
-                  <Text type="secondary" style={{ fontSize: 14 }}>
-                    Заказчик: {selectedTender.client_name || 'Не указан'} • 
-                    Общие затраты: {stats.actualTotalCost.toLocaleString('ru-RU')} ₽
-                  </Text>
-                </div>
-              </div>
-            </Card>
-          )}
+        <div className={`transition-all duration-700 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`} 
+             style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* Редактор процентов затрат */}
           <MarkupEditor
@@ -415,41 +668,247 @@ const FinancialIndicatorsPage: React.FC = () => {
             onMarkupChange={handleMarkupChange}
           />
           
-          {/* Финансовые индикаторы */}
-          <Card 
-            loading={loading}
-            style={{ 
-              borderRadius: 16,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-              border: 'none'
-            }}
-          >
-            <FinancialIndicatorsTab 
-              stats={stats} 
-              costsWithCalculations={costsWithCalculations} 
+          {/* Финансовые показатели на основе расчетных данных */}
+          {commercialTotal > 0 && (
+            <Row gutter={[24, 24]}>
+              {/* Основные показатели */}
+              <Col xs={24}>
+                <Card 
+                  title={
+                    <div className="flex items-center gap-2">
+                      <LineChartOutlined className="text-blue-500" />
+                      <span>Ключевые показатели</span>
+                    </div>
+                  }
+                  style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                >
+                  <Row gutter={[24, 16]}>
+                    <Col xs={12} sm={8} lg={6}>
+                      <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-600 mb-2">
+                          {Math.round(commercialTotal).toLocaleString('ru-RU')} ₽
+                        </div>
+                        <div className="text-sm text-gray-600">Коммерческая стоимость</div>
+                      </div>
+                    </Col>
+                    <Col xs={12} sm={8} lg={6}>
+                      <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
+                        <div className="text-2xl font-bold text-green-600 mb-2">
+                          {Math.round(stats.actualTotalCost).toLocaleString('ru-RU')} ₽
+                        </div>
+                        <div className="text-sm text-gray-600">Прямые затраты</div>
+                      </div>
+                    </Col>
+                    <Col xs={12} sm={8} lg={6}>
+                      <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg">
+                        <div className="text-2xl font-bold text-purple-600 mb-2">
+                          {Math.round(commercialTotal - stats.actualTotalCost).toLocaleString('ru-RU')} ₽
+                        </div>
+                        <div className="text-sm text-gray-600">Наценки и прибыль</div>
+                      </div>
+                    </Col>
+                    <Col xs={12} sm={8} lg={6}>
+                      <div className="text-center p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg">
+                        <div className="text-2xl font-bold text-orange-600 mb-2">
+                          {((commercialTotal - stats.actualTotalCost) / stats.actualTotalCost * 100).toFixed(1)}%
+                        </div>
+                        <div className="text-sm text-gray-600">Общий процент наценки</div>
+                      </div>
+                    </Col>
+                  </Row>
+                </Card>
+              </Col>
+
+              {/* Структура затрат */}
+              <Col xs={24} lg={8}>
+                <Card 
+                  title={
+                    <div className="flex items-center gap-2">
+                      <PieChartOutlined className="text-green-500" />
+                      <span>Структура прямых затрат</span>
+                    </div>
+                  }
+                  style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                >
+                  <CircularChart
+                    data={[
+                      { label: 'Материалы', value: stats.actualTotalMaterials, color: '#52c41a' },
+                      { label: 'Работы', value: stats.actualTotalWorks, color: '#1890ff' },
+                      { label: 'Субматериалы', value: stats.actualTotalSubmaterials, color: '#fa8c16' },
+                      { label: 'Субработы', value: stats.actualTotalSubworks, color: '#eb2f96' }
+                    ]}
+                    size={140}
+                  />
+                </Card>
+              </Col>
+
+              {/* Структура наценок */}
+              <Col xs={24} lg={8}>
+                <Card 
+                  title={
+                    <div className="flex items-center gap-2">
+                      <CalculatorOutlined className="text-purple-500" />
+                      <span>Структура наценок</span>
+                    </div>
+                  }
+                  style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                >
+                  {markupData ? (
+                    <CircularChart
+                      data={[
+                        { 
+                          label: 'Непредвиденные', 
+                          value: markupData.contingencyCost || 0, 
+                          color: '#faad14' 
+                        },
+                        { 
+                          label: 'ООЗ', 
+                          value: (markupData.overheadOwnForces || 0) + (markupData.overheadSubcontract || 0), 
+                          color: '#722ed1' 
+                        },
+                        { 
+                          label: 'Прибыль', 
+                          value: markupData.totalProfit || 0, 
+                          color: '#f5222d' 
+                        },
+                        { 
+                          label: 'Рост стоимости', 
+                          value: (markupData.materialsGrowthCost || 0) + (markupData.worksGrowthCost || 0), 
+                          color: '#13c2c2' 
+                        }
+                      ]}
+                      size={140}
+                    />
+                  ) : (
+                    <div className="text-center p-8 text-gray-500">
+                      <div className="text-sm">Нет данных о наценках</div>
+                    </div>
+                  )}
+                </Card>
+              </Col>
+
+              {/* Показатели эффективности */}
+              <Col xs={24} lg={8}>
+                <Card 
+                  title={
+                    <div className="flex items-center gap-2">
+                      <CalculatorOutlined className="text-purple-500" />
+                      <span>Показатели эффективности</span>
+                    </div>
+                  }
+                  style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                >
+                  {selectedTender?.area_sp && (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                        <span className="text-gray-700">Стоимость за м² (коммерческая)</span>
+                        <span className="font-bold text-blue-600">
+                          {Math.round(commercialTotal / selectedTender.area_sp).toLocaleString('ru-RU')} ₽/м²
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                        <span className="text-gray-700">Прямые затраты за м²</span>
+                        <span className="font-bold text-green-600">
+                          {Math.round(stats.actualTotalCost / selectedTender.area_sp).toLocaleString('ru-RU')} ₽/м²
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                        <span className="text-gray-700">Наценка за м²</span>
+                        <span className="font-bold text-orange-600">
+                          {Math.round((commercialTotal - stats.actualTotalCost) / selectedTender.area_sp).toLocaleString('ru-RU')} ₽/м²
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                        <span className="text-gray-700">Общая площадь</span>
+                        <span className="font-bold text-gray-800">
+                          {selectedTender.area_sp.toLocaleString('ru-RU')} м²
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {!selectedTender?.area_sp && (
+                    <div className="text-center p-8 text-gray-500">
+                      <div className="text-lg mb-2">Площадь не указана</div>
+                      <div className="text-sm">Для расчета показателей на м² укажите площадь в параметрах тендера</div>
+                    </div>
+                  )}
+                </Card>
+              </Col>
+            </Row>
+          )}
+          
+          {/* Показать только базовые затраты, если нет коммерческих расчетов */}
+          {commercialTotal === 0 && (
+            <Card 
+              title={
+                <div className="flex items-center gap-2">
+                  <DollarOutlined className="text-blue-500" />
+                  <span>Базовые затраты из BOQ</span>
+                </div>
+              }
+              style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+            >
+              <Row gutter={[24, 16]}>
+                <Col xs={12} sm={6}>
+                  <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
+                    <div className="text-xl font-bold text-green-600 mb-2">
+                      {Math.round(stats.actualTotalMaterials).toLocaleString('ru-RU')} ₽
+                    </div>
+                    <div className="text-sm text-gray-600">Материалы</div>
+                  </div>
+                </Col>
+                <Col xs={12} sm={6}>
+                  <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg">
+                    <div className="text-xl font-bold text-blue-600 mb-2">
+                      {Math.round(stats.actualTotalWorks).toLocaleString('ru-RU')} ₽
+                    </div>
+                    <div className="text-sm text-gray-600">Работы</div>
+                  </div>
+                </Col>
+                <Col xs={12} sm={6}>
+                  <div className="text-center p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg">
+                    <div className="text-xl font-bold text-orange-600 mb-2">
+                      {Math.round(stats.actualTotalSubmaterials).toLocaleString('ru-RU')} ₽
+                    </div>
+                    <div className="text-sm text-gray-600">Субматериалы</div>
+                  </div>
+                </Col>
+                <Col xs={12} sm={6}>
+                  <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg">
+                    <div className="text-xl font-bold text-purple-600 mb-2">
+                      {Math.round(stats.actualTotalSubworks).toLocaleString('ru-RU')} ₽
+                    </div>
+                    <div className="text-sm text-gray-600">Субработы</div>
+                  </div>
+                </Col>
+              </Row>
+              <div className="text-center mt-6 p-4 bg-gray-50 rounded-lg">
+                <div className="text-sm text-gray-600 mb-2">Итого прямые затраты:</div>
+                <div className="text-2xl font-bold text-gray-800">
+                  {Math.round(stats.actualTotalCost).toLocaleString('ru-RU')} ₽
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+      ) : (
+        <div className="text-center max-w-2xl mx-auto">
+          <Card className="shadow-lg">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <div className="space-y-2">
+                  <Title level={4} className="text-gray-600">
+                    Выберите тендер для анализа финансовых показателей
+                  </Title>
+                  <Text type="secondary" className="text-base">
+                    Для работы с финансовыми показателями выберите тендер и версию в шапке страницы
+                  </Text>
+                </div>
+              }
             />
           </Card>
         </div>
-      ) : (
-        <Card 
-          style={{ 
-            borderRadius: 16,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            border: 'none',
-            textAlign: 'center',
-            padding: '40px 20px'
-          }}
-        >
-          <div style={{ opacity: 0.6 }}>
-            <LineChartOutlined style={{ fontSize: 48, color: '#bfbfbf', marginBottom: 16 }} />
-            <Title level={4} style={{ color: '#8c8c8c' }}>
-              Выберите тендер для анализа
-            </Title>
-            <Text type="secondary">
-              Для начала работы с финансовыми показателями выберите тендер из списка выше
-            </Text>
-          </div>
-        </Card>
       )}
       </div>
     </div>

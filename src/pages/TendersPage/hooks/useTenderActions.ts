@@ -140,19 +140,29 @@ export const useTenderActions = (
     setActionLoading(true);
 
     try {
-      const updates: TenderUpdate = {
-        title: values.title,
-        description: values.description,
-        client_name: values.client_name,
-        tender_number: values.tender_number,
-        submission_deadline: values.submission_deadline ? dayjs(values.submission_deadline).format('YYYY-MM-DD HH:mm:ss') : undefined,
-        version: values.version ?? 1,
-        area_sp: values.area_sp ?? null,
-        area_client: values.area_client ?? null
-        // Note: status and estimated_value fields removed from schema
-      };
+      // Build updates object with only defined values to avoid overwriting other fields
+      const updates: TenderUpdate = {};
+      
+      // Only add fields that are explicitly defined (not undefined)
+      if (values.title !== undefined) updates.title = values.title;
+      if (values.description !== undefined) updates.description = values.description;
+      if (values.client_name !== undefined) updates.client_name = values.client_name;
+      if (values.tender_number !== undefined) updates.tender_number = values.tender_number;
+      if (values.submission_deadline !== undefined) {
+        updates.submission_deadline = values.submission_deadline ? 
+          dayjs(values.submission_deadline).format('YYYY-MM-DD HH:mm:ss') : null;
+      }
+      if (values.version !== undefined) updates.version = values.version;
+      
+      // Handle area fields - only update if explicitly provided
+      if ('area_sp' in values) {
+        updates.area_sp = values.area_sp ?? null;
+      }
+      if ('area_client' in values) {
+        updates.area_client = values.area_client ?? null;
+      }
 
-      console.log('📡 Calling tendersApi.update...');
+      console.log('📡 Calling tendersApi.update with updates:', updates);
       const result = await tendersApi.update(tenderId, updates);
       
       console.log('📦 Update result:', result);

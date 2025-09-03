@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Card,
   Table,
@@ -18,7 +18,8 @@ import {
   InputNumber,
   Tag,
   Tooltip,
-  Input
+  Input,
+  Empty
 } from 'antd';
 import '../styles/tender-costs-theme.css';
 import {
@@ -36,10 +37,14 @@ import {
   InboxOutlined,
   ToolOutlined,
   TeamOutlined,
-  SettingOutlined
+  SettingOutlined,
+  FolderOpenOutlined,
+  DashboardOutlined
 } from '@ant-design/icons';
 import { supabase } from '../lib/supabase/client';
 import { getCategoriesWithDetails } from '../lib/supabase/api/construction-costs';
+import { useNavigate } from 'react-router-dom';
+import { formatQuantity } from '../utils/formatters';
 // import { FinancialIndicatorsTab } from '../components/financial/FinancialIndicatorsTab';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -51,6 +56,11 @@ interface Tender {
   id: string;
   title: string;
   tender_number: string;
+  client_name?: string;
+  version?: number;
+  area_sp?: number;
+  area_client?: number;
+  submission_deadline?: string;
 }
 
 interface DetailCostCategory {
@@ -102,10 +112,13 @@ interface TenderCostVolume {
 }
 
 const TenderConstructionCostsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tenders, setTenders] = useState<Tender[]>([]);
+  const [selectedTenderName, setSelectedTenderName] = useState<string | null>(null);
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
+  const [isContentVisible, setIsContentVisible] = useState(false);
   const [costCategories, setCostCategories] = useState<DetailCostCategory[]>([]);
   const [costsWithCalculations, setCostsWithCalculations] = useState<CostWithCalculation[]>([]);
   const [volumes, setVolumes] = useState<Record<string, number>>({});
@@ -128,6 +141,97 @@ const TenderConstructionCostsPage: React.FC = () => {
     actualTotalSubworks: 0,
     actualTotalCost: 0
   });
+
+  // Get unique tender names/titles
+  const uniqueTenderNames = useMemo(() => {
+    const nameMap = new Map<string, string>();
+    tenders.forEach(t => {
+      const key = `${t.title}___${t.client_name || ''}`;
+      const displayName = `${t.title} - ${t.client_name || 'Без заказчика'}`;
+      if (!nameMap.has(key)) {
+        nameMap.set(key, displayName);
+      }
+    });
+    return Array.from(nameMap.entries());
+  }, [tenders]);
+
+  // Get versions for currently selected tender name
+  const availableVersions = useMemo(() => {
+    if (!selectedTenderName) return [];
+    
+    const [title, clientName] = selectedTenderName.split('___');
+    
+    // Find all tenders with the same title and client
+    const sameTenders = tenders.filter(t => 
+      t.title === title && 
+      (t.client_name || '') === (clientName || '')
+    );
+    
+    // Get unique versions from these tenders
+    const versions = [...new Set(sameTenders.map(t => t.version || 1))];
+    return versions.sort((a, b) => a - b);
+  }, [selectedTenderName, tenders]);
+
+  // Get selected tender object
+  const selectedTender = useMemo(() => {
+    return tenders.find(t => t.id === selectedTenderId) || null;
+  }, [selectedTenderId, tenders]);
+
+  // Handle tender name selection (first step)
+  const handleTenderNameChange = useCallback((value: string) => {
+    console.log('🔄 Tender name selection changed:', value);
+    setSelectedTenderName(value);
+    setSelectedTenderId(null); // Reset tender ID when name changes
+    setIsContentVisible(false); // Hide content when changing tender name
+  }, []);
+
+  // Handle version selection (second step)
+  const handleVersionChange = useCallback((version: number) => {
+    console.log('🔄 Version selection changed:', version);
+    if (!selectedTenderName) return;
+    
+    // Find the tender with the selected name and version
+    const [title, clientName] = selectedTenderName.split('___');
+    const targetTender = tenders.find(t => 
+      t.title === title && 
+      (t.client_name || '') === (clientName || '') &&
+      (t.version || 1) === version
+    );
+    
+    if (targetTender) {
+      setSelectedTenderId(targetTender.id);
+      // Trigger animation after version is selected
+      setTimeout(() => setIsContentVisible(true), 100);
+    }
+  }, [selectedTenderName, tenders]);
+
+  // Navigate to tender details
+  const handleNavigateToTender = useCallback(() => {
+    if (selectedTenderId) {
+      navigate(`/tenders/${selectedTenderId}`);
+    }
+  }, [selectedTenderId, navigate]);
+
+  // Refresh data
+  const handleRefresh = useCallback(async () => {
+    setLoading(true);
+    message.loading('Обновление данных...', 0.5);
+    
+    // Hide content with animation
+    setIsContentVisible(false);
+    
+    // Reload after animation
+    setTimeout(async () => {
+      await loadTenders();
+      await loadCostCategories();
+      if (selectedTenderId) {
+        await loadTenderVolumes();
+        await calculateCosts();
+      }
+      setLoading(false);
+      setTimeout(() => setIsContentVisible(true), 100);
+    }, 300);
+  }, [selectedTenderId]);
 
   useEffect(() => {
     loadTenders();
@@ -181,7 +285,7 @@ const TenderConstructionCostsPage: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('tenders')
-        .select('id, title, tender_number')
+        .select('id, title, tender_number, client_name, version, area_sp, area_client, submission_deadline')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -1047,87 +1151,232 @@ const TenderConstructionCostsPage: React.FC = () => {
   ];
 
   return (
-    <>
-      <div style={{
-        background: 'linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-800) 100%)',
-        padding: 'var(--spacing-xl)',
-        borderRadius: 'var(--radius-xl)',
-        marginBottom: 'var(--spacing-xl)',
-        boxShadow: 'var(--shadow-modal)'
-      }}>
-        <Row align="middle" justify="space-between">
-          <Col>
-            <Title 
-              level={2} 
-              style={{ 
+    <div className="w-full min-h-full bg-gray-50">
+      <style>
+        {`
+          .tender-costs-header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
+            border-radius: 16px 16px 0 0;
+            margin-bottom: 0;
+            padding: 32px;
+            padding-bottom: 32px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+          }
+          .tender-costs-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: rotate 30s linear infinite;
+          }
+          @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .tender-costs-header > div {
+            position: relative;
+            z-index: 1;
+          }
+          .tender-action-buttons {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+          }
+          .tender-action-btn {
+            height: 42px;
+            padding: 0 24px;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+          }
+        `}
+      </style>
+      
+      {/* Header с градиентом и выбором тендера */}
+      <div className="tender-costs-header">
+        <div className="max-w-none">
+          {/* Title and buttons row */}
+          <div className="flex justify-between items-start mb-6">
+            <div className="flex-1">
+              <Title level={2} style={{ 
                 color: 'white', 
-                margin: 0,
-                fontSize: 'var(--font-size-2xl)',
-                fontWeight: 'var(--font-weight-bold)'
-              }}
-            >
-              <DollarOutlined style={{ marginRight: 'var(--spacing-sm)' }} /> 
-              Затраты тендера
-            </Title>
-            <Text style={{ 
-              color: 'rgba(255,255,255,0.9)', 
-              fontSize: 'var(--font-size-md)',
-              lineHeight: 'var(--line-height-normal)'
-            }}>
-              Распределение объемов и расчет затрат по категориям строительства
-            </Text>
-          </Col>
-          <Col>
-            <Button
-              className="action-button"
-              icon={<ReloadOutlined />}
-              onClick={calculateCosts}
-              size="large"
-              style={{ 
-                background: 'rgba(255, 255, 255, 0.95)',
-                borderColor: 'transparent',
-                fontWeight: 'var(--font-weight-semibold)',
-                color: 'var(--color-neutral-600)',
-                height: 48,
-                padding: '0 var(--spacing-lg)'
-              }}
-            >
-              Обновить данные
-            </Button>
-          </Col>
-        </Row>
+                margin: 0, 
+                marginBottom: 8,
+                fontSize: '28px',
+                fontWeight: 600
+              }}>
+                <DollarOutlined className="mr-3" style={{ fontSize: 24 }} />
+                Затраты тендера
+              </Title>
+              <Text style={{ 
+                color: 'rgba(255, 255, 255, 0.9)',
+                fontSize: '14px'
+              }}>
+                {selectedTender ? `Заказчик: ${selectedTender.client_name}` : 'Расчет затрат на основе категорий и объемов работ'}
+              </Text>
+            </div>
+            <div className="tender-action-buttons">
+              <Button
+                className="tender-action-btn"
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  color: 'white',
+                  borderColor: 'rgba(255, 255, 255, 0.3)',
+                  fontWeight: 500
+                }}
+                size="large"
+                icon={<FolderOpenOutlined />}
+                onClick={() => navigate('/tenders')}
+              >
+                К тендерам
+              </Button>
+              <Button
+                className="tender-action-btn"
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.95)',
+                  color: '#1890ff',
+                  borderColor: 'rgba(255, 255, 255, 0.3)',
+                  fontWeight: 600
+                }}
+                size="large"
+                icon={<ReloadOutlined />}
+                onClick={handleRefresh}
+                loading={loading}
+              >
+                Обновить
+              </Button>
+            </div>
+          </div>
+
+          {/* Tender Selection */}
+          <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
+            {/* Tender Selection - Left Side */}
+            <div className={`rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
+              <Row gutter={[16, 16]} align="middle">
+                <Col xs={24} lg={selectedTenderId ? 14 : 24}>
+                  <div className="flex flex-col gap-2">
+                    <div className={`flex flex-wrap items-center gap-2 transition-all duration-700 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
+                      <Text strong className="whitespace-nowrap" style={{ color: '#262626', cursor: 'default' }}>Тендер:</Text>
+                      <Select
+                        value={selectedTenderName}
+                        onChange={handleTenderNameChange}
+                        style={{ minWidth: '280px', maxWidth: '400px' }}
+                        placeholder="Выберите тендер"
+                        loading={loading}
+                        showSearch
+                        size="large"
+                        optionFilterProp="children"
+                        filterOption={(input, option) =>
+                          (option?.children as string).toLowerCase().includes(input.toLowerCase())
+                        }
+                      >
+                        {uniqueTenderNames.map(([key, displayName]) => (
+                          <Option key={key} value={key}>
+                            {displayName}
+                          </Option>
+                        ))}
+                      </Select>
+                      <Select
+                        value={selectedTender?.version || undefined}
+                        onChange={handleVersionChange}
+                        style={{ width: '160px' }}
+                        placeholder="Выберите версию"
+                        size="large"
+                        disabled={!selectedTenderName || availableVersions.length === 0}
+                      >
+                        {availableVersions.map(version => (
+                          <Option key={version} value={version}>
+                            Версия {version}
+                          </Option>
+                        ))}
+                      </Select>
+                    </div>
+                    {selectedTender && (
+                      <div className={`transition-all duration-700 ${!isContentVisible ? 'opacity-0' : 'opacity-100'}`}>
+                        <Button 
+                          type="link"
+                          onClick={handleNavigateToTender}
+                          icon={<DashboardOutlined />}
+                          size="small"
+                          className="whitespace-nowrap"
+                        >
+                          Детали тендера
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </Col>
+                {selectedTender && (
+                  <Col xs={24} lg={10} className={`transition-all duration-700 ${isContentVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
+                    <div className="flex flex-col justify-center gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-3">
+                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                          <strong>Название:</strong> {selectedTender.title}
+                        </span>
+                        <span className="text-gray-400" style={{ cursor: 'default' }}>|</span>
+                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                          <strong>Заказчик:</strong> {selectedTender.client_name}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-3">
+                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                          <strong>Площадь по СП:</strong> {selectedTender?.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}
+                        </span>
+                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                          <strong>Площадь Заказчика:</strong> {selectedTender?.area_client ? formatQuantity(selectedTender.area_client, 0) + ' м²' : '—'}
+                        </span>
+                      </div>
+                    </div>
+                  </Col>
+                )}
+              </Row>
+            </div>
+            
+            {/* Total Cost - Right Side */}
+            {selectedTenderId && (
+              <div className={`flex flex-col justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
+                <div>
+                  <Text className="text-sm text-gray-600 block mb-1" style={{ cursor: 'default' }}>Общая стоимость</Text>
+                  <div className="text-3xl font-bold text-green-700" style={{ cursor: 'default' }}>
+                    {Math.round(stats.actualTotalCost).toLocaleString('ru-RU')} ₽
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col span={24}>
-          <Card>
-            <Form layout="vertical">
-              <Form.Item label="Выберите тендер">
-                <Select
-                  placeholder="Выберите тендер для работы с затратами"
-                  value={selectedTenderId}
-                  onChange={setSelectedTenderId}
-                  size="large"
-                  showSearch
-                  filterOption={(input, option) =>
-                    (option?.children as string).toLowerCase().includes(input.toLowerCase())
-                  }
-                >
-                  {tenders.map(tender => (
-                    <Option key={tender.id} value={tender.id}>
-                      {tender.tender_number} - {tender.title}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Form>
-          </Card>
-        </Col>
-      </Row>
+      {/* Main Content */}
+      <div className="p-6 max-w-none">
 
-      {selectedTenderId && (
-        <>
-                    <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)' }}>
+      {/* Main Content */}
+      {!selectedTenderId ? (
+        <div className="text-center max-w-2xl mx-auto">
+          <Card className="shadow-lg">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <div className="space-y-2">
+                  <Title level={4} className="text-gray-600">
+                    Выберите тендер для анализа затрат
+                  </Title>
+                  <Text type="secondary" className="text-base">
+                    Для работы с затратами выберите тендер и версию в шапке страницы
+                  </Text>
+                </div>
+              }
+            />
+          </Card>
+        </div>
+      ) : (
+        <div className={`transition-all duration-700 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}>
+          <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)' }}>
                       <Card className="stats-card cost-type-materials" style={{ 
                         height: '100%', 
                         minHeight: '180px', 
@@ -1549,9 +1798,10 @@ const TenderConstructionCostsPage: React.FC = () => {
               }}
             />
           </Card>
-        </>
+        </div>
       )}
-    </>
+      </div>
+    </div>
   );
 };
 

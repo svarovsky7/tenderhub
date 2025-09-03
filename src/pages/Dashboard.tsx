@@ -25,14 +25,15 @@ import {
   FilterOutlined,
   EyeOutlined,
   EditOutlined,
+  DashboardOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 // Removed auth imports - no authentication needed
-import type { TenderStatus } from '../lib/supabase/types';
+// TenderStatus import removed - status field no longer exists in schema
 import { supabase } from '../lib/supabase/client';
 
 const { Title, Text } = Typography;
-const { Option } = Select;
+// Option removed since status Select was removed
 
 // Import API functions
 import { tendersApi } from '../lib/supabase/api';
@@ -59,7 +60,7 @@ const Dashboard: React.FC = () => {
     winRate: 0,
   });
   const [searchText, setSearchText] = useState('');
-  const [statusFilter, setStatusFilter] = useState<TenderStatus | 'all'>('all');
+  // Status filter removed - status field no longer exists in schema
   
   // No authentication needed - all features are available
   const navigate = useNavigate();
@@ -75,7 +76,7 @@ const Dashboard: React.FC = () => {
         });
 
         if (tendersResponse.data) {
-          // Load BOQ totals for each tender
+          // Load BOQ totals and area_sp for each tender
           const tendersWithBOQ = await Promise.all(
             tendersResponse.data.map(async (tender) => {
               // Get total cost from client_positions
@@ -90,7 +91,8 @@ const Dashboard: React.FC = () => {
 
               return {
                 ...tender,
-                boq_total_value: boqTotal
+                boq_total_value: boqTotal,
+                area_sp: tender.area_sp || 0
               };
             })
           );
@@ -99,9 +101,9 @@ const Dashboard: React.FC = () => {
 
           // Calculate stats including BOQ totals
           const totalTenders = tendersWithBOQ.length;
-          const activeTenders = tendersWithBOQ.filter(t => t.status === 'active').length;
-          const submittedTenders = tendersWithBOQ.filter(t => t.status === 'submitted').length;
-          const wonTenders = tendersWithBOQ.filter(t => t.status === 'awarded').length;
+          const activeTenders = 0; // Status field removed from schema
+          const submittedTenders = 0; // Status field removed from schema  
+          const wonTenders = 0; // Status field removed from schema
           const totalValue = tendersWithBOQ.reduce((sum, t) => sum + (t.boq_total_value || 0), 0);
           const winRate = totalTenders > 0 ? (wonTenders / totalTenders) * 100 : 0;
 
@@ -124,39 +126,7 @@ const Dashboard: React.FC = () => {
     loadDashboardData();
   }, []);
 
-  const getStatusColor = (status: TenderStatus): string => {
-    switch (status) {
-      case 'draft':
-        return 'default';
-      case 'active':
-        return 'processing';
-      case 'submitted':
-        return 'warning';
-      case 'awarded':
-        return 'success';
-      case 'closed':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
-
-  const getStatusText = (status: TenderStatus): string => {
-    switch (status) {
-      case 'draft':
-        return 'Черновик';
-      case 'active':
-        return 'Активен';
-      case 'submitted':
-        return 'Подан';
-      case 'awarded':
-        return 'Выигран';
-      case 'closed':
-        return 'Закрыт';
-      default:
-        return status;
-    }
-  };
+  // Status helper functions removed - status field no longer exists in schema
 
   const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat('ru-RU', {
@@ -170,8 +140,8 @@ const Dashboard: React.FC = () => {
     const matchesSearch = tender.title.toLowerCase().includes(searchText.toLowerCase()) ||
                          tender.client_name.toLowerCase().includes(searchText.toLowerCase()) ||
                          tender.tender_number.toLowerCase().includes(searchText.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || tender.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    // Status filtering disabled since status field removed from schema
+    return matchesSearch;
   });
 
   const columns = [
@@ -193,36 +163,31 @@ const Dashboard: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: 'Клиент',
+      title: 'Заказчик',
       dataIndex: 'client_name',
       key: 'client_name',
       width: 200,
       ellipsis: true,
     },
-    {
-      title: 'Статус',
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      render: (status: TenderStatus) => (
-        <Tag color={getStatusColor(status)}>
-          {getStatusText(status)}
-        </Tag>
-      ),
-    },
-    {
-      title: 'Оценочная стоимость',
-      dataIndex: 'estimated_value',
-      key: 'estimated_value',
-      width: 150,
-      render: (value: number) => formatCurrency(value),
-    },
+    // Status column removed - status field no longer exists in schema
     {
       title: 'BOQ стоимость',
       dataIndex: 'boq_total_value',
       key: 'boq_total_value',
       width: 150,
       render: (value: number | null) => value ? formatCurrency(value) : '-',
+    },
+    {
+      title: 'Стоимость за м²',
+      key: 'cost_per_sqm',
+      width: 140,
+      render: (_, record: any) => {
+        if (record.boq_total_value && record.area_sp && record.area_sp > 0) {
+          const costPerSqm = record.boq_total_value / record.area_sp;
+          return formatCurrency(costPerSqm);
+        }
+        return '-';
+      },
     },
     {
       title: 'Крайний срок',
@@ -267,94 +232,185 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="w-full min-h-full bg-gray-50">
-      {/* Welcome Section */}
-      <div className="bg-white px-6 py-6 border-b border-gray-200">
-        <div className="max-w-none">
-        <Title level={2} className="mb-2">
-          Добро пожаловать в TenderHub!
-        </Title>
-        <Text type="secondary">
-          Обзор ваших тендеров и основных показателей
-        </Text>
+    <>
+      <style>
+        {`
+          .dashboard-page-header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
+            border-radius: 16px;
+            margin-bottom: 24px;
+            padding: 32px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+          }
+          .dashboard-page-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: rotate 30s linear infinite;
+          }
+          @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .dashboard-action-buttons {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+          }
+          .dashboard-action-btn {
+            height: 42px;
+            padding: 0 24px;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+          }
+          .dashboard-action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          }
+          .dashboard-stats-container {
+            margin-top: 24px;
+          }
+          .dashboard-stats-container .ant-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+          }
+          .dashboard-stats-container .ant-statistic-title {
+            color: rgba(0, 0, 0, 0.65);
+            font-weight: 500;
+          }
+          .dashboard-stats-container .ant-statistic-content {
+            color: rgba(0, 0, 0, 0.85);
+          }
+        `}
+      </style>
+      <div className="w-full min-h-full bg-gray-50">
+        <div className="p-6">
+          {/* Beautiful Gradient Header */}
+          <div className="dashboard-page-header">
+            <div className="flex justify-between items-start">
+              <div className="flex items-center gap-4">
+                <div
+                  className="w-16 h-16 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(255,255,255,0.2)' }}
+                >
+                  <DashboardOutlined style={{ fontSize: 32, color: 'white' }} />
+                </div>
+                <div>
+                  <Title level={2} style={{ margin: 0, color: 'white', fontSize: 28 }}>
+                    Дашборд TenderHub
+                  </Title>
+                  <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>
+                    Обзор ваших тендеров и основных показателей
+                  </Text>
+                </div>
+              </div>
+              <div className="dashboard-action-buttons">
+                <Button
+                  className="dashboard-action-btn"
+                  style={{ 
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    color: '#1890ff',
+                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                    fontWeight: 600
+                  }}
+                  size="large"
+                  icon={<PlusOutlined />}
+                  onClick={() => navigate('/tenders/new')}
+                >
+                  Новый тендер
+                </Button>
+              </div>
+            </div>
+
+            {/* Statistics in Header */}
+            <div className="dashboard-stats-container">
+              <Row gutter={[16, 16]}>
+                <Col xs={24} sm={12} lg={6}>
+                  <Card>
+                    <Statistic
+                      title="Всего тендеров"
+                      value={stats.totalTenders}
+                      prefix={<FileTextOutlined />}
+                      valueStyle={{ color: '#1890ff' }}
+                    />
+                  </Card>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Card>
+                    <Statistic
+                      title="Активные тендеры"
+                      value={stats.activeTenders}
+                      prefix={<ClockCircleOutlined />}
+                      valueStyle={{ color: '#52c41a' }}
+                    />
+                  </Card>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Card>
+                    <Statistic
+                      title="Общая стоимость"
+                      value={stats.totalValue}
+                      prefix={<DollarOutlined />}
+                      formatter={(value) => formatCurrency(Number(value))}
+                      valueStyle={{ color: '#722ed1' }}
+                    />
+                  </Card>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Card>
+                    <Statistic
+                      title="Процент побед"
+                      value={stats.winRate}
+                      prefix={<TrophyOutlined />}
+                      suffix="%"
+                      valueStyle={{ color: '#fa8c16' }}
+                    />
+                    <Progress 
+                      percent={stats.winRate} 
+                      showInfo={false} 
+                      strokeColor="#fa8c16"
+                      size="small"
+                      className="mt-2"
+                    />
+                  </Card>
+                </Col>
+              </Row>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="p-6">
-        {/* Statistics Cards */}
-        <Row gutter={[16, 16]} className="mb-6">
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Всего тендеров"
-              value={stats.totalTenders}
-              prefix={<FileTextOutlined />}
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Активные тендеры"
-              value={stats.activeTenders}
-              prefix={<ClockCircleOutlined />}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Общая стоимость"
-              value={stats.totalValue}
-              prefix={<DollarOutlined />}
-              formatter={(value) => formatCurrency(Number(value))}
-              valueStyle={{ color: '#722ed1' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Процент побед"
-              value={stats.winRate}
-              prefix={<TrophyOutlined />}
-              suffix="%"
-              valueStyle={{ color: '#fa8c16' }}
-            />
-            <Progress 
-              percent={stats.winRate} 
-              showInfo={false} 
-              strokeColor="#fa8c16"
-              size="small"
-              className="mt-2"
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Recent Tenders */}
-      <Card
-        title="Последние тендеры"
-        extra={
-          <Space>
-            {(
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => navigate('/tenders/new')}
-              >
-                Создать тендер
-              </Button>
-            )}
-            <Button onClick={() => navigate('/tenders')}>
-              Все тендеры
-            </Button>
-          </Space>
-        }
-      >
+        {/* Main Content */}
+        <div className="max-w-none px-6">
+          {/* Recent Tenders */}
+          <Card
+            title="Последние тендеры"
+            extra={
+              <Space>
+                {(
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => navigate('/tenders/new')}
+                  >
+                    Создать тендер
+                  </Button>
+                )}
+                <Button onClick={() => navigate('/tenders')}>
+                  Все тендеры
+                </Button>
+              </Space>
+            }
+          >
         {/* Filters */}
         <div className="mb-4 flex flex-wrap gap-4">
           <Input
@@ -365,20 +421,7 @@ const Dashboard: React.FC = () => {
             style={{ width: 300 }}
             allowClear
           />
-          <Select
-            placeholder="Статус"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            style={{ width: 120 }}
-            suffixIcon={<FilterOutlined />}
-          >
-            <Option value="all">Все</Option>
-            <Option value="draft">Черновик</Option>
-            <Option value="active">Активен</Option>
-            <Option value="submitted">Подан</Option>
-            <Option value="awarded">Выигран</Option>
-            <Option value="closed">Закрыт</Option>
-          </Select>
+          {/* Status filter removed - status field no longer exists in schema */}
         </div>
 
         <Table
@@ -402,9 +445,10 @@ const Dashboard: React.FC = () => {
             ),
           }}
         />
-      </Card>
+          </Card>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

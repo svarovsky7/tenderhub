@@ -18,9 +18,16 @@ export const tendersApi = {
     pagination: PaginationOptions = {}
   ): Promise<PaginatedResponse<TenderWithSummary>> {
     try {
+      // Get tenders with client positions total cost
       let query = supabase
         .from('tenders')
-        .select('*', { count: 'exact' });
+        .select(`
+          *,
+          client_positions (
+            total_materials_cost,
+            total_works_cost
+          )
+        `, { count: 'exact' });
 
       // Apply filters
       // Note: status field removed from schema
@@ -57,10 +64,27 @@ export const tendersApi = {
         };
       }
 
+      // Calculate total BOQ value for each tender from client_positions
+      const tendersWithBOQValue = (data || []).map(tender => {
+        const clientPositions = (tender as any).client_positions || [];
+        const totalBOQValue = clientPositions.reduce((sum: number, pos: any) => {
+          const materialsCost = parseFloat(pos.total_materials_cost || 0);
+          const worksCost = parseFloat(pos.total_works_cost || 0);
+          return sum + materialsCost + worksCost;
+        }, 0);
+        
+        // Remove client_positions from the result and add boq_total_value
+        const { client_positions, ...tenderData } = tender as any;
+        return {
+          ...tenderData,
+          boq_total_value: totalBOQValue
+        } as TenderWithSummary;
+      });
+
       const { page = 1, limit = 20 } = pagination;
       
       return {
-        data: data || [],
+        data: tendersWithBOQValue,
         pagination: {
           page,
           limit,
@@ -80,7 +104,13 @@ export const tendersApi = {
     try {
       const { data, error } = await supabase
         .from('tenders')
-        .select('*')
+        .select(`
+          *,
+          client_positions (
+            total_materials_cost,
+            total_works_cost
+          )
+        `)
         .eq('id', id)
         .single();
 
@@ -90,8 +120,23 @@ export const tendersApi = {
         };
       }
 
+      // Calculate total BOQ value from client_positions
+      const clientPositions = (data as any).client_positions || [];
+      const totalBOQValue = clientPositions.reduce((sum: number, pos: any) => {
+        const materialsCost = parseFloat(pos.total_materials_cost || 0);
+        const worksCost = parseFloat(pos.total_works_cost || 0);
+        return sum + materialsCost + worksCost;
+      }, 0);
+      
+      // Remove client_positions from the result and add boq_total_value
+      const { client_positions, ...tenderData } = data as any;
+      const tenderWithBOQValue = {
+        ...tenderData,
+        boq_total_value: totalBOQValue
+      } as TenderWithSummary;
+
       return {
-        data: data as TenderWithSummary,
+        data: tenderWithBOQValue,
         message: 'Tender loaded successfully',
       };
     } catch (error) {
@@ -239,4 +284,10 @@ export const tendersApi = {
       };
     }
   },
+};
+
+// Legacy function for backward compatibility
+export const getTenders = async () => {
+  const result = await tendersApi.getAll();
+  return result.data || [];
 };

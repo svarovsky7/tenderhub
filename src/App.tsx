@@ -25,6 +25,7 @@ const TestCostSearchAuto = React.lazy(() => import('./pages/admin/TestCostSearch
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 const WorkMaterialsPage = React.lazy(() => import('./pages/WorkMaterialsPage'));
 const FinancialIndicatorsPage = React.lazy(() => import('./pages/FinancialIndicatorsPage'));
+const CommercialCostsPage = React.lazy(() => import('./pages/CommercialCostsPage'));
 const TestMarkupTable = React.lazy(() => import('./pages/admin/TestMarkupTable'));
 const MarkupTablesSetup = React.lazy(() => import('./pages/admin/MarkupTablesSetup'));
 const TenderMarkupPage = React.lazy(() => import('./pages/TenderMarkupPage'));
@@ -144,6 +145,16 @@ function App() {
               element={
                 <React.Suspense fallback={<div>Загрузка...</div>}>
                   <FinancialIndicatorsPage />
+                </React.Suspense>
+              } 
+            />
+
+            {/* Commercial Costs route */}
+            <Route 
+              path="commercial-costs" 
+              element={
+                <React.Suspense fallback={<div>Загрузка...</div>}>
+                  <CommercialCostsPage />
                 </React.Suspense>
               } 
             />

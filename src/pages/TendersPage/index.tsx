@@ -98,75 +98,154 @@ const TendersPage: React.FC = () => {
   });
 
   return (
-    <div className="w-full min-h-full bg-gray-50">
-      {/* Header */}
-      <div className="bg-white px-6 py-6 border-b border-gray-200">
-        <div className="max-w-none">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <Title level={2} className="mb-2">
-                <FolderOpenOutlined className="mr-2" />
-                Управление тендерами
-              </Title>
-              <Text type="secondary">
-                Создавайте, управляйте и отслеживайте тендерные проекты
-              </Text>
+    <>
+      <style>
+        {`
+          .tenders-page-header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
+            border-radius: 16px;
+            margin-bottom: 24px;
+            padding: 32px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+          }
+          .tenders-page-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: rotate 30s linear infinite;
+          }
+          @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .tenders-action-buttons {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+          }
+          .tenders-action-btn {
+            height: 42px;
+            padding: 0 24px;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+          }
+          .tenders-action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          }
+          .tenders-stats-container {
+            margin-top: 24px;
+          }
+          .tenders-stats-container .ant-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+          }
+          .tenders-stats-container .ant-statistic-title {
+            color: rgba(0, 0, 0, 0.65);
+            font-weight: 500;
+          }
+          .tenders-stats-container .ant-statistic-content {
+            color: rgba(0, 0, 0, 0.85);
+          }
+        `}
+      </style>
+      <div className="w-full min-h-full bg-gray-50">
+        <div className="p-6">
+          {/* Beautiful Gradient Header */}
+          <div className="tenders-page-header">
+            <div className="flex justify-between items-start">
+              <div className="flex items-center gap-4">
+                <div
+                  className="w-16 h-16 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(255,255,255,0.2)' }}
+                >
+                  <FolderOpenOutlined style={{ fontSize: 32, color: 'white' }} />
+                </div>
+                <div>
+                  <Title level={2} style={{ margin: 0, color: 'white', fontSize: 28 }}>
+                    Управление тендерами
+                  </Title>
+                  <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>
+                    Создание, отслеживание и анализ тендерных предложений
+                  </Text>
+                </div>
+              </div>
+              <div className="tenders-action-buttons">
+                <Button
+                  className="tenders-action-btn"
+                  style={{ 
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    color: '#1890ff',
+                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                    fontWeight: 600
+                  }}
+                  size="large"
+                  icon={<PlusOutlined />}
+                  onClick={showCreateModal}
+                >
+                  Новый тендер
+                </Button>
+              </div>
             </div>
-            <Button
-              type="primary"
-              size="large"
-              icon={<PlusOutlined />}
-              onClick={showCreateModal}
-            >
-              Новый тендер
-            </Button>
-          </div>
 
-          {/* Statistics */}
-          <TenderStats stats={stats} loading={loading} />
+            {/* Statistics in Header */}
+            <div className="tenders-stats-container">
+              <TenderStats stats={stats} loading={loading} />
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-none">
+          {/* Filters */}
+          <TenderFilters
+            filters={filters}
+            onSearch={handleSearch}
+            // onStatusFilter removed as status field was removed from schema
+            onDateFilter={handleDateFilter}
+            onFiltersChange={handleFiltersChange}
+          />
+
+          {/* Table */}
+          <TenderTable
+            tenders={tenders}
+            loading={loading}
+            pagination={pagination}
+            onTableChange={handleTableChange}
+            onViewTender={handleViewTender}
+            onEditTender={handleEditTenderFromTable}
+            onDeleteTender={handleDeleteTenderFromTable}
+            onExcelUpload={handleExcelUpload}
+          />
+
+          {/* Modals */}
+          <CreateTenderModal
+            visible={createModalVisible}
+            loading={actionLoading}
+            onCancel={hideCreateModal}
+            onSubmit={handleCreateTender}
+          />
+
+          <DeleteTenderModal
+            visible={deleteModalVisible}
+            loading={deleteLoading}
+            tenderToDelete={tenderToDelete}
+            onCancel={hideDeleteModal}
+            onConfirm={handleDeleteTender}
+          />
         </div>
       </div>
-
-      {/* Main Content */}
-      <div className="p-6 max-w-none">
-        {/* Filters */}
-        <TenderFilters
-          filters={filters}
-          onSearch={handleSearch}
-          // onStatusFilter removed as status field was removed from schema
-          onDateFilter={handleDateFilter}
-          onFiltersChange={handleFiltersChange}
-        />
-
-        {/* Table */}
-        <TenderTable
-          tenders={tenders}
-          loading={loading}
-          pagination={pagination}
-          onTableChange={handleTableChange}
-          onViewTender={handleViewTender}
-          onEditTender={handleEditTenderFromTable}
-          onDeleteTender={handleDeleteTenderFromTable}
-          onExcelUpload={handleExcelUpload}
-        />
-
-        {/* Modals */}
-        <CreateTenderModal
-          visible={createModalVisible}
-          loading={actionLoading}
-          onCancel={hideCreateModal}
-          onSubmit={handleCreateTender}
-        />
-
-        <DeleteTenderModal
-          visible={deleteModalVisible}
-          loading={deleteLoading}
-          tenderToDelete={tenderToDelete}
-          onCancel={hideDeleteModal}
-          onConfirm={handleDeleteTender}
-        />
-      </div>
-    </div>
+    </>
   );
 };
 

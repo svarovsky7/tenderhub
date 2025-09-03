@@ -16,13 +16,14 @@ import {
 } from 'antd';
 import { 
   PlusOutlined, 
-  FileTextOutlined,
+  DollarOutlined,
   ReloadOutlined,
   FolderOpenOutlined,
-  DashboardOutlined
+  DashboardOutlined,
+  PercentageOutlined
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import TenderBOQManagerSimplified from '../components/tender/TenderBOQManagerSimplified';
+import TenderCommercialManager from '../components/tender/TenderCommercialManager';
 import DeadlineStatusBar from '../components/tender/DeadlineStatusBar';
 import { tendersApi } from '../lib/supabase/api';
 import type { Tender } from '../lib/supabase/types';
@@ -32,8 +33,8 @@ import dayjs from 'dayjs';
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-const BOQPageSimplified: React.FC = () => {
-  console.log('🚀 BOQPageSimplified component rendered');
+const CommercialCostsPage: React.FC = () => {
+  console.log('🚀 CommercialCostsPage component rendered');
   
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -43,11 +44,12 @@ const BOQPageSimplified: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [tendersLoading, setTendersLoading] = useState(false);
   const [isContentVisible, setIsContentVisible] = useState(false);
-  const [boqStats, setBOQStats] = useState({
-    totalWorks: 0,
-    totalMaterials: 0,
-    totalCost: 0,
-    positionsCount: 0
+  const [commercialStats, setCommercialStats] = useState({
+    totalBaseCost: 0,
+    totalCommercialCost: 0,
+    totalMarkup: 0,
+    positions: 0,
+    markupPercentage: 0
   });
 
   // Load all tenders for selection
@@ -73,7 +75,6 @@ const BOQPageSimplified: React.FC = () => {
         const foundTender = result.data?.find(t => t.id === tenderParam);
         if (foundTender) {
           console.log('🎯 Auto-selecting tender from URL parameter:', tenderParam);
-          // Set both ID and name for proper display
           setSelectedTenderId(tenderParam);
           const tenderNameKey = `${foundTender.title}___${foundTender.client_name}`;
           setSelectedTenderName(tenderNameKey);
@@ -81,7 +82,6 @@ const BOQPageSimplified: React.FC = () => {
           setTimeout(() => setIsContentVisible(true), 100);
         }
       }
-      // Removed auto-selection of first tender - user must explicitly choose
     } catch (error) {
       console.error('💥 Exception loading tenders:', error);
       message.error('Ошибка загрузки тендеров');
@@ -98,8 +98,8 @@ const BOQPageSimplified: React.FC = () => {
   const handleTenderNameChange = useCallback((value: string) => {
     console.log('🔄 Tender name selection changed:', value);
     setSelectedTenderName(value);
-    setSelectedTenderId(null); // Reset tender ID when name changes
-    setIsContentVisible(false); // Hide content when changing tender name
+    setSelectedTenderId(null);
+    setIsContentVisible(false);
   }, []);
 
   // Handle version selection (second step)
@@ -107,7 +107,6 @@ const BOQPageSimplified: React.FC = () => {
     console.log('🔄 Version selection changed:', version);
     if (!selectedTenderName) return;
     
-    // Find the tender with the selected name and version
     const [title, clientName] = selectedTenderName.split('___');
     const targetTender = tenders.find(t => 
       t.title === title && 
@@ -117,7 +116,6 @@ const BOQPageSimplified: React.FC = () => {
     
     if (targetTender) {
       setSelectedTenderId(targetTender.id);
-      // Trigger animation after version is selected
       setTimeout(() => setIsContentVisible(true), 100);
     }
   }, [selectedTenderName, tenders]);
@@ -140,33 +138,17 @@ const BOQPageSimplified: React.FC = () => {
     if (!selectedTenderName) return [];
     
     const [title, clientName] = selectedTenderName.split('___');
-    
-    // Find all tenders with the same title and client
     const sameTenders = tenders.filter(t => 
       t.title === title && 
       t.client_name === clientName
     );
     
-    // Get unique versions from these tenders
     const versions = new Set(sameTenders.map(t => t.version || 1));
-    return Array.from(versions).sort((a, b) => b - a); // Sort descending
+    return Array.from(versions).sort((a, b) => b - a);
   }, [tenders, selectedTenderName]);
-
 
   const selectedTender = tenders.find(t => t.id === selectedTenderId);
   
-  // Log for debugging
-  React.useEffect(() => {
-    if (selectedTenderId) {
-      console.log('🔍 BOQ Page - Debug info:', {
-        selectedTenderId,
-        tendersCount: tenders.length,
-        selectedTender: selectedTender || 'NOT FOUND',
-        allTenderIds: tenders.map(t => t.id)
-      });
-    }
-  }, [selectedTenderId, tenders, selectedTender]);
-
   const handleRefresh = useCallback(() => {
     if (!selectedTenderId) {
       console.log('❌ No tender selected for refresh');
@@ -178,23 +160,17 @@ const BOQPageSimplified: React.FC = () => {
     setLoading(true);
     message.loading('Обновление данных...', 0.5);
     
-    // Hide content with animation
-    console.log('🎬 Hiding content...');
     setIsContentVisible(false);
     
-    // Force reload the TenderBOQManagerSimplified component by changing its key
     setTimeout(() => {
       const currentId = selectedTenderId;
-      console.log('🔧 Unmounting component by clearing tenderId');
       setSelectedTenderId(null);
       
       setTimeout(() => {
-        console.log('🔄 Remounting component with tenderId:', currentId);
         setSelectedTenderId(currentId);
         setIsContentVisible(true);
         setLoading(false);
         message.success('Данные обновлены');
-        console.log('✅ Refresh completed');
       }, 100);
     }, 300);
   }, [selectedTenderId]);
@@ -206,13 +182,20 @@ const BOQPageSimplified: React.FC = () => {
     }
   }, [selectedTenderId, navigate]);
 
-  const handleUpdateStats = useCallback((stats: { works: number; materials: number; total: number; positions: number }) => {
-    console.log('📊 Updating stats:', stats);
-    setBOQStats({
-      totalWorks: stats.works,
-      totalMaterials: stats.materials,
-      totalCost: stats.total,
-      positionsCount: stats.positions
+  const handleUpdateStats = useCallback((stats: { 
+    totalBaseCost: number; 
+    totalCommercialCost: number; 
+    totalMarkup: number; 
+    positions: number 
+  }) => {
+    console.log('📊 Updating commercial stats:', stats);
+    const markupPercentage = stats.totalBaseCost > 0 
+      ? ((stats.totalCommercialCost - stats.totalBaseCost) / stats.totalBaseCost) * 100 
+      : 0;
+      
+    setCommercialStats({
+      ...stats,
+      markupPercentage
     });
   }, []);
 
@@ -220,7 +203,7 @@ const BOQPageSimplified: React.FC = () => {
     <>
       <style>
         {`
-          .boq-page-header {
+          .commercial-page-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
             border-radius: 16px 16px 0 0;
             margin-bottom: 0;
@@ -230,7 +213,7 @@ const BOQPageSimplified: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
-          .boq-page-header::before {
+          .commercial-page-header::before {
             content: '';
             position: absolute;
             top: -50%;
@@ -244,19 +227,19 @@ const BOQPageSimplified: React.FC = () => {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
           }
-          .boq-action-buttons {
+          .commercial-action-buttons {
             display: flex;
             gap: 12px;
             align-items: center;
           }
-          .boq-action-btn {
+          .commercial-action-btn {
             height: 42px;
             padding: 0 24px;
             border-radius: 8px;
             font-size: 15px;
             transition: all 0.3s ease;
           }
-          .boq-action-btn:hover {
+          .commercial-action-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           }
@@ -272,28 +255,28 @@ const BOQPageSimplified: React.FC = () => {
       >
         <div className="w-full min-h-full bg-gray-50">
           <div className="p-6">
-            {/* Beautiful Gradient Header */}
-            <div className="boq-page-header" style={{ borderRadius: '16px' }}>
+            {/* Header */}
+            <div className="commercial-page-header" style={{ borderRadius: '16px' }}>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-4">
                   <div
                     className="w-16 h-16 rounded-full flex items-center justify-center"
                     style={{ background: 'rgba(255,255,255,0.2)' }}
                   >
-                    <FileTextOutlined style={{ fontSize: 32, color: 'white' }} />
+                    <DollarOutlined style={{ fontSize: 32, color: 'white' }} />
                   </div>
                   <div>
                     <Title level={2} style={{ margin: 0, color: 'white', fontSize: 28 }}>
-                      {selectedTender ? selectedTender.title : 'Управление сметой (BOQ)'}
+                      {selectedTender ? selectedTender.title : 'Коммерческие стоимости'}
                     </Title>
                     <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>
-                      {selectedTender ? `Заказчик: ${selectedTender.client_name}` : 'Позиции заказчика и детализация сметы'}
+                      {selectedTender ? `Заказчик: ${selectedTender.client_name}` : 'Анализ базовых и коммерческих стоимостей позиций'}
                     </Text>
                   </div>
                 </div>
-                <div className="boq-action-buttons">
+                <div className="commercial-action-buttons">
                   <Button
-                    className="boq-action-btn"
+                    className="commercial-action-btn"
                     style={{ 
                       background: 'rgba(255, 255, 255, 0.2)',
                       color: 'white',
@@ -307,7 +290,7 @@ const BOQPageSimplified: React.FC = () => {
                     К тендерам
                   </Button>
                   <Button
-                    className="boq-action-btn"
+                    className="commercial-action-btn"
                     style={{ 
                       background: 'rgba(255, 255, 255, 0.95)',
                       color: '#1890ff',
@@ -324,9 +307,9 @@ const BOQPageSimplified: React.FC = () => {
                 </div>
               </div>
 
-              {/* Tender Selection and Total Cost */}
+              {/* Tender Selection and Commercial Stats */}
               <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
-                {/* Tender Selection - Left Side */}
+                {/* Tender Selection */}
                 <div className={`rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
                   <Row gutter={[16, 16]} align="middle">
                     <Col xs={24} lg={selectedTenderId ? 14 : 24}>
@@ -408,20 +391,40 @@ const BOQPageSimplified: React.FC = () => {
                   </Row>
                 </div>
                 
-                {/* Total Cost - Right Side */}
+                {/* Commercial Summary */}
                 {selectedTenderId && (
-                  <div className={`flex flex-col justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
-                    <div>
-                      <Text className="text-sm text-gray-600 block mb-1" style={{ cursor: 'default' }}>Общая стоимость</Text>
-                      <div className="text-3xl font-bold text-green-700" style={{ cursor: 'default' }}>
-                        {Math.round(boqStats.totalCost).toLocaleString('ru-RU')} ₽
-                      </div>
-                    </div>
+                  <div className={`flex justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
+                    <Row gutter={[16, 8]} justify="center" align="middle">
+                      <Col>
+                        <div className="text-center">
+                          <Text className="text-xs text-gray-600 block" style={{ cursor: 'default' }}>Базовая стоимость</Text>
+                          <div className="text-lg font-bold text-blue-600" style={{ cursor: 'default' }}>
+                            {Math.round(commercialStats.totalBaseCost).toLocaleString('ru-RU')} ₽
+                          </div>
+                        </div>
+                      </Col>
+                      <Col>
+                        <div className="text-center">
+                          <Text className="text-xs text-gray-600 block" style={{ cursor: 'default' }}>Коммерческая</Text>
+                          <div className="text-lg font-bold text-green-600" style={{ cursor: 'default' }}>
+                            {Math.round(commercialStats.totalCommercialCost).toLocaleString('ru-RU')} ₽
+                          </div>
+                        </div>
+                      </Col>
+                      <Col>
+                        <div className="text-center">
+                          <Text className="text-xs text-gray-600 block" style={{ cursor: 'default' }}>Наценка</Text>
+                          <div className="text-lg font-bold text-orange-600" style={{ cursor: 'default' }}>
+                            +{commercialStats.markupPercentage.toFixed(1)}%
+                          </div>
+                        </div>
+                      </Col>
+                    </Row>
                   </div>
                 )}
               </div>
               
-              {/* Deadline Status Bar - integrated into header */}
+              {/* Deadline Status Bar */}
               {selectedTenderId && selectedTender && (
                 <div className={`mt-4 -mx-8 -mb-8 transition-all duration-700 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}>
                   <DeadlineStatusBar 
@@ -442,13 +445,13 @@ const BOQPageSimplified: React.FC = () => {
                   <div className="space-y-3">
                     <div>
                       <Text className="text-xl font-semibold text-gray-800 block">
-                        {tendersLoading ? "Загрузка тендеров..." : "Выберите тендер для начала работы"}
+                        {tendersLoading ? "Загрузка тендеров..." : "Выберите тендер для анализа коммерческих стоимостей"}
                       </Text>
                     </div>
                     {!tendersLoading && (
                       <div>
                         <Text className="text-base text-gray-500 block">
-                          Выберите тендер из списка выше для просмотра и управления сметой
+                          Выберите тендер из списка выше для просмотра базовых и коммерческих стоимостей
                         </Text>
                       </div>
                     )}
@@ -473,7 +476,7 @@ const BOQPageSimplified: React.FC = () => {
         {selectedTenderId && (
           <div className={`p-4 lg:p-6 transition-all duration-1000 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}>
             <div className={`w-full transition-all duration-1000 transform ${isContentVisible ? 'translate-y-0' : 'translate-y-10'}`}>
-              <TenderBOQManagerSimplified 
+              <TenderCommercialManager 
                 tenderId={selectedTenderId} 
                 key={selectedTenderId}
                 onStatsUpdate={handleUpdateStats}
@@ -487,4 +490,4 @@ const BOQPageSimplified: React.FC = () => {
   );
 };
 
-export default React.memo(BOQPageSimplified);
+export default React.memo(CommercialCostsPage);

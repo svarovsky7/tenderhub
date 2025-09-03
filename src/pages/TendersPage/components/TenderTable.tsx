@@ -16,7 +16,8 @@ import {
   InputNumber,
   Row,
   Col,
-  Divider
+  Divider,
+  message
 } from 'antd';
 import {
   PlusOutlined,
@@ -26,12 +27,15 @@ import {
   FolderOpenOutlined,
   CalendarOutlined,
   DollarOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  CheckOutlined,
+  CloseOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import ExcelUpload from './ExcelUpload';
+import EditableCell from './EditableCell';
 // Note: status-related imports removed as status field was removed from schema
 import type { TenderTableProps, TenderWithSummary } from '../types';
 
@@ -51,7 +55,6 @@ const TenderTable: React.FC<TenderTableProps> = ({
   console.log('📊 Tenders count:', tenders.length);
   console.log('📄 Pagination:', pagination);
 
-  const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [form] = Form.useForm();
 
@@ -63,11 +66,27 @@ const TenderTable: React.FC<TenderTableProps> = ({
   const handleEditTender = (tender: TenderWithSummary) => {
     console.log('✏️ Edit tender clicked:', tender.id);
     setEditingKey(tender.id!);
-    setExpandedRowKeys([tender.id!]);
     form.setFieldsValue({
       ...tender,
-      submission_deadline: tender.submission_deadline ? dayjs(tender.submission_deadline) : null
+      submission_deadline: tender.submission_deadline ? dayjs(tender.submission_deadline) : null,
+      version: tender.version || 1
     });
+  };
+
+  const handleInlineEdit = async (tenderId: string, field: string, value: any) => {
+    console.log('🔄 Inline edit:', { tenderId, field, value });
+    try {
+      const updates = {
+        id: tenderId,
+        [field]: value
+      };
+      await onEditTender(updates);
+      message.success('Изменения сохранены');
+    } catch (error) {
+      console.error('❌ Inline edit failed:', error);
+      message.error('Ошибка сохранения');
+      throw error;
+    }
   };
 
   const handleSaveEdit = async (record: TenderWithSummary) => {
@@ -83,16 +102,16 @@ const TenderTable: React.FC<TenderTableProps> = ({
       
       await onEditTender(updates);
       setEditingKey(null);
-      setExpandedRowKeys([]);
       form.resetFields();
+      message.success('Изменения сохранены');
     } catch (error) {
       console.error('❌ Edit validation failed:', error);
+      message.error('Ошибка сохранения');
     }
   };
 
   const handleCancelEdit = () => {
     setEditingKey(null);
-    setExpandedRowKeys([]);
     form.resetFields();
   };
 
@@ -116,61 +135,173 @@ const TenderTable: React.FC<TenderTableProps> = ({
     {
       title: 'Тендер',
       key: 'tender',
-      render: (_, record) => (
-        <div className="flex items-start gap-3">
-          <Avatar 
-            size="large" 
-            icon={<FolderOpenOutlined />}
-            className="bg-blue-500 flex-shrink-0"
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <Text 
-                strong 
-                className="cursor-pointer hover:text-blue-600 transition-colors"
-                onClick={() => handleViewTender(record)}
-              >
-                {record.title}
-              </Text>
-              <Tag color="blue" size="small">
-                v{record.version || 1}
-              </Tag>
+      render: (_, record) => {
+        const isEditing = editingKey === record.id;
+        
+        if (isEditing) {
+          return (
+            <div className="flex items-start gap-3">
+              <Avatar 
+                size="large" 
+                icon={<FolderOpenOutlined />}
+                className="bg-blue-500 flex-shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <Form.Item
+                    name="title"
+                    style={{ margin: 0, flex: 1, minWidth: '150px' }}
+                  >
+                    <Input
+                      placeholder="Название тендера"
+                      style={{ fontWeight: 600 }}
+                    />
+                  </Form.Item>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Text type="secondary" className="text-sm">v</Text>
+                    <Form.Item
+                      name="version"
+                      style={{ margin: 0, width: '50px' }}
+                    >
+                      <InputNumber
+                        min={1}
+                        placeholder="1"
+                        size="small"
+                        style={{ width: '100%' }}
+                      />
+                    </Form.Item>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <Text type="secondary" className="text-sm flex-shrink-0">№</Text>
+                    <Form.Item
+                      name="tender_number"
+                      style={{ margin: 0 }}
+                    >
+                      <Input
+                        size="small"
+                        style={{ width: '110px', fontSize: '12px' }}
+                        placeholder="T-2024-001"
+                      />
+                    </Form.Item>
+                  </div>
+                  <Text type="secondary" className="text-sm">•</Text>
+                  <Form.Item
+                    name="client_name"
+                    style={{ margin: 0, flex: 1, minWidth: '120px' }}
+                  >
+                    <Input
+                      size="small"
+                      style={{ fontSize: '12px' }}
+                      placeholder="Название заказчика"
+                    />
+                  </Form.Item>
+                </div>
+              </div>
             </div>
-            <Text type="secondary" className="text-sm block">
-              №{record.tender_number} • {record.client_name}
-            </Text>
+          );
+        }
+        
+        return (
+          <div className="flex items-start gap-3">
+            <Avatar 
+              size="large" 
+              icon={<FolderOpenOutlined />}
+              className="bg-blue-500 flex-shrink-0"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Text 
+                  strong 
+                  className="cursor-pointer hover:text-blue-600 transition-colors"
+                  onClick={() => handleViewTender(record)}
+                >
+                  {record.title}
+                </Text>
+                <Tag color="blue" size="small">
+                  v{record.version || 1}
+                </Tag>
+              </div>
+              <Text type="secondary" className="text-sm">
+                №{record.tender_number || '—'} • {record.client_name || '—'}
+              </Text>
+            </div>
           </div>
-        </div>
-      ),
-      width: 300
+        );
+      },
+      width: 380
     },
     {
-      title: 'Дедлайн',
+      title: <div className="text-center">Создан</div>,
+      dataIndex: 'created_at',
+      key: 'created',
+      width: 100,
+      align: 'center' as const,
+      render: (created) => (
+        <div className="text-center">
+          <ClockCircleOutlined className="mb-1 block text-gray-400" />
+          <Text type="secondary" className="text-xs">
+            {dayjs(created).format('DD.MM.YYYY')}
+          </Text>
+        </div>
+      ),
+      sorter: (a, b) => dayjs(a.created_at).unix() - dayjs(b.created_at).unix()
+    },
+    {
+      title: <div className="text-center">Дедлайн</div>,
       dataIndex: 'submission_deadline',
       key: 'deadline',
-      width: 120,
-      render: (deadline) => {
-        if (!deadline) return '-';
+      width: 140,
+      align: 'center' as const,
+      render: (deadline, record) => {
+        const isEditing = editingKey === record.id;
+        const date = deadline ? dayjs(deadline) : null;
+        const isOverdue = date && date.isBefore(dayjs());
+        const isNear = date && date.diff(dayjs(), 'days') <= 3;
         
-        const date = dayjs(deadline);
-        const isOverdue = date.isBefore(dayjs());
-        const isNear = date.diff(dayjs(), 'days') <= 3;
+        // Show Form.Item in edit mode, otherwise show EditableCell for inline editing
+        if (isEditing) {
+          return (
+            <div className="text-center">
+              <CalendarOutlined className="mb-1 block text-gray-400" />
+              <Form.Item
+                name="submission_deadline"
+                style={{ margin: 0 }}
+              >
+                <DatePicker
+                  showTime
+                  format="DD.MM.YYYY HH:mm"
+                  style={{ width: '100%', maxWidth: '160px' }}
+                  placeholder="Дата и время"
+                  size="small"
+                />
+              </Form.Item>
+            </div>
+          );
+        }
         
         return (
           <div className={`text-center ${isOverdue ? 'text-red-500' : isNear ? 'text-orange-500' : ''}`}>
             <CalendarOutlined className="mb-1 block" />
-            <Text className={`text-xs block ${isOverdue ? 'text-red-500' : isNear ? 'text-orange-500' : ''}`}>
-              {date.format('DD.MM.YYYY')}
-            </Text>
+            <EditableCell
+              value={deadline}
+              type="date"
+              onChange={(value) => handleInlineEdit(record.id!, 'submission_deadline', value)}
+              formatter={(val) => val ? dayjs(val).format('DD.MM.YYYY') : '—'}
+              className={`text-xs ${isOverdue ? 'text-red-500' : isNear ? 'text-orange-500' : ''}`}
+              showEditIcon={false}
+            />
           </div>
         );
       },
       sorter: (a, b) => dayjs(a.submission_deadline || 0).unix() - dayjs(b.submission_deadline || 0).unix()
     },
     {
-      title: 'ВОР Стоимость',
+      title: <div className="text-center">Стоимость позиций</div>,
       key: 'boq_value',
-      width: 120,
+      width: 140,
+      align: 'center' as const,
       render: (_, record) => (
         <div className="text-center">
           <DollarOutlined className="mb-1 block text-green-500" />
@@ -187,52 +318,105 @@ const TenderTable: React.FC<TenderTableProps> = ({
       ),
       sorter: (a, b) => (a.boq_total_value || 0) - (b.boq_total_value || 0)
     },
-    // Conditionally add Area SP column
-    ...(hasAreaSP ? [{
-      title: 'Площадь по СП',
+    {
+      title: <div className="text-center">Площадь по СП</div>,
       key: 'area_sp',
       width: 120,
-      render: (_, record) => (
-        <div className="text-center">
-          <Text className="text-xs text-gray-500 block mb-1">м²</Text>
-          {record.area_sp ? (
-            <Text strong className="text-sm block">
-              {record.area_sp.toLocaleString('ru-RU')}
-            </Text>
-          ) : (
-            <Text type="secondary" className="text-sm block">
-              —
-            </Text>
-          )}
-        </div>
-      ),
+      align: 'center' as const,
+      render: (_, record) => {
+        const isEditing = editingKey === record.id;
+        
+        // Show Form.Item in edit mode, otherwise show EditableCell for inline editing
+        if (isEditing) {
+          return (
+            <div className="text-center px-1">
+              <Form.Item
+                name="area_sp"
+                style={{ margin: 0 }}
+              >
+                <InputNumber
+                  style={{ width: '100%', maxWidth: '110px' }}
+                  placeholder="0"
+                  suffix="м²"
+                  precision={2}
+                  min={0}
+                  size="small"
+                />
+              </Form.Item>
+            </div>
+          );
+        }
+        
+        return (
+          <div className="text-center">
+            <EditableCell
+              value={record.area_sp}
+              type="number"
+              onChange={(value) => handleInlineEdit(record.id!, 'area_sp', value)}
+              formatter={(val) => val ? `${val.toLocaleString('ru-RU')} м²` : '—'}
+              suffix="м²"
+              precision={2}
+              min={0}
+              className="text-sm font-semibold"
+              showEditIcon={false}
+            />
+          </div>
+        );
+      },
       sorter: (a, b) => (a.area_sp || 0) - (b.area_sp || 0)
-    }] : []),
-    // Conditionally add Area Client column
-    ...(hasAreaClient ? [{
-      title: 'Площадь от Заказчика',
+    },
+    {
+      title: <div className="text-center">Площадь от Заказчика</div>,
       key: 'area_client', 
       width: 140,
-      render: (_, record) => (
-        <div className="text-center">
-          <Text className="text-xs text-gray-500 block mb-1">м²</Text>
-          {record.area_client ? (
-            <Text strong className="text-sm block">
-              {record.area_client.toLocaleString('ru-RU')}
-            </Text>
-          ) : (
-            <Text type="secondary" className="text-sm block">
-              —
-            </Text>
-          )}
-        </div>
-      ),
+      align: 'center' as const,
+      render: (_, record) => {
+        const isEditing = editingKey === record.id;
+        
+        // Show Form.Item in edit mode, otherwise show EditableCell for inline editing
+        if (isEditing) {
+          return (
+            <div className="text-center px-1">
+              <Form.Item
+                name="area_client"
+                style={{ margin: 0 }}
+              >
+                <InputNumber
+                  style={{ width: '100%', maxWidth: '110px' }}
+                  placeholder="0"
+                  suffix="м²"
+                  precision={2}
+                  min={0}
+                  size="small"
+                />
+              </Form.Item>
+            </div>
+          );
+        }
+        
+        return (
+          <div className="text-center">
+            <EditableCell
+              value={record.area_client}
+              type="number"
+              onChange={(value) => handleInlineEdit(record.id!, 'area_client', value)}
+              formatter={(val) => val ? `${val.toLocaleString('ru-RU')} м²` : '—'}
+              suffix="м²"
+              precision={2}
+              min={0}
+              className="text-sm font-semibold"
+              showEditIcon={false}
+            />
+          </div>
+        );
+      },
       sorter: (a, b) => (a.area_client || 0) - (b.area_client || 0)
-    }] : []),
+    },
     {
-      title: 'Прогресс',
+      title: <div className="text-center">Прогресс</div>,
       key: 'progress',
       width: 120,
+      align: 'center' as const,
       render: (_, record) => {
         const progress = 75; // Temporarily hardcoded until backend supports this field
         const itemsCount = record.total_items || 0;
@@ -254,25 +438,66 @@ const TenderTable: React.FC<TenderTableProps> = ({
       }
     },
     {
-      title: 'Создан',
-      dataIndex: 'created_at',
-      key: 'created',
-      width: 100,
-      render: (created) => (
-        <div className="text-center">
-          <ClockCircleOutlined className="mb-1 block text-gray-400" />
-          <Text type="secondary" className="text-xs">
-            {dayjs(created).format('DD.MM.YYYY')}
+      title: <div className="text-center">Описание</div>,
+      dataIndex: 'description',
+      key: 'description',
+      width: 200,
+      align: 'center' as const,
+      render: (description, record) => {
+        const isEditing = editingKey === record.id;
+        
+        if (isEditing) {
+          return (
+            <Form.Item
+              name="description"
+              style={{ margin: 0 }}
+            >
+              <Input.TextArea
+                rows={2}
+                placeholder="Описание тендера"
+                style={{ fontSize: '12px' }}
+              />
+            </Form.Item>
+          );
+        }
+        
+        return (
+          <Text className="text-xs" style={{ display: 'block' }}>
+            {description || '—'}
           </Text>
-        </div>
-      ),
-      sorter: (a, b) => dayjs(a.created_at).unix() - dayjs(b.created_at).unix()
+        );
+      }
     },
     {
-      title: 'Действия',
+      title: <div className="text-center">Действия</div>,
       key: 'actions',
       width: 150,
+      align: 'center' as const,
       render: (_, record) => {
+        const isEditing = editingKey === record.id;
+        
+        if (isEditing) {
+          return (
+            <Space size="small">
+              <Tooltip title="Сохранить">
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<CheckOutlined />}
+                  onClick={() => handleSaveEdit(record)}
+                />
+              </Tooltip>
+              <Tooltip title="Отмена">
+                <Button
+                  size="small"
+                  icon={<CloseOutlined />}
+                  onClick={handleCancelEdit}
+                />
+              </Tooltip>
+            </Space>
+          );
+        }
+        
         return (
           <Space size="small">
             <ExcelUpload 
@@ -315,160 +540,25 @@ const TenderTable: React.FC<TenderTableProps> = ({
     }
   ];
 
-  // Expandable row render function for inline editing
-  const expandedRowRender = (record: TenderWithSummary) => {
-    const isEditing = editingKey === record.id;
-    
-    if (!isEditing) return null;
-    
-    return (
-      <div className="p-4 bg-gray-50">
-        <Form
-          form={form}
-          layout="vertical"
-          className="max-w-4xl"
-        >
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="title"
-                label="Название тендера"
-                rules={[{ required: true, message: 'Введите название' }]}
-              >
-                <Input placeholder="Название тендерного проекта" />
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item
-                name="tender_number"
-                label="Номер тендера"
-                rules={[{ required: true, message: 'Введите номер' }]}
-              >
-                <Input placeholder="T-2024-001" />
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item
-                name="version"
-                label="Версия"
-                rules={[{ required: true, message: 'Укажите версию' }]}
-                tooltip="Увеличьте версию при загрузке нового ВОР"
-              >
-                <InputNumber 
-                  min={1} 
-                  step={1}
-                  precision={0}
-                  placeholder="1" 
-                  style={{ width: '100%' }}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item
-            name="description"
-            label="Описание"
-          >
-            <Input.TextArea rows={3} placeholder="Подробное описание проекта" />
-          </Form.Item>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="client_name"
-                label="Заказчик"
-                rules={[{ required: true, message: 'Введите название заказчика' }]}
-              >
-                <Input placeholder="Название организации-заказчика" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="submission_deadline"
-                label="Срок подачи заявки"
-              >
-                <DatePicker 
-                  showTime 
-                  className="w-full"
-                  placeholder="Выберите дату и время"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Divider orientation="left">Площади</Divider>
-          
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="area_sp"
-                label="Площадь по СП"
-                tooltip="Площадь по строительным правилам"
-              >
-                <InputNumber 
-                  style={{ width: '100%' }}
-                  placeholder="0.00"
-                  suffix="м²"
-                  precision={2}
-                  min={0}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="area_client"
-                label="Площадь от Заказчика"
-                tooltip="Площадь, указанная заказчиком"
-              >
-                <InputNumber 
-                  style={{ width: '100%' }}
-                  placeholder="0.00"
-                  suffix="м²"
-                  precision={2}
-                  min={0}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <div className="flex justify-end gap-2 pt-4">
-            <Button onClick={handleCancelEdit}>
-              Отмена
-            </Button>
-            <Button 
-              type="primary" 
-              onClick={() => handleSaveEdit(record)}
-            >
-              Сохранить
-            </Button>
-          </div>
-        </Form>
-      </div>
-    );
-  };
 
   return (
     <Card>
-      <Table
-        columns={columns}
-        dataSource={tenders}
-        rowKey="id"
-        loading={loading}
-        pagination={pagination}
-        onChange={onTableChange}
-        expandable={{
-          expandedRowRender,
-          expandedRowKeys,
-          onExpandedRowsChange: (keys) => {
-            // Only allow expansion if we're editing
-            if (editingKey) {
-              setExpandedRowKeys(keys as string[]);
-            }
-          },
-          expandIcon: () => null, // Hide expand icon since we expand programmatically
-          expandRowByClick: false
-        }}
-        locale={{
+      <style>
+        {`
+          .ant-picker-input > input {
+            text-align: center !important;
+          }
+        `}
+      </style>
+      <Form form={form} component={false}>
+        <Table
+          columns={columns}
+          dataSource={tenders}
+          rowKey="id"
+          loading={loading}
+          pagination={pagination}
+          onChange={onTableChange}
+          locale={{
           emptyText: (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -487,8 +577,9 @@ const TenderTable: React.FC<TenderTableProps> = ({
             </Empty>
           )
         }}
-        scroll={{ x: 1000 }}
+        scroll={{ x: 1200 }}
       />
+      </Form>
     </Card>
   );
 };
