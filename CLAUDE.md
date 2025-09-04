@@ -65,7 +65,7 @@ npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 ALL database operations MUST reference:
 supabase/schemas/prod.sql
 
-This is the SINGLE SOURCE OF TRUTH for:
+This is the SINGLE SOURCE OF TRUTH (7000+ lines) for:
 - Tables, columns, types
 - Functions and procedures
 - Views and triggers
@@ -133,7 +133,12 @@ src/components/admin/      # Admin interfaces
   ModernImportModal.tsx  # Excel import with progress
   EditableTable.tsx     # In-place table editing
 
-src/pages/                # Route components
+src/components/financial/  # Financial components
+  FinancialIndicatorsTab.tsx # Financial indicators tab
+  MarkupEditor.tsx        # Markup editing component
+  MarkupTemplateSelector.tsx # Template selection
+
+src/pages/                # Route components (40+ pages)
   TendersPage/            # Tender management with filters/stats
   Dashboard.tsx           # Statistics dashboard
   admin/                  # Admin interfaces for costs/categories

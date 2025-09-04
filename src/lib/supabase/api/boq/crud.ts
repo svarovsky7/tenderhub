@@ -386,4 +386,48 @@ export const boqCrudApi = {
       };
     }
   },
+
+  /**
+   * Update commercial fields (commercial_cost and commercial_markup_coefficient) for BOQ item
+   */
+  async updateCommercialFields(
+    id: string, 
+    commercialCost: number, 
+    markupCoefficient: number
+  ): Promise<ApiResponse<BOQItem>> {
+    console.log('🚀 boqCrudApi.updateCommercialFields called with:', { id, commercialCost, markupCoefficient });
+    
+    try {
+      console.log('📡 Updating commercial fields in database...');
+      const { data, error } = await supabase
+        .from('boq_items')
+        .update({
+          commercial_cost: commercialCost,
+          commercial_markup_coefficient: markupCoefficient
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      console.log('📦 Update commercial fields response:', { data, error });
+
+      if (error) {
+        console.error('❌ Update commercial fields failed:', error);
+        return {
+          error: handleSupabaseError(error, 'Update commercial fields'),
+        };
+      }
+
+      console.log('✅ Commercial fields updated successfully');
+      return {
+        data,
+        message: 'Commercial fields updated successfully',
+      };
+    } catch (error) {
+      console.error('💥 Exception in updateCommercialFields:', error);
+      return {
+        error: handleSupabaseError(error, 'Update commercial fields'),
+      };
+    }
+  },
 };

@@ -110,6 +110,12 @@ const AppLayout: React.FC = () => {
       path: '/boq',
     },
     {
+      key: 'commercial-costs',
+      icon: <CalculatorOutlined />,
+      label: <Link to="/commercial-costs">Коммерческие стоимости</Link>,
+      path: '/commercial-costs',
+    },
+    {
       key: 'libraries',
       icon: <BookOutlined />,
       label: 'Библиотеки',
@@ -160,12 +166,6 @@ const AppLayout: React.FC = () => {
       icon: <LineChartOutlined />,
       label: <Link to="/financial">Финансовые показатели</Link>,
       path: '/financial',
-    },
-    {
-      key: 'commercial-costs',
-      icon: <DollarOutlined />,
-      label: <Link to="/commercial-costs">Коммерческие стоимости</Link>,
-      path: '/commercial-costs',
     },
     {
       key: 'tender-markup',

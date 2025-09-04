@@ -213,20 +213,65 @@ export function calculateSubcontractMaterialCommercialCost(
   console.log('🚀 Расчет коммерческой стоимости субподрядного материала');
   console.log('📊 Субмат ПЗ (базовая стоимость):', baseCost);
 
-  // Расчет полной стоимости с накрутками (Субмат прибыль)
-  const submatProfit = baseCost * (1 + markups.subcontract_materials_cost_growth / 100);
-  console.log('📈 Субмат прибыль (с накруткой):', submatProfit, 
-              `(+${markups.subcontract_materials_cost_growth}%)`);
+  // 1. Субмат РОСТ = Субмат ПЗ * (1 + процент РОСТ субподряда)
+  const submatGrowth = baseCost * (1 + markups.subcontract_works_cost_growth / 100);
+  console.log('1️⃣ Субмат РОСТ:', submatGrowth, `(+${markups.subcontract_works_cost_growth}%)`);
+  
+  // 2. Субмат ООЗ = Субмат РОСТ * (1 + процент ООЗ субподряда)
+  const submatOverhead = submatGrowth * (1 + markups.overhead_subcontract / 100);
+  console.log('2️⃣ Субмат ООЗ:', submatOverhead, `(+${markups.overhead_subcontract}%)`);
+  
+  // 3. Субмат прибыль = Субмат ООЗ * (1 + процент прибыль субподряда)
+  const submatProfit = submatOverhead * (1 + markups.profit_subcontract / 100);
+  console.log('3️⃣ Субмат прибыль:', submatProfit, `(+${markups.profit_subcontract}%)`);
   
   // Наценка = Субмат прибыль - Субмат ПЗ
   const markup = submatProfit - baseCost;
   
   console.log('✅ Субмат коммерческая стоимость:', baseCost, '(остается Субмат ПЗ)');
   console.log('➕ Наценка для добавления к субподрядным работам:', markup);
+  console.log('📈 Коэффициент увеличения:', (submatProfit / baseCost).toFixed(2));
   
   return {
     materialCost: baseCost,  // Коммерческая стоимость субмат = Субмат ПЗ
     workMarkup: markup       // Наценка переходит в субподрядные работы
+  };
+}
+
+/**
+ * Расчет коммерческой стоимости вспомогательного субподрядного материала
+ * Вспомогательный субматериал - это субматериал БЕЗ связи с субработой
+ * 
+ * @param baseCost - Базовая стоимость субматериала (unit_rate * quantity + delivery)
+ * @param markups - Проценты накруток из БД
+ * @returns Объект с нулевой стоимостью материала и полной стоимостью для субработ
+ */
+export function calculateAuxiliarySubcontractMaterialCommercialCost(
+  baseCost: number,
+  markups: TenderMarkupPercentages
+): { materialCost: number; workMarkup: number } {
+  console.log('🚀 Расчет коммерческой стоимости ВСПОМОГАТЕЛЬНОГО субматериала');
+  console.log('📊 Базовая стоимость:', baseCost);
+
+  // 1. Субмат РОСТ = Субмат ПЗ * (1 + процент РОСТ субподряда)
+  const submatGrowth = baseCost * (1 + markups.subcontract_works_cost_growth / 100);
+  console.log('1️⃣ Субмат РОСТ:', submatGrowth, `(+${markups.subcontract_works_cost_growth}%)`);
+  
+  // 2. Субмат ООЗ = Субмат РОСТ * (1 + процент ООЗ субподряда)
+  const submatOverhead = submatGrowth * (1 + markups.overhead_subcontract / 100);
+  console.log('2️⃣ Субмат ООЗ:', submatOverhead, `(+${markups.overhead_subcontract}%)`);
+  
+  // 3. Субмат прибыль = Субмат ООЗ * (1 + процент прибыль субподряда)
+  const submatProfit = submatOverhead * (1 + markups.profit_subcontract / 100);
+  console.log('3️⃣ Субмат прибыль:', submatProfit, `(+${markups.profit_subcontract}%)`);
+  
+  console.log('✅ Материал остается: 0 (все переходит в субработы)');
+  console.log('✅ Переходит в субработы:', submatProfit, '(вся коммерческая стоимость)');
+  console.log('📈 Коэффициент увеличения:', (submatProfit / baseCost).toFixed(2));
+  
+  return {
+    materialCost: 0,           // В материале не остается ничего
+    workMarkup: submatProfit   // Вся коммерческая стоимость переходит в субработы
   };
 }
 
@@ -253,9 +298,14 @@ export function calculateBOQItemCommercialCost(
     case 'sub_work':
       return calculateSubcontractWorkCommercialCost(baseCost, markups);
     case 'sub_material':
-      // Для обратной совместимости возвращаем только стоимость материала
-      const result = calculateSubcontractMaterialCommercialCost(baseCost, markups);
-      return result.materialCost; // Возвращаем Субмат ПЗ
+      if (isLinked) {
+        // Основной субматериал - возвращаем только базовую стоимость
+        const result = calculateSubcontractMaterialCommercialCost(baseCost, markups);
+        return result.materialCost; // Возвращаем Субмат ПЗ
+      } else {
+        // Вспомогательный субматериал - возвращаем 0 (все переходит в работы)
+        return 0;
+      }
     default:
       console.warn('⚠️ Неизвестный тип элемента:', itemType);
       return baseCost;

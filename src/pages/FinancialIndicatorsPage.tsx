@@ -3,6 +3,7 @@ import { Card, Select, Form, message, Typography, Row, Col, Button, Empty } from
 import { DollarOutlined, LineChartOutlined, FolderOpenOutlined, ReloadOutlined, DashboardOutlined, PieChartOutlined, CalculatorOutlined } from '@ant-design/icons';
 import { supabase } from '../lib/supabase/client';
 import { MarkupEditor } from '../components/financial/MarkupEditor';
+import QuickTenderSelector from '../components/common/QuickTenderSelector';
 import { useNavigate } from 'react-router-dom';
 import { formatQuantity } from '../utils/formatters';
 
@@ -76,7 +77,7 @@ const CircularChart: React.FC<{
           }}
         >
           <div className="text-lg font-bold text-gray-800">
-            {Math.round(total).toLocaleString('ru-RU')}
+            {total.toFixed(2).replace('.', ',')}
           </div>
           <div className="text-xs text-gray-500">₽</div>
         </div>
@@ -243,6 +244,33 @@ const FinancialIndicatorsPage: React.FC = () => {
       setTimeout(() => setIsContentVisible(true), 100);
     }, 300);
   }, [selectedTenderId]);
+
+  // Handle quick tender selection
+  const handleQuickTenderSelect = useCallback((tender: Tender) => {
+    console.log('🚀 Quick tender selected for financial indicators:', tender.id, tender.title);
+    
+    // Auto-fill the tender selection fields
+    const tenderNameKey = `${tender.title}___${tender.client_name || ''}`;
+    setSelectedTenderName(tenderNameKey);
+    setSelectedTenderId(tender.id);
+    
+    console.log('✅ Auto-filled tender selection for financial indicators:', {
+      tenderNameKey,
+      tenderId: tender.id,
+      version: tender.version
+    });
+    
+    // Show content after brief delay for smooth transition
+    setTimeout(() => setIsContentVisible(true), 150);
+    
+    // Scroll to content section
+    setTimeout(() => {
+      const contentSection = document.getElementById('financial-indicators-content-section');
+      if (contentSection) {
+        contentSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+  }, []);
 
   const calculateFinancialStats = async () => {
     if (!selectedTenderId) return;
@@ -440,11 +468,12 @@ const FinancialIndicatorsPage: React.FC = () => {
 
   return (
     <div className="w-full min-h-full bg-gray-50">
+      <div className="p-6">
       <style>
         {`
           .financial-page-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
-            border-radius: 16px 16px 0 0;
+            border-radius: 16px;
             margin-bottom: 0;
             padding: 32px;
             padding-bottom: 32px;
@@ -486,7 +515,7 @@ const FinancialIndicatorsPage: React.FC = () => {
       </style>
       
       {/* Header с градиентом и выбором тендера */}
-      <div className="financial-page-header">
+        <div className="financial-page-header">
         <div className="max-w-none">
           {/* Title and buttons row */}
           <div className="flex justify-between items-start mb-6">
@@ -633,22 +662,38 @@ const FinancialIndicatorsPage: React.FC = () => {
                     {commercialTotal > 0 ? 'Коммерческая стоимость' : 'Общая стоимость'}
                   </Text>
                   <div className="text-3xl font-bold text-green-700" style={{ cursor: 'default' }}>
-                    {Math.round(commercialTotal > 0 ? commercialTotal : stats.actualTotalCost).toLocaleString('ru-RU')} ₽
+                    {(commercialTotal > 0 ? commercialTotal : stats.actualTotalCost).toFixed(2).replace('.', ',')} ₽
                   </div>
                 </div>
               </div>
             )}
           </div>
+          
+          {/* Quick Tender Selection - moved to header */}
+          {!selectedTenderId && (
+            <div className="mt-6">
+              <QuickTenderSelector 
+                tenders={tenders}
+                loading={loading}
+                onTenderSelect={handleQuickTenderSelect}
+                selectedTenderId={selectedTenderId}
+                maxItems={6}
+              />
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="p-6 max-w-none">
+        {/* Main Content */}
+        <div className="max-w-none">
 
       {/* Основной контент */}
       {selectedTenderId ? (
-        <div className={`transition-all duration-700 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`} 
-             style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div 
+          id="financial-indicators-content-section"
+          className={`transition-all duration-700 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`} 
+          style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
+        >
 
           {/* Редактор процентов затрат */}
           <MarkupEditor
@@ -686,7 +731,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                     <Col xs={12} sm={8} lg={6}>
                       <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg">
                         <div className="text-2xl font-bold text-blue-600 mb-2">
-                          {Math.round(commercialTotal).toLocaleString('ru-RU')} ₽
+                          {commercialTotal.toFixed(2).replace('.', ',')} ₽
                         </div>
                         <div className="text-sm text-gray-600">Коммерческая стоимость</div>
                       </div>
@@ -694,7 +739,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                     <Col xs={12} sm={8} lg={6}>
                       <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
                         <div className="text-2xl font-bold text-green-600 mb-2">
-                          {Math.round(stats.actualTotalCost).toLocaleString('ru-RU')} ₽
+                          {stats.actualTotalCost.toFixed(2).replace('.', ',')} ₽
                         </div>
                         <div className="text-sm text-gray-600">Прямые затраты</div>
                       </div>
@@ -702,7 +747,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                     <Col xs={12} sm={8} lg={6}>
                       <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg">
                         <div className="text-2xl font-bold text-purple-600 mb-2">
-                          {Math.round(commercialTotal - stats.actualTotalCost).toLocaleString('ru-RU')} ₽
+                          {(commercialTotal - stats.actualTotalCost).toFixed(2).replace('.', ',')} ₽
                         </div>
                         <div className="text-sm text-gray-600">Наценки и прибыль</div>
                       </div>
@@ -852,7 +897,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                 <Col xs={12} sm={6}>
                   <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
                     <div className="text-xl font-bold text-green-600 mb-2">
-                      {Math.round(stats.actualTotalMaterials).toLocaleString('ru-RU')} ₽
+                      {stats.actualTotalMaterials.toFixed(2).replace('.', ',')} ₽
                     </div>
                     <div className="text-sm text-gray-600">Материалы</div>
                   </div>
@@ -860,7 +905,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                 <Col xs={12} sm={6}>
                   <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg">
                     <div className="text-xl font-bold text-blue-600 mb-2">
-                      {Math.round(stats.actualTotalWorks).toLocaleString('ru-RU')} ₽
+                      {stats.actualTotalWorks.toFixed(2).replace('.', ',')} ₽
                     </div>
                     <div className="text-sm text-gray-600">Работы</div>
                   </div>
@@ -868,7 +913,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                 <Col xs={12} sm={6}>
                   <div className="text-center p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg">
                     <div className="text-xl font-bold text-orange-600 mb-2">
-                      {Math.round(stats.actualTotalSubmaterials).toLocaleString('ru-RU')} ₽
+                      {stats.actualTotalSubmaterials.toFixed(2).replace('.', ',')} ₽
                     </div>
                     <div className="text-sm text-gray-600">Субматериалы</div>
                   </div>
@@ -876,7 +921,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                 <Col xs={12} sm={6}>
                   <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg">
                     <div className="text-xl font-bold text-purple-600 mb-2">
-                      {Math.round(stats.actualTotalSubworks).toLocaleString('ru-RU')} ₽
+                      {stats.actualTotalSubworks.toFixed(2).replace('.', ',')} ₽
                     </div>
                     <div className="text-sm text-gray-600">Субработы</div>
                   </div>
@@ -885,31 +930,35 @@ const FinancialIndicatorsPage: React.FC = () => {
               <div className="text-center mt-6 p-4 bg-gray-50 rounded-lg">
                 <div className="text-sm text-gray-600 mb-2">Итого прямые затраты:</div>
                 <div className="text-2xl font-bold text-gray-800">
-                  {Math.round(stats.actualTotalCost).toLocaleString('ru-RU')} ₽
+                  {(stats.actualTotalCost / 1000).toFixed(1).replace('.', ',')} тыс. ₽
                 </div>
               </div>
             </Card>
           )}
         </div>
       ) : (
-        <div className="text-center max-w-2xl mx-auto">
-          <Card className="shadow-lg">
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <div className="space-y-2">
-                  <Title level={4} className="text-gray-600">
-                    Выберите тендер для анализа финансовых показателей
-                  </Title>
-                  <Text type="secondary" className="text-base">
-                    Для работы с финансовыми показателями выберите тендер и версию в шапке страницы
-                  </Text>
-                </div>
-              }
-            />
-          </Card>
+        <div>
+          {/* Empty State */}
+          <div className="text-center max-w-2xl mx-auto">
+            <Card className="shadow-lg">
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  <div className="space-y-2">
+                    <Title level={4} className="text-gray-600">
+                      Выберите тендер для анализа финансовых показателей
+                    </Title>
+                    <Text type="secondary" className="text-base">
+                      Выберите тендер из списка выше или используйте селектор
+                    </Text>
+                  </div>
+                }
+              />
+            </Card>
+          </div>
         </div>
       )}
+        </div>
       </div>
     </div>
   );

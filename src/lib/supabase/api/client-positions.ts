@@ -350,4 +350,48 @@ export const clientPositionsApi = {
       };
     }
   },
+
+  /**
+   * Update commercial costs for a client position
+   */
+  async updateCommercialCosts(
+    id: string, 
+    materialsCost: number, 
+    worksCost: number
+  ): Promise<ApiResponse<ClientPosition>> {
+    console.log('🚀 clientPositionsApi.updateCommercialCosts called with:', { id, materialsCost, worksCost });
+    
+    try {
+      console.log('📡 Updating commercial costs in database...');
+      const { data, error } = await supabase
+        .from('client_positions')
+        .update({
+          total_commercial_materials_cost: materialsCost,
+          total_commercial_works_cost: worksCost
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      console.log('📦 Update commercial costs response:', { data, error });
+
+      if (error) {
+        console.error('❌ Update commercial costs failed:', error);
+        return {
+          error: handleSupabaseError(error, 'Update commercial costs'),
+        };
+      }
+
+      console.log('✅ Commercial costs updated successfully');
+      return {
+        data,
+        message: 'Commercial costs updated successfully',
+      };
+    } catch (error) {
+      console.error('💥 Exception in updateCommercialCosts:', error);
+      return {
+        error: handleSupabaseError(error, 'Update commercial costs'),
+      };
+    }
+  },
 };

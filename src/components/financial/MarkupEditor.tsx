@@ -683,14 +683,14 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
               color: '#1890ff',
               fontWeight: 600
             }}>
-              {baseCost.toLocaleString('ru-RU')} ₽
+              {baseCost.toFixed(2).replace('.', ',')} ₽
             </Text>
           );
         }
         
         return (
           <Text strong style={{ color: '#1890ff' }}>
-            {Math.round(cost).toLocaleString('ru-RU')} ₽
+            {cost.toFixed(2).replace('.', ',')} ₽
           </Text>
         );
       },
@@ -726,7 +726,7 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
           marginBottom: 8 
         }}>
           <Text type="secondary">
-            Общая базовая стоимость: <Text strong>{totalCost.toLocaleString('ru-RU')} ₽</Text>
+            Общая базовая стоимость: <Text strong>{totalCost.toFixed(2).replace('.', ',')} ₽</Text>
           </Text>
           
           {tenderData && (
@@ -792,7 +792,7 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
               </Table.Summary.Cell>
               <Table.Summary.Cell index={3}>
                 <Text strong style={{ fontSize: 14, color: '#1890ff' }}>
-                  {Math.round(totalCalculatedCosts).toLocaleString('ru-RU')} ₽
+                  {totalCalculatedCosts.toFixed(2).replace('.', ',')} ₽
                 </Text>
               </Table.Summary.Cell>
             </Table.Summary.Row>

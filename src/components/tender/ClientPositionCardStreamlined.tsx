@@ -48,8 +48,10 @@ import {
   calculateWorkCommercialCost,
   calculateMainMaterialCommercialCost,
   calculateAuxiliaryMaterialCommercialCost,
+  calculateMaterialCommercialCost,
   calculateSubcontractWorkCommercialCost,
-  calculateSubcontractMaterialCommercialCost
+  calculateSubcontractMaterialCommercialCost,
+  calculateAuxiliarySubcontractMaterialCommercialCost
 } from '../../utils/calculateCommercialCost';
 import type { 
   BOQItemWithLibrary,
@@ -132,6 +134,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const materialsCount = position.boq_items?.filter(item => item.item_type === 'material' || item.item_type === 'sub_material').length || 0;
   const worksCount = position.boq_items?.filter(item => item.item_type === 'work' || item.item_type === 'sub_work').length || 0;
   const totalCost = position.total_position_cost || 0;
+  
   const [localWorks, setLocalWorks] = useState<BOQItemWithLibrary[]>([]);
   const [tempManualVolume, setTempManualVolume] = useState<number | null>(position.manual_volume ?? null);
   const [tempManualNote, setTempManualNote] = useState<string>(position.manual_note ?? '');
@@ -161,7 +164,10 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   
   // Function to calculate commercial cost
   const calculateCommercialCost = useCallback((record: BOQItemWithLibrary) => {
-    if (!tenderMarkup) return 0;
+    if (!tenderMarkup) {
+      console.log('⚠️ TenderMarkup is not loaded yet');
+      return 0;
+    }
     
     // Calculate base cost with delivery
     let quantity = record.quantity || 0;
@@ -214,30 +220,272 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         commercialCost = calculateWorkCommercialCost(baseCost, tenderMarkup);
         break;
       case 'material':
-        // For commercial cost calculation, what matters is whether material is linked to work
-        // not whether it's main or auxiliary type
-        const isLinked = !!record.work_link;
-        if (isLinked) {
-          // Material linked to work: base cost stays, markup transfers to work
-          const result = calculateMainMaterialCommercialCost(baseCost, tenderMarkup);
-          commercialCost = result.materialCost;
-        } else {
-          // Unlinked material: entire cost transfers to work
+        // Определяем тип материала и рассчитываем коммерческую стоимость
+        const isAuxiliary = record.material_type === 'auxiliary';
+        if (isAuxiliary) {
           const result = calculateAuxiliaryMaterialCommercialCost(baseCost, tenderMarkup);
-          commercialCost = result.materialCost;
+          commercialCost = result.materialCost + result.workMarkup; // Полная коммерческая стоимость
+        } else {
+          const result = calculateMainMaterialCommercialCost(baseCost, tenderMarkup);
+          commercialCost = result.materialCost + result.workMarkup; // Полная коммерческая стоимость
         }
         break;
       case 'sub_work':
         commercialCost = calculateSubcontractWorkCommercialCost(baseCost, tenderMarkup);
         break;
       case 'sub_material':
-        const subResult = calculateSubcontractMaterialCommercialCost(baseCost, tenderMarkup);
-        commercialCost = subResult.materialCost;
+        // Определяем тип субматериала и рассчитываем коммерческую стоимость
+        const isSubAuxiliary = record.material_type === 'auxiliary';
+        if (isSubAuxiliary) {
+          const result = calculateAuxiliarySubcontractMaterialCommercialCost(baseCost, tenderMarkup);
+          commercialCost = result.materialCost + result.workMarkup; // Полная коммерческая стоимость
+        } else {
+          const result = calculateSubcontractMaterialCommercialCost(baseCost, tenderMarkup);
+          commercialCost = result.materialCost + result.workMarkup; // Полная коммерческая стоимость
+        }
         break;
     }
     
     return commercialCost;
   }, [tenderMarkup, position.boq_items]);
+
+  // Function to save commercial fields to database
+  const saveCommercialFields = useCallback(async (itemId: string, commercialCost: number, baseCost: number) => {
+    if (!tenderMarkup || baseCost <= 0) return;
+    
+    const markupCoefficient = commercialCost / baseCost;
+    
+    try {
+      console.log('🚀 Saving commercial fields:', { itemId, commercialCost, markupCoefficient });
+      const result = await boqApi.updateCommercialFields(itemId, commercialCost, markupCoefficient);
+      
+      if (result.error) {
+        console.error('❌ Failed to save commercial fields:', result.error);
+      } else {
+        console.log('✅ Commercial fields saved successfully');
+      }
+    } catch (error) {
+      console.error('💥 Exception saving commercial fields:', error);
+    }
+  }, [tenderMarkup]);
+  
+  // Auto-save commercial fields when values change
+  useEffect(() => {
+    if (!position.boq_items || !tenderMarkup) return;
+    
+    const savePromises = position.boq_items.map(async (item) => {
+      const commercialCost = calculateCommercialCost(item);
+      const baseCost = (item.unit_rate || 0) * (item.quantity || 0) + (item.delivery_amount || 0) * (item.quantity || 0);
+      
+      if (commercialCost > 0 && baseCost > 0) {
+        await saveCommercialFields(item.id, commercialCost, baseCost);
+      }
+    });
+    
+    Promise.allSettled(savePromises);
+  }, [position.boq_items, tenderMarkup, calculateCommercialCost, saveCommercialFields]);
+  
+  // Calculate position-level commercial costs split between works and materials with detailed breakdown
+  const commercialCosts = useMemo(() => {
+    if (!position.boq_items || !tenderMarkup) {
+      return { works: 0, materials: 0, total: 0, breakdown: [] };
+    }
+
+    let worksTotal = 0;
+    let materialsTotal = 0;
+    const breakdown: any[] = [];
+
+    position.boq_items.forEach(item => {
+      const commercialCost = calculateCommercialCost(item);
+      
+      // Create detailed breakdown for each item
+      let quantity = item.quantity || 0;
+      const unitRate = item.unit_rate || 0;
+      
+      // For linked materials, calculate actual quantity
+      if ((item.item_type === 'material' || item.item_type === 'sub_material') && item.work_link) {
+        const work = position.boq_items?.find(w => {
+          if (item.work_link.work_boq_item_id && 
+              w.id === item.work_link.work_boq_item_id && 
+              w.item_type === 'work') {
+            return true;
+          }
+          if (item.work_link.sub_work_boq_item_id && 
+              w.id === item.work_link.sub_work_boq_item_id && 
+              w.item_type === 'sub_work') {
+            return true;
+          }
+          return false;
+        });
+        
+        if (work) {
+          const consumptionCoef = item.consumption_coefficient || 
+                                 item.work_link.material_quantity_per_work || 1;
+          const conversionCoef = item.conversion_coefficient || 
+                                item.work_link.usage_coefficient || 1;
+          const workQuantity = work.quantity || 0;
+          quantity = workQuantity * consumptionCoef * conversionCoef;
+        }
+      }
+      
+      // Calculate base cost with delivery
+      let baseCost = quantity * unitRate;
+      const deliveryType = item.delivery_price_type || 'included';
+      const deliveryAmount = item.delivery_amount || 0;
+      
+      if ((deliveryType === 'amount' || deliveryType === 'not_included') && deliveryAmount > 0) {
+        baseCost = baseCost + (deliveryAmount * quantity);
+      }
+
+      // Create detailed stages for each item type
+      let stages = [];
+      let itemWorksContribution = 0;
+      let itemMaterialsContribution = 0;
+      
+      if (item.item_type === 'work') {
+        // Work item - detailed calculation stages
+        const mechanizationCost = baseCost * (tenderMarkup.mechanization_service / 100);
+        const mbpGsmCost = baseCost * (tenderMarkup.mbp_gsm / 100);
+        const warrantyCost = baseCost * (tenderMarkup.warranty_period / 100);
+        const work16 = (baseCost + mechanizationCost) * (1 + tenderMarkup.works_16_markup / 100);
+        const worksCostGrowth = (work16 + mbpGsmCost) * (1 + tenderMarkup.works_cost_growth / 100);
+        const contingencyCosts = (work16 + mbpGsmCost) * (1 + tenderMarkup.contingency_costs / 100);
+        const ooz = (worksCostGrowth + contingencyCosts - work16 - mbpGsmCost) * (1 + tenderMarkup.overhead_own_forces / 100);
+        const ofz = ooz * (1 + tenderMarkup.general_costs_without_subcontract / 100);
+        const profit = ofz * (1 + tenderMarkup.profit_own_forces / 100);
+        const totalCommercial = profit + warrantyCost;
+
+        stages = [
+          { name: 'Работа ПЗ (база)', value: baseCost },
+          { name: 'Служба механизации', value: mechanizationCost, percent: tenderMarkup.mechanization_service },
+          { name: 'МБП+ГСМ', value: mbpGsmCost, percent: tenderMarkup.mbp_gsm },
+          { name: 'Работа 1,6', value: work16, formula: `(База + СМ) × ${1 + tenderMarkup.works_16_markup / 100}` },
+          { name: 'Рост работ', value: worksCostGrowth, percent: tenderMarkup.works_cost_growth },
+          { name: 'Непредвиденные', value: contingencyCosts, percent: tenderMarkup.contingency_costs },
+          { name: 'ООЗ собств. силы', value: ooz, percent: tenderMarkup.overhead_own_forces },
+          { name: 'ОФЗ (без субподр.)', value: ofz, percent: tenderMarkup.general_costs_without_subcontract },
+          { name: 'Прибыль собств. силы', value: profit, percent: tenderMarkup.profit_own_forces },
+          { name: 'Гарантийный период', value: warrantyCost, percent: tenderMarkup.warranty_period },
+          { name: 'ИТОГО коммерческая', value: totalCommercial, isTotal: true }
+        ];
+        itemWorksContribution = commercialCost;
+        
+      } else if (item.item_type === 'sub_work') {
+        // Subcontract work
+        const subcontractGrowth = baseCost * (1 + tenderMarkup.subcontract_works_cost_growth / 100);
+        const subcontractOverhead = subcontractGrowth * (1 + tenderMarkup.overhead_subcontract / 100);
+        const subcontractProfit = subcontractOverhead * (1 + tenderMarkup.profit_subcontract / 100);
+
+        stages = [
+          { name: 'СУБРАБ ПЗ (база)', value: baseCost },
+          { name: 'Субраб РОСТ', value: subcontractGrowth, percent: tenderMarkup.subcontract_works_cost_growth },
+          { name: 'Субраб ООЗ', value: subcontractOverhead, percent: tenderMarkup.overhead_subcontract },
+          { name: 'Субраб прибыль', value: subcontractProfit, percent: tenderMarkup.profit_subcontract, isTotal: true }
+        ];
+        itemWorksContribution = commercialCost;
+        
+      } else if (item.item_type === 'material') {
+        // Определяем тип материала (основной или вспомогательный)
+        const isAuxiliary = item.material_type === 'auxiliary';
+        
+        // Рассчитываем полную коммерческую стоимость материала
+        const materialsGrowth = baseCost * (1 + tenderMarkup.materials_cost_growth / 100);
+        const contingencyMaterials = baseCost * (1 + tenderMarkup.contingency_costs / 100);
+        const oozMat = (materialsGrowth + contingencyMaterials - baseCost) * (1 + tenderMarkup.overhead_own_forces / 100);
+        const ofzMat = oozMat * (1 + tenderMarkup.general_costs_without_subcontract / 100);
+        const profitMat = ofzMat * (1 + tenderMarkup.profit_own_forces / 100);
+        const markup = profitMat - baseCost;
+
+        if (isAuxiliary) {
+          // Вспомогательный материал - наценённая стоимость переходит в работы
+          stages = [
+            { name: 'Материал вспомогательный ПЗ', value: baseCost },
+            { name: 'Материалы РОСТ', value: materialsGrowth, percent: tenderMarkup.materials_cost_growth },
+            { name: 'Непредвиденные мат.', value: contingencyMaterials, percent: tenderMarkup.contingency_costs },
+            { name: 'ООЗ мат', value: oozMat, percent: tenderMarkup.overhead_own_forces },
+            { name: 'ОФЗ мат', value: ofzMat, percent: tenderMarkup.general_costs_without_subcontract },
+            { name: 'Прибыль мат', value: profitMat, percent: tenderMarkup.profit_own_forces },
+            { name: '→ Наценённая стоимость в работы', value: profitMat, highlight: 'work', isTotal: true },
+            { name: '→ В материалах остается', value: 0, highlight: 'material' }
+          ];
+          itemMaterialsContribution = 0; // Ничего не остается в материалах
+          itemWorksContribution = profitMat; // Вся стоимость переходит в работы
+        } else {
+          // Основной материал - база остается, наценка переходит в работы
+          stages = [
+            { name: 'Материал основной ПЗ (база)', value: baseCost },
+            { name: 'Материалы РОСТ', value: materialsGrowth, percent: tenderMarkup.materials_cost_growth },
+            { name: 'Непредвиденные мат.', value: contingencyMaterials, percent: tenderMarkup.contingency_costs },
+            { name: 'ООЗ мат', value: oozMat, percent: tenderMarkup.overhead_own_forces },
+            { name: 'ОФЗ мат', value: ofzMat, percent: tenderMarkup.general_costs_without_subcontract },
+            { name: 'Прибыль мат', value: profitMat, percent: tenderMarkup.profit_own_forces },
+            { name: '→ В материалах остается', value: baseCost, highlight: 'material' },
+            { name: '→ В работы переходит', value: markup, highlight: 'work' }
+          ];
+          itemMaterialsContribution = baseCost; // Базовая стоимость остается в материалах
+          itemWorksContribution = markup; // Наценка переходит в работы
+        }
+        
+      } else if (item.item_type === 'sub_material') {
+        // Определяем тип субматериала (основной или вспомогательный)
+        const isAuxiliary = item.material_type === 'auxiliary';
+        
+        // Рассчитываем полную коммерческую стоимость субматериала
+        const submatGrowth = baseCost * (1 + tenderMarkup.subcontract_works_cost_growth / 100);
+        const submatOverhead = submatGrowth * (1 + tenderMarkup.overhead_subcontract / 100);
+        const submatProfit = submatOverhead * (1 + tenderMarkup.profit_subcontract / 100);
+        const markup = submatProfit - baseCost;
+
+        if (isAuxiliary) {
+          // Вспомогательный субматериал - наценённая стоимость переходит в субработы
+          stages = [
+            { name: 'Субматериал вспомогательный ПЗ', value: baseCost },
+            { name: 'Субмат РОСТ', value: submatGrowth, percent: tenderMarkup.subcontract_works_cost_growth },
+            { name: 'Субмат ООЗ', value: submatOverhead, percent: tenderMarkup.overhead_subcontract },
+            { name: 'Субмат прибыль', value: submatProfit, percent: tenderMarkup.profit_subcontract },
+            { name: '→ Наценённая стоимость в субработы', value: submatProfit, highlight: 'work', isTotal: true },
+            { name: '→ В материалах остается', value: 0, highlight: 'material' }
+          ];
+          itemMaterialsContribution = 0; // Ничего не остается в материалах
+          itemWorksContribution = submatProfit; // ВСЯ стоимость переходит в работы
+        } else {
+          // Основной субматериал - база остается, наценка переходит в субработы
+          stages = [
+            { name: 'Субматериал основной ПЗ (база)', value: baseCost },
+            { name: 'Субмат РОСТ', value: submatGrowth, percent: tenderMarkup.subcontract_works_cost_growth },
+            { name: 'Субмат ООЗ', value: submatOverhead, percent: tenderMarkup.overhead_subcontract },
+            { name: 'Субмат прибыль', value: submatProfit, percent: tenderMarkup.profit_subcontract },
+            { name: '→ В материалах остается', value: baseCost, highlight: 'material' },
+            { name: '→ В субраб. переходит', value: markup, highlight: 'work' }
+          ];
+          itemMaterialsContribution = baseCost; // Базовая стоимость остается в материалах
+          itemWorksContribution = markup; // Наценка переходит в работы
+        }
+      }
+
+      breakdown.push({
+        item: item.description || 'Без названия',
+        type: item.item_type,
+        baseCost,
+        commercialCost,
+        stages,
+        worksContribution: itemWorksContribution,
+        materialsContribution: itemMaterialsContribution
+      });
+
+      // Add to totals
+      worksTotal += itemWorksContribution;
+      materialsTotal += itemMaterialsContribution;
+    });
+    
+    return {
+      works: worksTotal,
+      materials: materialsTotal,
+      total: worksTotal + materialsTotal,
+      breakdown
+    };
+  }, [position.boq_items, tenderMarkup, calculateCommercialCost]);
+  
   
   // Create stable dependency for position items
   const positionItemsKey = useMemo(() => {
@@ -285,9 +533,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     const loadMarkup = async () => {
       try {
         const markup = await getActiveTenderMarkup(tenderId);
-        if (markup && markup.percentages) {
-          setTenderMarkup(markup.percentages);
-          console.log('📊 Loaded tender markup:', markup.percentages);
+        console.log('📊 Raw markup response:', markup);
+        
+        // Handle both array and object responses
+        const markupData = Array.isArray(markup) ? markup[0] : markup;
+        
+        if (markupData) {
+          setTenderMarkup(markupData);
+          console.log('📊 Loaded tender markup:', markupData);
         }
       } catch (error) {
         console.error('❌ Failed to load tender markup:', error);
@@ -1367,15 +1620,23 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       render: (type, record) => {
         switch(type) {
           case 'work':
-            return <Tag icon={<BuildOutlined />} color="orange" className="text-xs">Работа</Tag>;
+            return (
+              <div className="flex justify-center">
+                <Tag icon={<BuildOutlined />} color="orange" className="text-xs">Работа</Tag>
+              </div>
+            );
           case 'sub_work':
-            return <Tag icon={<BuildOutlined />} color="purple" className="text-xs">Суб-раб</Tag>;
+            return (
+              <div className="flex justify-center">
+                <Tag icon={<BuildOutlined />} color="purple" className="text-xs">Суб-раб</Tag>
+              </div>
+            );
           case 'material':
             // Check material type from material_type field (default to main if not specified)
             const isMainMaterial = record.material_type !== 'auxiliary';
             
             return (
-              <div className="flex flex-col gap-0.5">
+              <div className="flex flex-col gap-0.5 items-center">
                 <Tag icon={<ToolOutlined />} color="blue" className="text-xs">Материал</Tag>
                 <Tag 
                   color={isMainMaterial ? "cyan" : "gold"} 
@@ -1395,7 +1656,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             const isMainSubMaterial = record.material_type !== 'auxiliary';
             
             return (
-              <div className="flex flex-col gap-0.5">
+              <div className="flex flex-col gap-0.5 items-center">
                 <Tag icon={<ToolOutlined />} color="green" className="text-xs">Суб-мат</Tag>
                 <Tag 
                   color={isMainSubMaterial ? "cyan" : "gold"} 
@@ -1764,100 +2025,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       )
     },
     {
-      title: 'Комм. стоимость',
-      key: 'commercial_cost',
-      width: 120,
-      align: 'right',
-      render: (_, record) => {
-        if (!tenderMarkup) {
-          return (
-            <Tooltip title="Проценты накруток не загружены">
-              <div className="text-right text-gray-400 text-sm">—</div>
-            </Tooltip>
-          );
-        }
-        
-        const commercialCost = calculateCommercialCost(record);
-        const baseCost = (() => {
-          // Calculate base cost with delivery for comparison
-          let quantity = record.quantity || 0;
-          const unitRate = record.unit_rate || 0;
-          
-          // For linked materials, calculate quantity based on work volume
-          if ((record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link) {
-            const work = position.boq_items?.find(item => {
-              if (record.work_link.work_boq_item_id && 
-                  item.id === record.work_link.work_boq_item_id && 
-                  item.item_type === 'work') {
-                return true;
-              }
-              if (record.work_link.sub_work_boq_item_id && 
-                  item.id === record.work_link.sub_work_boq_item_id && 
-                  item.item_type === 'sub_work') {
-                return true;
-              }
-              return false;
-            });
-            
-            if (work) {
-              const consumptionCoef = record.consumption_coefficient || 
-                                     record.work_link.material_quantity_per_work || 1;
-              const conversionCoef = record.conversion_coefficient || 
-                                    record.work_link.usage_coefficient || 1;
-              const workQuantity = work.quantity || 0;
-              quantity = workQuantity * consumptionCoef * conversionCoef;
-            }
-          }
-          
-          let base = quantity * unitRate;
-          
-          // Add delivery for materials
-          if ((record.item_type === 'material' || record.item_type === 'sub_material')) {
-            const deliveryType = record.delivery_price_type || 'included';
-            const deliveryAmount = record.delivery_amount || 0;
-            
-            if ((deliveryType === 'amount' || deliveryType === 'not_included') && deliveryAmount > 0) {
-              base = base + (deliveryAmount * quantity);
-            }
-          }
-          
-          return base;
-        })();
-        
-        const markup = commercialCost - baseCost;
-        const markupPercent = baseCost > 0 ? (markup / baseCost) * 100 : 0;
-        
-        // Color based on markup percentage
-        let color = '#52c41a'; // green by default
-        if (markupPercent > 50) {
-          color = '#fa8c16'; // orange for high markup
-        } else if (markupPercent < 10) {
-          color = '#1890ff'; // blue for low markup
-        }
-        
-        return (
-          <Tooltip 
-            title={
-              <div>
-                <div>Базовая: {Math.round(baseCost).toLocaleString('ru-RU')} ₽</div>
-                <div>Наценка: {markup >= 0 ? '+' : ''}{Math.round(markup).toLocaleString('ru-RU')} ₽</div>
-                <div>Процент: {markupPercent >= 0 ? '+' : ''}{markupPercent.toFixed(1)}%</div>
-              </div>
-            }
-          >
-            <div className="text-right py-1">
-              <div className="font-semibold text-sm" style={{ color }}>
-                {Math.round(commercialCost).toLocaleString('ru-RU')} ₽
-              </div>
-              <div className="text-xs text-gray-500">
-                {markupPercent >= 0 ? '+' : ''}{markupPercent.toFixed(0)}%
-              </div>
-            </div>
-          </Tooltip>
-        );
-      }
-    },
-    {
       title: '',
       key: 'actions',
       width: 80,
@@ -1939,6 +2106,26 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
   // Work Edit Row (inline editing) - With column headers
   const WorkEditRow = ({ item }: { item: BOQItemWithLibrary }) => {
+    // Watch form fields for dynamic calculation
+    const quantity = Form.useWatch('quantity', workEditForm) || 0;
+    const unitRate = Form.useWatch('unit_rate', workEditForm) || 0;
+    const itemType = Form.useWatch('item_type', workEditForm) || item.item_type;
+    
+    // Calculate commercial cost
+    const commercialCost = useMemo(() => {
+      if (!tenderMarkup || !unitRate || !quantity) return 0;
+      
+      const baseCost = quantity * unitRate;
+      
+      if (itemType === 'work') {
+        return calculateWorkCommercialCost(baseCost, tenderMarkup);
+      } else if (itemType === 'sub_work') {
+        return calculateSubcontractWorkCommercialCost(baseCost, tenderMarkup);
+      }
+      
+      return baseCost;
+    }, [quantity, unitRate, itemType, tenderMarkup]);
+    
     // Determine background color based on item type
     const getEditBackgroundColor = () => {
       switch(item.item_type) {
@@ -1964,7 +2151,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
     return (
     <tr>
-      <td colSpan={11} style={{ padding: 0 }}>
+      <td colSpan={12} style={{ padding: 0 }}>
         <Form
           form={workEditForm}
           layout="vertical"
@@ -2071,11 +2258,66 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 fontWeight: 'normal',
                 color: '#000'
               }}>
-                {formatCurrency(
-                  (workEditForm.getFieldValue('quantity') || 0) * 
-                  (workEditForm.getFieldValue('unit_rate') || 0)
-                )}
+                {formatCurrency(quantity * unitRate)}
               </div>
+            </Form.Item>
+            
+            {/* Commercial Cost */}
+            <Form.Item 
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Коммерч. стоимость</span>}
+              className="mb-0"
+              style={{ width: '160px' }}
+            >
+              <Tooltip
+                title={tenderMarkup ? (
+                  <div style={{ fontSize: '12px' }}>
+                    <div style={{ marginBottom: '8px', fontWeight: 'bold' }}>Расчет коммерческой стоимости:</div>
+                    <div>Базовая стоимость: {formatCurrency(quantity * unitRate)}</div>
+                    {itemType === 'work' && (
+                      <>
+                        <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px' }}>Этапы накруток:</div>
+                        <div>1. Служба механизации: {tenderMarkup.mechanization_service || 0}%</div>
+                        <div>2. МБП+ГСМ: {tenderMarkup.mbp_gsm || 0}%</div>
+                        <div>3. Работа 1,6: коэф. {1 + (tenderMarkup.works_16_markup || 0) / 100}</div>
+                        <div>4. Рост стоимости работ: +{tenderMarkup.works_cost_growth || 0}%</div>
+                        <div>5. Непредвиденные: +{tenderMarkup.contingency_costs || 0}%</div>
+                        <div>6. ООЗ собств. силы: +{tenderMarkup.overhead_own_forces || 0}%</div>
+                        <div>7. ОФЗ: +{tenderMarkup.general_costs_without_subcontract || 0}%</div>
+                        <div>8. Прибыль: +{tenderMarkup.profit_own_forces || 0}%</div>
+                        <div>9. Гарантийный период: {tenderMarkup.warranty_period || 0}%</div>
+                      </>
+                    )}
+                    {itemType === 'sub_work' && (
+                      <>
+                        <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px' }}>Этапы накруток субподряда:</div>
+                        <div>1. Рост стоимости субподряда: +{tenderMarkup.subcontract_works_cost_growth || 0}%</div>
+                        <div>2. ООЗ субподряд: +{tenderMarkup.overhead_subcontract || 0}%</div>
+                        <div>3. Прибыль субподряд: +{tenderMarkup.profit_subcontract || 0}%</div>
+                      </>
+                    )}
+                    <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px', fontWeight: 'bold' }}>
+                      Итого: {formatCurrency(commercialCost)}
+                    </div>
+                    <div style={{ color: '#52c41a' }}>Коэффициент: ×{commercialCost && quantity && unitRate ? (commercialCost / (quantity * unitRate)).toFixed(2) : '1.00'}</div>
+                  </div>
+                ) : 'Проценты накруток не загружены'}
+                placement="top"
+              >
+                <div style={{ 
+                  height: '24px', 
+                  padding: '0 8px',
+                  background: tenderMarkup ? '#e6f4ff' : '#f5f5f5',
+                  borderRadius: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  fontSize: '14px',
+                  fontWeight: tenderMarkup ? 'bold' : 'normal',
+                  color: tenderMarkup ? '#1677ff' : '#999',
+                  cursor: 'help'
+                }}>
+                  {tenderMarkup ? formatCurrency(commercialCost) : 'Нет накруток'}
+                </div>
+              </Tooltip>
             </Form.Item>
           </div>
 
@@ -2125,6 +2367,64 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
   // Material Edit Row (inline editing) - Compact two-row layout
   const MaterialEditRow = ({ item }: { item: BOQItemWithLibrary }) => {
+    // Watch form fields for dynamic calculation
+    const quantity = Form.useWatch('quantity', editForm) || 0;
+    const unitRate = Form.useWatch('unit_rate', editForm) || 0;
+    const itemType = Form.useWatch('item_type', editForm) || item.item_type;
+    const workId = Form.useWatch('work_id', editForm);
+    const deliveryType = Form.useWatch('delivery_price_type', editForm) || 'included';
+    const deliveryAmount = Form.useWatch('delivery_amount', editForm) || 0;
+    const consumptionCoef = Form.useWatch('consumption_coefficient', editForm) || 1;
+    const conversionCoef = Form.useWatch('conversion_coefficient', editForm) || 1;
+    
+    // Calculate actual quantity based on work link
+    const actualQuantity = useMemo(() => {
+      if (workId) {
+        // Find the linked work to get its quantity
+        const linkedWork = works.find(w => w.id === workId);
+        const workQuantity = linkedWork?.quantity || 0;
+        return workQuantity * consumptionCoef * conversionCoef;
+      }
+      return quantity;
+    }, [workId, quantity, consumptionCoef, conversionCoef, works]);
+    
+    // Calculate delivery cost
+    const deliveryCost = useMemo(() => {
+      if (deliveryType === 'included') return 0;
+      if (deliveryType === 'not_included') return unitRate * 0.03;
+      if (deliveryType === 'amount') return deliveryAmount;
+      return 0;
+    }, [deliveryType, deliveryAmount, unitRate]);
+    
+    // Calculate commercial cost
+    const commercialCost = useMemo(() => {
+      if (!tenderMarkup || !unitRate) return 0;
+      
+      // Base cost includes delivery
+      const baseCostPerUnit = unitRate + deliveryCost;
+      const totalBaseCost = actualQuantity * baseCostPerUnit;
+      
+      if (itemType === 'material') {
+        // Check if it's linked (main) or unlinked (auxiliary)
+        const isLinked = !!workId;
+        if (isLinked) {
+          // For main materials, return just the base cost (markup goes to works)
+          const result = calculateMainMaterialCommercialCost(totalBaseCost, tenderMarkup);
+          return result.materialCost;
+        } else {
+          // For auxiliary materials, return 0 (all cost goes to works)
+          const result = calculateAuxiliaryMaterialCommercialCost(totalBaseCost, tenderMarkup);
+          return result.materialCost; // This will be 0
+        }
+      } else if (itemType === 'sub_material') {
+        // For sub-materials
+        const result = calculateSubcontractMaterialCommercialCost(totalBaseCost, tenderMarkup);
+        return result.materialCost;
+      }
+      
+      return totalBaseCost;
+    }, [actualQuantity, unitRate, deliveryCost, itemType, workId, tenderMarkup]);
+    
     // Determine background color based on item type and link status
     const getEditBackgroundColor = () => {
       switch(item.item_type) {
@@ -2150,7 +2450,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
     return (
     <tr>
-      <td colSpan={11} style={{ padding: 0 }}>
+      <td colSpan={12} style={{ padding: 0 }}>
         <Form
           form={editForm}
           layout="vertical"
@@ -2368,7 +2668,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             <Form.Item 
               label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Сумма</span>}
               className="mb-0"
-              style={{ minWidth: '120px', maxWidth: '200px' }}
+              style={{ minWidth: '100px', maxWidth: '140px' }}
             >
               <div style={{ 
                 height: '24px', 
@@ -2401,6 +2701,83 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   return formatCurrency(baseTotal + deliveryCost);
                 })()}
               </div>
+            </Form.Item>
+            
+            {/* Commercial Cost */}
+            <Form.Item 
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Комм. ст.</span>}
+              className="mb-0"
+              style={{ minWidth: '100px', maxWidth: '140px' }}
+            >
+              <Tooltip
+                title={tenderMarkup ? (
+                  <div style={{ fontSize: '12px' }}>
+                    <div style={{ marginBottom: '8px', fontWeight: 'bold' }}>Расчет коммерческой стоимости материала:</div>
+                    <div>Базовая стоимость: {formatCurrency(actualQuantity * (unitRate + deliveryCost))}</div>
+                    {itemType === 'material' && (
+                      <>
+                        <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px' }}>
+                          {workId ? 'Основной материал (связан с работой):' : 'Вспомогательный материал:'}
+                        </div>
+                        {workId ? (
+                          <>
+                            <div>1. Рост стоимости материалов: +{tenderMarkup.materials_cost_growth || 0}%</div>
+                            <div>2. Непредвиденные: +{tenderMarkup.contingency_costs || 0}%</div>
+                            <div>3. ООЗ: +{tenderMarkup.overhead_own_forces || 0}%</div>
+                            <div>4. ОФЗ: +{tenderMarkup.general_costs_without_subcontract || 0}%</div>
+                            <div>5. Прибыль: +{tenderMarkup.profit_own_forces || 0}%</div>
+                            <div style={{ marginTop: '4px', color: '#faad14' }}>В материале остается только базовая стоимость</div>
+                            <div style={{ color: '#faad14' }}>Вся наценка переходит в работы</div>
+                          </>
+                        ) : (
+                          <>
+                            <div>Вся стоимость (включая наценки) переходит в работы</div>
+                            <div style={{ color: '#faad14' }}>В материале: 0 ₽</div>
+                          </>
+                        )}
+                      </>
+                    )}
+                    {itemType === 'sub_material' && (
+                      <>
+                        <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px' }}>Субподрядный материал:</div>
+                        <div>1. Рост стоимости субмат: +{tenderMarkup.subcontract_materials_cost_growth || 0}%</div>
+                        <div style={{ marginTop: '4px', color: '#faad14' }}>В материале остается базовая стоимость</div>
+                        <div style={{ color: '#faad14' }}>Наценка переходит в субподрядные работы</div>
+                      </>
+                    )}
+                    <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px', fontWeight: 'bold' }}>
+                      {commercialCost === 0 && itemType === 'material' && !workId ? 
+                        'Итого в материале: 0 ₽ (все → в работы)' : 
+                        `Итого в материале: ${formatCurrency(commercialCost)}`
+                      }
+                    </div>
+                  </div>
+                ) : 'Проценты накруток не загружены'}
+                placement="top"
+              >
+                <div style={{ 
+                  height: '24px', 
+                  padding: '0 8px',
+                  background: tenderMarkup ? '#e6f4ff' : '#f5f5f5',
+                  borderRadius: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '14px',
+                  fontWeight: tenderMarkup ? 'bold' : 'normal',
+                  color: tenderMarkup ? '#1677ff' : '#999',
+                  whiteSpace: 'nowrap',
+                  cursor: 'help'
+                }}>
+                  {tenderMarkup ? (
+                    commercialCost === 0 && itemType === 'material' && !workId ? 
+                      '→ в работы' : 
+                      formatCurrency(commercialCost)
+                  ) : (
+                    'Нет накруток'
+                  )}
+                </div>
+              </Tooltip>
             </Form.Item>
           </div>
 
@@ -2759,7 +3136,23 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   </Form.Item>
                 </>
               )}
+            </div>
 
+            {/* Second row: Category field and Action Buttons */}
+            <div className="flex items-end gap-2">
+              <Form.Item
+                name="detail_cost_category_id"
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Категория затрат</span>}
+                className="mb-0 flex-1"
+                rules={[{ required: true, message: 'Выберите категорию затрат' }]}
+              >
+                <CostDetailCascadeSelector
+                  placeholder="Выберите категорию затрат"
+                  size="small"
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+              
               {/* Action Buttons */}
               <div className="flex gap-2" style={{ paddingBottom: '2px' }}>
                 <Button 
@@ -2786,23 +3179,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   Добавить
                 </Button>
               </div>
-            </div>
-
-            {/* Second row: Category field full width */}
-            <div className="flex items-end gap-2">
-              <Form.Item
-                name="detail_cost_category_id"
-                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Категория затрат</span>}
-                className="mb-0"
-                style={{ width: '100%' }}
-                rules={[{ required: true, message: 'Выберите категорию затрат' }]}
-              >
-                <CostDetailCascadeSelector
-                  placeholder="Выберите категорию затрат"
-                  size="small"
-                  style={{ width: '100%' }}
-                />
-              </Form.Item>
             </div>
             </>
           );
@@ -3091,9 +3467,12 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             {/* Total Cost and Statistics */}
             <Col xs={24} sm={24} md={24} lg={3}>
               <div className="flex flex-col items-end">
-                <Text strong className="text-lg text-green-700 whitespace-nowrap">
-                  {Math.round(totalCost).toLocaleString('ru-RU')} ₽
-                </Text>
+                {/* Коммерческие стоимости скрыты на странице BOQ */}
+                <div>
+                  <Text strong className="text-lg text-green-700 whitespace-nowrap">
+                    {Math.round(totalCost).toLocaleString('ru-RU')} ₽
+                  </Text>
+                </div>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="whitespace-nowrap">
                     <Text className="text-gray-600 text-xs">Р: </Text>

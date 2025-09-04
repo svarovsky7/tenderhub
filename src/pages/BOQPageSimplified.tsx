@@ -24,6 +24,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TenderBOQManagerSimplified from '../components/tender/TenderBOQManagerSimplified';
 import DeadlineStatusBar from '../components/tender/DeadlineStatusBar';
+import QuickTenderSelector from '../components/common/QuickTenderSelector';
 import { tendersApi } from '../lib/supabase/api';
 import type { Tender } from '../lib/supabase/types';
 import { formatQuantity } from '../utils/formatters';
@@ -214,6 +215,33 @@ const BOQPageSimplified: React.FC = () => {
       totalCost: stats.total,
       positionsCount: stats.positions
     });
+  }, []);
+
+  // Handle quick tender selection
+  const handleQuickTenderSelect = useCallback((tender: Tender) => {
+    console.log('🚀 Quick tender selected for BOQ:', tender.id, tender.title);
+    
+    // Auto-fill the tender selection fields
+    const tenderNameKey = `${tender.title}___${tender.client_name}`;
+    setSelectedTenderName(tenderNameKey);
+    setSelectedTenderId(tender.id);
+    
+    console.log('✅ Auto-filled tender selection for BOQ:', {
+      tenderNameKey,
+      tenderId: tender.id,
+      version: tender.version
+    });
+    
+    // Show content after brief delay for smooth transition
+    setTimeout(() => setIsContentVisible(true), 150);
+    
+    // Scroll to content section
+    setTimeout(() => {
+      const contentSection = document.getElementById('boq-content-section');
+      if (contentSection) {
+        contentSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
   }, []);
 
   return (
@@ -421,6 +449,19 @@ const BOQPageSimplified: React.FC = () => {
                 )}
               </div>
               
+              {/* Quick Tender Selection - moved to header */}
+              {!selectedTenderId && (
+                <div className="mt-6">
+                  <QuickTenderSelector 
+                    tenders={tenders}
+                    loading={tendersLoading}
+                    onTenderSelect={handleQuickTenderSelect}
+                    selectedTenderId={selectedTenderId}
+                    maxItems={6}
+                  />
+                </div>
+              )}
+              
               {/* Deadline Status Bar - integrated into header */}
               {selectedTenderId && selectedTender && (
                 <div className={`mt-4 -mx-8 -mb-8 transition-all duration-700 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}>
@@ -436,6 +477,7 @@ const BOQPageSimplified: React.FC = () => {
         {/* Main Content */}
         {!selectedTenderId && (
           <div className="p-4 lg:p-6">
+            {/* Empty State */}
             <Card className="text-center max-w-2xl mx-auto shadow-lg">
               <Empty
                 description={
@@ -448,7 +490,7 @@ const BOQPageSimplified: React.FC = () => {
                     {!tendersLoading && (
                       <div>
                         <Text className="text-base text-gray-500 block">
-                          Выберите тендер из списка выше для просмотра и управления сметой
+                          Выберите тендер из списка выше или используйте селектор
                         </Text>
                       </div>
                     )}
@@ -471,7 +513,10 @@ const BOQPageSimplified: React.FC = () => {
         )}
         
         {selectedTenderId && (
-          <div className={`p-4 lg:p-6 transition-all duration-1000 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}>
+          <div 
+            id="boq-content-section"
+            className={`p-4 lg:p-6 transition-all duration-1000 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}
+          >
             <div className={`w-full transition-all duration-1000 transform ${isContentVisible ? 'translate-y-0' : 'translate-y-10'}`}>
               <TenderBOQManagerSimplified 
                 tenderId={selectedTenderId} 

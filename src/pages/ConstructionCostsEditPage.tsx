@@ -559,7 +559,7 @@ const ConstructionCostsEditPage: React.FC = () => {
       <style>
         {`
           .edit-page-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
             border-radius: 16px;
             margin-bottom: 24px;
             padding: 32px;

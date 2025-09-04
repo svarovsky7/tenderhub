@@ -122,6 +122,59 @@ export const generateConstructionCostsTemplate = () => {
 };
 
 /**
+ * Export client positions with commercial costs to Excel
+ */
+export const exportCommercialCostsToExcel = (positions: any[], tenderName = '', fileName = 'commercial_costs.xlsx') => {
+  console.log('🚀 [exportCommercialCostsToExcel] Exporting positions:', positions.length);
+
+  const exportData = positions.map(position => ({
+    '№ п/п': position.position_number || '',
+    'Тип позиции': position.position_type || 'executable',
+    'Наименование работ': position.work_name || '',
+    'Ед. изм.': position.unit || '',
+    'Кол-во Заказчика': position.client_quantity || position.volume || '',
+    'Кол-во ГП': position.gp_quantity || position.manual_volume || '',
+    'Примечание заказчика': position.client_note || '',
+    'Базовая стоимость, ₽': position.base_total_cost ? Math.round(position.base_total_cost) : '',
+    'Коммерческая стоимость, ₽': position.commercial_total_cost ? Math.round(position.commercial_total_cost) : '',
+    'Наценка, ₽': position.base_total_cost && position.commercial_total_cost 
+      ? Math.round(position.commercial_total_cost - position.base_total_cost) : '',
+    'Наценка, %': position.markup_percentage ? `${position.markup_percentage.toFixed(1)}%` : '',
+    'Работы (коммерческая), ₽': position.works_total_cost ? Math.round(position.works_total_cost) : '',
+    'Материалы (коммерческая), ₽': position.materials_total_cost ? Math.round(position.materials_total_cost) : '',
+  }));
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(exportData);
+
+  // Set column widths
+  const colWidths = [
+    { wch: 8 },  // № п/п
+    { wch: 15 }, // Тип позиции
+    { wch: 40 }, // Наименование работ
+    { wch: 10 }, // Ед. изм.
+    { wch: 15 }, // Кол-во Заказчика
+    { wch: 12 }, // Кол-во ГП
+    { wch: 30 }, // Примечание заказчика
+    { wch: 18 }, // Базовая стоимость
+    { wch: 20 }, // Коммерческая стоимость
+    { wch: 15 }, // Наценка, ₽
+    { wch: 12 }, // Наценка, %
+    { wch: 20 }, // Работы (коммерческая)
+    { wch: 22 }, // Материалы (коммерческая)
+  ];
+  ws['!cols'] = colWidths;
+
+  // Add title and tender info
+  const sheetName = tenderName ? `Коммерческие стоимости - ${tenderName}` : 'Коммерческие стоимости';
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31)); // Excel sheet name limit
+
+  XLSX.writeFile(wb, fileName);
+
+  console.log('✅ [exportCommercialCostsToExcel] Export completed');
+};
+
+/**
  * Export construction costs to Excel
  */
 export const exportConstructionCostsToExcel = (costs: any[], fileName = 'construction_costs.xlsx') => {

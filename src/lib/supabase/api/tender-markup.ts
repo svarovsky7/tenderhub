@@ -2,9 +2,9 @@ import { supabase } from '../client';
 import type { 
   TenderMarkupPercentages, 
   CreateTenderMarkupPercentages, 
-  UpdateTenderMarkupPercentages,
-  DEFAULT_MARKUP_PERCENTAGES 
+  UpdateTenderMarkupPercentages
 } from '../types/tender-markup';
+import { DEFAULT_MARKUP_PERCENTAGES } from '../types/tender-markup';
 
 /**
  * Получить активные проценты накруток для тендера
@@ -16,24 +16,27 @@ export const getActiveTenderMarkup = async (tenderId: string): Promise<TenderMar
     .from('tender_markup_percentages')
     .select('*')
     .eq('tender_id', tenderId)
-    .eq('is_active', true)
-    .single();
+    .eq('is_active', true);
 
   if (error) {
-    if (error.code === 'PGRST116') {
-      // Запись не найдена, создадим значения по умолчанию
-      console.log('📝 [getActiveTenderMarkup] No markup found, creating default');
-      return await createTenderMarkup({
-        tender_id: tenderId,
-        ...DEFAULT_MARKUP_PERCENTAGES
-      });
-    }
     console.error('❌ [getActiveTenderMarkup] Error:', error);
     throw error;
   }
 
-  console.log('✅ [getActiveTenderMarkup] Success:', data);
-  return data;
+  // Handle both array and single result
+  const markup = Array.isArray(data) ? data[0] : data;
+  
+  if (!markup) {
+    // Запись не найдена, создадим значения по умолчанию
+    console.log('📝 [getActiveTenderMarkup] No markup found, creating default');
+    return await createTenderMarkup({
+      tender_id: tenderId,
+      ...DEFAULT_MARKUP_PERCENTAGES
+    });
+  }
+
+  console.log('✅ [getActiveTenderMarkup] Success:', markup);
+  return markup;
 };
 
 /**
