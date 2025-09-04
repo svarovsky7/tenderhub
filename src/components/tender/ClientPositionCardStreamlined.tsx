@@ -39,10 +39,18 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { boqApi, clientPositionsApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
+import { getActiveTenderMarkup } from '../../lib/supabase/api/tender-markup';
 import MaterialLinkingModal from './MaterialLinkingModal';
 import { DecimalInput } from '../common';
 import CostDetailCascadeSelector from '../common/CostDetailCascadeSelector';
 import CostCategoryDisplay from './CostCategoryDisplay';
+import { 
+  calculateWorkCommercialCost,
+  calculateMainMaterialCommercialCost,
+  calculateAuxiliaryMaterialCommercialCost,
+  calculateSubcontractWorkCommercialCost,
+  calculateSubcontractMaterialCommercialCost
+} from '../../utils/calculateCommercialCost';
 import type { 
   BOQItemWithLibrary,
   BOQItemInsert,
@@ -80,6 +88,7 @@ interface QuickAddRowData {
   quantity: number;
   unit_rate: number;
   work_id?: string;
+  material_type?: 'main' | 'auxiliary';
   consumption_coefficient?: number;
   conversion_coefficient?: number;
   detail_cost_category_id?: string;
@@ -126,6 +135,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const [localWorks, setLocalWorks] = useState<BOQItemWithLibrary[]>([]);
   const [tempManualVolume, setTempManualVolume] = useState<number | null>(position.manual_volume ?? null);
   const [tempManualNote, setTempManualNote] = useState<string>(position.manual_note ?? '');
+  const [tenderMarkup, setTenderMarkup] = useState<any>(null);
   
   // Position hierarchy properties
   const positionType: ClientPositionType = position.position_type || 'executable';
@@ -148,6 +158,86 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const fontWeight = useMemo(() => getFontWeight(positionType), [positionType]);
   const textSize = useMemo(() => getTextSize(positionType), [positionType]);
   const tagColor = useMemo(() => getTagColor(positionType), [positionType]);
+  
+  // Function to calculate commercial cost
+  const calculateCommercialCost = useCallback((record: BOQItemWithLibrary) => {
+    if (!tenderMarkup) return 0;
+    
+    // Calculate base cost with delivery
+    let quantity = record.quantity || 0;
+    const unitRate = record.unit_rate || 0;
+    
+    // For linked materials, calculate quantity based on work volume
+    if ((record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link) {
+      const work = position.boq_items?.find(item => {
+        if (record.work_link.work_boq_item_id && 
+            item.id === record.work_link.work_boq_item_id && 
+            item.item_type === 'work') {
+          return true;
+        }
+        if (record.work_link.sub_work_boq_item_id && 
+            item.id === record.work_link.sub_work_boq_item_id && 
+            item.item_type === 'sub_work') {
+          return true;
+        }
+        return false;
+      });
+      
+      if (work) {
+        const consumptionCoef = record.consumption_coefficient || 
+                               record.work_link.material_quantity_per_work || 1;
+        const conversionCoef = record.conversion_coefficient || 
+                              record.work_link.usage_coefficient || 1;
+        const workQuantity = work.quantity || 0;
+        quantity = workQuantity * consumptionCoef * conversionCoef;
+      }
+    }
+    
+    // Calculate base cost including delivery
+    let baseCost = quantity * unitRate;
+    
+    // Add delivery for materials
+    if ((record.item_type === 'material' || record.item_type === 'sub_material')) {
+      const deliveryType = record.delivery_price_type || 'included';
+      const deliveryAmount = record.delivery_amount || 0;
+      
+      if ((deliveryType === 'amount' || deliveryType === 'not_included') && deliveryAmount > 0) {
+        baseCost = baseCost + (deliveryAmount * quantity);
+      }
+    }
+    
+    // Calculate commercial cost based on item type
+    let commercialCost = baseCost;
+    
+    switch (record.item_type) {
+      case 'work':
+        commercialCost = calculateWorkCommercialCost(baseCost, tenderMarkup);
+        break;
+      case 'material':
+        // For commercial cost calculation, what matters is whether material is linked to work
+        // not whether it's main or auxiliary type
+        const isLinked = !!record.work_link;
+        if (isLinked) {
+          // Material linked to work: base cost stays, markup transfers to work
+          const result = calculateMainMaterialCommercialCost(baseCost, tenderMarkup);
+          commercialCost = result.materialCost;
+        } else {
+          // Unlinked material: entire cost transfers to work
+          const result = calculateAuxiliaryMaterialCommercialCost(baseCost, tenderMarkup);
+          commercialCost = result.materialCost;
+        }
+        break;
+      case 'sub_work':
+        commercialCost = calculateSubcontractWorkCommercialCost(baseCost, tenderMarkup);
+        break;
+      case 'sub_material':
+        const subResult = calculateSubcontractMaterialCommercialCost(baseCost, tenderMarkup);
+        commercialCost = subResult.materialCost;
+        break;
+    }
+    
+    return commercialCost;
+  }, [tenderMarkup, position.boq_items]);
   
   // Create stable dependency for position items
   const positionItemsKey = useMemo(() => {
@@ -189,6 +279,23 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   useEffect(() => {
     setTempManualNote(position.manual_note ?? '');
   }, [position.manual_note]);
+  
+  // Load tender markup on component mount
+  useEffect(() => {
+    const loadMarkup = async () => {
+      try {
+        const markup = await getActiveTenderMarkup(tenderId);
+        if (markup && markup.percentages) {
+          setTenderMarkup(markup.percentages);
+          console.log('📊 Loaded tender markup:', markup.percentages);
+        }
+      } catch (error) {
+        console.error('❌ Failed to load tender markup:', error);
+      }
+    };
+    
+    loadMarkup();
+  }, [tenderId]);
   
   const works = localWorks;
   // console.log('🔧 Current works for linking:', works.length, works.map(w => ({ id: w.id, desc: w.description })));
@@ -480,7 +587,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           consumption_coefficient: values.consumption_coefficient || 1,
           conversion_coefficient: values.conversion_coefficient || 1,
           delivery_price_type: values.delivery_price_type || 'included',
-          delivery_amount: values.delivery_amount || 0
+          delivery_amount: values.delivery_amount || 0,
+          material_type: values.material_type || 'main'
         })
       };
 
@@ -714,7 +822,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       detail_cost_category_id: item.detail_cost_category_id || null,
       delivery_price_type: item.delivery_price_type || 'included',
       delivery_amount: item.delivery_amount || 0,
-      item_type: item.item_type
+      item_type: item.item_type,
+      material_type: item.material_type || 'main'  // Add material type field
     });
   }, [editForm, position.boq_items, localWorks]);
 
@@ -842,7 +951,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         detail_cost_category_id: detailCostCategoryId,
         delivery_price_type: values.delivery_price_type || 'included',
         delivery_amount: values.delivery_amount || 0,
-        item_type: values.item_type || editingItem.item_type
+        item_type: values.item_type || editingItem.item_type,
+        material_type: values.material_type || 'main'  // Add material type field
       };
       
       // Add base_quantity for unlinked materials
@@ -1253,18 +1363,53 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       title: 'Тип',
       dataIndex: 'item_type',
       key: 'item_type', 
-      width: '10%',
-      minWidth: 90,
-      render: (type) => {
+      width: 85,
+      render: (type, record) => {
         switch(type) {
           case 'work':
             return <Tag icon={<BuildOutlined />} color="orange" className="text-xs">Работа</Tag>;
           case 'sub_work':
             return <Tag icon={<BuildOutlined />} color="purple" className="text-xs">Суб-раб</Tag>;
           case 'material':
-            return <Tag icon={<ToolOutlined />} color="blue" className="text-xs">Материал</Tag>;
+            // Check material type from material_type field (default to main if not specified)
+            const isMainMaterial = record.material_type !== 'auxiliary';
+            
+            return (
+              <div className="flex flex-col gap-0.5">
+                <Tag icon={<ToolOutlined />} color="blue" className="text-xs">Материал</Tag>
+                <Tag 
+                  color={isMainMaterial ? "cyan" : "gold"} 
+                  className="text-xs"
+                  style={{ fontSize: '10px', padding: '0 4px', height: '18px', lineHeight: '18px' }}
+                >
+                  {isMainMaterial ? (
+                    <>📦 Основной</>
+                  ) : (
+                    <>🔧 Вспомог.</>
+                  )}
+                </Tag>
+              </div>
+            );
           case 'sub_material':
-            return <Tag icon={<ToolOutlined />} color="green" className="text-xs">Суб-мат</Tag>;
+            // Check sub-material type from material_type field (default to main if not specified)
+            const isMainSubMaterial = record.material_type !== 'auxiliary';
+            
+            return (
+              <div className="flex flex-col gap-0.5">
+                <Tag icon={<ToolOutlined />} color="green" className="text-xs">Суб-мат</Tag>
+                <Tag 
+                  color={isMainSubMaterial ? "cyan" : "gold"} 
+                  className="text-xs"
+                  style={{ fontSize: '10px', padding: '0 4px', height: '18px', lineHeight: '18px' }}
+                >
+                  {isMainSubMaterial ? (
+                    <>📦 Основной</>
+                  ) : (
+                    <>🔧 Вспомог.</>
+                  )}
+                </Tag>
+              </div>
+            );
           default:
             return <Tag className="text-xs">{type}</Tag>;
         }
@@ -1274,8 +1419,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       title: 'Наименование',
       dataIndex: 'description',
       key: 'description',
-      width: '30%',
-      minWidth: 180,
+      width: 240,
       ellipsis: { showTitle: false },
       render: (text, record) => {
         // Find if material/sub-material is linked to a work
@@ -1318,8 +1462,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         </Tooltip>
       ),
       key: 'conversion_coef',
-      width: '6%',
-      minWidth: 55,
+      width: 60,
       align: 'center',
       render: (_, record) => {
         if (record.item_type === 'material' || record.item_type === 'sub_material') {
@@ -1342,8 +1485,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         </Tooltip>
       ),
       key: 'consumption_coef',
-      width: '6%',
-      minWidth: 55,
+      width: 60,
       align: 'center',
       render: (_, record) => {
         if (record.item_type === 'material' || record.item_type === 'sub_material') {
@@ -1363,8 +1505,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       title: 'Кол-во',
       dataIndex: 'quantity',
       key: 'quantity',
-      width: '10%',
-      minWidth: 90,
+      width: 85,
       align: 'right',
       render: (value, record) => {
         // For materials linked to works (including sub-materials linked to sub-works)
@@ -1447,8 +1588,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       title: 'Ед.',
       dataIndex: 'unit',
       key: 'unit',
-      width: '5%',
-      minWidth: 50,
+      width: 50,
       align: 'center',
       render: (text) => (
         <div className="text-center py-1 text-sm">{text}</div>
@@ -1458,8 +1598,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       title: 'Цена',
       dataIndex: 'unit_rate',
       key: 'unit_rate',
-      width: '10%',
-      minWidth: 90,
+      width: 85,
       align: 'right',
       render: (value) => (
         <div className="text-right py-1 text-sm">
@@ -1473,8 +1612,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     {
       title: 'Доставка',
       key: 'delivery',
-      width: '10%',
-      minWidth: 100,
+      width: 100,
       align: 'center',
       render: (_, record) => {
         // Показываем доставку только для материалов и субматериалов
@@ -1517,8 +1655,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     {
       title: 'Сумма',
       key: 'total',
-      width: '12%',
-      minWidth: 100,
+      width: 110,
       align: 'right',
       render: (_, record) => {
         // Получаем дополнительные данные для расчета
@@ -1620,18 +1757,110 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       title: 'Категория затрат',
       dataIndex: 'detail_cost_category_id',
       key: 'detail_cost_category_id',
-      width: '15%',
-      minWidth: 150,
+      width: 140,
       align: 'center',
       render: (detailCategoryId) => (
         <CostCategoryDisplay detailCategoryId={detailCategoryId} />
       )
     },
     {
+      title: 'Комм. стоимость',
+      key: 'commercial_cost',
+      width: 120,
+      align: 'right',
+      render: (_, record) => {
+        if (!tenderMarkup) {
+          return (
+            <Tooltip title="Проценты накруток не загружены">
+              <div className="text-right text-gray-400 text-sm">—</div>
+            </Tooltip>
+          );
+        }
+        
+        const commercialCost = calculateCommercialCost(record);
+        const baseCost = (() => {
+          // Calculate base cost with delivery for comparison
+          let quantity = record.quantity || 0;
+          const unitRate = record.unit_rate || 0;
+          
+          // For linked materials, calculate quantity based on work volume
+          if ((record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link) {
+            const work = position.boq_items?.find(item => {
+              if (record.work_link.work_boq_item_id && 
+                  item.id === record.work_link.work_boq_item_id && 
+                  item.item_type === 'work') {
+                return true;
+              }
+              if (record.work_link.sub_work_boq_item_id && 
+                  item.id === record.work_link.sub_work_boq_item_id && 
+                  item.item_type === 'sub_work') {
+                return true;
+              }
+              return false;
+            });
+            
+            if (work) {
+              const consumptionCoef = record.consumption_coefficient || 
+                                     record.work_link.material_quantity_per_work || 1;
+              const conversionCoef = record.conversion_coefficient || 
+                                    record.work_link.usage_coefficient || 1;
+              const workQuantity = work.quantity || 0;
+              quantity = workQuantity * consumptionCoef * conversionCoef;
+            }
+          }
+          
+          let base = quantity * unitRate;
+          
+          // Add delivery for materials
+          if ((record.item_type === 'material' || record.item_type === 'sub_material')) {
+            const deliveryType = record.delivery_price_type || 'included';
+            const deliveryAmount = record.delivery_amount || 0;
+            
+            if ((deliveryType === 'amount' || deliveryType === 'not_included') && deliveryAmount > 0) {
+              base = base + (deliveryAmount * quantity);
+            }
+          }
+          
+          return base;
+        })();
+        
+        const markup = commercialCost - baseCost;
+        const markupPercent = baseCost > 0 ? (markup / baseCost) * 100 : 0;
+        
+        // Color based on markup percentage
+        let color = '#52c41a'; // green by default
+        if (markupPercent > 50) {
+          color = '#fa8c16'; // orange for high markup
+        } else if (markupPercent < 10) {
+          color = '#1890ff'; // blue for low markup
+        }
+        
+        return (
+          <Tooltip 
+            title={
+              <div>
+                <div>Базовая: {Math.round(baseCost).toLocaleString('ru-RU')} ₽</div>
+                <div>Наценка: {markup >= 0 ? '+' : ''}{Math.round(markup).toLocaleString('ru-RU')} ₽</div>
+                <div>Процент: {markupPercent >= 0 ? '+' : ''}{markupPercent.toFixed(1)}%</div>
+              </div>
+            }
+          >
+            <div className="text-right py-1">
+              <div className="font-semibold text-sm" style={{ color }}>
+                {Math.round(commercialCost).toLocaleString('ru-RU')} ₽
+              </div>
+              <div className="text-xs text-gray-500">
+                {markupPercent >= 0 ? '+' : ''}{markupPercent.toFixed(0)}%
+              </div>
+            </div>
+          </Tooltip>
+        );
+      }
+    },
+    {
       title: '',
       key: 'actions',
-      width: '8%',
-      minWidth: 80,
+      width: 80,
       render: (_, record) => (
         <div className="whitespace-nowrap">
           <Space size="small">
@@ -1769,15 +1998,15 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             <Form.Item
               name="description"
               label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Наименование</span>}
-              className="mb-0 flex-1"
-              style={{ minWidth: '300px' }}
+              className="mb-0"
+              style={{ flex: '1 1 auto', minWidth: '0' }}
               rules={[{ required: true, message: 'Наименование' }]}
             >
               <Input.TextArea 
                 placeholder="Наименование работы" 
                 size="small" 
                 autoSize={{ minRows: 1, maxRows: 2 }}
-                style={{ resize: 'none' }}
+                style={{ resize: 'none', width: '100%' }}
               />
             </Form.Item>
 
@@ -1948,6 +2177,20 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               <Select size="small" placeholder="Тип">
                 <Select.Option value="material">Материал</Select.Option>
                 <Select.Option value="sub_material">Суб-мат</Select.Option>
+              </Select>
+            </Form.Item>
+
+            {/* Material Type - основной/вспомогательный */}
+            <Form.Item
+              name="material_type"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Вид</span>}
+              className="mb-0"
+              style={{ width: '140px' }}
+              initialValue="main"
+            >
+              <Select size="small" placeholder="Вид материала">
+                <Select.Option value="main">Основной</Select.Option>
+                <Select.Option value="auxiliary">Вспомогательный</Select.Option>
               </Select>
             </Form.Item>
 
@@ -2288,6 +2531,22 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   <Select.Option value="sub_material">Суб-мат</Select.Option>
                 </Select>
               </Form.Item>
+
+              {/* Material Type - only for materials, right after Type */}
+              {isMaterial && (
+                <Form.Item
+                  name="material_type"
+                  label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Вид</span>}
+                  className="mb-0"
+                  style={{ width: '140px' }}
+                  initialValue="main"
+                >
+                  <Select size="small" placeholder="Вид материала">
+                    <Select.Option value="main">Основной</Select.Option>
+                    <Select.Option value="auxiliary">Вспомогательный</Select.Option>
+                  </Select>
+                </Form.Item>
+              )}
 
               {/* Name - expands to fill available space */}
               <Form.Item
@@ -2725,14 +2984,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 {/* Second row - GP Note - always show for sections/headers, conditional for executable items */}
                 {(canAddItems ? (
                   isExpanded ? (
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-2 w-full" onClick={(e) => e.stopPropagation()}>
                       <Text className="text-sm text-gray-500 whitespace-nowrap font-semibold">Примечание ГП:</Text>
                       <Input
                         size="middle"
                         value={tempManualNote ?? undefined}
                         placeholder="Примечание"
                         className="flex-1"
-                        style={{ fontSize: '14px' }}
+                        style={{ fontSize: '14px', width: '100%' }}
                         onChange={(e) => setTempManualNote(e.target.value)}
                         onBlur={() => {
                           if (tempManualNote !== position.manual_note) {
@@ -2932,7 +3191,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   rowKey="id"
                   pagination={false}
                   size="small"
-                  scroll={{ y: 400 }}
+                  scroll={{ x: 1150, y: 400 }}
                   className="custom-table boq-items-table"
                   rowClassName={(record) => {
                     switch(record.item_type) {

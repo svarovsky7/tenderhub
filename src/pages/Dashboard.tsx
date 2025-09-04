@@ -206,7 +206,10 @@ const Dashboard: React.FC = () => {
             type="text"
             icon={<EyeOutlined />}
             size="small"
-            onClick={() => navigate(`/tenders/${record.id}`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/tenders/${record.id}`);
+            }}
             title="Просмотр"
           />
           {(
@@ -214,7 +217,10 @@ const Dashboard: React.FC = () => {
               type="text"
               icon={<EditOutlined />}
               size="small"
-              onClick={() => navigate(`/tenders/${record.id}/edit`)}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/tenders/${record.id}/edit`);
+              }}
               title="Редактировать"
             />
           )}
@@ -375,13 +381,6 @@ const Dashboard: React.FC = () => {
                       suffix="%"
                       valueStyle={{ color: '#fa8c16' }}
                     />
-                    <Progress 
-                      percent={stats.winRate} 
-                      showInfo={false} 
-                      strokeColor="#fa8c16"
-                      size="small"
-                      className="mt-2"
-                    />
                   </Card>
                 </Col>
               </Row>
@@ -428,6 +427,16 @@ const Dashboard: React.FC = () => {
           columns={columns}
           dataSource={filteredTenders}
           rowKey="id"
+          onRow={(record) => ({
+            onClick: () => navigate(`/boq?tender=${record.id}`),
+            style: { cursor: 'pointer' },
+            onMouseEnter: (e) => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = '#fafafa';
+            },
+            onMouseLeave: (e) => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = '';
+            },
+          })}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,

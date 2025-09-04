@@ -22,7 +22,12 @@ import { getActiveTenderMarkup } from '../../lib/supabase/api/tender-markup';
 import type { ClientPositionInsert, ClientPositionType } from '../../lib/supabase/types';
 import type { TenderMarkupPercentages } from '../../lib/supabase/types/tender-markup';
 import { formatQuantity } from '../../utils/formatters';
-import { calculateBOQItemCommercialCost } from '../../utils/calculateCommercialCost';
+import { 
+  calculateBOQItemCommercialCost,
+  calculateMainMaterialCommercialCost,
+  calculateAuxiliaryMaterialCommercialCost,
+  calculateWorkCommercialCost 
+} from '../../utils/calculateCommercialCost';
 
 const { Title, Text } = Typography;
 
@@ -140,10 +145,15 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
             .reduce((sum, item) => sum + (item.total_amount || 0), 0);
 
           // Calculate commercial costs using markup percentages
-          const commercialMaterialsCost = items
+          // Для материалов: основные (связанные) vs вспомогательные (несвязанные)
+          let totalMaterialsCommercialCost = 0;
+          let totalWorksMarkupFromMaterials = 0;
+          
+          items
             .filter(item => item.item_type === 'material' || item.item_type === 'sub_material')
-            .reduce((sum, item) => {
+            .forEach(item => {
               let quantity = item.quantity || 0;
+              const isLinkedMaterial = !!item.work_link;
               
               // For linked materials, calculate quantity based on work volume and coefficients
               if ((item.item_type === 'material' || item.item_type === 'sub_material') && item.work_link) {
@@ -173,29 +183,67 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
               
               // Базовая стоимость материала за единицу
               const baseCost = (item.unit_rate || 0) + (item.delivery_amount || 0);
-              // Полная базовая стоимость материала
+              // Полная базовая стоимость материала (Материалы ПЗ)
               const fullBaseCost = baseCost * quantity;
-              // Используем формулы расчета коммерческой стоимости
-              const commercialTotalCost = markups 
-                ? calculateBOQItemCommercialCost(item.item_type as 'material' | 'sub_material', fullBaseCost, markups)
-                : fullBaseCost;
               
-              return sum + commercialTotalCost;
-            }, 0);
+              if (markups) {
+                if (isLinkedMaterial) {
+                  // Основной материал (связан с работой)
+                  const result = calculateMainMaterialCommercialCost(fullBaseCost, markups);
+                  totalMaterialsCommercialCost += result.materialCost; // Остается только базовая стоимость
+                  totalWorksMarkupFromMaterials += result.workMarkup; // Наценка переходит в работы
+                } else {
+                  // Вспомогательный материал (не связан с работой)
+                  const result = calculateAuxiliaryMaterialCommercialCost(fullBaseCost, markups);
+                  totalMaterialsCommercialCost += result.materialCost; // Всегда 0 для вспомогательных
+                  totalWorksMarkupFromMaterials += result.workMarkup; // Вся стоимость переходит в работы
+                }
+              } else {
+                totalMaterialsCommercialCost += fullBaseCost;
+              }
+            });
+          
+          const commercialMaterialsCost = totalMaterialsCommercialCost;
 
-          const commercialWorksCost = items
+          const commercialWorksOnlyCost = items
             .filter(item => item.item_type === 'work' || item.item_type === 'sub_work')
             .reduce((sum, item) => {
               const quantity = item.quantity || 0;
               // Базовая стоимость работы (Работа ПЗ)
               const baseCost = (item.unit_rate || 0) * quantity;
-              // Используем формулы расчета, если есть проценты накруток
-              const commercialTotalCost = markups 
-                ? calculateBOQItemCommercialCost(item.item_type, baseCost, markups)
-                : baseCost * (item.commercial_markup_coefficient || 1);
+              
+              // Используем правильную функцию для расчета коммерческой стоимости работ
+              let commercialTotalCost = baseCost;
+              
+              if (markups) {
+                if (item.item_type === 'work') {
+                  // Для работ собственными силами
+                  commercialTotalCost = calculateWorkCommercialCost(baseCost, markups);
+                  console.log('💰 Work commercial cost:', {
+                    description: item.description,
+                    baseCost,
+                    commercialCost: commercialTotalCost,
+                    markup: commercialTotalCost - baseCost
+                  });
+                } else if (item.item_type === 'sub_work') {
+                  // Для субподрядных работ используем базовую функцию
+                  commercialTotalCost = calculateBOQItemCommercialCost(item.item_type, baseCost, markups);
+                  console.log('💰 Sub-work commercial cost:', {
+                    description: item.description,
+                    baseCost,
+                    commercialCost: commercialTotalCost,
+                    markup: commercialTotalCost - baseCost
+                  });
+                }
+              } else {
+                commercialTotalCost = baseCost * (item.commercial_markup_coefficient || 1);
+              }
               
               return sum + commercialTotalCost;
             }, 0);
+          
+          // Коммерческая стоимость работ = работы + наценки от материалов
+          const commercialWorksCost = commercialWorksOnlyCost + totalWorksMarkupFromMaterials;
 
           const baseTotalCost = baseMaterialsCost + baseWorksCost;
           const commercialTotalCost = commercialMaterialsCost + commercialWorksCost;

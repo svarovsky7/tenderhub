@@ -177,35 +177,35 @@ const Cart: React.FC<CartProps> = ({
           </Space>
         </div>
       }
-      extra={
-        <Space>
-          <Button
-            size="small"
-            icon={<ClearOutlined />}
-            onClick={handleClearCart}
-            title="Очистить корзину"
-          >
-            Очистить
-          </Button>
-          <Button
-            type="primary"
-            size="small"
-            icon={<CheckOutlined />}
-            onClick={handleConfirm}
-          >
-            Подтвердить выбор
-          </Button>
-        </Space>
-      }
     >
-      <Table
-        rowKey="id"
-        dataSource={items}
-        columns={cartColumns}
-        pagination={false}
-        size="small"
-        scroll={{ y: 300 }}
-      />
+      <div className="space-y-3">
+        <div className="flex justify-end">
+          <Space>
+            <Button
+              icon={<ClearOutlined />}
+              onClick={handleClearCart}
+              title="Очистить корзину"
+            >
+              Очистить
+            </Button>
+            <Button
+              type="primary"
+              icon={<CheckOutlined />}
+              onClick={handleConfirm}
+            >
+              Подтвердить выбор
+            </Button>
+          </Space>
+        </div>
+        <Table
+          rowKey="id"
+          dataSource={items}
+          columns={cartColumns}
+          pagination={false}
+          size="small"
+          scroll={{ y: 300 }}
+        />
+      </div>
     </Card>
   );
 };

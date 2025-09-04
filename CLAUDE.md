@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TenderHub is a construction tender management portal built with React 19, TypeScript 5.8, and Vite 7. The application manages hierarchical Bill of Quantities (BOQ), materials/works libraries, and tender workflows for construction project bidding. Currently operates without authentication for simplified development.
 
-**Language**: Russian UI throughout the application
+**Language**: Russian UI throughout the application  
+**React 19 Note**: Using compatibility patch for Ant Design (`@ant-design/v5-patch-for-react-19`)
 
 ## Development Commands
 
@@ -24,6 +25,12 @@ npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 - ESLint: `npm run lint`
 - Manual testing in dev server
 - Database schema validation against `supabase/schemas/prod.sql`
+
+**Build Process:**
+- TypeScript compilation first (`tsc -b`) using project references
+- Then Vite bundling if TypeScript succeeds
+- Build will fail on any TypeScript errors
+- `.tsbuildinfo` cached in `node_modules/.tmp/`
 
 ## MCP (Model Context Protocol) Integration
 
@@ -96,6 +103,7 @@ Modular domain-specific modules (all < 600 lines):
 - `tender-markup.ts` - Markup management
 - `users.ts` - User management
 - `work-materials-management.ts` - Combined work-material operations
+- `financial-indicators.ts` - Financial metrics management
 - Real-time subscriptions ready but disabled
 
 ### Type System (`src/lib/supabase/types/`)
@@ -106,7 +114,7 @@ Modular domain-specific modules (all < 600 lines):
 
 ### Component Organization
 ```
-src/components/tender/     # Core BOQ components (40+ components)
+src/components/tender/     # Core BOQ components (46 components)
   TenderBOQManagerNew.tsx  # Main BOQ interface
   TenderBOQManagerSimplified.tsx # Alternative simplified BOQ
   ClientPositionCardStreamlined.tsx # Position card with inline editing
@@ -115,7 +123,7 @@ src/components/tender/     # Core BOQ components (40+ components)
   MaterialLinkModal.tsx   # Material linking UI
   CostCategoryDisplay.tsx # Dynamic cost category display
 
-src/components/common/     # Shared components
+src/components/common/     # Shared components (7 components)
   CostDetailCascadeSelector.tsx # Combined cascade/search selector with caching
   AutoCompleteSearch.tsx # Debounced autocomplete component
   DecimalInput.tsx       # Formatted decimal input
@@ -152,6 +160,7 @@ src/pages/                # Route components
 - **BOQ Items**: Uses `detail_cost_category_id` (not `cost_node_id`)
 - **Base Quantity**: `base_quantity` field stores user input for unlinked materials
 - **Total Amount**: Calculated as `(unit_rate + delivery_amount) × quantity` via database trigger
+- **Database Triggers**: Auto-calculate delivery amounts (`calculate_boq_amounts_trigger`)
 
 ### 2. File Size Limits
 - **Maximum 600 lines per file**
@@ -220,6 +229,26 @@ try {
 - **Selector Modes**: Combined cascade selection and search (min 2 chars)
 - **Grouping**: Details grouped by name to avoid duplicates with different locations
 
+### Commercial Cost Calculation System (`utils/calculateCommercialCost.ts`)
+- **Own Forces Work Formula** (uses `tender_markup_percentages` table):
+  1. Служба механизации = Работа ПЗ × % механизации
+  2. МБП+ГСМ = Работа ПЗ × % МБП+ГСМ
+  3. Гарантийный период = Работа ПЗ × % гарантии
+  4. Работа 1,6 = (Работа ПЗ + СМ) × (1 + % works_16_markup/100)
+  5. Работы Рост = (Работа 1,6 + МБП+ГСМ) × (1 + % роста)
+  6. Непредвиденные = (Работа 1,6 + МБП+ГСМ) × (1 + % непредвиденных)
+  7. ООЗ = (Работы Рост + Непредвиденные - Работа 1,6 - МБП+ГСМ) × (1 + % ООЗ)
+  8. ОФЗ = ООЗ × (1 + % ОФЗ)
+  9. Прибыль = ОФЗ × (1 + % прибыли)
+  10. Итого = Прибыль + Гарантийный период
+- **Material Types**:
+  - **Main Materials** (linked): Base cost stays, markup transfers to works
+  - **Auxiliary Materials** (unlinked): Entire cost transfers to works
+- **Subcontract Works**: Sequential multiplication with growth, overhead, profit percentages
+- **Subcontract Materials**: Base cost stays, markup transfers to subcontract works
+- **Logging**: Detailed console logs with emojis for each calculation step
+- **Database Tables Used**: `tender_markup_percentages`, `boq_items`, `materials_library`, `works_library`
+
 ### Performance Optimizations
 - Code splitting with React.lazy() for all routes
 - Virtual scrolling with react-window for BOQ lists
@@ -230,7 +259,7 @@ try {
 - Memoization with React.memo for expensive components
 
 ### Code Organization
-- Components grouped by feature in `components/tender/` (40+ BOQ-related components)
+- Components grouped by feature in `components/tender/` (46 BOQ-related components)
 - Custom hooks extracted to separate files (`hooks/useBOQManagement.ts`, `hooks/useMaterialDragDrop.tsx`)
 - Types centralized in modular `lib/supabase/types/` structure
 - Domain-specific API modules with barrel exports (`src/lib/supabase/api/index.ts`)
@@ -243,6 +272,8 @@ Create `.env.local`:
 ```
 VITE_SUPABASE_URL=https://lkmgbizyyaaacetllbzr.supabase.co
 VITE_SUPABASE_ANON_KEY=your_anon_key_here
+VITE_APP_NAME=TenderHub  # Optional: Application name
+VITE_APP_VERSION=1.0.0   # Optional: Version display
 ```
 
 ## Vite Configuration
@@ -257,6 +288,13 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - **Type Safety**: Modular database types in `src/lib/supabase/types/database/`
 - **Path Resolution**: Configured for absolute imports from src/
 - **Build Info**: `.tsbuildinfo` stored in `node_modules/.tmp/`
+
+## ESLint Configuration
+- **Flat Config**: Using ESLint 9 flat config format (`eslint.config.js`)
+- **Plugins**: React hooks, React refresh, TypeScript ESLint
+- **Globals**: Browser environment
+- **Ignores**: `dist` directory
+- **File Extensions**: `.ts` and `.tsx` files only
 
 ## Current Status
 
@@ -309,37 +347,35 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 - **Connection Monitoring**: Built-in Supabase status tracking via ConnectionStatus component
 - **Excel Import**: Batch operations via `client-works.ts` and `client-positions.ts`
 - **BOQ Pages**: Two interfaces - standard (`/tender/:id/boq`) and simplified (`/boq`)
+- **Fetch Interceptor**: Custom retry logic with exponential backoff for all Supabase calls
+- **Component Count**: 46 BOQ components, 7 shared components, 20+ API modules
+- **Utilities**: Key utilities in `src/utils/`:
+  - `calculateCommercialCost.ts` - Commercial cost calculation logic
+  - `clientPositionHierarchy.ts` - Client position hierarchy helpers
+  - `excel-templates.ts` - Excel import/export templates
+  - `formatters.ts` - Number and date formatting
+  - `materialCalculations.ts` - Material quantity calculations
 
 ## Development Workflow
 
-1. Check `.env.local` exists with Supabase credentials
-2. Run `npm install` then `npm run dev`
-3. For DB changes:
+1. **Setup**: Ensure `.env.local` exists with Supabase credentials
+2. **Start**: `npm install` → `npm run dev`
+3. **Database changes**:
    - Modify in Supabase dashboard
-   - Run `npm run db:schema` to export schema
-   - Update types to match prod.sql
-   - Apply migrations if needed via Supabase CLI
-4. Always verify against `supabase/schemas/prod.sql` before database operations
-5. Test with:
-   - Type checking: `npm run build`
-   - Linting: `npm run lint`
-   - Manual testing in development server
-6. Git workflow:
-   - Commit with descriptive emoji prefixes:
-     - 🎯 Feature implementation
-     - ✨ New features
-     - 🚀 Performance improvements
-     - 🐛 Bug fixes
-     - 🎨 UI/UX improvements
-     - 💥 Breaking changes
-   - Push to origin/main after testing
+   - Export: `npm run db:schema`
+   - Update TypeScript types to match `prod.sql`
+4. **Testing**:
+   - Type check: `npm run build`
+   - Lint: `npm run lint`
+   - Manual testing in dev server
+5. **MCP tools**: Use `mcp__supabase__*` for direct database operations
 
 ## Project File Structure
 ```
 TenderHUB/
 ├── src/
 │   ├── components/         # UI components
-│   │   ├── tender/        # BOQ-specific (40+ components)
+│   │   ├── tender/        # BOQ-specific (46 components)
 │   │   ├── common/        # Shared components
 │   │   ├── admin/         # Admin interfaces
 │   │   ├── financial/     # Financial indicators components
@@ -367,47 +403,30 @@ TenderHUB/
 └── package.json          # Dependencies & scripts
 ```
 
-## Specialized Agents Available
+## Git Workflow
 
-When working with complex tasks, consider using these specialized agents via the Task tool:
+- **Main branch**: `main` (for development and PRs)
+- **Commit prefixes**: Use descriptive emoji prefixes
+  - 🎯 Feature implementation
+  - ✨ New features
+  - 💰 Financial/cost features
+  - 🚀 Performance improvements
+  - 🐛 Bug fixes
+  - 🎨 UI/UX improvements
+  - 💥 Breaking changes
+- **Recent focus areas** (from commit history):
+  - Commercial cost calculations
+  - BOQ interface improvements
+  - Inline editing capabilities
+  - Database synchronization fixes
+  - Financial calculations optimization
 
-- **ui-ux-designer**: For creating new UI components, design systems, or improving user experience
-- **backend-architect**: For designing API endpoints, database schemas, or complex business logic
-- **typescript-pro**: For complex TypeScript patterns, advanced types, or generics
-- **sql-pro**: For optimizing database queries, designing schemas, or complex SQL operations
-- **database-optimizer**: For performance tuning, indexing strategies, or query optimization
-- **debugger**: For troubleshooting errors, test failures, or unexpected behavior
-- **docs-architect**: For creating comprehensive technical documentation
+## Common Troubleshooting
 
-## Common Development Tasks
-
-### Running Development Server
-```bash
-npm run dev  # Server will auto-assign port if 5173 is busy
-# Access at http://localhost:5173 (or assigned port)
-```
-
-### Database Operations
-```bash
-# Export current schema from production
-npm run db:schema
-
-# Direct database queries via MCP tools
-# Use mcp__supabase__supabase_query for SELECT
-# Use mcp__supabase__supabase_insert/update/delete for mutations
-```
-
-### Code Quality Checks
-```bash
-npm run build  # TypeScript type checking + production build
-npm run lint   # ESLint checks with flat config
-```
-
-## Git State Context
-
-When starting a conversation, check the git status which shows:
-- Current branch (usually `main`)
-- Modified/staged files
-- Recent commits with descriptive emoji prefixes
+- **Port Already in Use**: Dev server auto-assigns new port if 5173 is busy
+- **React 19 Warnings**: Expected due to Ant Design compatibility patch
+- **Type Errors**: Run `npm run build` to check all TypeScript errors
+- **Database Schema Mismatch**: Always sync with `supabase/schemas/prod.sql`
+- **MCP Not Working**: Restart Claude Code completely (see MCP_SETUP.md)
 
 Remember: This is a simplified dev environment. Production will require authentication, RLS, and security features.
