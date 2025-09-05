@@ -278,7 +278,7 @@ Create `.env.local`:
 VITE_SUPABASE_URL=https://lkmgbizyyaaacetllbzr.supabase.co
 VITE_SUPABASE_ANON_KEY=your_anon_key_here
 VITE_APP_NAME=TenderHub  # Optional: Application name
-VITE_APP_VERSION=1.0.0   # Optional: Version display
+VITE_APP_VERSION=0.0.0   # Optional: Version display (matches package.json)
 ```
 
 ## Vite Configuration

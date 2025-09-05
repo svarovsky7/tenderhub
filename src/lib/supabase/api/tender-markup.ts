@@ -229,13 +229,12 @@ export const calculateMarkupFinancials = (
   // Добавляем все дополнительные службы к общему итогу
   const subtotalAfterGrowth = materialsWithGrowth + worksWithGrowth + submaterialsWithGrowth + subworksWithGrowth + mbpGsmCost + warrantyPeriodCost;
   
-  // НЕПРЕДВИДЕННЫЕ ЗАТРАТЫ: Применяем % к (Работы ПЗ + Материалы ПЗ + МБП+ГСМ + Служба механизации + Работы РОСТ (результат) + Материалы РОСТ (результат) + Работы 1,6)
-  const contingencyBase = baseCosts.works + baseCosts.materials + mbpGsmCost + mechanizationServiceCost + worksGrowthAmount + materialsGrowthAmount + worksAfter16;
+  // НЕПРЕДВИДЕННЫЕ ЗАТРАТЫ: Применяем % к (Работы ПЗ + Материалы ПЗ + МБП+ГСМ + Служба механизации + Работы 1,6)
+  const contingencyBase = baseCosts.works + baseCosts.materials + mbpGsmCost + mechanizationServiceCost + worksAfter16;
   const contingencyCost = contingencyBase * (safeMarkup.contingency_costs / 100);
-  console.log('⚠️ [Непредвиденные] (Работы ПЗ + Материалы ПЗ + МБП+ГСМ + Служба механизации + Работы РОСТ (результат) + Материалы РОСТ (результат) + Работы 1,6) * Непредвиденные%:', 
+  console.log('⚠️ [Непредвиденные] (Работы ПЗ + Материалы ПЗ + МБП+ГСМ + Служба механизации + Работы 1,6) * Непредвиденные%:', 
     '(' + baseCosts.works.toFixed(2), '+', baseCosts.materials.toFixed(2), '+', mbpGsmCost.toFixed(2), '+', 
-    mechanizationServiceCost.toFixed(2), '+', worksGrowthAmount.toFixed(2), '+', materialsGrowthAmount.toFixed(2), '+',
-    worksAfter16.toFixed(2) + ')', '*', safeMarkup.contingency_costs + '%', '=', contingencyCost.toFixed(2));
+    mechanizationServiceCost.toFixed(2), '+', worksAfter16.toFixed(2) + ')', '*', safeMarkup.contingency_costs + '%', '=', contingencyCost.toFixed(2));
   
   const subtotalWithContingency = subtotalAfterGrowth + contingencyCost;
   

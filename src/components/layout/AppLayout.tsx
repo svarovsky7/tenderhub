@@ -15,6 +15,7 @@ import {
   DollarOutlined,
   LineChartOutlined,
   CalculatorOutlined,
+  ShopOutlined,
 } from '@ant-design/icons';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import ConnectionStatus from './ConnectionStatus';
@@ -110,10 +111,24 @@ const AppLayout: React.FC = () => {
       path: '/boq',
     },
     {
-      key: 'commercial-costs',
-      icon: <CalculatorOutlined />,
-      label: <Link to="/commercial-costs">Коммерческие стоимости</Link>,
-      path: '/commercial-costs',
+      key: 'commerce',
+      icon: <ShopOutlined />,
+      label: 'Коммерция',
+      path: '/commerce',
+      children: [
+        {
+          key: 'commercial-costs',
+          icon: null,
+          label: <Link to="/commercial-costs">Коммерческие стоимости</Link>,
+          path: '/commercial-costs',
+        },
+        {
+          key: 'financial',
+          icon: null,
+          label: <Link to="/financial">Финансовые показатели</Link>,
+          path: '/financial',
+        },
+      ],
     },
     {
       key: 'libraries',
@@ -160,12 +175,6 @@ const AppLayout: React.FC = () => {
           path: '/construction-costs/management',
         },
       ],
-    },
-    {
-      key: 'financial',
-      icon: <LineChartOutlined />,
-      label: <Link to="/financial">Финансовые показатели</Link>,
-      path: '/financial',
     },
     {
       key: 'tender-markup',

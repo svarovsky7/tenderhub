@@ -11,7 +11,7 @@ export function calculateWorkCommercialCost(
   baseCost: number,
   markups: TenderMarkupPercentages
 ): number {
-  console.log('🚀 Расчет коммерческой стоимости работы');
+  console.log('🚀 Расчет коммерческой стоимости работы (исправленная формула)');
   console.log('📊 Базовая стоимость (Работа ПЗ):', baseCost);
   console.log('📊 Проценты накруток:', markups);
 
@@ -36,22 +36,31 @@ export function calculateWorkCommercialCost(
   const worksCostGrowth = (work16 + mbpGsmCost) * (1 + markups.works_cost_growth / 100);
   console.log('5️⃣ Работы Рост:', worksCostGrowth, `(+${markups.works_cost_growth}%)`);
 
-  // 6. Непредвиденные = (Работа 1,6 + МБП+ГСМ) * (1 + процент)
-  const contingencyCosts = (work16 + mbpGsmCost) * (1 + markups.contingency_costs / 100);
-  console.log('6️⃣ Непредвиденные затраты:', contingencyCosts, `(+${markups.contingency_costs}%)`);
+  // Рост работ для данной работы = (базовые работы + механизация + Работы 1,6 + МБП) * процент роста
+  const worksGrowthAmount = (baseCost + mechanizationCost + work16 + mbpGsmCost) * (markups.works_cost_growth / 100);
+  console.log('💹 Рост работ (результат):', worksGrowthAmount, `(+${markups.works_cost_growth}%)`);
 
-  // 7. ООЗ = (Работы Рост + Непредвиденные - Работа 1,6 - МБП-ГСМ) * (1 + процент)
-  const ooz = (worksCostGrowth + contingencyCosts - work16 - mbpGsmCost) * 
-              (1 + markups.overhead_own_forces / 100);
-  console.log('7️⃣ ООЗ собств. силы:', ooz, `(+${markups.overhead_own_forces}%)`);
+  // 6. Непредвиденные = (Работа 1,6 + МБП+ГСМ) * (1 + процент)
+  // ИСПРАВЛЕНО: используем (1 + процент), а не просто процент
+  const contingencyBase = work16 + mbpGsmCost;
+  const contingencyCosts = contingencyBase * (1 + markups.contingency_costs / 100);
+  console.log('6️⃣ Непредвиденные затраты:', contingencyCosts, `(база: ${contingencyBase} = Работа1,6 + МБП+ГСМ, коэф: ${1 + markups.contingency_costs / 100})`);
+
+  // 7. ООЗ = (Непредвиденные + Работы Рост - Работы 1,6 - МБП) * (1 + процент)
+  // ИСПРАВЛЕНО: используем (1 + процент), а не просто процент
+  const oozBase = contingencyCosts + worksCostGrowth - work16 - mbpGsmCost;
+  const ooz = oozBase * (1 + markups.overhead_own_forces / 100);
+  console.log('7️⃣ ООЗ собств. силы:', ooz, `(база: ${oozBase} = Непредвиденные + Работы Рост - Работы 1,6 - МБП, коэф: ${1 + markups.overhead_own_forces / 100})`);
 
   // 8. ОФЗ = ООЗ * (1 + процент)
+  // ИСПРАВЛЕНО: используем (1 + процент), а не просто процент
   const ofz = ooz * (1 + markups.general_costs_without_subcontract / 100);
-  console.log('8️⃣ ОФЗ (без субподряда):', ofz, `(+${markups.general_costs_without_subcontract}%)`);
+  console.log('8️⃣ ОФЗ (без субподряда):', ofz, `(база: ${ooz} = ООЗ, коэф: ${1 + markups.general_costs_without_subcontract / 100})`);
 
-  // 9. Прибыль собственные силы = ОФЗ * (1 + процент)
+  // 9. Прибыль = ОФЗ * (1 + процент)
+  // ИСПРАВЛЕНО: используем (1 + процент), а не просто процент
   const profit = ofz * (1 + markups.profit_own_forces / 100);
-  console.log('9️⃣ Прибыль собств. силы:', profit, `(+${markups.profit_own_forces}%)`);
+  console.log('9️⃣ Прибыль собств. силы:', profit, `(база: ${ofz} = ОФЗ, коэф: ${1 + markups.profit_own_forces / 100})`);
 
   // Итоговая коммерческая стоимость = Прибыль + Гарантийный период
   const totalCommercialCost = profit + warrantyCost;
@@ -85,8 +94,8 @@ export function calculateMainMaterialCommercialCost(
   const contingencyMaterials = baseCost * (1 + markups.contingency_costs / 100);
   console.log('2️⃣ Непредвиденные затраты на материалы:', contingencyMaterials, `(+${markups.contingency_costs}%)`);
 
-  // 3. ООЗ мат = (Материалы РОСТ + Непредвиденные - Материалы ПЗ) * (1 + процент ООЗ)
-  const oozMat = (materialsGrowth + contingencyMaterials - baseCost) * 
+  // 3. ООЗ мат = (Непредвиденные + Материалы рост - Материалы ПЗ) * (1 + процент ООЗ)
+  const oozMat = (contingencyMaterials + materialsGrowth - baseCost) * 
                  (1 + markups.overhead_own_forces / 100);
   console.log('3️⃣ ООЗ мат:', oozMat, `(+${markups.overhead_own_forces}%)`);
 

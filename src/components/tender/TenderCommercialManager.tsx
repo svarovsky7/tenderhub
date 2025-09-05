@@ -26,7 +26,8 @@ import {
   calculateBOQItemCommercialCost,
   calculateMainMaterialCommercialCost,
   calculateAuxiliaryMaterialCommercialCost,
-  calculateWorkCommercialCost 
+  calculateWorkCommercialCost as calcWorkCost,
+  calculateMaterialCommercialCost
 } from '../../utils/calculateCommercialCost';
 import { exportCommercialCostsToExcel } from '../../utils/excel-templates';
 
@@ -71,6 +72,16 @@ interface ClientPositionWithCommercial {
   client_quantity?: number;        // Кол-во Заказчика (area_client)
   gp_quantity?: number;            // Кол-во ГП (area_sp)
   manual_volume?: number;          // Ручной объем
+  // Детализация компонентов работ для подсказок
+  works_breakdown?: {
+    ownWorksCost: number;          // Коммерческая стоимость собственных работ
+    subcontractWorksCost: number;  // Коммерческая стоимость субподрядных работ
+    auxiliaryMaterialsCost: number; // Полная стоимость вспомогательных материалов
+    mainMaterialsMarkup: number;   // Наценки от основных материалов
+    subMaterialsMarkup: number;    // Наценки от субматериалов
+    ownWorksBaseCost: number;      // Базовая стоимость собственных работ
+    subcontractWorksBaseCost: number; // Базовая стоимость субподрядных работ
+  };
 }
 
 const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({ 
@@ -82,6 +93,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
   const [positions, setPositions] = useState<ClientPositionWithCommercial[]>([]);
   const [loading, setLoading] = useState(false);
   const [tenderName, setTenderName] = useState<string>('');
+  const [markups, setMarkups] = useState<TenderMarkupPercentages | null>(null);
   
   // Sort positions by position number
   const sortPositionsByNumber = useCallback((positions: ClientPositionWithCommercial[]): ClientPositionWithCommercial[] => {
@@ -124,12 +136,13 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
       }
 
       // Загружаем проценты накруток для тендера
-      const markups = await getActiveTenderMarkup(tenderId);
-      if (!markups) {
+      const markupsData = await getActiveTenderMarkup(tenderId);
+      if (!markupsData) {
         console.warn('⚠️ No markup percentages found for tender:', tenderId);
         message.warning('Не найдены проценты накруток для тендера');
       }
-      console.log('✅ Markup percentages loaded:', markups);
+      setMarkups(markupsData);
+      console.log('✅ Markup percentages loaded:', markupsData);
 
       const result = await clientPositionsApi.getByTenderId(tenderId, {}, { limit: 1000 });
       if (result.error) {
@@ -148,11 +161,47 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
           // Calculate base costs
           const baseMaterialsCost = items
             .filter(item => item.item_type === 'material' || item.item_type === 'sub_material')
-            .reduce((sum, item) => sum + (item.total_amount || 0), 0);
+            .reduce((sum, item) => {
+              // Для базовой стоимости используем unit_rate * quantity, а не total_amount
+              const quantity = item.quantity || 0;
+              const unitRate = item.unit_rate || 0;
+              const deliveryAmount = item.delivery_amount || 0;
+              const baseCost = (unitRate + deliveryAmount) * quantity;
+              
+              console.log('💰 Material base cost calculation:', {
+                description: item.description,
+                type: item.item_type,
+                quantity,
+                unitRate,
+                deliveryAmount,
+                baseCost,
+                totalAmount: item.total_amount // Для сравнения
+              });
+              
+              return sum + baseCost;
+            }, 0);
           
           const baseWorksCost = items
             .filter(item => item.item_type === 'work' || item.item_type === 'sub_work')
-            .reduce((sum, item) => sum + (item.total_amount || 0), 0);
+            .reduce((sum, item) => {
+              // Для базовой стоимости используем unit_rate * quantity, а не total_amount
+              const quantity = item.quantity || 0;
+              const unitRate = item.unit_rate || 0;
+              const deliveryAmount = item.delivery_amount || 0;
+              const baseCost = (unitRate + deliveryAmount) * quantity;
+              
+              console.log('💰 Work base cost calculation:', {
+                description: item.description,
+                type: item.item_type,
+                quantity,
+                unitRate,
+                deliveryAmount,
+                baseCost,
+                totalAmount: item.total_amount // Для сравнения
+              });
+              
+              return sum + baseCost;
+            }, 0);
 
           // Рассчитываем коммерческую стоимость материалов используя сохраненные значения из БД
           const commercialMaterialsCost = items
@@ -190,57 +239,120 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
             totalMaterialsCost: commercialMaterialsCost
           });
 
-          const commercialWorksOnlyCost = items
-            .filter(item => item.item_type === 'work' || item.item_type === 'sub_work')
+          // Разделяем расчет собственных и субподрядных работ для детального логирования
+          const ownWorksBaseCost = items
+            .filter(item => item.item_type === 'work')
             .reduce((sum, item) => {
-              // Используем сохраненную в БД коммерческую стоимость
+              const quantity = item.quantity || 0;
+              const unitRate = item.unit_rate || 0;
+              const deliveryAmount = item.delivery_amount || 0;
+              const baseCost = (unitRate + deliveryAmount) * quantity;
+              return sum + baseCost;
+            }, 0);
+
+          const ownWorksCost = items
+            .filter(item => item.item_type === 'work')
+            .reduce((sum, item) => {
               const commercialTotalCost = item.commercial_cost || 0;
-              
-              console.log('💰 Using saved commercial cost for work:', {
+              console.log('💰 Own work commercial cost:', {
                 description: item.description,
                 type: item.item_type,
                 commercialCost: commercialTotalCost
               });
-              
               return sum + commercialTotalCost;
             }, 0);
 
-          // Рассчитываем наценку от материалов, которая переходит в работы
-          const totalWorksMarkupFromMaterials = items
-            .filter(item => item.item_type === 'material' || item.item_type === 'sub_material')
+          const subcontractWorksBaseCost = items
+            .filter(item => item.item_type === 'sub_work')
             .reduce((sum, item) => {
-              const isAuxiliary = item.material_type === 'auxiliary';
-              const commercialTotalCost = item.commercial_cost || 0;
-              
-              if (isAuxiliary) {
-                // Вспомогательный материал: вся коммерческая стоимость переходит в работы
-                console.log('💰 Auxiliary material transferring to works:', {
-                  description: item.description,
-                  type: item.item_type,
-                  commercialCost: commercialTotalCost
-                });
-                return sum + commercialTotalCost;
-              } else {
-                // Основной материал: только наценка переходит в работы
-                const quantity = item.quantity || 0;
-                const baseCost = (item.unit_rate || 0) * quantity + (item.delivery_amount || 0) * quantity;
-                const markup = commercialTotalCost - baseCost;
-                
-                console.log('💰 Main material markup transferring to works:', {
-                  description: item.description,
-                  type: item.item_type,
-                  baseCost,
-                  commercialCost: commercialTotalCost,
-                  markup: markup
-                });
-                return sum + (markup > 0 ? markup : 0);
-              }
+              const quantity = item.quantity || 0;
+              const unitRate = item.unit_rate || 0;
+              const deliveryAmount = item.delivery_amount || 0;
+              const baseCost = (unitRate + deliveryAmount) * quantity;
+              return sum + baseCost;
             }, 0);
 
+          const subcontractWorksCost = items
+            .filter(item => item.item_type === 'sub_work')
+            .reduce((sum, item) => {
+              const commercialTotalCost = item.commercial_cost || 0;
+              console.log('💰 Subcontract work commercial cost:', {
+                description: item.description,
+                type: item.item_type,
+                commercialCost: commercialTotalCost
+              });
+              return sum + commercialTotalCost;
+            }, 0);
+
+          const commercialWorksOnlyCost = ownWorksCost + subcontractWorksCost;
+
+          // Рассчитываем наценку от материалов, которая переходит в работы
+          let auxiliaryMaterialsCost = 0;
+          let mainMaterialsMarkup = 0;
+          let subMaterialsMarkup = 0;
+          
+          items.filter(item => item.item_type === 'material' || item.item_type === 'sub_material')
+            .forEach(item => {
+              const isAuxiliary = item.material_type === 'auxiliary';
+              const commercialTotalCost = item.commercial_cost || 0;
+              const quantity = item.quantity || 0;
+              const baseCost = (item.unit_rate || 0) * quantity + (item.delivery_amount || 0) * quantity;
+              const markup = commercialTotalCost - baseCost;
+              
+              if (item.item_type === 'material') {
+                if (isAuxiliary) {
+                  // Вспомогательный материал: вся коммерческая стоимость переходит в работы
+                  auxiliaryMaterialsCost += commercialTotalCost;
+                  console.log('💰 Auxiliary material (full cost to works):', {
+                    description: item.description,
+                    type: item.item_type,
+                    commercialCost: commercialTotalCost
+                  });
+                } else {
+                  // Основной материал: только наценка переходит в работы
+                  mainMaterialsMarkup += (markup > 0 ? markup : 0);
+                  console.log('💰 Main material (markup to works):', {
+                    description: item.description,
+                    type: item.item_type,
+                    baseCost,
+                    commercialCost: commercialTotalCost,
+                    markup: markup
+                  });
+                }
+              } else if (item.item_type === 'sub_material') {
+                if (isAuxiliary) {
+                  // Вспомогательный СУБМАТ: вся коммерческая стоимость переходит в субработы
+                  subMaterialsMarkup += commercialTotalCost;
+                  console.log('💰 Auxiliary sub-material (full cost to subcontract works):', {
+                    description: item.description,
+                    type: item.item_type,
+                    commercialCost: commercialTotalCost
+                  });
+                } else {
+                  // Основной СУБМАТ: только наценка переходит в субработы
+                  subMaterialsMarkup += (markup > 0 ? markup : 0);
+                  console.log('💰 Main sub-material (markup to subcontract works):', {
+                    description: item.description,
+                    type: item.item_type,
+                    baseCost,
+                    commercialCost: commercialTotalCost,
+                    markup: markup
+                  });
+                }
+              }
+            });
+            
+          const totalWorksMarkupFromMaterials = auxiliaryMaterialsCost + mainMaterialsMarkup + subMaterialsMarkup;
+
           console.log('📊 Works cost breakdown:', {
-            worksOnlyCost: commercialWorksOnlyCost,
-            markupFromMaterials: totalWorksMarkupFromMaterials,
-            total: commercialWorksOnlyCost + totalWorksMarkupFromMaterials
+            ownWorksCost,
+            subcontractWorksCost,
+            auxiliaryMaterialsCost,
+            mainMaterialsMarkup,
+            subMaterialsMarkup,
+            totalWorksOnly: commercialWorksOnlyCost,
+            totalMarkupFromMaterials: totalWorksMarkupFromMaterials,
+            grandTotal: commercialWorksOnlyCost + totalWorksMarkupFromMaterials
           });
 
           
@@ -317,6 +429,8 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
           return {
             ...pos,
             boq_items: items,
+            total_materials_cost: baseMaterialsCost,  // BASE cost for tooltips
+            total_works_cost: baseWorksCost,          // BASE cost for tooltips
             total_commercial_materials_cost: commercialMaterialsCost,
             total_commercial_works_cost: commercialWorksCost,
             base_total_cost: baseTotalCost,
@@ -327,8 +441,18 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
             materials_unit_price: materialsUnitPrice,
             works_total_volume: worksTotalVolume,
             materials_total_volume: materialsTotalVolume,
-            works_total_cost: worksTotalCost,
-            materials_total_cost: materialsTotalCost,
+            works_total_cost: worksTotalCost,         // COMMERCIAL cost for display
+            materials_total_cost: materialsTotalCost, // COMMERCIAL cost for display
+            // Детализация компонентов работ для подсказок
+            works_breakdown: {
+              ownWorksCost,                           // Коммерческая стоимость собственных работ
+              subcontractWorksCost,                   // Коммерческая стоимость субподрядных работ
+              auxiliaryMaterialsCost,                 // Полная стоимость вспомогательных материалов
+              mainMaterialsMarkup,                    // Наценки от основных материалов
+              subMaterialsMarkup,                     // Наценки от субматериалов
+              ownWorksBaseCost,                       // Базовая стоимость собственных работ
+              subcontractWorksBaseCost                // Базовая стоимость субподрядных работ
+            },
             // Данные из позиции заказчика (не из тендера)
             client_quantity: pos.volume || 0,        // Кол-во Заказчика из Excel
             gp_quantity: pos.manual_volume || 0,     // Кол-во ГП (объем, заданный вручную ГП)
@@ -478,13 +602,115 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
       key: 'works_total_cost',
       width: 130,
       align: 'right' as const,
-      render: (record: ClientPositionWithCommercial) => (
-        <Text strong style={{ color: '#1890ff' }}>
-          {record.works_total_cost && record.works_total_cost > 0 
-            ? `${formatQuantity(record.works_total_cost, 2)} ₽` 
-            : '—'}
-        </Text>
-      ),
+      render: (record: ClientPositionWithCommercial) => {
+        if (!record.works_total_cost || record.works_total_cost <= 0) {
+          return <Text style={{ color: '#999' }}>—</Text>;
+        }
+
+        if (!markups) {
+          return (
+            <Text strong style={{ color: '#1890ff' }}>
+              {`${formatQuantity(record.works_total_cost, 2)} ₽`}
+            </Text>
+          );
+        }
+
+        // Рассчитываем базовую стоимость работ (приблизительно)
+        const baseCost = (record.total_works_cost || 0);
+        
+        // Консольный вывод для отладки
+        console.log('🔍 Tooltip debug info:', {
+          positionId: record.id,
+          positionNumber: record.position_number,
+          workName: record.work_name,
+          baseCost: baseCost,
+          commercialCost: record.works_total_cost,
+          totalWorksCost: record.total_works_cost,
+          worksCommercialCost: record.total_commercial_works_cost
+        });
+        
+        // Создаем детальную подсказку расчета
+        const tooltipContent = (baseCost > 0 || (record.works_breakdown && Object.values(record.works_breakdown).some(v => v > 0))) ? (
+          <div style={{ maxWidth: '500px' }}>
+            <div><strong>Детализация итоговой стоимости работ:</strong></div>
+            
+            {record.works_breakdown && (
+              <>
+                <div style={{ marginTop: '8px' }}>
+                  <div><strong>Компоненты стоимости:</strong></div>
+                  <div style={{ fontSize: '13px', marginLeft: '8px' }}>
+                    {record.works_breakdown.ownWorksCost > 0 && (
+                      <div>• Собственные работы: <strong>{formatQuantity(record.works_breakdown.ownWorksCost, 2)} ₽</strong></div>
+                    )}
+                    {record.works_breakdown.subcontractWorksCost > 0 && (
+                      <div>• Субподрядные работы: <strong>{formatQuantity(record.works_breakdown.subcontractWorksCost, 2)} ₽</strong></div>
+                    )}
+                    {record.works_breakdown.auxiliaryMaterialsCost > 0 && (
+                      <div>• Вспомогательные материалы → работы: <strong>{formatQuantity(record.works_breakdown.auxiliaryMaterialsCost, 2)} ₽</strong></div>
+                    )}
+                    {record.works_breakdown.mainMaterialsMarkup > 0 && (
+                      <div>• Наценки основных материалов → работы: <strong>{formatQuantity(record.works_breakdown.mainMaterialsMarkup, 2)} ₽</strong></div>
+                    )}
+                    {record.works_breakdown.subMaterialsMarkup > 0 && (
+                      <div>• Наценки субматериалов → субработы: <strong>{formatQuantity(record.works_breakdown.subMaterialsMarkup, 2)} ₽</strong></div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '8px', borderTop: '1px solid #d9d9d9', paddingTop: '8px' }}>
+                  <div><strong>Базовые стоимости:</strong></div>
+                  <div style={{ fontSize: '12px', color: '#666', marginLeft: '8px' }}>
+                    <div>Общая базовая стоимость работ (ПЗ): {formatQuantity(baseCost, 2)} ₽</div>
+                    {record.works_breakdown.ownWorksBaseCost > 0 && (
+                      <div>• Базовая стоимость собственных работ: {formatQuantity(record.works_breakdown.ownWorksBaseCost, 2)} ₽</div>
+                    )}
+                    {record.works_breakdown.subcontractWorksBaseCost > 0 && (
+                      <div>• Базовая стоимость субподрядных работ: {formatQuantity(record.works_breakdown.subcontractWorksBaseCost, 2)} ₽</div>
+                    )}
+                    {record.works_breakdown.ownWorksCost > 0 && record.works_breakdown.ownWorksBaseCost > 0 && (
+                      <div style={{ color: '#52c41a', fontWeight: 'bold' }}>Коэффициент собственных работ: {(record.works_breakdown.ownWorksCost / record.works_breakdown.ownWorksBaseCost).toFixed(2)}x</div>
+                    )}
+                    {record.works_breakdown.subcontractWorksCost > 0 && record.works_breakdown.subcontractWorksBaseCost > 0 && (
+                      <div style={{ color: '#52c41a', fontWeight: 'bold' }}>Коэффициент субподрядных работ: {(record.works_breakdown.subcontractWorksCost / record.works_breakdown.subcontractWorksBaseCost).toFixed(2)}x</div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+            
+            {baseCost > 0 && markups && (
+              <div style={{ marginTop: '8px', borderTop: '1px solid #d9d9d9', paddingTop: '8px' }}>
+                <div><strong>Формулы расчета собственных работ:</strong></div>
+                <div style={{ fontSize: '11px', color: '#555', marginLeft: '8px' }}>
+                  <div>1. СМ = {formatQuantity(baseCost, 2)} × {markups.mechanization_service}% = {formatQuantity(baseCost * markups.mechanization_service / 100, 2)} ₽</div>
+                  <div>2. МБП+ГСМ = {formatQuantity(baseCost, 2)} × {markups.mbp_gsm}% = {formatQuantity(baseCost * markups.mbp_gsm / 100, 2)} ₽</div>
+                  <div>3. Гарантия = {formatQuantity(baseCost, 2)} × {markups.warranty_period}% = {formatQuantity(baseCost * markups.warranty_period / 100, 2)} ₽</div>
+                  <div>+ Рост работ, Непредвиденные, ООЗ, ОФЗ, Прибыль...</div>
+                </div>
+              </div>
+            )}
+            
+            <div style={{ marginTop: '8px', borderTop: '1px solid #d9d9d9', paddingTop: '8px' }}>
+              <div><strong>Итого работы:</strong> <span style={{ color: '#1890ff', fontSize: '16px' }}>{formatQuantity(record.works_total_cost, 2)} ₽</span></div>
+              {baseCost > 0 && (
+                <div style={{ color: '#52c41a', fontSize: '12px' }}>
+                  Общий коэффициент: {((record.works_total_cost || 0) / baseCost).toFixed(2)}x
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div>Коммерческая стоимость работ: {formatQuantity(record.works_total_cost, 2)} ₽</div>
+        );
+
+        return (
+          <Tooltip title={tooltipContent} placement="topRight">
+            <Text strong style={{ color: '#1890ff', cursor: 'help' }}>
+              {`${formatQuantity(record.works_total_cost, 2)} ₽`}
+            </Text>
+          </Tooltip>
+        );
+      },
       sorter: (a: ClientPositionWithCommercial, b: ClientPositionWithCommercial) => (a.works_total_cost || 0) - (b.works_total_cost || 0),
     },
     {
@@ -492,13 +718,98 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
       key: 'materials_total_cost',
       width: 140,
       align: 'right' as const,
-      render: (record: ClientPositionWithCommercial) => (
-        <Text strong style={{ color: '#722ed1' }}>
-          {record.materials_total_cost && record.materials_total_cost > 0 
-            ? `${formatQuantity(record.materials_total_cost, 2)} ₽` 
-            : '—'}
-        </Text>
-      ),
+      render: (record: ClientPositionWithCommercial) => {
+        if (!record.materials_total_cost || record.materials_total_cost <= 0) {
+          return <Text style={{ color: '#999' }}>—</Text>;
+        }
+
+        if (!markups) {
+          return (
+            <Text strong style={{ color: '#722ed1' }}>
+              {`${formatQuantity(record.materials_total_cost, 2)} ₽`}
+            </Text>
+          );
+        }
+
+        // Рассчитываем базовую стоимость материалов (приблизительно)
+        const baseCost = (record.total_materials_cost || 0);
+        
+        // Создаем детальную подсказку расчета
+        const tooltipContent = baseCost > 0 ? (
+          <div style={{ maxWidth: '450px' }}>
+            <div><strong>Расчет коммерческой стоимости материалов:</strong></div>
+            <div style={{ marginTop: '8px' }}>
+              <div><strong>Исходные данные:</strong></div>
+              <div>Материал ПЗ (базовая): {formatQuantity(baseCost, 2)} ₽</div>
+              <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                <div>• <strong>Основные материалы:</strong> базовая стоимость остается в материалах, наценка переходит в работы</div>
+                <div>• <strong>Вспомогательные материалы:</strong> вся стоимость переходит в работы (в материалах = 0)</div>
+              </div>
+            </div>
+            
+            <div style={{ marginTop: '8px' }}>
+              <div><strong>Коммерческий расчет материалов:</strong></div>
+              {(() => {
+                // Расчет по той же логике что и в calculateMainMaterialCommercialCost
+                const materialsGrowth = baseCost * (1 + markups.materials_cost_growth / 100);
+                const contingencyMaterials = baseCost * (1 + markups.contingency_costs / 100);
+                const oozMat = (materialsGrowth + contingencyMaterials - baseCost) * (1 + markups.overhead_own_forces / 100);
+                const ofzMat = oozMat * (1 + markups.general_costs_without_subcontract / 100);
+                const profitMat = ofzMat * (1 + markups.profit_own_forces / 100);
+                const totalCommercialCost = profitMat;
+                const totalMarkup = totalCommercialCost - baseCost;
+                
+                return (
+                  <>
+                    <div>1. Материалы РОСТ = {formatQuantity(baseCost, 2)} × {(1 + markups.materials_cost_growth / 100).toFixed(2)} = {formatQuantity(materialsGrowth, 2)} ₽</div>
+                    <div>2. Непредвиденные мат = {formatQuantity(baseCost, 2)} × {(1 + markups.contingency_costs / 100).toFixed(2)} = {formatQuantity(contingencyMaterials, 2)} ₽</div>
+                    <div>3. ООЗ мат = ({formatQuantity(materialsGrowth, 2)} + {formatQuantity(contingencyMaterials, 2)} - {formatQuantity(baseCost, 2)}) × {(1 + markups.overhead_own_forces / 100).toFixed(2)} = {formatQuantity(oozMat, 2)} ₽</div>
+                    <div>4. ОФЗ мат = {formatQuantity(oozMat, 2)} × {(1 + markups.general_costs_without_subcontract / 100).toFixed(2)} = {formatQuantity(ofzMat, 2)} ₽</div>
+                    <div>5. Прибыль мат = {formatQuantity(ofzMat, 2)} × {(1 + markups.profit_own_forces / 100).toFixed(2)} = {formatQuantity(profitMat, 2)} ₽</div>
+                  </>
+                );
+              })()}
+            </div>
+            
+            <div style={{ marginTop: '8px', borderTop: '1px solid #d9d9d9', paddingTop: '8px' }}>
+              <div><strong>Распределение стоимости:</strong></div>
+              {(() => {
+                // Пример расчета распределения между основными и вспомогательными материалами
+                const materialsGrowth = baseCost * (1 + markups.materials_cost_growth / 100);
+                const contingencyMaterials = baseCost * (1 + markups.contingency_costs / 100);
+                const oozMat = (materialsGrowth + contingencyMaterials - baseCost) * (1 + markups.overhead_own_forces / 100);
+                const ofzMat = oozMat * (1 + markups.general_costs_without_subcontract / 100);
+                const profitMat = ofzMat * (1 + markups.profit_own_forces / 100);
+                const totalMarkup = profitMat - baseCost;
+                
+                return (
+                  <>
+                    <div>• Остается в материалах (основные): <strong>{formatQuantity(baseCost, 2)} ₽</strong></div>
+                    <div>• Наценка переходит в работы: {formatQuantity(totalMarkup, 2)} ₽</div>
+                    <div>• Вспомогательные переходят в работы полностью</div>
+                    <div style={{ color: '#722ed1', fontWeight: 'bold', marginTop: '4px' }}>
+                      Итого в материалах: {formatQuantity(record.materials_total_cost, 2)} ₽
+                    </div>
+                    <div style={{ color: '#52c41a' }}>
+                      Коэффициент: {baseCost > 0 ? ((record.materials_total_cost || 0) / baseCost).toFixed(2) : '0.00'}x
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        ) : (
+          <div>Коммерческая стоимость: {formatQuantity(record.materials_total_cost, 2)} ₽</div>
+        );
+
+        return (
+          <Tooltip title={tooltipContent} placement="topRight">
+            <Text strong style={{ color: '#722ed1', cursor: 'help' }}>
+              {`${formatQuantity(record.materials_total_cost, 2)} ₽`}
+            </Text>
+          </Tooltip>
+        );
+      },
       sorter: (a: ClientPositionWithCommercial, b: ClientPositionWithCommercial) => (a.materials_total_cost || 0) - (b.materials_total_cost || 0),
     },
     {
@@ -508,7 +819,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
       align: 'right' as const,
       render: (record: ClientPositionWithCommercial) => (
         <Text strong>
-          {formatQuantity(record.base_total_cost || 0, 0)} ₽
+          {formatQuantity(record.base_total_cost || 0, 2)} ₽
         </Text>
       ),
       sorter: (a: ClientPositionWithCommercial, b: ClientPositionWithCommercial) => (a.base_total_cost || 0) - (b.base_total_cost || 0),
@@ -520,7 +831,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
       align: 'right' as const,
       render: (record: ClientPositionWithCommercial) => (
         <Text strong style={{ color: '#52c41a' }}>
-          {formatQuantity(record.commercial_total_cost || 0, 0)} ₽
+          {formatQuantity(record.commercial_total_cost || 0, 2)} ₽
         </Text>
       ),
       sorter: (a: ClientPositionWithCommercial, b: ClientPositionWithCommercial) => (a.commercial_total_cost || 0) - (b.commercial_total_cost || 0),
@@ -538,7 +849,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
           <div className="text-right">
             <div>
               <Text strong style={{ color: markup >= 0 ? '#52c41a' : '#ff4d4f' }}>
-                {markup >= 0 ? '+' : ''}{formatQuantity(markup, 0)} ₽
+                {markup >= 0 ? '+' : ''}{formatQuantity(markup, 2)} ₽
               </Text>
             </div>
             <div>

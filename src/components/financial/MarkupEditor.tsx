@@ -148,7 +148,7 @@ const markupFields = [
     key: 'contingency_costs',
     name: 'contingency_costs',
     label: 'Непредвиденные затраты',
-    tooltip: 'Расчет: (Работы ПЗ + Материалы ПЗ + МБП+ГСМ + Служба механизации + Работы РОСТ + Материалы РОСТ + Работы 1,6) × процент. Резерв на непредвиденные ситуации',
+    tooltip: 'Расчет: (Работы ПЗ + Материалы ПЗ + МБП+ГСМ + Служба механизации + Работы 1,6) × процент. Резерв на непредвиденные ситуации',
     max: 20,
     suffix: '%',
     baseType: 'contingencyBaseNew',
@@ -280,23 +280,8 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
     setCalculatedFinancials(financials);
     
     if (onMarkupChange) {
-      // Вычисляем итоговую коммерческую стоимость
-      const formValues = form.getFieldsValue();
-      const totalCommercialPrice = markupFields.reduce((sum, field) => {
-        if (field.isBaseInfo) {
-          // Для базовых затрат берем их значения
-          switch (field.baseType) {
-            case 'materials': return sum + baseCosts.materials;
-            case 'works': return sum + baseCosts.works;
-            case 'submaterials': return sum + baseCosts.submaterials;
-            case 'subworks': return sum + baseCosts.subworks;
-            default: return sum;
-          }
-        } else {
-          // Для процентных строк берем рассчитанное значение
-          return sum + calculateMarkupCost(field, formValues);
-        }
-      }, 0);
+      // Используем тот же расчет что и для отображения в итогах таблицы
+      const totalCommercialPrice = totalCalculatedCosts;
 
       onMarkupChange({
         ...financials,
@@ -365,7 +350,7 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
     
     // Рассчитываем непредвиденные затраты для использования в ООЗ
     const contingencyCost = formValues['contingency_costs']
-      ? (baseCosts.works + baseCosts.materials + mbpGsmCost + mechanizationServiceCost + worksGrowthAmount + materialsGrowthAmount + works16Result) * (formValues['contingency_costs'] / 100)
+      ? (baseCosts.works + baseCosts.materials + mbpGsmCost + mechanizationServiceCost + works16Result) * (formValues['contingency_costs'] / 100)
       : 0;
 
     // Рассчитываем ООЗ собств. силы для использования в ОФЗ
@@ -407,7 +392,7 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
       worksAfter16: calculatedFinancials.worksAfter16 || 0,
       subtotalAfterGrowth: calculatedFinancials.subtotalAfterGrowth || 0,
       contingencyBase: (calculatedFinancials.worksWithGrowth || 0) + (calculatedFinancials.materialsWithGrowth || 0),
-      contingencyBaseNew: baseCosts.works + baseCosts.materials + mbpGsmCost + mechanizationServiceCost + worksGrowthAmount + materialsGrowthAmount + works16Result, // Новая база для непредвиденных: Работы ПЗ + Материалы ПЗ + МБП+ГСМ + Служба механизации + Работы РОСТ (результат) + Материалы РОСТ (результат) + Работы 1,6
+      contingencyBaseNew: baseCosts.works + baseCosts.materials + mbpGsmCost + mechanizationServiceCost + works16Result, // Новая база для непредвиденных: Работы ПЗ + Материалы ПЗ + МБП+ГСМ + Служба механизации + Работы 1,6
       ownForcesBase: (calculatedFinancials.materialsWithGrowth || 0) + (calculatedFinancials.worksWithGrowth || 0),
       ownForcesBaseNew: baseCosts.works + mechanizationServiceCost + works16Result + baseCosts.materials + mbpGsmCost + materialsGrowthAmount + worksGrowthAmount + contingencyCost, // Новая база для ООЗ собств. силы: Работы ПЗ + Служба механизации + Работы 1,6 + Материалы ПЗ + МБП+ГСМ + Материалы РОСТ (результат) + Работы РОСТ (результат) + Непредвиденные
       overheadOwnForces: overheadOwnForcesCost, // ООЗ собств. силы для расчета ОФЗ
@@ -431,6 +416,25 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
     return 0;
   };
 
+  // Helper функция для расчета общей коммерческой стоимости
+  const calculateTotalCosts = (fieldsData: any[], formValues: any) => {
+    return fieldsData.reduce((sum, field) => {
+      if (field.isBaseInfo) {
+        // Для базовых затрат берем их значения
+        switch (field.baseType) {
+          case 'materials': return sum + baseCosts.materials;
+          case 'works': return sum + baseCosts.works;
+          case 'submaterials': return sum + baseCosts.submaterials;
+          case 'subworks': return sum + baseCosts.subworks;
+          default: return sum;
+        }
+      } else {
+        // Для процентных строк берем рассчитанное значение
+        return sum + calculateMarkupCost(field, formValues);
+      }
+    }, 0);
+  };
+
   const handleFormChange = () => {
     const values = form.getFieldsValue();
     if (markupData && values) {
@@ -442,22 +446,8 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
       setCalculatedFinancials(financials);
       
       if (onMarkupChange) {
-        // Вычисляем итоговую коммерческую стоимость
-        const totalCommercialPrice = markupFields.reduce((sum, field) => {
-          if (field.isBaseInfo) {
-            // Для базовых затрат берем их значения
-            switch (field.baseType) {
-              case 'materials': return sum + baseCosts.materials;
-              case 'works': return sum + baseCosts.works;
-              case 'submaterials': return sum + baseCosts.submaterials;
-              case 'subworks': return sum + baseCosts.subworks;
-              default: return sum;
-            }
-          } else {
-            // Для процентных строк берем рассчитанное значение
-            return sum + calculateMarkupCost(field, values);
-          }
-        }, 0);
+        // Вычисляем итоговую коммерческую стоимость используя ту же логику что и для отображения
+        const totalCommercialPrice = calculateTotalCosts(markupFields, values);
 
         onMarkupChange({
           ...financials,
@@ -624,13 +614,18 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
           
           const costPerSqm = baseCost / tenderData.area_sp;
           
+          // Для очень маленьких значений показываем больше знаков или в копейках
+          const displayValue = costPerSqm < 0.01 && costPerSqm > 0 
+            ? (costPerSqm * 100).toFixed(4) + ' коп/м²'
+            : costPerSqm.toFixed(2) + ' ₽/м²';
+            
           return (
             <Text style={{ 
               fontSize: 13,
               color: '#666',
               fontWeight: 500
             }}>
-              {Math.round(costPerSqm).toLocaleString('ru-RU')}
+              {displayValue}
             </Text>
           );
         }
@@ -642,13 +637,18 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
         
         const costPerSqm = record.calculatedCost / tenderData.area_sp;
         
+        // Для очень маленьких значений показываем больше знаков или в копейках
+        const displayValue = costPerSqm < 0.01 && costPerSqm > 0 
+          ? (costPerSqm * 100).toFixed(4) + ' коп/м²'
+          : costPerSqm.toFixed(2) + ' ₽/м²';
+        
         return (
           <Text style={{ 
             fontSize: 13,
             color: '#52c41a',
             fontWeight: 500
           }}>
-            {Math.round(costPerSqm).toLocaleString('ru-RU')}
+            {displayValue}
           </Text>
         );
       },
@@ -683,14 +683,14 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
               color: '#1890ff',
               fontWeight: 600
             }}>
-              {baseCost.toFixed(2).replace('.', ',')} ₽
+              {baseCost.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
             </Text>
           );
         }
         
         return (
           <Text strong style={{ color: '#1890ff' }}>
-            {cost.toFixed(2).replace('.', ',')} ₽
+            {cost.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
           </Text>
         );
       },
@@ -746,7 +746,7 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
               {(tenderData.area_sp || tenderData.area_client) && totalCost > 0 && (
                 <Text type="secondary">
                   Базовая стоимость за м²: <Text strong>
-                    {Math.round(totalCost / (tenderData.area_sp || tenderData.area_client || 1)).toLocaleString('ru-RU')} ₽/м²
+                    {(totalCost / (tenderData.area_sp || tenderData.area_client || 1)).toLocaleString('ru-RU')} ₽/м²
                   </Text>
                 </Text>
               )}
@@ -787,12 +787,12 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
               </Table.Summary.Cell>
               <Table.Summary.Cell index={2} align="center">
                 <Text strong style={{ fontSize: 14, color: '#1890ff' }}>
-                  {totalCostPerSqm > 0 ? Math.round(totalCostPerSqm).toLocaleString('ru-RU') : '-'}
+                  {totalCostPerSqm > 0 ? totalCostPerSqm.toLocaleString('ru-RU') : '-'}
                 </Text>
               </Table.Summary.Cell>
               <Table.Summary.Cell index={3}>
                 <Text strong style={{ fontSize: 14, color: '#1890ff' }}>
-                  {totalCalculatedCosts.toFixed(2).replace('.', ',')} ₽
+                  {totalCalculatedCosts.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
                 </Text>
               </Table.Summary.Cell>
             </Table.Summary.Row>

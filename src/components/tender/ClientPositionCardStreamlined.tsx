@@ -275,7 +275,32 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     
     const savePromises = position.boq_items.map(async (item) => {
       const commercialCost = calculateCommercialCost(item);
-      const baseCost = (item.unit_rate || 0) * (item.quantity || 0) + (item.delivery_amount || 0) * (item.quantity || 0);
+      
+      // Calculate base cost properly based on item type - same logic as in calculateCommercialCost
+      let baseCost = (item.quantity || 0) * (item.unit_rate || 0);
+      
+      // Add delivery only for materials with appropriate delivery type
+      if ((item.item_type === 'material' || item.item_type === 'sub_material')) {
+        const deliveryType = item.delivery_price_type || 'included';
+        const deliveryAmount = item.delivery_amount || 0;
+        
+        if ((deliveryType === 'amount' || deliveryType === 'not_included') && deliveryAmount > 0) {
+          baseCost = baseCost + (deliveryAmount * (item.quantity || 0));
+        }
+      }
+      
+      console.log('💾 Saving commercial fields:', {
+        itemId: item.id,
+        itemType: item.item_type,
+        description: item.description,
+        quantity: item.quantity,
+        unitRate: item.unit_rate,
+        deliveryAmount: item.delivery_amount,
+        deliveryType: item.delivery_price_type,
+        baseCost: baseCost,
+        commercialCost: commercialCost,
+        coefficient: baseCost > 0 ? (commercialCost / baseCost).toFixed(3) : 'N/A'
+      });
       
       if (commercialCost > 0 && baseCost > 0) {
         await saveCommercialFields(item.id, commercialCost, baseCost);
@@ -1977,10 +2002,10 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             const deliveryTotal = record.delivery_amount * quantity;
             tooltipContent = (
               <div>
-                <div>Материал: {Math.round(baseTotal).toLocaleString('ru-RU')} ₽</div>
-                <div>Доставка: {Math.round(deliveryTotal).toLocaleString('ru-RU')} ₽</div>
+                <div>Материал: {baseTotal.toLocaleString('ru-RU')} ₽</div>
+                <div>Доставка: {deliveryTotal.toLocaleString('ru-RU')} ₽</div>
                 <div className="border-t pt-1 mt-1">
-                  <strong>Итого: {Math.round(total).toLocaleString('ru-RU')} ₽</strong>
+                  <strong>Итого: {total.toLocaleString('ru-RU')} ₽</strong>
                 </div>
               </div>
             );
@@ -1989,10 +2014,10 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             const deliveryTotal = deliveryPerUnit * quantity;
             tooltipContent = (
               <div>
-                <div>Материал: {Math.round(baseTotal).toLocaleString('ru-RU')} ₽</div>
-                <div>Доставка: {Math.round(deliveryTotal).toLocaleString('ru-RU')} ₽</div>
+                <div>Материал: {baseTotal.toLocaleString('ru-RU')} ₽</div>
+                <div>Доставка: {deliveryTotal.toLocaleString('ru-RU')} ₽</div>
                 <div className="border-t pt-1 mt-1">
-                  <strong>Итого: {Math.round(total).toLocaleString('ru-RU')} ₽</strong>
+                  <strong>Итого: {total.toLocaleString('ru-RU')} ₽</strong>
                 </div>
               </div>
             );
@@ -2151,7 +2176,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
     return (
     <tr>
-      <td colSpan={12} style={{ padding: 0 }}>
+      <td colSpan={11} style={{ padding: 0 }}>
         <Form
           form={workEditForm}
           layout="vertical"
@@ -2241,7 +2266,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               />
             </Form.Item>
 
-            {/* Total - стандартный шрифт */}
+            {/* Total - стандартная ширина */}
             <Form.Item 
               label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Сумма</span>}
               className="mb-0"
@@ -2260,64 +2285,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               }}>
                 {formatCurrency(quantity * unitRate)}
               </div>
-            </Form.Item>
-            
-            {/* Commercial Cost */}
-            <Form.Item 
-              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Коммерч. стоимость</span>}
-              className="mb-0"
-              style={{ width: '160px' }}
-            >
-              <Tooltip
-                title={tenderMarkup ? (
-                  <div style={{ fontSize: '12px' }}>
-                    <div style={{ marginBottom: '8px', fontWeight: 'bold' }}>Расчет коммерческой стоимости:</div>
-                    <div>Базовая стоимость: {formatCurrency(quantity * unitRate)}</div>
-                    {itemType === 'work' && (
-                      <>
-                        <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px' }}>Этапы накруток:</div>
-                        <div>1. Служба механизации: {tenderMarkup.mechanization_service || 0}%</div>
-                        <div>2. МБП+ГСМ: {tenderMarkup.mbp_gsm || 0}%</div>
-                        <div>3. Работа 1,6: коэф. {1 + (tenderMarkup.works_16_markup || 0) / 100}</div>
-                        <div>4. Рост стоимости работ: +{tenderMarkup.works_cost_growth || 0}%</div>
-                        <div>5. Непредвиденные: +{tenderMarkup.contingency_costs || 0}%</div>
-                        <div>6. ООЗ собств. силы: +{tenderMarkup.overhead_own_forces || 0}%</div>
-                        <div>7. ОФЗ: +{tenderMarkup.general_costs_without_subcontract || 0}%</div>
-                        <div>8. Прибыль: +{tenderMarkup.profit_own_forces || 0}%</div>
-                        <div>9. Гарантийный период: {tenderMarkup.warranty_period || 0}%</div>
-                      </>
-                    )}
-                    {itemType === 'sub_work' && (
-                      <>
-                        <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px' }}>Этапы накруток субподряда:</div>
-                        <div>1. Рост стоимости субподряда: +{tenderMarkup.subcontract_works_cost_growth || 0}%</div>
-                        <div>2. ООЗ субподряд: +{tenderMarkup.overhead_subcontract || 0}%</div>
-                        <div>3. Прибыль субподряд: +{tenderMarkup.profit_subcontract || 0}%</div>
-                      </>
-                    )}
-                    <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px', fontWeight: 'bold' }}>
-                      Итого: {formatCurrency(commercialCost)}
-                    </div>
-                    <div style={{ color: '#52c41a' }}>Коэффициент: ×{commercialCost && quantity && unitRate ? (commercialCost / (quantity * unitRate)).toFixed(2) : '1.00'}</div>
-                  </div>
-                ) : 'Проценты накруток не загружены'}
-                placement="top"
-              >
-                <div style={{ 
-                  height: '24px', 
-                  padding: '0 8px',
-                  background: tenderMarkup ? '#e6f4ff' : '#f5f5f5',
-                  borderRadius: '2px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  fontSize: '14px',
-                  fontWeight: tenderMarkup ? 'bold' : 'normal',
-                  color: tenderMarkup ? '#1677ff' : '#999',
-                  cursor: 'help'
-                }}>
-                  {tenderMarkup ? formatCurrency(commercialCost) : 'Нет накруток'}
-                </div>
-              </Tooltip>
             </Form.Item>
           </div>
 
@@ -2450,7 +2417,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
     return (
     <tr>
-      <td colSpan={12} style={{ padding: 0 }}>
+      <td colSpan={11} style={{ padding: 0 }}>
         <Form
           form={editForm}
           layout="vertical"
@@ -2664,7 +2631,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               }}
             </Form.Item>
 
-            {/* Total - adaptive width */}
+            {/* Total - стандартная ширина */}
             <Form.Item 
               label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Сумма</span>}
               className="mb-0"
@@ -2701,83 +2668,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   return formatCurrency(baseTotal + deliveryCost);
                 })()}
               </div>
-            </Form.Item>
-            
-            {/* Commercial Cost */}
-            <Form.Item 
-              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Комм. ст.</span>}
-              className="mb-0"
-              style={{ minWidth: '100px', maxWidth: '140px' }}
-            >
-              <Tooltip
-                title={tenderMarkup ? (
-                  <div style={{ fontSize: '12px' }}>
-                    <div style={{ marginBottom: '8px', fontWeight: 'bold' }}>Расчет коммерческой стоимости материала:</div>
-                    <div>Базовая стоимость: {formatCurrency(actualQuantity * (unitRate + deliveryCost))}</div>
-                    {itemType === 'material' && (
-                      <>
-                        <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px' }}>
-                          {workId ? 'Основной материал (связан с работой):' : 'Вспомогательный материал:'}
-                        </div>
-                        {workId ? (
-                          <>
-                            <div>1. Рост стоимости материалов: +{tenderMarkup.materials_cost_growth || 0}%</div>
-                            <div>2. Непредвиденные: +{tenderMarkup.contingency_costs || 0}%</div>
-                            <div>3. ООЗ: +{tenderMarkup.overhead_own_forces || 0}%</div>
-                            <div>4. ОФЗ: +{tenderMarkup.general_costs_without_subcontract || 0}%</div>
-                            <div>5. Прибыль: +{tenderMarkup.profit_own_forces || 0}%</div>
-                            <div style={{ marginTop: '4px', color: '#faad14' }}>В материале остается только базовая стоимость</div>
-                            <div style={{ color: '#faad14' }}>Вся наценка переходит в работы</div>
-                          </>
-                        ) : (
-                          <>
-                            <div>Вся стоимость (включая наценки) переходит в работы</div>
-                            <div style={{ color: '#faad14' }}>В материале: 0 ₽</div>
-                          </>
-                        )}
-                      </>
-                    )}
-                    {itemType === 'sub_material' && (
-                      <>
-                        <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px' }}>Субподрядный материал:</div>
-                        <div>1. Рост стоимости субмат: +{tenderMarkup.subcontract_materials_cost_growth || 0}%</div>
-                        <div style={{ marginTop: '4px', color: '#faad14' }}>В материале остается базовая стоимость</div>
-                        <div style={{ color: '#faad14' }}>Наценка переходит в субподрядные работы</div>
-                      </>
-                    )}
-                    <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px', fontWeight: 'bold' }}>
-                      {commercialCost === 0 && itemType === 'material' && !workId ? 
-                        'Итого в материале: 0 ₽ (все → в работы)' : 
-                        `Итого в материале: ${formatCurrency(commercialCost)}`
-                      }
-                    </div>
-                  </div>
-                ) : 'Проценты накруток не загружены'}
-                placement="top"
-              >
-                <div style={{ 
-                  height: '24px', 
-                  padding: '0 8px',
-                  background: tenderMarkup ? '#e6f4ff' : '#f5f5f5',
-                  borderRadius: '2px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '14px',
-                  fontWeight: tenderMarkup ? 'bold' : 'normal',
-                  color: tenderMarkup ? '#1677ff' : '#999',
-                  whiteSpace: 'nowrap',
-                  cursor: 'help'
-                }}>
-                  {tenderMarkup ? (
-                    commercialCost === 0 && itemType === 'material' && !workId ? 
-                      '→ в работы' : 
-                      formatCurrency(commercialCost)
-                  ) : (
-                    'Нет накруток'
-                  )}
-                </div>
-              </Tooltip>
             </Form.Item>
           </div>
 
@@ -3563,14 +3453,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
             {/* Items Display - Table */}
             {totalItems > 0 ? (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" style={{ width: '100%', minWidth: '1200px' }}>
                   <Table
                   columns={columns}
                   dataSource={sortedBOQItems}
                   rowKey="id"
                   pagination={false}
                   size="small"
-                  scroll={{ x: 1150, y: 400 }}
+                  scroll={{ x: 1200, y: 400 }}
                   className="custom-table boq-items-table"
                   rowClassName={(record) => {
                     switch(record.item_type) {

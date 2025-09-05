@@ -20,7 +20,8 @@ import {
   ReloadOutlined,
   FolderOpenOutlined,
   DashboardOutlined,
-  PercentageOutlined
+  PercentageOutlined,
+  CalculatorOutlined
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TenderCommercialManager from '../components/tender/TenderCommercialManager';
@@ -45,6 +46,7 @@ const CommercialCostsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [tendersLoading, setTendersLoading] = useState(false);
   const [isContentVisible, setIsContentVisible] = useState(false);
+  const [recalculatingCoefficients, setRecalculatingCoefficients] = useState(false);
   const [commercialStats, setCommercialStats] = useState({
     totalBaseCost: 0,
     totalCommercialCost: 0,
@@ -175,6 +177,164 @@ const CommercialCostsPage: React.FC = () => {
       }, 100);
     }, 300);
   }, [selectedTenderId]);
+
+  const handleRecalculateCoefficients = useCallback(async () => {
+    if (!selectedTenderId) {
+      message.info('Выберите тендер для пересчета коэффициентов');
+      return;
+    }
+    
+    console.log('🧮 Starting coefficient recalculation for tender:', selectedTenderId);
+    setRecalculatingCoefficients(true);
+    
+    try {
+      const loadingMessage = message.loading('Пересчет коэффициентов...', 0);
+      
+      // Импортируем API для работы с BOQ
+      const { boqApi } = await import('../lib/supabase/api');
+      
+      // Получаем все элементы BOQ для данного тендера
+      console.log('📡 Fetching BOQ items for recalculation...');
+      const boqItemsResult = await boqApi.getByTenderId(selectedTenderId);
+      
+      if (boqItemsResult.error) {
+        throw new Error(boqItemsResult.error);
+      }
+      
+      const items = boqItemsResult.data || [];
+      console.log(`📊 Found ${items.length} BOQ items to recalculate`);
+      
+      if (items.length === 0) {
+        message.warning('Нет элементов BOQ для пересчета');
+        return;
+      }
+      
+      // Получаем проценты накруток для тендера
+      const { getActiveTenderMarkup } = await import('../lib/supabase/api/tender-markup');
+      let markupsResult = await getActiveTenderMarkup(selectedTenderId);
+      
+      let markups;
+      if (markupsResult.error || !markupsResult.data) {
+        console.log('⚠️ No markup settings found for tender, using default values...');
+        
+        // Используем настройки по умолчанию (те же, что в ID: 2af68b6a-a86a-4f4b-880c-89191ab1e58b)
+        markups = {
+          works_16_markup: 60,
+          works_cost_growth: 10,
+          materials_cost_growth: 10,
+          subcontract_works_cost_growth: 10,
+          subcontract_materials_cost_growth: 10,
+          contingency_costs: 3,
+          overhead_own_forces: 10,
+          overhead_subcontract: 10,
+          general_costs_without_subcontract: 20,
+          profit_own_forces: 10,
+          profit_subcontract: 16,
+          mechanization_service: 10,
+          mbp_gsm: 10,
+          warranty_period: 10
+        };
+        
+        console.log('📋 Using default markup percentages');
+      } else {
+        markups = markupsResult.data;
+        console.log('✅ Found existing markup settings');
+      }
+      
+      console.log('💰 Using markups:', markups);
+      
+      // Импортируем функции расчета коммерческой стоимости
+      const { calculateBOQItemCommercialCost } = await import('../utils/calculateCommercialCost');
+      
+      let updatedCount = 0;
+      
+      // Пересчитываем коэффициенты для каждого элемента
+      for (const item of items) {
+        try {
+          const quantity = item.quantity || 0;
+          const unitRate = item.unit_rate || 0;
+          const deliveryAmount = item.delivery_amount || 0;
+          
+          // Рассчитываем базовую стоимость
+          let baseCost = quantity * unitRate;
+          
+          // Добавляем доставку для материалов
+          if ((item.item_type === 'material' || item.item_type === 'sub_material')) {
+            const deliveryType = item.delivery_price_type || 'included';
+            if ((deliveryType === 'amount' || deliveryType === 'not_included') && deliveryAmount > 0) {
+              baseCost += deliveryAmount * quantity;
+            }
+          }
+          
+          // Определяем тип материала
+          const isLinked = item.material_type !== 'auxiliary';
+          
+          // Рассчитываем ПОЛНУЮ коммерческую стоимость для коэффициента
+          let fullCommercialCost;
+          
+          if (item.item_type === 'material') {
+            if (isLinked) {
+              // Основной материал: рассчитываем полную коммерческую стоимость
+              const { calculateMainMaterialCommercialCost } = await import('../utils/calculateCommercialCost');
+              const result = calculateMainMaterialCommercialCost(baseCost, markups);
+              fullCommercialCost = baseCost + result.workMarkup; // Базовая + наценка = полная коммерческая
+            } else {
+              // Вспомогательный материал: рассчитываем полную коммерческую стоимость
+              const { calculateAuxiliaryMaterialCommercialCost } = await import('../utils/calculateCommercialCost');
+              const result = calculateAuxiliaryMaterialCommercialCost(baseCost, markups);
+              fullCommercialCost = result.workMarkup; // Полная коммерческая стоимость
+            }
+          } else if (item.item_type === 'sub_material') {
+            if (isLinked) {
+              // Основной субматериал: рассчитываем полную коммерческую стоимость
+              const { calculateSubcontractMaterialCommercialCost } = await import('../utils/calculateCommercialCost');
+              const result = calculateSubcontractMaterialCommercialCost(baseCost, markups);
+              fullCommercialCost = baseCost + result.workMarkup; // Базовая + наценка = полная коммерческая
+            } else {
+              // Вспомогательный субматериал: рассчитываем полную коммерческую стоимость
+              const { calculateAuxiliarySubcontractMaterialCommercialCost } = await import('../utils/calculateCommercialCost');
+              const result = calculateAuxiliarySubcontractMaterialCommercialCost(baseCost, markups);
+              fullCommercialCost = result.workMarkup; // Полная коммерческая стоимость
+            }
+          } else {
+            // Для работ используем стандартную функцию
+            fullCommercialCost = calculateBOQItemCommercialCost(
+              item.item_type as any,
+              baseCost,
+              markups,
+              isLinked
+            );
+          }
+          
+          // Рассчитываем коэффициент на основе ПОЛНОЙ коммерческой стоимости
+          const coefficient = baseCost > 0 ? fullCommercialCost / baseCost : 1;
+          
+          console.log(`🔢 Item ${item.item_number}: ${baseCost.toFixed(2)} → ${fullCommercialCost.toFixed(2)} (${coefficient.toFixed(8)})`);
+          
+          // Обновляем в базе данных с ПОЛНОЙ коммерческой стоимостью
+          await boqApi.updateCommercialFields(item.id, fullCommercialCost, coefficient);
+          updatedCount++;
+          
+        } catch (itemError) {
+          console.error(`❌ Error recalculating item ${item.item_number}:`, itemError);
+        }
+      }
+      
+      loadingMessage();
+      message.success(`Пересчитано ${updatedCount} из ${items.length} коэффициентов`);
+      
+      // Обновляем данные на странице
+      setTimeout(() => {
+        handleRefresh();
+      }, 500);
+      
+    } catch (error) {
+      console.error('💥 Coefficient recalculation error:', error);
+      message.error(`Ошибка пересчета коэффициентов: ${error}`);
+    } finally {
+      setRecalculatingCoefficients(false);
+    }
+  }, [selectedTenderId, handleRefresh]);
 
   const handleNavigateToTender = useCallback(() => {
     if (selectedTenderId) {
@@ -317,6 +477,24 @@ const CommercialCostsPage: React.FC = () => {
                   >
                     К тендерам
                   </Button>
+                  {selectedTenderId && (
+                    <Button
+                      className="commercial-action-btn"
+                      style={{ 
+                        background: 'rgba(255, 165, 0, 0.9)',
+                        color: 'white',
+                        borderColor: 'rgba(255, 165, 0, 0.3)',
+                        fontWeight: 600
+                      }}
+                      size="large"
+                      icon={<CalculatorOutlined />}
+                      onClick={handleRecalculateCoefficients}
+                      loading={recalculatingCoefficients}
+                      disabled={recalculatingCoefficients}
+                    >
+                      Пересчитать коэффициенты
+                    </Button>
+                  )}
                   <Button
                     className="commercial-action-btn"
                     style={{ 
@@ -427,7 +605,7 @@ const CommercialCostsPage: React.FC = () => {
                         <div className="text-center">
                           <Text className="text-xs text-gray-600 block" style={{ cursor: 'default' }}>Базовая стоимость</Text>
                           <div className="text-lg font-bold text-blue-600" style={{ cursor: 'default' }}>
-                            {Math.round(commercialStats.totalBaseCost).toLocaleString('ru-RU')} ₽
+                            {commercialStats.totalBaseCost.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽
                           </div>
                         </div>
                       </Col>
@@ -435,7 +613,7 @@ const CommercialCostsPage: React.FC = () => {
                         <div className="text-center">
                           <Text className="text-xs text-gray-600 block" style={{ cursor: 'default' }}>Коммерческая</Text>
                           <div className="text-lg font-bold text-green-600" style={{ cursor: 'default' }}>
-                            {Math.round(commercialStats.totalCommercialCost).toLocaleString('ru-RU')} ₽
+                            {commercialStats.totalCommercialCost.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽
                           </div>
                         </div>
                       </Col>
@@ -443,7 +621,7 @@ const CommercialCostsPage: React.FC = () => {
                         <div className="text-center">
                           <Text className="text-xs text-gray-600 block" style={{ cursor: 'default' }}>Наценка</Text>
                           <div className="text-lg font-bold text-orange-600" style={{ cursor: 'default' }}>
-                            +{Math.round(commercialStats.totalMarkup).toLocaleString('ru-RU')} ₽
+                            +{commercialStats.totalMarkup.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽
                           </div>
                           <div className="text-xs text-gray-500" style={{ cursor: 'default' }}>
                             +{commercialStats.markupPercentage.toFixed(1)}%

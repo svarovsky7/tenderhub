@@ -662,7 +662,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                     {commercialTotal > 0 ? 'Коммерческая стоимость' : 'Общая стоимость'}
                   </Text>
                   <div className="text-3xl font-bold text-green-700" style={{ cursor: 'default' }}>
-                    {(commercialTotal > 0 ? commercialTotal : stats.actualTotalCost).toFixed(2).replace('.', ',')} ₽
+                    {(commercialTotal > 0 ? commercialTotal : stats.actualTotalCost).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
                   </div>
                 </div>
               </div>
@@ -731,7 +731,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                     <Col xs={12} sm={8} lg={6}>
                       <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg">
                         <div className="text-2xl font-bold text-blue-600 mb-2">
-                          {commercialTotal.toFixed(2).replace('.', ',')} ₽
+                          {commercialTotal.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
                         </div>
                         <div className="text-sm text-gray-600">Коммерческая стоимость</div>
                       </div>
@@ -739,7 +739,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                     <Col xs={12} sm={8} lg={6}>
                       <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
                         <div className="text-2xl font-bold text-green-600 mb-2">
-                          {stats.actualTotalCost.toFixed(2).replace('.', ',')} ₽
+                          {stats.actualTotalCost.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
                         </div>
                         <div className="text-sm text-gray-600">Прямые затраты</div>
                       </div>
@@ -747,7 +747,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                     <Col xs={12} sm={8} lg={6}>
                       <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg">
                         <div className="text-2xl font-bold text-purple-600 mb-2">
-                          {(commercialTotal - stats.actualTotalCost).toFixed(2).replace('.', ',')} ₽
+                          {(commercialTotal - stats.actualTotalCost).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
                         </div>
                         <div className="text-sm text-gray-600">Наценки и прибыль</div>
                       </div>
