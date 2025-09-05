@@ -1,108 +1,16 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, Select, Form, message, Typography, Row, Col, Button, Empty } from 'antd';
-import { DollarOutlined, LineChartOutlined, FolderOpenOutlined, ReloadOutlined, DashboardOutlined, PieChartOutlined, CalculatorOutlined } from '@ant-design/icons';
+import { DollarOutlined, LineChartOutlined, FolderOpenOutlined, ReloadOutlined, DashboardOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { supabase } from '../lib/supabase/client';
 import { MarkupEditor } from '../components/financial/MarkupEditor';
+import { ModernFinancialIndicators } from '../components/financial/ModernFinancialIndicators';
 import QuickTenderSelector from '../components/common/QuickTenderSelector';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { formatQuantity } from '../utils/formatters';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-// Компонент круговой диаграммы
-const CircularChart: React.FC<{ 
-  data: { label: string; value: number; color: string }[]; 
-  size?: number; 
-  strokeWidth?: number;
-  showLabels?: boolean;
-}> = ({ data, size = 120, strokeWidth = 8, showLabels = true }) => {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
-  const center = size / 2;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  
-  let accumulatedPercentage = 0;
-  
-  return (
-    <div className="flex flex-col items-center">
-      <div style={{ position: 'relative', width: size, height: size }}>
-        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-          <circle
-            cx={center}
-            cy={center}
-            r={radius}
-            fill="transparent"
-            stroke="#f0f0f0"
-            strokeWidth={strokeWidth}
-          />
-          {data.map((segment, index) => {
-            if (segment.value === 0) return null;
-            
-            const percentage = segment.value / total;
-            const strokeDasharray = `${percentage * circumference} ${circumference}`;
-            const strokeDashoffset = -accumulatedPercentage * circumference;
-            
-            accumulatedPercentage += percentage;
-            
-            return (
-              <circle
-                key={index}
-                cx={center}
-                cy={center}
-                r={radius}
-                fill="transparent"
-                stroke={segment.color}
-                strokeWidth={strokeWidth}
-                strokeDasharray={strokeDasharray}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="round"
-                style={{
-                  transition: 'all 0.6s ease-in-out',
-                  transformOrigin: 'center'
-                }}
-              />
-            );
-          })}
-        </svg>
-        
-        {/* Центральный текст */}
-        <div 
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            textAlign: 'center'
-          }}
-        >
-          <div className="text-lg font-bold text-gray-800">
-            {total.toFixed(2).replace('.', ',')}
-          </div>
-          <div className="text-xs text-gray-500">₽</div>
-        </div>
-      </div>
-      
-      {/* Легенда */}
-      {showLabels && (
-        <div className="mt-3 space-y-1">
-          {data.filter(item => item.value > 0).map((segment, index) => (
-            <div key={index} className="flex items-center gap-2 text-xs">
-              <div 
-                className="w-3 h-3 rounded-full" 
-                style={{ backgroundColor: segment.color }}
-              />
-              <span className="text-gray-700">{segment.label}</span>
-              <span className="font-medium">
-                {((segment.value / total) * 100).toFixed(1)}%
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
 
 interface Tender {
   id: string;
@@ -116,6 +24,7 @@ interface Tender {
 
 const FinancialIndicatorsPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [selectedTenderName, setSelectedTenderName] = useState<string | null>(null);
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
@@ -459,12 +368,34 @@ const FinancialIndicatorsPage: React.FC = () => {
   const handleMarkupChange = (calculatedFinancials: any) => {
     console.log('🚀 [FinancialIndicatorsPage] Markup changed:', calculatedFinancials);
     // Обновляем коммерческую общую стоимость из данных MarkupEditor
-    if (calculatedFinancials?.totalCommercialPrice) {
+    if (calculatedFinancials?.totalCommercialPrice && calculatedFinancials.totalCommercialPrice > 0) {
       setCommercialTotal(calculatedFinancials.totalCommercialPrice);
+      console.log('✅ [FinancialIndicatorsPage] Commercial total updated:', calculatedFinancials.totalCommercialPrice);
+    } else {
+      console.log('⚠️ [FinancialIndicatorsPage] No totalCommercialPrice or zero value:', calculatedFinancials?.totalCommercialPrice);
     }
     // Сохраняем данные наценок для построения графиков
     setMarkupData(calculatedFinancials);
   };
+
+  // Reset tender selection - возврат к выбору тендера
+  const handleResetSelection = useCallback(() => {
+    console.log('🔄 Resetting tender selection');
+    setSelectedTenderId(null);
+    setSelectedTenderName(null);
+    setSelectedTender(null);
+    setIsContentVisible(false);
+    setCommercialTotal(0);
+    setMarkupData(null);
+    setStats({
+      actualTotalMaterials: 0,
+      actualTotalWorks: 0,
+      actualTotalSubmaterials: 0,
+      actualTotalSubworks: 0,
+      actualTotalCost: 0
+    });
+    message.info('Возврат к выбору тендера');
+  }, []);
 
   return (
     <div className="w-full min-h-full bg-gray-50">
@@ -474,7 +405,7 @@ const FinancialIndicatorsPage: React.FC = () => {
           .financial-page-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
             border-radius: 16px;
-            margin-bottom: 0;
+            margin-bottom: 24px;
             padding: 32px;
             padding-bottom: 32px;
             color: white;
@@ -567,6 +498,22 @@ const FinancialIndicatorsPage: React.FC = () => {
               >
                 Обновить
               </Button>
+              {selectedTenderId && (
+                <Button
+                  className="financial-action-btn"
+                  style={{ 
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    color: 'white',
+                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                    fontWeight: 600
+                  }}
+                  size="large"
+                  icon={<ArrowLeftOutlined />}
+                  onClick={handleResetSelection}
+                >
+                  Назад к выбору
+                </Button>
+              )}
             </div>
           </div>
 
@@ -655,15 +602,18 @@ const FinancialIndicatorsPage: React.FC = () => {
             </div>
             
             {/* Total Cost - Right Side */}
-            {selectedTenderId && (
-              <div className={`flex flex-col justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
-                <div>
-                  <Text className="text-sm text-gray-600 block mb-1" style={{ cursor: 'default' }}>
-                    {commercialTotal > 0 ? 'Коммерческая стоимость' : 'Общая стоимость'}
-                  </Text>
+            {selectedTenderId && commercialTotal > 0 && (
+              <div className={`flex flex-col justify-center items-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
+                <div className="text-center">
                   <div className="text-3xl font-bold text-green-700" style={{ cursor: 'default' }}>
-                    {(commercialTotal > 0 ? commercialTotal : stats.actualTotalCost).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
+                    {commercialTotal.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
                   </div>
+                  {/* Цена за м² */}
+                  {selectedTender?.area_sp && (
+                    <div className="text-lg font-medium text-gray-600 mt-2" style={{ cursor: 'default' }}>
+                      {Math.round((commercialTotal / selectedTender.area_sp)).toLocaleString('ru-RU')} ₽/м²
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -713,173 +663,22 @@ const FinancialIndicatorsPage: React.FC = () => {
             onMarkupChange={handleMarkupChange}
           />
           
-          {/* Финансовые показатели на основе расчетных данных */}
+          {/* Современные финансовые показатели */}
           {commercialTotal > 0 && (
-            <Row gutter={[24, 24]}>
-              {/* Основные показатели */}
-              <Col xs={24}>
-                <Card 
-                  title={
-                    <div className="flex items-center gap-2">
-                      <LineChartOutlined className="text-blue-500" />
-                      <span>Ключевые показатели</span>
-                    </div>
-                  }
-                  style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                >
-                  <Row gutter={[24, 16]}>
-                    <Col xs={12} sm={8} lg={6}>
-                      <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg">
-                        <div className="text-2xl font-bold text-blue-600 mb-2">
-                          {commercialTotal.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
-                        </div>
-                        <div className="text-sm text-gray-600">Коммерческая стоимость</div>
-                      </div>
-                    </Col>
-                    <Col xs={12} sm={8} lg={6}>
-                      <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
-                        <div className="text-2xl font-bold text-green-600 mb-2">
-                          {stats.actualTotalCost.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
-                        </div>
-                        <div className="text-sm text-gray-600">Прямые затраты</div>
-                      </div>
-                    </Col>
-                    <Col xs={12} sm={8} lg={6}>
-                      <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg">
-                        <div className="text-2xl font-bold text-purple-600 mb-2">
-                          {(commercialTotal - stats.actualTotalCost).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
-                        </div>
-                        <div className="text-sm text-gray-600">Наценки и прибыль</div>
-                      </div>
-                    </Col>
-                    <Col xs={12} sm={8} lg={6}>
-                      <div className="text-center p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg">
-                        <div className="text-2xl font-bold text-orange-600 mb-2">
-                          {((commercialTotal - stats.actualTotalCost) / stats.actualTotalCost * 100).toFixed(1)}%
-                        </div>
-                        <div className="text-sm text-gray-600">Общий процент наценки</div>
-                      </div>
-                    </Col>
-                  </Row>
-                </Card>
-              </Col>
-
-              {/* Структура затрат */}
-              <Col xs={24} lg={8}>
-                <Card 
-                  title={
-                    <div className="flex items-center gap-2">
-                      <PieChartOutlined className="text-green-500" />
-                      <span>Структура прямых затрат</span>
-                    </div>
-                  }
-                  style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                >
-                  <CircularChart
-                    data={[
-                      { label: 'Материалы', value: stats.actualTotalMaterials, color: '#52c41a' },
-                      { label: 'Работы', value: stats.actualTotalWorks, color: '#1890ff' },
-                      { label: 'Субматериалы', value: stats.actualTotalSubmaterials, color: '#fa8c16' },
-                      { label: 'Субработы', value: stats.actualTotalSubworks, color: '#eb2f96' }
-                    ]}
-                    size={140}
-                  />
-                </Card>
-              </Col>
-
-              {/* Структура наценок */}
-              <Col xs={24} lg={8}>
-                <Card 
-                  title={
-                    <div className="flex items-center gap-2">
-                      <CalculatorOutlined className="text-purple-500" />
-                      <span>Структура наценок</span>
-                    </div>
-                  }
-                  style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                >
-                  {markupData ? (
-                    <CircularChart
-                      data={[
-                        { 
-                          label: 'Непредвиденные', 
-                          value: markupData.contingencyCost || 0, 
-                          color: '#faad14' 
-                        },
-                        { 
-                          label: 'ООЗ', 
-                          value: (markupData.overheadOwnForces || 0) + (markupData.overheadSubcontract || 0), 
-                          color: '#722ed1' 
-                        },
-                        { 
-                          label: 'Прибыль', 
-                          value: markupData.totalProfit || 0, 
-                          color: '#f5222d' 
-                        },
-                        { 
-                          label: 'Рост стоимости', 
-                          value: (markupData.materialsGrowthCost || 0) + (markupData.worksGrowthCost || 0), 
-                          color: '#13c2c2' 
-                        }
-                      ]}
-                      size={140}
-                    />
-                  ) : (
-                    <div className="text-center p-8 text-gray-500">
-                      <div className="text-sm">Нет данных о наценках</div>
-                    </div>
-                  )}
-                </Card>
-              </Col>
-
-              {/* Показатели эффективности */}
-              <Col xs={24} lg={8}>
-                <Card 
-                  title={
-                    <div className="flex items-center gap-2">
-                      <CalculatorOutlined className="text-purple-500" />
-                      <span>Показатели эффективности</span>
-                    </div>
-                  }
-                  style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                >
-                  {selectedTender?.area_sp && (
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                        <span className="text-gray-700">Стоимость за м² (коммерческая)</span>
-                        <span className="font-bold text-blue-600">
-                          {Math.round(commercialTotal / selectedTender.area_sp).toLocaleString('ru-RU')} ₽/м²
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                        <span className="text-gray-700">Прямые затраты за м²</span>
-                        <span className="font-bold text-green-600">
-                          {Math.round(stats.actualTotalCost / selectedTender.area_sp).toLocaleString('ru-RU')} ₽/м²
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                        <span className="text-gray-700">Наценка за м²</span>
-                        <span className="font-bold text-orange-600">
-                          {Math.round((commercialTotal - stats.actualTotalCost) / selectedTender.area_sp).toLocaleString('ru-RU')} ₽/м²
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                        <span className="text-gray-700">Общая площадь</span>
-                        <span className="font-bold text-gray-800">
-                          {selectedTender.area_sp.toLocaleString('ru-RU')} м²
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  {!selectedTender?.area_sp && (
-                    <div className="text-center p-8 text-gray-500">
-                      <div className="text-lg mb-2">Площадь не указана</div>
-                      <div className="text-sm">Для расчета показателей на м² укажите площадь в параметрах тендера</div>
-                    </div>
-                  )}
-                </Card>
-              </Col>
-            </Row>
+            <ModernFinancialIndicators
+              data={{
+                commercialTotal,
+                directCosts: {
+                  materials: stats.actualTotalMaterials,
+                  works: stats.actualTotalWorks,
+                  submaterials: stats.actualTotalSubmaterials,
+                  subworks: stats.actualTotalSubworks,
+                  total: stats.actualTotalCost
+                },
+                markupData,
+                tenderArea: selectedTender?.area_sp
+              }}
+            />
           )}
           
           {/* Показать только базовые затраты, если нет коммерческих расчетов */}

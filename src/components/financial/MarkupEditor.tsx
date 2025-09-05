@@ -280,8 +280,11 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
     setCalculatedFinancials(financials);
     
     if (onMarkupChange) {
-      // Используем тот же расчет что и для отображения в итогах таблицы
-      const totalCommercialPrice = totalCalculatedCosts;
+      // Рассчитываем итоговую коммерческую стоимость используя ту же логику что и для отображения
+      const formValues = form.getFieldsValue();
+      const totalCommercialPrice = calculateTotalCosts(markupFields, formValues);
+
+      console.log('📊 [MarkupEditor] Calculated totalCommercialPrice:', totalCommercialPrice);
 
       onMarkupChange({
         ...financials,
@@ -295,8 +298,12 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
   useEffect(() => {
     if (markupData && baseCosts.materials >= 0) {
       calculateFinancialsInternal(); // Don't notify parent on dependency changes
+      // После внутреннего расчета, уведомляем родителя
+      setTimeout(() => {
+        calculateAndNotifyParent();
+      }, 100);
     }
-  }, [calculateFinancialsInternal]);
+  }, [calculateFinancialsInternal, calculateAndNotifyParent]);
 
 
   const handleRefreshCalculation = () => {

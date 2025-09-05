@@ -149,6 +149,16 @@ function App() {
               } 
             />
 
+            {/* Financial Indicators direct access route */}
+            <Route 
+              path="financial-indicators" 
+              element={
+                <React.Suspense fallback={<div>Загрузка...</div>}>
+                  <FinancialIndicatorsPage />
+                </React.Suspense>
+              } 
+            />
+
             {/* Commercial Costs route */}
             <Route 
               path="commercial-costs" 
