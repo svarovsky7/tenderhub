@@ -96,25 +96,237 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
     console.log('📡 Loading positions for tender:', tenderId);
     setLoading(true);
     try {
-      const result = await clientPositionsApi.getByTenderId(tenderId, {}, { limit: 1000 });
+      // Use new API method to get positions with additional works
+      const result = await clientPositionsApi.getPositionsWithAdditional(tenderId);
+      let positionsData = [];
+      let orphanedAdditionalData = [];
+      
       if (result.error) {
-        throw new Error(result.error);
+        // Fallback to old method if new method not available
+        console.log('⚠️ New API not available, using fallback');
+        const fallbackResult = await clientPositionsApi.getByTenderId(tenderId, {}, { limit: 1000 });
+        if (fallbackResult.error) {
+          throw new Error(fallbackResult.error);
+        }
+        positionsData = fallbackResult.data || [];
+      } else if (result.data) {
+        // New API returns object with positions and orphanedAdditional
+        if (result.data.positions) {
+          positionsData = result.data.positions;
+          orphanedAdditionalData = result.data.orphanedAdditional || [];
+        } else {
+          // Handle old API response format
+          positionsData = result.data;
+        }
       }
-      console.log('✅ Positions loaded:', result.data?.length);
+      
+      console.log('✅ Positions loaded:', positionsData.length);
+      if (orphanedAdditionalData.length > 0) {
+        console.log('📦 Orphaned additional works:', orphanedAdditionalData.length);
+      }
       
       // Debug: Check if manual fields are loaded
-      if (result.data && result.data.length > 0) {
+      if (positionsData.length > 0) {
         console.log('🔍 First position data:', {
-          id: result.data[0].id,
-          manual_volume: result.data[0].manual_volume,
-          manual_note: result.data[0].manual_note,
-          work_name: result.data[0].work_name
+          id: positionsData[0].id,
+          idType: typeof positionsData[0].id,
+          manual_volume: positionsData[0].manual_volume,
+          manual_note: positionsData[0].manual_note,
+          work_name: positionsData[0].work_name,
+          is_additional: positionsData[0].is_additional,
+          parent_position_id: positionsData[0].parent_position_id,
+          additional_works: positionsData[0].additional_works
         });
+        
+        // Check for positions with invalid IDs
+        const invalidPositions = positionsData.filter(p => !p.id || p.id === 'undefined' || typeof p.id !== 'string');
+        if (invalidPositions.length > 0) {
+          console.error('❌ Found positions with invalid IDs:', invalidPositions);
+        }
       }
       
       // Load BOQ items for each position with work-material links
       const positionsWithItems = await Promise.all(
-        (result.data || []).map(async (pos) => {
+        positionsData.map(async (pos) => {
+          // Process additional works if they exist
+          let additionalWorksWithItems = [];
+          if (pos.additional_works && pos.additional_works.length > 0) {
+            additionalWorksWithItems = await Promise.all(
+              pos.additional_works.map(async (additionalWork) => {
+                // Load BOQ items for additional work
+                const { data: boqItems } = await boqApi.getByClientPositionId(additionalWork.id);
+                const items = boqItems || [];
+                
+                // Load work-material links for additional work
+                const { data: links } = await workMaterialLinksApi.getLinksByPosition(additionalWork.id);
+                console.log('🔗 Links loaded for additional work:', {
+                  id: additionalWork.id,
+                  work_name: additionalWork.work_name,
+                  links: links,
+                  boq_items_count: items.length
+                });
+                
+                // Process items with link information (same as main positions)
+                const processedItems = items.map(item => {
+                  if ((item.item_type === 'material' || item.item_type === 'sub_material') && links && links.length > 0) {
+                    // Find ALL works this material is linked to
+                    const materialLinks = links.filter(l => {
+                      return l.material_boq_item_id === item.id || 
+                             l.sub_material_boq_item_id === item.id ||
+                             (l.material && l.material.id === item.id);
+                    });
+                    
+                    if (materialLinks.length > 0) {
+                      console.log('📎 Found links for material in additional work:', item.description, materialLinks);
+                      return {
+                        ...item,
+                        work_links: materialLinks.map(link => ({
+                          ...link,
+                          material_quantity_per_work: link.material_quantity_per_work || link.material_consumption_coefficient || 1,
+                          usage_coefficient: link.usage_coefficient || link.material_conversion_coefficient || 1
+                        })),
+                        work_link: materialLinks[0] ? {
+                          ...materialLinks[0],
+                          work_boq_item_id: materialLinks[0].work_boq_item_id,
+                          sub_work_boq_item_id: materialLinks[0].sub_work_boq_item_id,
+                          material_boq_item_id: materialLinks[0].material_boq_item_id,
+                          sub_material_boq_item_id: materialLinks[0].sub_material_boq_item_id,
+                          material_quantity_per_work: materialLinks[0].material_quantity_per_work || materialLinks[0].material_consumption_coefficient || 1,
+                          usage_coefficient: materialLinks[0].usage_coefficient || materialLinks[0].material_conversion_coefficient || 1
+                        } : undefined
+                      };
+                    }
+                  } else if ((item.item_type === 'work' || item.item_type === 'sub_work') && links && links.length > 0) {
+                    // Find materials linked to this work
+                    const workLinks = links.filter(l => {
+                      return l.work_boq_item_id === item.id || 
+                             l.sub_work_boq_item_id === item.id ||
+                             (l.work && l.work.id === item.id);
+                    });
+                    if (workLinks.length > 0) {
+                      console.log('📎 Found materials for work in additional:', item.description, workLinks);
+                      return {
+                        ...item,
+                        linked_materials: workLinks.map(wl => ({
+                          ...wl,
+                          material_quantity_per_work: wl.material_quantity_per_work || wl.material_consumption_coefficient || 1,
+                          usage_coefficient: wl.usage_coefficient || wl.material_conversion_coefficient || 1
+                        }))
+                      };
+                    }
+                  }
+                  return item;
+                });
+                
+                // Calculate total for additional work including delivery
+                let calculatedTotal = 0;
+                processedItems.forEach(item => {
+                  let quantity = item.quantity || 0;
+                  const unitRate = item.unit_rate || 0;
+                  
+                  // For linked materials, calculate quantity based on work volume
+                  if ((item.item_type === 'material' || item.item_type === 'sub_material') && item.work_link) {
+                    const work = processedItems.find(procItem => {
+                      if (item.work_link.work_boq_item_id && 
+                          procItem.id === item.work_link.work_boq_item_id && 
+                          procItem.item_type === 'work') {
+                        return true;
+                      }
+                      if (item.work_link.sub_work_boq_item_id && 
+                          procItem.id === item.work_link.sub_work_boq_item_id && 
+                          procItem.item_type === 'sub_work') {
+                        return true;
+                      }
+                      return false;
+                    });
+                    
+                    if (work) {
+                      const consumptionCoef = item.consumption_coefficient || 
+                                             item.work_link.material_quantity_per_work || 1;
+                      const conversionCoef = item.conversion_coefficient || 
+                                            item.work_link.usage_coefficient || 1;
+                      const workQuantity = work.quantity || 0;
+                      quantity = workQuantity * consumptionCoef * conversionCoef;
+                    }
+                  }
+                  
+                  let itemTotal = quantity * unitRate;
+                  
+                  // Add delivery cost for materials
+                  if (item.item_type === 'material' || item.item_type === 'sub_material') {
+                    const deliveryType = item.delivery_price_type;
+                    const deliveryAmount = item.delivery_amount || 0;
+                    
+                    if (deliveryType === 'amount' && deliveryAmount > 0) {
+                      itemTotal += deliveryAmount * quantity;
+                    } else if (deliveryType === 'not_included') {
+                      itemTotal += deliveryAmount * quantity;
+                    }
+                  }
+                  
+                  calculatedTotal += itemTotal;
+                });
+                
+                // Sort items: works first, then linked materials after their works, then unlinked materials
+                const sortedItems = [];
+                const unlinkedMaterials = [];
+                
+                // First pass: add works
+                processedItems.forEach(item => {
+                  if (item.item_type === 'work' || item.item_type === 'sub_work') {
+                    sortedItems.push(item);
+                    // Immediately add materials linked to this work
+                    processedItems.forEach(matItem => {
+                      if ((matItem.item_type === 'material' || matItem.item_type === 'sub_material') && matItem.work_link) {
+                        const linkedToThisWork = 
+                          (matItem.work_link.work_boq_item_id === item.id && item.item_type === 'work') ||
+                          (matItem.work_link.sub_work_boq_item_id === item.id && item.item_type === 'sub_work');
+                        if (linkedToThisWork && !sortedItems.includes(matItem)) {
+                          sortedItems.push(matItem);
+                        }
+                      }
+                    });
+                  } else if ((item.item_type === 'material' || item.item_type === 'sub_material') && !item.work_link) {
+                    unlinkedMaterials.push(item);
+                  }
+                });
+                
+                // Add unlinked materials at the end
+                sortedItems.push(...unlinkedMaterials);
+                
+                // Debug: check sorted items
+                const linkedMaterials = sortedItems.filter(item => 
+                  (item.item_type === 'material' || item.item_type === 'sub_material') && item.work_link
+                );
+                if (sortedItems.length > 0) {
+                  console.log('✅ ДОП работа after sorting:', {
+                    work_name: additionalWork.work_name,
+                    total_items: sortedItems.length,
+                    linked_count: linkedMaterials.length,
+                    sorted_order: sortedItems.map((si, idx) => ({
+                      index: idx,
+                      id: si.id,
+                      type: si.item_type,
+                      name: si.description,
+                      has_link: !!si.work_link,
+                      linked_to: si.work_link?.work_boq_item_id || si.work_link?.sub_work_boq_item_id
+                    }))
+                  });
+                }
+                
+                return {
+                  ...additionalWork,
+                  boq_items: sortedItems,
+                  materials_count: items.filter(item => item.item_type === 'material').length,
+                  works_count: items.filter(item => item.item_type === 'work').length,
+                  total_position_cost: calculatedTotal,
+                  position_type: 'executable', // Убедимся, что ДОП работы имеют правильный тип
+                  hierarchy_level: 6 // Executable level
+                };
+              })
+            );
+          }
+          
           // Load BOQ items for this position
           const { data: boqItems } = await boqApi.getByClientPositionId(pos.id);
           
@@ -231,22 +443,245 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
             calculatedTotal += itemTotal;
           });
           
+          // Sort items: works first, then linked materials after their works, then unlinked materials
+          const sortedItems = [];
+          const unlinkedMaterials = [];
+          
+          // First pass: add works
+          processedItems.forEach(item => {
+            if (item.item_type === 'work' || item.item_type === 'sub_work') {
+              sortedItems.push(item);
+              // Immediately add materials linked to this work
+              processedItems.forEach(matItem => {
+                if ((matItem.item_type === 'material' || matItem.item_type === 'sub_material') && matItem.work_link) {
+                  const linkedToThisWork = 
+                    (matItem.work_link.work_boq_item_id === item.id && item.item_type === 'work') ||
+                    (matItem.work_link.sub_work_boq_item_id === item.id && item.item_type === 'sub_work');
+                  if (linkedToThisWork && !sortedItems.includes(matItem)) {
+                    sortedItems.push(matItem);
+                  }
+                }
+              });
+            } else if ((item.item_type === 'material' || item.item_type === 'sub_material') && !item.work_link) {
+              unlinkedMaterials.push(item);
+            }
+          });
+          
+          // Add unlinked materials at the end
+          sortedItems.push(...unlinkedMaterials);
+          
           return {
             ...pos,
-            boq_items: processedItems,
+            boq_items: sortedItems,
             materials_count: items.filter(item => item.item_type === 'material').length,
             works_count: items.filter(item => item.item_type === 'work').length,
             total_position_cost: calculatedTotal,
             // Ensure manual fields are preserved
             manual_volume: pos.manual_volume,
-            manual_note: pos.manual_note
+            manual_note: pos.manual_note,
+            // Include processed additional works
+            additional_works: additionalWorksWithItems
           };
         })
       );
       
-      console.log('✅ Positions with items loaded:', positionsWithItems);
-      setPositions(positionsWithItems);
-      updateStats(positionsWithItems);
+      // Process orphaned additional works (same as regular positions)
+      let orphanedWithItems = [];
+      if (orphanedAdditionalData.length > 0) {
+        orphanedWithItems = await Promise.all(
+          orphanedAdditionalData.map(async (orphaned) => {
+            // Load BOQ items for orphaned additional work
+            const { data: boqItems } = await boqApi.getByClientPositionId(orphaned.id);
+            const items = boqItems || [];
+            
+            // Load work-material links for orphaned additional work
+            const { data: links } = await workMaterialLinksApi.getLinksByPosition(orphaned.id);
+            console.log('🔗 Links loaded for orphaned additional work:', orphaned.id, links);
+            
+            // Process items with link information (same as regular positions)
+            const processedItems = items.map(item => {
+              if ((item.item_type === 'material' || item.item_type === 'sub_material') && links && links.length > 0) {
+                // Find ALL works this material is linked to
+                const materialLinks = links.filter(l => {
+                  return l.material_boq_item_id === item.id || 
+                         l.sub_material_boq_item_id === item.id ||
+                         (l.material && l.material.id === item.id);
+                });
+                
+                if (materialLinks.length > 0) {
+                  console.log('📎 Found links for material in orphaned work:', item.description, materialLinks);
+                  return {
+                    ...item,
+                    work_links: materialLinks.map(link => ({
+                      ...link,
+                      material_quantity_per_work: link.material_quantity_per_work || link.material_consumption_coefficient || 1,
+                      usage_coefficient: link.usage_coefficient || link.material_conversion_coefficient || 1
+                    })),
+                    work_link: materialLinks[0] ? {
+                      ...materialLinks[0],
+                      work_boq_item_id: materialLinks[0].work_boq_item_id,
+                      sub_work_boq_item_id: materialLinks[0].sub_work_boq_item_id,
+                      material_boq_item_id: materialLinks[0].material_boq_item_id,
+                      sub_material_boq_item_id: materialLinks[0].sub_material_boq_item_id,
+                      material_quantity_per_work: materialLinks[0].material_quantity_per_work || materialLinks[0].material_consumption_coefficient || 1,
+                      usage_coefficient: materialLinks[0].usage_coefficient || materialLinks[0].material_conversion_coefficient || 1
+                    } : undefined
+                  };
+                }
+              } else if ((item.item_type === 'work' || item.item_type === 'sub_work') && links && links.length > 0) {
+                // Find materials linked to this work
+                const workLinks = links.filter(l => {
+                  return l.work_boq_item_id === item.id || 
+                         l.sub_work_boq_item_id === item.id ||
+                         (l.work && l.work.id === item.id);
+                });
+                if (workLinks.length > 0) {
+                  console.log('📎 Found materials for work in orphaned:', item.description, workLinks);
+                  return {
+                    ...item,
+                    linked_materials: workLinks.map(wl => ({
+                      ...wl,
+                      material_quantity_per_work: wl.material_quantity_per_work || wl.material_consumption_coefficient || 1,
+                      usage_coefficient: wl.usage_coefficient || wl.material_conversion_coefficient || 1
+                    }))
+                  };
+                }
+              }
+              return item;
+            });
+            
+            // Calculate total including delivery
+            let calculatedTotal = 0;
+            processedItems.forEach(item => {
+              let quantity = item.quantity || 0;
+              const unitRate = item.unit_rate || 0;
+              
+              // For linked materials, calculate quantity based on work volume
+              if ((item.item_type === 'material' || item.item_type === 'sub_material') && item.work_link) {
+                const work = processedItems.find(procItem => {
+                  if (item.work_link.work_boq_item_id && 
+                      procItem.id === item.work_link.work_boq_item_id && 
+                      procItem.item_type === 'work') {
+                    return true;
+                  }
+                  if (item.work_link.sub_work_boq_item_id && 
+                      procItem.id === item.work_link.sub_work_boq_item_id && 
+                      procItem.item_type === 'sub_work') {
+                    return true;
+                  }
+                  return false;
+                });
+                
+                if (work) {
+                  const consumptionCoef = item.consumption_coefficient || 
+                                         item.work_link.material_quantity_per_work || 1;
+                  const conversionCoef = item.conversion_coefficient || 
+                                        item.work_link.usage_coefficient || 1;
+                  const workQuantity = work.quantity || 0;
+                  quantity = workQuantity * consumptionCoef * conversionCoef;
+                }
+              }
+              
+              let itemTotal = quantity * unitRate;
+              
+              // Add delivery cost for materials
+              if (item.item_type === 'material' || item.item_type === 'sub_material') {
+                const deliveryType = item.delivery_price_type;
+                const deliveryAmount = item.delivery_amount || 0;
+                
+                if (deliveryType === 'amount' && deliveryAmount > 0) {
+                  itemTotal += deliveryAmount * quantity;
+                } else if (deliveryType === 'not_included') {
+                  itemTotal += deliveryAmount * quantity;
+                }
+              }
+              
+              calculatedTotal += itemTotal;
+            });
+            
+            // Sort items: works first, then linked materials after their works, then unlinked materials
+            const sortedItems = [];
+            const unlinkedMaterials = [];
+            
+            // First pass: add works
+            processedItems.forEach(item => {
+              if (item.item_type === 'work' || item.item_type === 'sub_work') {
+                sortedItems.push(item);
+                // Immediately add materials linked to this work
+                processedItems.forEach(matItem => {
+                  if ((matItem.item_type === 'material' || matItem.item_type === 'sub_material') && matItem.work_link) {
+                    const linkedToThisWork = 
+                      (matItem.work_link.work_boq_item_id === item.id && item.item_type === 'work') ||
+                      (matItem.work_link.sub_work_boq_item_id === item.id && item.item_type === 'sub_work');
+                    if (linkedToThisWork && !sortedItems.includes(matItem)) {
+                      sortedItems.push(matItem);
+                    }
+                  }
+                });
+              } else if ((item.item_type === 'material' || item.item_type === 'sub_material') && !item.work_link) {
+                unlinkedMaterials.push(item);
+              }
+            });
+            
+            // Add unlinked materials at the end
+            sortedItems.push(...unlinkedMaterials);
+            
+            // Debug: check orphaned sorted items
+            const linkedMats = sortedItems.filter(item => 
+              (item.item_type === 'material' || item.item_type === 'sub_material') && item.work_link
+            );
+            if (sortedItems.length > 0) {
+              console.log('✅ Orphaned ДОП работа after sorting:', {
+                work_name: orphaned.work_name,
+                total_items: sortedItems.length,
+                linked_count: linkedMats.length,
+                sorted_order: sortedItems.map((si, idx) => ({
+                  index: idx,
+                  id: si.id,
+                  type: si.item_type,
+                  name: si.description,
+                  has_link: !!si.work_link,
+                  linked_to: si.work_link?.work_boq_item_id || si.work_link?.sub_work_boq_item_id
+                }))
+              });
+            }
+            
+            return {
+              ...orphaned,
+              boq_items: sortedItems,
+              materials_count: items.filter(item => item.item_type === 'material').length,
+              works_count: items.filter(item => item.item_type === 'work').length,
+              total_position_cost: calculatedTotal,
+              is_orphaned: true, // Mark as orphaned for UI display
+              position_type: 'executable', // Убедимся, что orphaned ДОП работы имеют правильный тип
+              hierarchy_level: 6 // Executable level
+            };
+          })
+        );
+      }
+      
+      // Combine all positions
+      const allPositions = [...positionsWithItems, ...orphanedWithItems];
+      
+      // Filter out positions with invalid IDs before setting state
+      const validPositions = allPositions.filter(pos => {
+        if (!pos.id || pos.id === 'undefined' || typeof pos.id !== 'string') {
+          console.error('❌ Filtering out position with invalid ID during load:', {
+            id: pos.id,
+            type: typeof pos.id,
+            work_name: pos.work_name
+          });
+          return false;
+        }
+        return true;
+      });
+      
+      console.log('✅ Positions with items loaded:', validPositions.length);
+      if (orphanedWithItems.length > 0) {
+        console.log('📦 Orphaned additional works processed:', orphanedWithItems.length);
+      }
+      setPositions(validPositions);
+      updateStats(validPositions);
     } catch (error) {
       console.error('❌ Load positions error:', error);
       message.error('Ошибка загрузки позиций');
@@ -398,16 +833,120 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
         </Card>
       ) : (
         <div className="space-y-3 w-full">
-          {sortPositionsByNumber(positions).map(position => (
-            <ClientPositionCardStreamlined
-              key={position.id}
-              position={position}
-              isExpanded={expandedPositions.has(position.id)}
-              onToggle={() => togglePosition(position.id)}
-              onUpdate={loadPositions}
-              tenderId={tenderId}
-            />
-          ))}
+          {/* Regular positions and their linked additional works */}
+          {sortPositionsByNumber(positions.filter(p => !p.is_orphaned)).map(position => {
+            // Validate position before rendering
+            if (!position.id || position.id === 'undefined' || typeof position.id !== 'string') {
+              console.error('❌ Skipping position with invalid ID:', {
+                id: position.id,
+                type: typeof position.id,
+                work_name: position.work_name
+              });
+              return null;
+            }
+            
+            return (
+            <React.Fragment key={position.id}>
+              {/* Main position */}
+              <ClientPositionCardStreamlined
+                position={position}
+                isExpanded={expandedPositions.has(position.id)}
+                onToggle={() => togglePosition(position.id)}
+                onUpdate={loadPositions}
+                tenderId={tenderId}
+              />
+              
+              {/* Additional works for this position */}
+              {position.additional_works && position.additional_works.map(additionalWork => {
+                // Validate additional work before rendering
+                if (!additionalWork.id || additionalWork.id === 'undefined') {
+                  console.error('❌ Skipping additional work with invalid ID:', additionalWork);
+                  return null;
+                }
+                
+                return (
+                <div 
+                  key={additionalWork.id}
+                  style={{ 
+                    marginLeft: '40px',
+                    position: 'relative'
+                  }}
+                >
+                  {/* Visual connector line */}
+                  <div 
+                    style={{
+                      position: 'absolute',
+                      left: '-20px',
+                      top: '0',
+                      bottom: '0',
+                      width: '2px',
+                      backgroundColor: '#faad14',
+                      opacity: 0.5
+                    }}
+                  />
+                  <div 
+                    style={{
+                      position: 'absolute',
+                      left: '-20px',
+                      top: '50%',
+                      width: '20px',
+                      height: '2px',
+                      backgroundColor: '#faad14',
+                      opacity: 0.5
+                    }}
+                  />
+                  
+                  <ClientPositionCardStreamlined
+                    position={{
+                      ...additionalWork,
+                      is_additional: true,
+                      boq_items: additionalWork.boq_items // Явно передаем boq_items с привязками
+                    }}
+                    isExpanded={expandedPositions.has(additionalWork.id)}
+                    onToggle={() => togglePosition(additionalWork.id)}
+                    onUpdate={loadPositions}
+                    tenderId={tenderId}
+                  />
+                </div>
+                );
+              })}
+            </React.Fragment>
+            );
+          })}
+          
+          {/* Orphaned Additional Works Section */}
+          {positions.filter(p => p.is_orphaned).length > 0 && (
+            <>
+              <div style={{ 
+                marginTop: '24px', 
+                marginBottom: '12px',
+                padding: '8px 16px',
+                backgroundColor: '#fff7e6',
+                border: '1px solid #ffd591',
+                borderRadius: '4px'
+              }}>
+                <Text strong style={{ color: '#fa8c16' }}>
+                  Независимые ДОП работы (исходная позиция удалена)
+                </Text>
+              </div>
+              
+              {sortPositionsByNumber(positions.filter(p => p.is_orphaned)).map(orphanedWork => (
+                <ClientPositionCardStreamlined
+                  key={orphanedWork.id}
+                  position={{
+                    ...orphanedWork,
+                    is_additional: true,
+                    is_orphaned: true,
+                    boq_items: orphanedWork.boq_items // Явно передаем boq_items с привязками
+                  }}
+                  isExpanded={expandedPositions.has(orphanedWork.id)}
+                  onToggle={() => togglePosition(orphanedWork.id)}
+                  onUpdate={loadPositions}
+                  tenderId={tenderId}
+                />
+              ))}
+            </>
+          )}
         </div>
       )}
 

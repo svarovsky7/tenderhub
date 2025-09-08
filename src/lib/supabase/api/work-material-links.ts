@@ -39,17 +39,46 @@ export const workMaterialLinksApi = {
    * Создать связь между работой и материалом
    */
   async createLink(link: WorkMaterialLink) {
-    console.log('🚀 Creating work-material link:', link);
+    console.log('🚀 Creating work-material link:', {
+      client_position_id: link.client_position_id,
+      work_boq_item_id: link.work_boq_item_id,
+      sub_work_boq_item_id: link.sub_work_boq_item_id,
+      material_boq_item_id: link.material_boq_item_id,
+      sub_material_boq_item_id: link.sub_material_boq_item_id,
+      coefficients: {
+        material_quantity_per_work: link.material_quantity_per_work,
+        usage_coefficient: link.usage_coefficient
+      }
+    });
+    
+    // Validate required fields
+    if (!link.client_position_id) {
+      console.error('❌ client_position_id is required');
+      return { error: 'client_position_id is required' };
+    }
+    
+    const hasWork = link.work_boq_item_id || link.sub_work_boq_item_id;
+    const hasMaterial = link.material_boq_item_id || link.sub_material_boq_item_id;
+    
+    if (!hasWork) {
+      console.error('❌ Either work_boq_item_id or sub_work_boq_item_id is required');
+      return { error: 'Work ID is required' };
+    }
+    
+    if (!hasMaterial) {
+      console.error('❌ Either material_boq_item_id or sub_material_boq_item_id is required');
+      return { error: 'Material ID is required' };
+    }
     
     try {
       const { data, error } = await supabase
         .from('work_material_links')
         .insert({
           client_position_id: link.client_position_id,
-          work_boq_item_id: link.work_boq_item_id,
-          material_boq_item_id: link.material_boq_item_id,
-          sub_work_boq_item_id: link.sub_work_boq_item_id,
-          sub_material_boq_item_id: link.sub_material_boq_item_id,
+          work_boq_item_id: link.work_boq_item_id || null,
+          material_boq_item_id: link.material_boq_item_id || null,
+          sub_work_boq_item_id: link.sub_work_boq_item_id || null,
+          sub_material_boq_item_id: link.sub_material_boq_item_id || null,
           material_quantity_per_work: link.material_quantity_per_work || 1,  // Всегда 1, не используется в расчетах
           usage_coefficient: link.usage_coefficient || 1,  // Всегда 1, не используется в расчетах
           delivery_price_type: link.delivery_price_type || 'included',
@@ -80,6 +109,37 @@ export const workMaterialLinksApi = {
    */
   async getLinksByPosition(positionId: string) {
     console.log('🚀 Getting links for position:', positionId);
+    
+    try {
+      // Прямой запрос к таблице work_material_links
+      const { data: links, error } = await supabase
+        .from('work_material_links')
+        .select('*')
+        .eq('client_position_id', positionId);
+
+      if (error) {
+        console.error('❌ Failed to get links:', error);
+        return { error: error.message };
+      }
+
+      if (!links || links.length === 0) {
+        console.log('📭 No links found for position');
+        return { data: [] };
+      }
+
+      console.log(`✅ Found ${links.length} links for position`);
+      return { data: links };
+    } catch (error) {
+      console.error('💥 Exception in getLinksByPosition:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  /**
+   * Получить все связи для позиции заказчика (старая версия для совместимости)
+   */
+  async getLinksByPositionOld(positionId: string) {
+    console.log('🚀 Getting links for position (old):', positionId);
     
     try {
       // Первый подход: попробуем через представление

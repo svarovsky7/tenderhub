@@ -352,6 +352,282 @@ export const clientPositionsApi = {
   },
 
   /**
+   * Get next position number for additional work (starting from 1000)
+   */
+  async getNextAdditionalNumber(tenderId: string): Promise<ApiResponse<number>> {
+    console.log('🚀 clientPositionsApi.getNextAdditionalNumber called:', { tenderId });
+    
+    try {
+      const { data, error } = await supabase
+        .from('client_positions')
+        .select('position_number')
+        .eq('tender_id', tenderId)
+        .eq('is_additional', true)
+        .order('position_number', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        return {
+          error: handleSupabaseError(error, 'Get next additional number'),
+        };
+      }
+
+      // Start from 1000 if no additional positions exist
+      const nextNumber = data && data.length > 0 ? data[0].position_number + 1 : 1000;
+
+      console.log('✅ Next additional number:', nextNumber);
+      return {
+        data: nextNumber,
+        message: `Next additional number: ${nextNumber}`,
+      };
+    } catch (error) {
+      return {
+        error: handleSupabaseError(error, 'Get next additional number'),
+      };
+    }
+  },
+
+  /**
+   * Create additional work position
+   */
+  async createAdditionalWork(
+    parentPositionId: string,
+    tenderId: string,
+    data: Omit<ClientPositionInsert, 'tender_id' | 'is_additional' | 'parent_position_id' | 'position_type'>
+  ): Promise<ApiResponse<ClientPosition>> {
+    console.log('🚀 clientPositionsApi.createAdditionalWork called:', { parentPositionId, tenderId, data });
+    
+    // Validate parentPositionId is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!parentPositionId || 
+        parentPositionId === 'undefined' || 
+        parentPositionId === 'null' ||
+        !uuidRegex.test(parentPositionId)) {
+      console.error('❌ Invalid parentPositionId:', {
+        value: parentPositionId,
+        type: typeof parentPositionId
+      });
+      return {
+        error: `Invalid parent position ID: ${parentPositionId}`,
+      };
+    }
+    
+    // Validate tenderId is a valid UUID
+    if (!tenderId || 
+        tenderId === 'undefined' || 
+        tenderId === 'null' ||
+        !uuidRegex.test(tenderId)) {
+      console.error('❌ Invalid tenderId:', {
+        value: tenderId,
+        type: typeof tenderId
+      });
+      return {
+        error: `Invalid tender ID: ${tenderId}`,
+      };
+    }
+    
+    try {
+      // Get parent position
+      const { data: parentPosition, error: parentError } = await supabase
+        .from('client_positions')
+        .select('*')
+        .eq('id', parentPositionId)
+        .single();
+
+      if (parentError || !parentPosition) {
+        console.error('❌ Parent position not found:', {
+          parentPositionId,
+          error: parentError
+        });
+        return {
+          error: 'Parent position not found',
+        };
+      }
+
+      console.log('📦 Parent position loaded:', {
+        id: parentPosition.id,
+        tender_id: parentPosition.tender_id,
+        work_name: parentPosition.work_name,
+        is_additional: parentPosition.is_additional,
+        fullObject: parentPosition
+      });
+
+      // Use passed tenderId (parent position may not have tender_id populated)
+      const actualTenderId = tenderId || parentPosition.tender_id;
+      
+      console.log('📍 Using tender_id:', {
+        actualTenderId,
+        passedTenderId: tenderId,
+        parentTenderId: parentPosition.tender_id,
+        usingPassed: tenderId ? true : false
+      });
+      
+      if (!actualTenderId) {
+        console.error('❌ No tender_id available:', {
+          parentTenderId: parentPosition.tender_id,
+          passedTenderId: tenderId,
+          parentPosition
+        });
+        return {
+          error: 'No tender ID available',
+        };
+      }
+
+      // Check if parent is already additional
+      if (parentPosition.is_additional) {
+        return {
+          error: 'Cannot create additional work for another additional work',
+        };
+      }
+
+      // Get next additional number using actualTenderId
+      const nextNumberResult = await this.getNextAdditionalNumber(actualTenderId);
+      if (nextNumberResult.error) {
+        return {
+          error: nextNumberResult.error,
+        };
+      }
+
+      // Create additional position with actualTenderId
+      // Generate item_no with "ДОП." prefix, handling undefined parent item_no
+      let additionalItemNo: string;
+      if (parentPosition.item_no) {
+        additionalItemNo = `ДОП.${parentPosition.item_no}`;
+        // Limit item_no to 10 characters (database constraint)
+        if (additionalItemNo.length > 10) {
+          // Truncate parent item_no to fit "ДОП." prefix within 10 chars
+          const maxParentLength = 6; // 10 - 4 ("ДОП." is 4 chars)
+          const truncatedParent = parentPosition.item_no.substring(0, maxParentLength);
+          additionalItemNo = `ДОП.${truncatedParent}`;
+          console.log('⚠️ Truncated item_no to fit database limit:', {
+            original: `ДОП.${parentPosition.item_no}`,
+            truncated: additionalItemNo,
+            length: additionalItemNo.length
+          });
+        }
+      } else {
+        // If parent has no item_no, use position number
+        additionalItemNo = `ДОП.${nextNumberResult.data!}`;
+        if (additionalItemNo.length > 10) {
+          // Ensure it fits in 10 chars
+          additionalItemNo = additionalItemNo.substring(0, 10);
+        }
+        console.log('⚠️ Parent has no item_no, using position number:', {
+          parentPosition: parentPosition.id,
+          generatedItemNo: additionalItemNo
+        });
+      }
+      
+      const newAdditionalPosition: ClientPositionInsert = {
+        ...data,
+        tender_id: actualTenderId,
+        position_number: nextNumberResult.data!,
+        item_no: additionalItemNo,
+        work_name: data.work_name.startsWith('ДОП:') ? data.work_name : `ДОП: ${data.work_name}`,
+        position_type: 'executable', // Additional works are always executable
+        is_additional: true,
+        parent_position_id: parentPositionId,
+        hierarchy_level: 6, // Executable level
+      };
+
+      const { data: createdPosition, error: createError } = await supabase
+        .from('client_positions')
+        .insert(newAdditionalPosition)
+        .select()
+        .single();
+
+      if (createError) {
+        return {
+          error: handleSupabaseError(createError, 'Create additional work'),
+        };
+      }
+
+      console.log('✅ Additional work created:', createdPosition);
+      return {
+        data: createdPosition,
+        message: 'Additional work created successfully',
+      };
+    } catch (error) {
+      return {
+        error: handleSupabaseError(error, 'Create additional work'),
+      };
+    }
+  },
+
+  /**
+   * Get positions with their additional works
+   */
+  async getPositionsWithAdditional(tenderId: string): Promise<ApiResponse<any[]>> {
+    console.log('🚀 clientPositionsApi.getPositionsWithAdditional called:', { tenderId });
+    
+    try {
+      // Get all positions for the tender
+      const { data: positions, error } = await supabase
+        .from('client_positions')
+        .select('*')
+        .eq('tender_id', tenderId)
+        .order('position_number', { ascending: true });
+
+      if (error) {
+        return {
+          error: handleSupabaseError(error, 'Get positions with additional'),
+        };
+      }
+
+      // Separate main and additional positions
+      const mainPositions = positions?.filter(p => !p.is_additional) || [];
+      const additionalPositions = positions?.filter(p => p.is_additional) || [];
+
+      // Create a set of existing position IDs for quick lookup
+      const existingPositionIds = new Set(mainPositions.map(p => p.id));
+
+      // Separate orphaned and linked additional works
+      const orphanedAdditional: any[] = [];
+      const linkedAdditional: Record<string, any[]> = {};
+
+      additionalPositions.forEach(add => {
+        if (!add.parent_position_id || !existingPositionIds.has(add.parent_position_id)) {
+          // Parent doesn't exist or is null - this is an orphaned additional work
+          orphanedAdditional.push({
+            ...add,
+            is_orphaned: true // Mark as orphaned for UI display
+          });
+        } else {
+          // Parent exists - group by parent
+          if (!linkedAdditional[add.parent_position_id]) {
+            linkedAdditional[add.parent_position_id] = [];
+          }
+          linkedAdditional[add.parent_position_id].push(add);
+        }
+      });
+
+      // Attach additional works to their parent positions
+      const positionsWithAdditional = mainPositions.map(position => ({
+        ...position,
+        additional_works: linkedAdditional[position.id] || [],
+      }));
+
+      // Add orphaned additional works at the end
+      if (orphanedAdditional.length > 0) {
+        console.log(`📦 Found ${orphanedAdditional.length} orphaned additional works`);
+      }
+
+      console.log('✅ Positions with additional works loaded');
+      return {
+        data: {
+          positions: positionsWithAdditional,
+          orphanedAdditional: orphanedAdditional
+        },
+        message: 'Positions loaded successfully',
+      };
+    } catch (error) {
+      return {
+        error: handleSupabaseError(error, 'Get positions with additional'),
+      };
+    }
+  },
+
+  /**
    * Update commercial costs for a client position
    */
   async updateCommercialCosts(

@@ -41,6 +41,7 @@ import { boqApi, clientPositionsApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import { getActiveTenderMarkup } from '../../lib/supabase/api/tender-markup';
 import MaterialLinkingModal from './MaterialLinkingModal';
+import AdditionalWorkModal from './AdditionalWorkModal';
 import { DecimalInput } from '../common';
 import CostDetailCascadeSelector from '../common/CostDetailCascadeSelector';
 import CostCategoryDisplay from './CostCategoryDisplay';
@@ -111,7 +112,11 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     id: position.id,
     manual_volume: position.manual_volume,
     manual_note: position.manual_note,
-    work_name: position.work_name?.substring(0, 30)
+    work_name: position.work_name?.substring(0, 30),
+    is_additional: position.is_additional,
+    position_type: position.position_type,
+    boq_items_count: position.boq_items?.length || 0,
+    has_linked_materials: position.boq_items?.some(item => item.work_link) || false
   });
   
   
@@ -138,7 +143,10 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const [localWorks, setLocalWorks] = useState<BOQItemWithLibrary[]>([]);
   const [tempManualVolume, setTempManualVolume] = useState<number | null>(position.manual_volume ?? null);
   const [tempManualNote, setTempManualNote] = useState<string>(position.manual_note ?? '');
+  const [tempWorkName, setTempWorkName] = useState<string>(position.work_name ?? '');
+  const [tempUnit, setTempUnit] = useState<string>(position.unit ?? '');
   const [tenderMarkup, setTenderMarkup] = useState<any>(null);
+  const [showAdditionalWorkModal, setShowAdditionalWorkModal] = useState(false);
   
   // Position hierarchy properties
   const positionType: ClientPositionType = position.position_type || 'executable';
@@ -147,6 +155,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const isStructural = isStructuralPosition(positionType);
   const positionIcon = POSITION_ICONS[positionType];
   const positionLabel = POSITION_LABELS[positionType];
+  
+  // Sync state when position changes
+  useEffect(() => {
+    setTempWorkName(position.work_name ?? '');
+    setTempManualVolume(position.manual_volume ?? null);
+    setTempManualNote(position.manual_note ?? '');
+    setTempUnit(position.unit ?? '');
+  }, [position.work_name, position.manual_volume, position.manual_note, position.unit]);
   
   // Debug logging (commented to reduce console spam)
   // console.log('🔍 Position click check:', {
@@ -529,6 +545,16 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       item.item_type === 'work' || item.item_type === 'sub_work'
     ) || [];
     
+    // Debug for ДОП работы
+    if (position.is_additional) {
+      console.log('🔧 ДОП: Updating available works:', {
+        position_name: position.work_name,
+        total_items: position.boq_items.length,
+        works_found: updatedWorks.length,
+        works: updatedWorks.map(w => ({ id: w.id, type: w.item_type, desc: w.description }))
+      });
+    }
+    
     // Use functional update to prevent infinite loops
     setLocalWorks(prevWorks => {
       // Only update if the works list actually changed
@@ -541,7 +567,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       }
       return prevWorks;
     });
-  }, [positionItemsKey]);
+  }, [positionItemsKey, position.is_additional, position.work_name, position.boq_items]);
   
   // Update temp manual volume when position changes
   useEffect(() => {
@@ -584,7 +610,17 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       return [];
     }
 
-    // console.log('🔄 Sorting BOQ items for table view');
+    // Debug for additional works
+    if (position.is_additional) {
+      console.log('🔄 Sorting BOQ items for ДОП работа:', {
+        work_name: position.work_name,
+        total_items: position.boq_items.length,
+        works: position.boq_items.filter(i => i.item_type === 'work').length,
+        materials: position.boq_items.filter(i => i.item_type === 'material').length,
+        linked_materials: position.boq_items.filter(i => i.work_link).length
+      });
+    }
+    
     const items = [...position.boq_items];
     const sortedItems: BOQItemWithLibrary[] = [];
     
@@ -627,18 +663,24 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     
     sortedItems.push(...unlinkedMaterials);
     
-    // console.log('✅ Sorted items:', {
-    //   total: sortedItems.length,
-    //   works: works.length,
-    //   linked: sortedItems.filter(i => (i.item_type === 'material' || i.item_type === 'sub_material') && i.work_link).length,
-    //   unlinked: unlinkedMaterials.length,
-    //   subMaterials: sortedItems.filter(i => i.item_type === 'sub_material').map(i => ({
-    //     desc: i.description,
-    //     hasLink: !!i.work_link,
-    //     workId: i.work_link?.work_boq_item_id,
-    //     subWorkId: i.work_link?.sub_work_boq_item_id
-    //   }))
-    // });
+    // Enable debug for ДОП работы
+    if (position.is_additional) {
+      console.log('✅ ДОП sorted items in ClientPositionCardStreamlined:', {
+        work_name: position.work_name,
+        total: sortedItems.length,
+        works: works.length,
+        linked: sortedItems.filter(i => (i.item_type === 'material' || i.item_type === 'sub_material') && i.work_link).length,
+        unlinked: unlinkedMaterials.length,
+        order: sortedItems.map((item, idx) => ({
+          index: idx,
+          id: item.id,
+          type: item.item_type,
+          desc: item.description,
+          hasLink: !!item.work_link,
+          linkedTo: item.work_link?.work_boq_item_id || item.work_link?.sub_work_boq_item_id
+        }))
+      });
+    }
     
     return sortedItems;
   }, [position.boq_items]);
@@ -1042,17 +1084,60 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     
     // Get work_link information if exists
     const workLink = item.work_link;
+    
+    // Debug for ДОП работы
+    if (position.is_additional) {
+      console.log('🔍 ДОП: Editing material:', {
+        material: item.description,
+        material_type: item.item_type,
+        has_work_link: !!workLink,
+        work_link: workLink,
+        work_boq_item_id: workLink?.work_boq_item_id,
+        sub_work_boq_item_id: workLink?.sub_work_boq_item_id,
+        available_works: position.boq_items?.filter(i => i.item_type === 'work' || i.item_type === 'sub_work').map(w => ({ 
+          id: w.id, 
+          type: w.item_type,
+          desc: w.description 
+        })),
+        localWorks: localWorks.map(w => ({
+          id: w.id,
+          type: w.item_type,
+          desc: w.description
+        }))
+      });
+    }
+    
     const linkedWork = workLink ? position.boq_items?.find(boqItem => {
       // Check if this item is linked via work_boq_item_id (for regular work) 
       // or sub_work_boq_item_id (for sub_work)
       if (workLink.work_boq_item_id && boqItem.id === workLink.work_boq_item_id && boqItem.item_type === 'work') {
+        if (position.is_additional) {
+          console.log('✅ ДОП: Found linked work:', boqItem.description);
+        }
         return true;
       }
       if (workLink.sub_work_boq_item_id && boqItem.id === workLink.sub_work_boq_item_id && boqItem.item_type === 'sub_work') {
+        if (position.is_additional) {
+          console.log('✅ ДОП: Found linked sub_work:', boqItem.description);
+        }
         return true;
       }
       return false;
     }) : undefined;
+    
+    // More debug for ДОП if not found
+    if (position.is_additional && workLink && !linkedWork) {
+      console.error('❌ ДОП: Linked work not found for material:', {
+        material: item.description,
+        searching_for_work_id: workLink.work_boq_item_id,
+        searching_for_sub_work_id: workLink.sub_work_boq_item_id,
+        available_items: position.boq_items?.map(i => ({
+          id: i.id,
+          type: i.item_type,
+          desc: i.description
+        }))
+      });
+    }
     
     // Get coefficients from BOQ item itself (primary source)
     // Fall back to work_link values if BOQ item doesn't have them
@@ -1269,22 +1354,67 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       const existingWorkId = existingLink?.work_boq_item_id || existingLink?.sub_work_boq_item_id || null;
       
       console.log('🔗 Existing link info:', {
+        materialId: editingMaterialId,
+        materialType: editingItem.item_type,
         hasLink: hasExistingLink,
+        existingLink: existingLink ? {
+          id: existingLink.id,
+          work_boq_item_id: existingLink.work_boq_item_id,
+          sub_work_boq_item_id: existingLink.sub_work_boq_item_id,
+          material_boq_item_id: existingLink.material_boq_item_id,
+          sub_material_boq_item_id: existingLink.sub_material_boq_item_id
+        } : null,
         existingWorkId,
         newWorkId: values.work_id,
-        needsUpdate: values.work_id === existingWorkId
+        needsUpdate: values.work_id !== existingWorkId
       });
       
       // Check if we need to update, create, or delete link
-      if (values.work_id !== existingWorkId) {
+      // Note: values.work_id может быть undefined, null или пустой строкой при отвязке
+      // Важно: нужно правильно обработать все варианты "пустых" значений
+      const newWorkId = values.work_id && values.work_id !== '' ? values.work_id : null;
+      
+      console.log('🔍 Comparing work IDs:', {
+        rawWorkId: values.work_id,
+        newWorkId,
+        existingWorkId,
+        needsChange: newWorkId !== existingWorkId,
+        isUnlinking: !newWorkId && existingWorkId,
+        isLinking: newWorkId && !existingWorkId,
+        isChanging: newWorkId && existingWorkId && newWorkId !== existingWorkId
+      });
+      
+      // Важно: сравниваем с учетом того, что оба значения могут быть null
+      const workIdChanged = (newWorkId || null) !== (existingWorkId || null);
+      
+      if (workIdChanged) {
+        console.log('🔄 Work ID has changed, processing link update:', {
+          scenario: !newWorkId && existingWorkId ? 'UNLINKING' : 
+                    newWorkId && !existingWorkId ? 'LINKING' : 
+                    'CHANGING',
+          from: existingWorkId,
+          to: newWorkId
+        });
+        
         // Remove old link if exists
         if (hasExistingLink && existingLink?.id) {
-          await workMaterialLinksApi.deleteLink(existingLink.id);
-          console.log('🔗 Removed old link');
+          console.log('🗑️ Removing old link:', {
+            linkId: existingLink.id,
+            oldWorkId: existingWorkId,
+            materialId: editingMaterialId,
+            materialType: editingItem.item_type,
+            reason: !newWorkId ? 'User cleared work selection (unlinking)' : 'Changing to different work'
+          });
+          const deleteResult = await workMaterialLinksApi.deleteLink(existingLink.id);
+          if (deleteResult.error) {
+            console.error('❌ Failed to delete old link:', deleteResult.error);
+            throw new Error(`Failed to delete old link: ${deleteResult.error}`);
+          }
+          console.log('✅ Removed old link successfully');
         }
         
         // Create new link if work_id is provided
-        if (values.work_id) {
+        if (newWorkId) {
           // Get the work item to check its type
           const workItem = works.find(w => w.id === values.work_id);
           const isSubWork = workItem?.item_type === 'sub_work';
@@ -1331,11 +1461,21 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           
           console.log('🔗 Creating new link with data:', linkData);
           const linkResult = await workMaterialLinksApi.createLink(linkData);
-          console.log('✅ Material linked to work', linkResult);
+          
+          if (linkResult.error) {
+            console.error('❌ Failed to create link:', linkResult.error);
+            throw new Error(`Failed to create link: ${linkResult.error}`);
+          }
+          
+          console.log('✅ Material linked to work successfully:', {
+            linkId: linkResult.data?.id,
+            workId: values.work_id,
+            materialId: editingMaterialId
+          });
         } else {
-          console.log('✅ Material unlinked from work');
+          console.log('✅ Material unlinked from work (no new work_id provided)');
         }
-      } else if (values.work_id && hasExistingLink && existingLink) {
+      } else if (newWorkId && hasExistingLink && existingLink) {
         // Update existing link with new coefficients ALWAYS
         const oldConsumption = existingLink.material_quantity_per_work || 1;
         const oldConversion = existingLink.usage_coefficient || 1;
@@ -1395,7 +1535,30 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             console.log('📏 Updated material quantity based on coefficients:', calculatedQuantity);
           }
         }
+      } else {
+        console.log('📊 No work link change detected, keeping existing link state:', {
+          hasLink: hasExistingLink,
+          workId: existingWorkId
+        });
       }
+
+      // Final verification of link state
+      const finalLinksResult = await workMaterialLinksApi.getLinksByPosition(position.id);
+      const finalLink = !finalLinksResult.error && finalLinksResult.data?.find(
+        link => link.material_boq_item_id === editingMaterialId || 
+                link.sub_material_boq_item_id === editingMaterialId
+      );
+      
+      console.log('🎯 Final link state after all operations:', {
+        materialId: editingMaterialId,
+        hasLink: !!finalLink,
+        linkDetails: finalLink ? {
+          id: finalLink.id,
+          work_boq_item_id: finalLink.work_boq_item_id,
+          sub_work_boq_item_id: finalLink.sub_work_boq_item_id
+        } : null,
+        expectedState: !newWorkId ? 'Should be unlinked' : `Should be linked to ${newWorkId}`
+      });
 
       // Update linked works in the background when material changes affect them
       setTimeout(async () => {
@@ -1721,6 +1884,15 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             }
             return false;
           });
+          
+          // Debug for additional works
+          if (position.is_additional && !linkedWork && record.work_link) {
+            console.log('⚠️ Material has work_link but work not found in ДОП:', {
+              material: record.description,
+              work_link: record.work_link,
+              available_works: position.boq_items?.filter(i => i.item_type === 'work').map(w => ({ id: w.id, name: w.description }))
+            });
+          }
         }
         
         // Add visual indentation for linked materials and sub-materials
@@ -3214,22 +3386,101 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             <Col xs={24} sm={18} md={14} lg={14}>
               <div style={{ paddingLeft: `${visualIndent}px` }}>
                 <div className="flex items-baseline gap-2 flex-wrap">
-                  <Title 
-                    level={5} 
-                    className={`mb-0 ${textSize} flex-1 min-w-0`}
-                    ellipsis={{ tooltip: position.work_name }}
-                    style={{ 
-                      fontWeight: fontWeight === 'bold' ? '700' : 
-                                 fontWeight === 'semibold' ? '600' : 
-                                 fontWeight === 'medium' ? '500' : '400',
-                      color: positionColors.text,
-                      lineHeight: '1.3',
-                      margin: 0
-                    }}
-                  >
-                    <span style={{ marginRight: '8px', color: '#666', fontSize: '0.9em' }}>{position.item_no}</span>
-                    {position.work_name}
-                  </Title>
+                  {/* Редактируемое название для ДОП работ */}
+                  {position.is_additional ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <span style={{ color: '#666', fontSize: '0.9em' }}>{position.item_no}</span>
+                      <Tag color="orange" style={{ marginRight: 0 }}>
+                        ДОП
+                      </Tag>
+                      <Input
+                        value={tempWorkName.replace(/^ДОП:\s*/, '')} // Убираем префикс "ДОП: " при отображении
+                        onChange={(e) => {
+                          // Сохраняем без префикса, он добавится при сохранении если нужно
+                          const newValue = e.target.value;
+                          setTempWorkName(newValue.startsWith('ДОП:') ? newValue : `ДОП: ${newValue}`);
+                        }}
+                        onBlur={async () => {
+                          const displayName = tempWorkName.replace(/^ДОП:\s*/, '');
+                          if (!displayName.trim()) {
+                            message.warning('Название не может быть пустым');
+                            setTempWorkName(position.work_name); // Restore original value
+                            return;
+                          }
+                          
+                          // Убеждаемся, что в БД сохраняется с префиксом "ДОП: "
+                          const nameToSave = tempWorkName.startsWith('ДОП:') ? tempWorkName : `ДОП: ${tempWorkName}`;
+                          
+                          if (nameToSave === position.work_name) {
+                            return; // No changes
+                          }
+                          
+                          console.log('📝 Updating additional work name:', {
+                            id: position.id,
+                            oldName: position.work_name,
+                            newName: nameToSave
+                          });
+                          
+                          setLoading(true);
+                          try {
+                            const result = await clientPositionsApi.update(position.id, {
+                              work_name: nameToSave
+                            });
+                            
+                            if (result.error) {
+                              message.error(result.error);
+                              setTempWorkName(position.work_name); // Restore on error
+                            } else {
+                              message.success('Название ДОП работы обновлено');
+                              onUpdate();
+                            }
+                          } catch (error) {
+                            console.error('💥 Error updating additional work name:', error);
+                            message.error('Ошибка при обновлении названия');
+                            setTempWorkName(position.work_name); // Restore on error
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                        onPressEnter={(e) => e.currentTarget.blur()}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex-1"
+                        disabled={loading}
+                        style={{
+                          fontWeight: fontWeight === 'bold' ? '700' : 
+                                     fontWeight === 'semibold' ? '600' : 
+                                     fontWeight === 'medium' ? '500' : '400',
+                          color: positionColors.text,
+                          fontSize: textSize === 'text-base' ? '16px' : 
+                                   textSize === 'text-lg' ? '18px' : '14px'
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <Title 
+                      level={5} 
+                      className={`mb-0 ${textSize} flex-1 min-w-0`}
+                      ellipsis={{ tooltip: position.work_name }}
+                      style={{ 
+                        fontWeight: fontWeight === 'bold' ? '700' : 
+                                   fontWeight === 'semibold' ? '600' : 
+                                   fontWeight === 'medium' ? '500' : '400',
+                        color: positionColors.text,
+                        lineHeight: '1.3',
+                        margin: 0
+                      }}
+                    >
+                      <span style={{ marginRight: '8px', color: '#666', fontSize: '0.9em' }}>{position.item_no}</span>
+                      {position.work_name}
+                      {position.is_orphaned && (
+                        <Tooltip title="Независимая ДОП работа (исходная позиция удалена)">
+                          <Tag color="warning" style={{ marginLeft: '8px', fontSize: '0.8em' }}>
+                            Независимая
+                          </Tag>
+                        </Tooltip>
+                      )}
+                    </Title>
+                  )}
                 </div>
               </div>
             </Col>
@@ -3237,8 +3488,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             {/* Client and GP data - four rows */}
             <Col xs={24} sm={24} md={8} lg={6}>
               <div className="flex flex-col gap-2">
-                {/* First row - Client note */}
-                {position.client_note && (
+                {/* First row - Client note - only for non-ДОП positions */}
+                {!position.is_additional && position.client_note && (
                   <div className="flex flex-col gap-1">
                     <Text className="text-sm text-gray-500 font-semibold">Примечание Заказчика:</Text>
                     <Text className="text-sm text-gray-700 break-words whitespace-pre-wrap">
@@ -3247,44 +3498,18 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   </div>
                 )}
                 
-                {/* Second row - GP Note - always show for sections/headers, conditional for executable items */}
-                {(canAddItems ? (
-                  isExpanded ? (
-                    <div className="flex items-center gap-2 w-full" onClick={(e) => e.stopPropagation()}>
-                      <Text className="text-sm text-gray-500 whitespace-nowrap font-semibold">Примечание ГП:</Text>
-                      <Input
-                        size="middle"
-                        value={tempManualNote ?? undefined}
-                        placeholder="Примечание"
-                        className="flex-1"
-                        style={{ fontSize: '14px', width: '100%' }}
-                        onChange={(e) => setTempManualNote(e.target.value)}
-                        onBlur={() => {
-                          if (tempManualNote !== position.manual_note) {
-                            handleManualNoteChange(tempManualNote);
-                          }
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    position.manual_note && (
-                      <div className="flex items-center gap-1">
-                        <Text className="text-sm text-gray-500 font-semibold">Примечание ГП:</Text>
-                        <Text className="text-sm text-green-600 flex-1" ellipsis={{ tooltip: position.manual_note }}>
-                          <strong>{position.manual_note}</strong>
-                        </Text>
-                      </div>
-                    )
-                  )
-                ) : (
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                {/* Second row - GP Note - always editable for ДОП, conditional for others */}
+                {position.is_additional ? (
+                  // For ДОП positions - always show editable field
+                  <div className="flex items-center gap-2 w-full" onClick={(e) => e.stopPropagation()}>
                     <Text className="text-sm text-gray-500 whitespace-nowrap font-semibold">Примечание ГП:</Text>
                     <Input
-                      size="middle"
+                      size="small"
                       value={tempManualNote ?? undefined}
                       placeholder="Примечание"
                       className="flex-1"
-                      style={{ fontSize: '14px' }}
+                      disabled={loading}
+                      style={{ fontSize: '13px', width: '100%' }}
                       onChange={(e) => setTempManualNote(e.target.value)}
                       onBlur={() => {
                         if (tempManualNote !== position.manual_note) {
@@ -3293,10 +3518,58 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                       }}
                     />
                   </div>
-                ))}
+                ) : (
+                  // For regular positions - existing logic
+                  (canAddItems ? (
+                    isExpanded ? (
+                      <div className="flex items-center gap-2 w-full" onClick={(e) => e.stopPropagation()}>
+                        <Text className="text-sm text-gray-500 whitespace-nowrap font-semibold">Примечание ГП:</Text>
+                        <Input
+                          size="middle"
+                          value={tempManualNote ?? undefined}
+                          placeholder="Примечание"
+                          className="flex-1"
+                          style={{ fontSize: '14px', width: '100%' }}
+                          onChange={(e) => setTempManualNote(e.target.value)}
+                          onBlur={() => {
+                            if (tempManualNote !== position.manual_note) {
+                              handleManualNoteChange(tempManualNote);
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      position.manual_note && (
+                        <div className="flex items-center gap-1">
+                          <Text className="text-sm text-gray-500 font-semibold">Примечание ГП:</Text>
+                          <Text className="text-sm text-green-600 flex-1" ellipsis={{ tooltip: position.manual_note }}>
+                            <strong>{position.manual_note}</strong>
+                          </Text>
+                        </div>
+                      )
+                    )
+                  ) : (
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Text className="text-sm text-gray-500 whitespace-nowrap font-semibold">Примечание ГП:</Text>
+                      <Input
+                        size="middle"
+                        value={tempManualNote ?? undefined}
+                        placeholder="Примечание"
+                        className="flex-1"
+                        style={{ fontSize: '14px' }}
+                        onChange={(e) => setTempManualNote(e.target.value)}
+                        onBlur={() => {
+                          if (tempManualNote !== position.manual_note) {
+                            handleManualNoteChange(tempManualNote);
+                          }
+                        }}
+                      />
+                    </div>
+                  ))
+                )}
                 
-                {/* Third row - Client Quantity */}
-                {position.volume && (
+                {/* Third row - Client Quantity - only for non-ДОП positions */}
+                {!position.is_additional && position.volume && (
                   <div className="flex items-center gap-1">
                     <Text className="text-sm text-gray-500 font-semibold">Кол-во Заказчика:</Text>
                     <Text className="text-sm text-gray-600">
@@ -3310,60 +3583,212 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   </div>
                 )}
                 
-                {/* Fourth row - GP Quantity - show input when expanded, show value when collapsed if exists */}
-                {canAddItems && (
-                  isExpanded ? (
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <Text className="text-sm text-gray-500 font-semibold">Кол-во ГП:</Text>
-                      <InputNumber
-                        size="middle"
-                        min={0}
-                        value={tempManualVolume ?? undefined}
-                        placeholder="0"
-                        className="w-24"
-                        onChange={(value) => setTempManualVolume(value)}
-                        onBlur={() => {
-                          if (tempManualVolume !== position.manual_volume) {
-                            handleManualVolumeChange(tempManualVolume);
+                {/* Fourth row - GP Quantity - editable for ДОП positions always, for others when expanded */}
+                {position.is_additional ? (
+                  // For ДОП positions - always show editable fields
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <Text className="text-sm text-gray-500 font-semibold whitespace-nowrap">Объем ГП:</Text>
+                    <InputNumber
+                      size="small"
+                      min={0}
+                      value={tempManualVolume ?? undefined}
+                      placeholder="0"
+                      className="w-20"
+                      disabled={loading}
+                      onChange={(value) => setTempManualVolume(value)}
+                      onBlur={() => {
+                        if (tempManualVolume !== position.manual_volume) {
+                          handleManualVolumeChange(tempManualVolume);
+                        }
+                      }}
+                      style={{ fontSize: '13px' }}
+                    />
+                    <Select
+                      size="small"
+                      value={tempUnit || 'компл.'}
+                      onChange={async (value) => {
+                        setTempUnit(value);
+                        console.log('📝 Updating additional work unit:', {
+                          id: position.id,
+                          oldUnit: position.unit,
+                          newUnit: value
+                        });
+                        
+                        setLoading(true);
+                        try {
+                          const result = await clientPositionsApi.update(position.id, {
+                            unit: value
+                          });
+                          
+                          if (result.error) {
+                            message.error(result.error);
+                            setTempUnit(position.unit); // Restore on error
+                          } else {
+                            message.success('Единица измерения обновлена');
+                            onUpdate();
                           }
-                        }}
-                        style={{ fontSize: '14px' }}
-                      />
-                      {position.unit && (
-                        <Text className="text-sm text-gray-600 ml-1">
-                          <strong>{position.unit}</strong>
-                        </Text>
-                      )}
-                    </div>
-                  ) : (
-                    position.manual_volume && (
-                      <div className="flex items-center gap-1">
+                        } catch (error) {
+                          console.error('💥 Error updating unit:', error);
+                          message.error('Ошибка при обновлении единицы');
+                          setTempUnit(position.unit); // Restore on error
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                      disabled={loading}
+                      className="w-24"
+                      style={{ fontSize: '13px' }}
+                    >
+                      <Select.Option value="компл.">компл.</Select.Option>
+                      <Select.Option value="шт">шт</Select.Option>
+                      <Select.Option value="м²">м²</Select.Option>
+                      <Select.Option value="м³">м³</Select.Option>
+                      <Select.Option value="м.п.">м.п.</Select.Option>
+                      <Select.Option value="т">т</Select.Option>
+                      <Select.Option value="кг">кг</Select.Option>
+                      <Select.Option value="л">л</Select.Option>
+                    </Select>
+                  </div>
+                ) : (
+                  // For regular positions - show based on expanded state
+                  canAddItems && (
+                    isExpanded ? (
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                         <Text className="text-sm text-gray-500 font-semibold">Кол-во ГП:</Text>
-                        <Text className="text-sm text-green-600">
-                          <strong>{position.manual_volume}</strong>
-                        </Text>
+                        <InputNumber
+                          size="middle"
+                          min={0}
+                          value={tempManualVolume ?? undefined}
+                          placeholder="0"
+                          className="w-24"
+                          onChange={(value) => setTempManualVolume(value)}
+                          onBlur={() => {
+                            if (tempManualVolume !== position.manual_volume) {
+                              handleManualVolumeChange(tempManualVolume);
+                            }
+                          }}
+                          style={{ fontSize: '14px' }}
+                        />
                         {position.unit && (
-                          <Text className="text-sm text-green-600 ml-1">
+                          <Text className="text-sm text-gray-600 ml-1">
                             <strong>{position.unit}</strong>
                           </Text>
                         )}
                       </div>
+                    ) : (
+                      position.manual_volume && (
+                        <div className="flex items-center gap-1">
+                          <Text className="text-sm text-gray-500 font-semibold">Кол-во ГП:</Text>
+                          <Text className="text-sm text-green-600">
+                            <strong>{position.manual_volume}</strong>
+                          </Text>
+                          {position.unit && (
+                            <Text className="text-sm text-green-600 ml-1">
+                              <strong>{position.unit}</strong>
+                            </Text>
+                          )}
+                        </div>
+                      )
                     )
                   )
                 )}
               </div>
             </Col>
             
-            {/* Total Cost and Statistics */}
+            {/* Additional Work Button and Total Cost */}
             <Col xs={24} sm={24} md={24} lg={3}>
-              <div className="flex flex-col items-end">
-                {/* Коммерческие стоимости скрыты на странице BOQ */}
+              <div className="flex flex-col items-end gap-2">
+                {/* Кнопка добавления ДОП работы - для всех основных позиций */}
+                {!position.is_additional && position.id && (
+                  <Button
+                    size="small"
+                    icon={<LinkOutlined />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log('🔍 Opening additional work modal for position:', {
+                        id: position.id,
+                        work_name: position.work_name,
+                        position_type: position.position_type,
+                        idType: typeof position.id
+                      });
+                      if (!position.id || 
+                          position.id === 'undefined' || 
+                          position.id === undefined) {
+                        console.error('❌ Position ID is invalid!', {
+                          id: position.id,
+                          type: typeof position.id,
+                          position: position
+                        });
+                        message.error('Ошибка: ID позиции не определен');
+                        return;
+                      }
+                      setShowAdditionalWorkModal(true);
+                    }}
+                    className="border border-orange-300 text-orange-600 hover:border-orange-400 hover:text-orange-700"
+                    style={{ 
+                      fontSize: '12px',
+                      padding: '2px 8px',
+                      height: '24px'
+                    }}
+                  >
+                    + ДОП
+                  </Button>
+                )}
+                
+                {/* Кнопка удаления для ДОП работ */}
+                {position.is_additional && position.id && (
+                  <Popconfirm
+                    title="Удалить ДОП работу?"
+                    description="Это действие нельзя отменить. Все связанные работы и материалы будут удалены."
+                    onConfirm={async (e) => {
+                      e?.stopPropagation();
+                      console.log('🗑️ Deleting additional work:', position.id);
+                      setLoading(true);
+                      try {
+                        const result = await clientPositionsApi.delete(position.id);
+                        if (result.error) {
+                          message.error(result.error);
+                        } else {
+                          message.success('ДОП работа удалена');
+                          onUpdate();
+                        }
+                      } catch (error) {
+                        console.error('💥 Error deleting additional work:', error);
+                        message.error('Ошибка при удалении ДОП работы');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    okText="Удалить"
+                    cancelText="Отмена"
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Button
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={(e) => e.stopPropagation()}
+                      disabled={loading}
+                      style={{ 
+                        fontSize: '12px',
+                        padding: '2px 8px',
+                        height: '24px'
+                      }}
+                    >
+                      Удалить
+                    </Button>
+                  </Popconfirm>
+                )}
+                
+                {/* Total Cost */}
                 <div>
                   <Text strong className="text-lg text-green-700 whitespace-nowrap">
                     {Math.round(totalCost).toLocaleString('ru-RU')} ₽
                   </Text>
                 </div>
-                <div className="flex items-center gap-2 mt-1">
+                
+                {/* Statistics */}
+                <div className="flex items-center gap-2">
                   <span className="whitespace-nowrap">
                     <Text className="text-gray-600 text-xs">Р: </Text>
                     <Text strong className="text-green-600 text-xs">{worksCount}</Text>
@@ -3387,36 +3812,38 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           <div className="p-4 bg-gray-50 min-h-0">
             {/* View Mode Toggle and Quick Add Button */}
             <div className="mb-4 flex justify-between items-center gap-4">
-              {!quickAddMode ? (
-                <>
-                  {canAddItems ? (
-                    <Button
-                      type="dashed"
-                      icon={<PlusOutlined />}
-                      onClick={() => setQuickAddMode(true)}
-                      className="flex-1 h-10 border-2 border-dashed border-blue-300 text-blue-600 hover:border-blue-400 hover:text-blue-700 transition-colors duration-200"
-                      style={{ 
-                        borderStyle: 'dashed',
-                        fontSize: '14px',
-                        fontWeight: '500'
-                      }}
-                    >
-                      Добавить работу или материал
-                    </Button>
-                  ) : (
-                    <div className="flex-1 h-10 flex items-center justify-center bg-gray-100 rounded-lg border-2 border-dashed border-gray-300">
-                      <Text className="text-gray-500 flex items-center gap-2">
-                        <Tooltip title={positionLabel}>
-                          <span className="text-lg cursor-help">{positionIcon}</span>
-                        </Tooltip>
-                        Структурный элемент - нельзя добавлять работы/материалы
-                      </Text>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="w-full" />
-              )}
+              <div className="flex gap-2 flex-1">
+                {!quickAddMode ? (
+                  <>
+                    {canAddItems ? (
+                      <Button
+                        type="dashed"
+                        icon={<PlusOutlined />}
+                        onClick={() => setQuickAddMode(true)}
+                        className="flex-1 h-10 border-2 border-dashed border-blue-300 text-blue-600 hover:border-blue-400 hover:text-blue-700 transition-colors duration-200"
+                        style={{ 
+                          borderStyle: 'dashed',
+                          fontSize: '14px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        Добавить работу или материал
+                      </Button>
+                    ) : (
+                      <div className="flex-1 h-10 flex items-center justify-center bg-gray-100 rounded-lg border-2 border-dashed border-gray-300">
+                        <Text className="text-gray-500 flex items-center gap-2">
+                          <Tooltip title={positionLabel}>
+                            <span className="text-lg cursor-help">{positionIcon}</span>
+                          </Tooltip>
+                          Структурный элемент - нельзя добавлять работы/материалы
+                        </Text>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex-1" />
+                )}
+              </div>
             </div>
 
             {/* Quick Add Form */}
@@ -3608,6 +4035,21 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             setSelectedWorkId(null);
           }}
           onSuccess={handleMaterialsLinked}
+        />
+      )}
+
+      {/* Additional Work Modal */}
+      {showAdditionalWorkModal && position.id && position.id !== 'undefined' && (
+        <AdditionalWorkModal
+          visible={showAdditionalWorkModal}
+          onClose={() => setShowAdditionalWorkModal(false)}
+          parentPositionId={position.id}
+          parentPositionName={position.work_name || 'Позиция'}
+          tenderId={tenderId}
+          onSuccess={() => {
+            setShowAdditionalWorkModal(false);
+            onUpdate(); // Refresh parent component
+          }}
         />
       )}
 
