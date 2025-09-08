@@ -179,6 +179,8 @@ const CommercialCostsPage: React.FC = () => {
   }, [selectedTenderId]);
 
   const handleRecalculateCoefficients = useCallback(async () => {
+    console.log('🔥 handleRecalculateCoefficients called, selectedTenderId:', selectedTenderId);
+    
     if (!selectedTenderId) {
       message.info('Выберите тендер для пересчета коэффициентов');
       return;
@@ -195,16 +197,23 @@ const CommercialCostsPage: React.FC = () => {
       
       // Получаем все элементы BOQ для данного тендера
       console.log('📡 Fetching BOQ items for recalculation...');
-      const boqItemsResult = await boqApi.getByTenderId(selectedTenderId);
+      const boqItemsResult = await boqApi.getByTenderId(
+        selectedTenderId,
+        {}, // filters
+        { limit: 1000 } // получить до 1000 записей для пересчета всех коэффициентов
+      );
       
       if (boqItemsResult.error) {
         throw new Error(boqItemsResult.error);
       }
       
       const items = boqItemsResult.data || [];
-      console.log(`📊 Found ${items.length} BOQ items to recalculate`);
+      console.error(`🔥🔥🔥 КРИТИЧЕСКАЯ ПРОВЕРКА: Found ${items.length} BOQ items to recalculate`);
+      console.error(`🔥🔥🔥 BOQ результат:`, boqItemsResult);
+      console.error(`🔥🔥🔥 Первые 3 элемента:`, items.slice(0, 3));
       
       if (items.length === 0) {
+        console.error('🔥🔥🔥 НЕТ ЭЛЕМЕНТОВ BOQ!');
         message.warning('Нет элементов BOQ для пересчета');
         return;
       }
@@ -251,20 +260,27 @@ const CommercialCostsPage: React.FC = () => {
       // Пересчитываем коэффициенты для каждого элемента
       for (const item of items) {
         try {
+          // ВАЖНО: используем total_amount из БД как базовую стоимость
+          const baseCost = item.total_amount || 0;
+          
+          console.warn(`🔥🔥🔥 НАЧИНАЕТСЯ ОБРАБОТКА: ${item.item_number} 🔥🔥🔥`);
+          
+          // Сохраняем другие поля для логирования
           const quantity = item.quantity || 0;
           const unitRate = item.unit_rate || 0;
           const deliveryAmount = item.delivery_amount || 0;
           
-          // Рассчитываем базовую стоимость
-          let baseCost = quantity * unitRate;
-          
-          // Добавляем доставку для материалов
-          if ((item.item_type === 'material' || item.item_type === 'sub_material')) {
-            const deliveryType = item.delivery_price_type || 'included';
-            if ((deliveryType === 'amount' || deliveryType === 'not_included') && deliveryAmount > 0) {
-              baseCost += deliveryAmount * quantity;
-            }
-          }
+          // Детальное логирование для отладки
+          console.log(`\n🔍 Processing item ${item.item_number}:`, {
+            description: item.description,
+            item_type: item.item_type,
+            quantity,
+            unitRate,
+            deliveryAmount,
+            total_amount: item.total_amount,
+            baseCost,
+            client_position_id: item.client_position_id
+          });
           
           // Определяем тип материала
           const isLinked = item.material_type !== 'auxiliary';
@@ -273,46 +289,126 @@ const CommercialCostsPage: React.FC = () => {
           let fullCommercialCost;
           
           if (item.item_type === 'material') {
+            // Для всех материалов используем один подход - умножаем на коэффициент
+            // Коэффициент уже рассчитан правильно в calculateMainMaterialCommercialCost/calculateAuxiliaryMaterialCommercialCost
             if (isLinked) {
-              // Основной материал: рассчитываем полную коммерческую стоимость
+              // Основной материал
               const { calculateMainMaterialCommercialCost } = await import('../utils/calculateCommercialCost');
               const result = calculateMainMaterialCommercialCost(baseCost, markups);
-              fullCommercialCost = baseCost + result.workMarkup; // Базовая + наценка = полная коммерческая
+              // Полная коммерческая стоимость = материал + наценка
+              fullCommercialCost = result.materialCost + result.workMarkup;
+              console.log(`💰 Main material: base=${baseCost}, material=${result.materialCost}, markup=${result.workMarkup}, total=${fullCommercialCost}`);
             } else {
-              // Вспомогательный материал: рассчитываем полную коммерческую стоимость
+              // Вспомогательный материал
               const { calculateAuxiliaryMaterialCommercialCost } = await import('../utils/calculateCommercialCost');
               const result = calculateAuxiliaryMaterialCommercialCost(baseCost, markups);
-              fullCommercialCost = result.workMarkup; // Полная коммерческая стоимость
+              // Полная коммерческая стоимость = материал (0) + наценка
+              fullCommercialCost = result.materialCost + result.workMarkup;
+              console.log(`💰 Auxiliary material: base=${baseCost}, material=${result.materialCost}, markup=${result.workMarkup}, total=${fullCommercialCost}`);
             }
           } else if (item.item_type === 'sub_material') {
+            // Для всех субматериалов используем один подход
             if (isLinked) {
-              // Основной субматериал: рассчитываем полную коммерческую стоимость
+              // Основной субматериал
               const { calculateSubcontractMaterialCommercialCost } = await import('../utils/calculateCommercialCost');
               const result = calculateSubcontractMaterialCommercialCost(baseCost, markups);
-              fullCommercialCost = baseCost + result.workMarkup; // Базовая + наценка = полная коммерческая
+              // Полная коммерческая стоимость = материал + наценка
+              fullCommercialCost = result.materialCost + result.workMarkup;
+              console.log(`💰 Main sub-material: base=${baseCost}, material=${result.materialCost}, markup=${result.workMarkup}, total=${fullCommercialCost}`);
             } else {
-              // Вспомогательный субматериал: рассчитываем полную коммерческую стоимость
+              // Вспомогательный субматериал
               const { calculateAuxiliarySubcontractMaterialCommercialCost } = await import('../utils/calculateCommercialCost');
               const result = calculateAuxiliarySubcontractMaterialCommercialCost(baseCost, markups);
-              fullCommercialCost = result.workMarkup; // Полная коммерческая стоимость
+              // Полная коммерческая стоимость = материал (0) + наценка
+              fullCommercialCost = result.materialCost + result.workMarkup;
+              console.log(`💰 Auxiliary sub-material: base=${baseCost}, material=${result.materialCost}, markup=${result.workMarkup}, total=${fullCommercialCost}`);
             }
           } else {
             // Для работ используем стандартную функцию
+            console.log(`🔍 DEBUG: Before calculateBOQItemCommercialCost for ${item.item_number}:`, {
+              item_type: item.item_type,
+              baseCost,
+              total_amount: item.total_amount,
+              note: 'Using total_amount from DB as baseCost'
+            });
+            
             fullCommercialCost = calculateBOQItemCommercialCost(
               item.item_type as any,
               baseCost,
               markups,
               isLinked
             );
+            
+            console.log(`💰 Work result: type=${item.item_type}, base=${baseCost}, commercial=${fullCommercialCost}`);
+            console.log(`🔍 DEBUG: After calculation for ${item.item_number}:`, {
+              fullCommercialCost,
+              expectedForWork: item.item_type === 'work' ? baseCost * 3.1518136 : 'N/A',
+              difference: item.item_type === 'work' ? fullCommercialCost - (baseCost * 3.1518136) : 'N/A'
+            });
+            
+            // КРИТИЧЕСКОЕ логирование для отладки
+            if (item.item_number === '4.1') {
+              console.error(`🚨 КРИТИЧЕСКАЯ ОТЛАДКА для строки 4.1:`);
+              console.error(`   total_amount из БД: ${item.total_amount}`);
+              console.error(`   baseCost переданный в функцию: ${baseCost}`);
+              console.error(`   Результат функции calculateBOQItemCommercialCost: ${fullCommercialCost}`);
+              console.error(`   Ожидаемый результат: ${baseCost * 3.1518136}`);
+              console.error(`   Расхождение в: ${Math.abs(fullCommercialCost - (baseCost * 3.1518136))} раз`);
+            }
           }
           
           // Рассчитываем коэффициент на основе ПОЛНОЙ коммерческой стоимости
           const coefficient = baseCost > 0 ? fullCommercialCost / baseCost : 1;
           
-          console.log(`🔢 Item ${item.item_number}: ${baseCost.toFixed(2)} → ${fullCommercialCost.toFixed(2)} (${coefficient.toFixed(8)})`);
+          console.log(`🔢 Item ${item.item_number}: ${baseCost.toFixed(2)} → ${fullCommercialCost.toFixed(2)} (coef: ${coefficient.toFixed(8)})`);
+          
+          // Дополнительное логирование для отладки
+          if (item.item_type === 'work' || item.item_type === 'sub_work') {
+            console.log(`📊 Work calculation details:`, {
+              item_number: item.item_number,
+              total_amount: item.total_amount,
+              base_cost: baseCost,
+              commercial_cost: fullCommercialCost,
+              coefficient: coefficient,
+              expected_commercial: baseCost * 3.1518136, // Ожидаемое значение с коэффициентом от строки 3
+              difference: fullCommercialCost - (baseCost * 3.1518136)
+            });
+          }
+          
+          // Проверка корректности commercial_cost перед сохранением
+          if (coefficient > 1 && fullCommercialCost < baseCost) {
+            console.error(`❌ КРИТИЧЕСКАЯ ОШИБКА: commercial_cost (${fullCommercialCost}) меньше base_cost (${baseCost}) при коэффициенте ${coefficient} для позиции ${item.item_number}`);
+            console.log(`🔧 Пересчитываем commercial_cost правильно: ${baseCost} × ${coefficient} = ${baseCost * coefficient}`);
+            // Принудительно пересчитываем правильное значение
+            fullCommercialCost = baseCost * coefficient;
+          }
+          
+          // Проверка на явно заниженные значения (в 1000 раз меньше ожидаемых)
+          const expectedCommercial = baseCost * coefficient;
+          if (Math.abs(fullCommercialCost - expectedCommercial) > 0.01 && fullCommercialCost < expectedCommercial / 100) {
+            console.warn(`⚠️ Обнаружено заниженное значение commercial_cost для ${item.item_number}:`);
+            console.log(`   Расчётное: ${fullCommercialCost.toFixed(2)}`);
+            console.log(`   Ожидаемое: ${expectedCommercial.toFixed(2)}`);
+            console.log(`   Исправляем на правильное значение...`);
+            fullCommercialCost = expectedCommercial;
+          }
           
           // Обновляем в базе данных с ПОЛНОЙ коммерческой стоимостью
-          await boqApi.updateCommercialFields(item.id, fullCommercialCost, coefficient);
+          console.error(`🔥 ПЕРЕД СОХРАНЕНИЕМ в БД для ${item.item_number}:`);
+          console.error(`   ID: ${item.id}`);
+          console.error(`   Сохраняем commercial_cost: ${fullCommercialCost}`);
+          console.error(`   Сохраняем coefficient: ${coefficient}`);
+          console.error(`   Тип значения commercial_cost: ${typeof fullCommercialCost}`);
+          
+          // ПРОВЕРКА: какая функция вызывается
+          console.error(`🔍 ПРОВЕРКА ФУНКЦИИ:`);
+          console.error(`   boqApi.updateCommercialFields существует: ${typeof boqApi.updateCommercialFields}`);
+          console.error(`   boqApi объект: ${Object.keys(boqApi).includes('updateCommercialFields')}`);
+          console.error(`   Все методы boqApi: ${Object.keys(boqApi).join(', ')}`);
+          
+          console.error(`🚨 ВЫЗЫВАЕМ boqApi.updateCommercialFields для ${item.item_number}...`);
+          const updateResult = await boqApi.updateCommercialFields(item.id, fullCommercialCost, coefficient);
+          console.error(`🚨 РЕЗУЛЬТАТ обновления для ${item.item_number}:`, updateResult);
           updatedCount++;
           
         } catch (itemError) {

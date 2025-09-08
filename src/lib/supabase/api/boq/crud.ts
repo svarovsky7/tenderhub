@@ -398,7 +398,12 @@ export const boqCrudApi = {
     console.log('🚀 boqCrudApi.updateCommercialFields called with:', { id, commercialCost, markupCoefficient });
     
     try {
+      // Теперь триггер в БД правильно рассчитывает commercial_cost
+      // Просто сохраняем значения как есть
       console.log('📡 Updating commercial fields in database...');
+      console.log(`   Commercial cost: ${commercialCost}`);
+      console.log(`   Markup coefficient: ${markupCoefficient}`);
+      
       const { data, error } = await supabase
         .from('boq_items')
         .update({
@@ -419,6 +424,7 @@ export const boqCrudApi = {
       }
 
       console.log('✅ Commercial fields updated successfully');
+      
       return {
         data,
         message: 'Commercial fields updated successfully',
