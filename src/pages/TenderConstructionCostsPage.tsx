@@ -19,7 +19,8 @@ import {
   Tag,
   Tooltip,
   Input,
-  Empty
+  Empty,
+  Switch
 } from 'antd';
 import '../styles/tender-costs-theme.css';
 import {
@@ -101,6 +102,18 @@ interface CostWithCalculation {
   actual_works: number;
   actual_submaterials: number;
   actual_subworks: number;
+  // Commercial costs from BOQ items
+  commercial_materials: number;
+  commercial_works: number;
+  commercial_submaterials: number;
+  commercial_subworks: number;
+  commercial_total: number;
+  // Commercial costs with volume
+  commercial_materials_with_volume: number;
+  commercial_works_with_volume: number;
+  commercial_submaterials_with_volume: number;
+  commercial_subworks_with_volume: number;
+  commercial_total_with_volume: number;
 }
 
 interface TenderCostVolume {
@@ -127,6 +140,7 @@ const TenderConstructionCostsPage: React.FC = () => {
   const [savedVolumes, setSavedVolumes] = useState<Record<string, number>>({});
   const [searchText, setSearchText] = useState('');
   const [hideZeroCosts, setHideZeroCosts] = useState(false);
+  const [showCommercialCosts, setShowCommercialCosts] = useState(false);
   const [stats, setStats] = useState({
     totalMaterials: 0,
     totalWorks: 0,
@@ -425,7 +439,31 @@ const TenderConstructionCostsPage: React.FC = () => {
     console.log('🚀 [calculateCosts] Calculating costs for tender:', selectedTenderId);
     
     try {
-      // Load client positions with BOQ items for this tender
+      // First, ensure commercial costs are up to date
+      console.log('🔄 [calculateCosts] Recalculating commercial costs...');
+      await supabase.rpc('recalculate_commercial_costs_by_category', {
+        p_tender_id: selectedTenderId
+      });
+
+      // Load commercial costs from the new table
+      const { data: commercialCosts, error: commercialError } = await supabase
+        .from('commercial_costs_by_category')
+        .select('*')
+        .eq('tender_id', selectedTenderId);
+
+      if (commercialError) {
+        console.error('❌ Error loading commercial costs:', commercialError);
+      }
+
+      // Create a map for quick lookup
+      const commercialCostsMap = new Map();
+      commercialCosts?.forEach(cost => {
+        commercialCostsMap.set(cost.detail_cost_category_id, cost);
+      });
+
+      console.log('💰 [calculateCosts] Loaded commercial costs for', commercialCosts?.length, 'categories');
+
+      // Load client positions with BOQ items for this tender (for direct costs)
       const { data: positions, error: posError } = await supabase
         .from('client_positions')
         .select(`
@@ -438,36 +476,179 @@ const TenderConstructionCostsPage: React.FC = () => {
 
       if (posError) throw posError;
 
+      console.log('🔍 [calculateCosts] Loaded positions:', positions?.length);
+      
+      // Enhanced debugging for commercial costs
+      let totalCommercialFound = 0;
+      let itemsWithCommercial = 0;
+      let itemsWithoutCommercial = 0;
+      
+      // Check all BOQ items for commercial_cost
+      positions?.forEach(position => {
+        position.boq_items?.forEach((item: any) => {
+          if (item.commercial_cost && item.commercial_cost > 0) {
+            itemsWithCommercial++;
+            totalCommercialFound += item.commercial_cost;
+            // Log first few items with commercial cost
+            if (itemsWithCommercial <= 3) {
+              console.log('✅ Found commercial cost:', {
+                position: position.name,
+                item_type: item.item_type,
+                total_amount: item.total_amount,
+                commercial_cost: item.commercial_cost,
+                detail_cost_category_id: item.detail_cost_category_id
+              });
+            }
+          } else {
+            itemsWithoutCommercial++;
+          }
+        });
+      });
+      
+      console.log('📊 Commercial Cost Summary:');
+      console.log(`  - Items WITH commercial cost: ${itemsWithCommercial}`);
+      console.log(`  - Items WITHOUT commercial cost: ${itemsWithoutCommercial}`);
+      console.log(`  - Total commercial cost found: ${totalCommercialFound.toLocaleString('ru-RU')} ₽`);
+
       // Calculate costs for each detail category based on assigned categories in BOQ items
       const calculations: CostWithCalculation[] = costCategories.map(category => {
         let materialsTotal = 0;
         let worksTotal = 0;
         let submaterialsTotal = 0;
         let subworksTotal = 0;
+        
+        // Get commercial costs from the new table
+        const commercialData = commercialCostsMap.get(category.id);
+        
+        // Apply the commercial cost transfer logic:
+        // 1. For materials: only base cost stays (no markup)
+        // 2. For works: includes original commercial cost + material markups
+        // 3. For submaterials: only base cost stays  
+        // 4. For subworks: includes original commercial cost + submaterial markups
+        
+        let commercialMaterials = 0;
+        let commercialWorks = 0;
+        let commercialSubmaterials = 0;
+        let commercialSubworks = 0;
+        
+        if (commercialData) {
+          // Analyze material types in this category
+          let mainMaterialsTotal = 0;
+          let auxiliaryMaterialsTotal = 0;
+          let mainMaterialsCommercial = 0;
+          let auxiliaryMaterialsCommercial = 0;
+          
+          let mainSubmaterialsTotal = 0;
+          let auxiliarySubmaterialsTotal = 0;
+          let mainSubmaterialsCommercial = 0;
+          let auxiliarySubmaterialsCommercial = 0;
+          
+          // Go through BOQ items to separate main and auxiliary materials
+          positions?.forEach(position => {
+            const categoryItems = position.boq_items?.filter((item: any) => 
+              item.detail_cost_category_id === category.id
+            ) || [];
+            
+            categoryItems.forEach((item: any) => {
+              if (item.item_type === 'material') {
+                if (item.material_type === 'main') {
+                  mainMaterialsTotal += item.total_amount || 0;
+                  mainMaterialsCommercial += item.commercial_cost || 0;
+                } else if (item.material_type === 'auxiliary') {
+                  auxiliaryMaterialsTotal += item.total_amount || 0;
+                  auxiliaryMaterialsCommercial += item.commercial_cost || 0;
+                }
+              } else if (item.item_type === 'sub_material') {
+                if (item.material_type === 'main') {
+                  mainSubmaterialsTotal += item.total_amount || 0;
+                  mainSubmaterialsCommercial += item.commercial_cost || 0;
+                } else if (item.material_type === 'auxiliary') {
+                  auxiliarySubmaterialsTotal += item.total_amount || 0;
+                  auxiliarySubmaterialsCommercial += item.commercial_cost || 0;
+                }
+              }
+            });
+          });
+          
+          // Calculate works and subworks commercial costs from BOQ items
+          let worksCommercial = 0;
+          let subworksCommercial = 0;
+          
+          positions?.forEach(position => {
+            const categoryItems = position.boq_items?.filter((item: any) => 
+              item.detail_cost_category_id === category.id
+            ) || [];
+            
+            categoryItems.forEach((item: any) => {
+              if (item.item_type === 'work') {
+                worksCommercial += item.commercial_cost || 0;
+              } else if (item.item_type === 'sub_work') {
+                subworksCommercial += item.commercial_cost || 0;
+              }
+            });
+          });
+          
+          // Calculate commercial materials (only main materials stay, auxiliary transfer to works)
+          commercialMaterials = mainMaterialsTotal; // Main materials: only base cost
+          
+          // Calculate commercial works (includes original works + markup from main materials + all auxiliary materials)
+          const mainMaterialsMarkup = mainMaterialsCommercial - mainMaterialsTotal;
+          commercialWorks = worksCommercial + mainMaterialsMarkup + auxiliaryMaterialsCommercial;
+          
+          // Calculate commercial submaterials (only main submaterials stay, auxiliary transfer to subworks)
+          commercialSubmaterials = mainSubmaterialsTotal; // Main submaterials: only base cost
+          
+          // Calculate commercial subworks (includes original subworks + markup from main submaterials + all auxiliary submaterials)
+          const mainSubmaterialsMarkup = mainSubmaterialsCommercial - mainSubmaterialsTotal;
+          commercialSubworks = subworksCommercial + mainSubmaterialsMarkup + auxiliarySubmaterialsCommercial;
+          
+          console.log('💰 Material transfer logic for', category.name, {
+            main_materials: mainMaterialsTotal,
+            auxiliary_materials: auxiliaryMaterialsTotal,
+            main_markup: mainMaterialsMarkup,
+            auxiliary_to_works: auxiliaryMaterialsCommercial,
+            final_commercial_materials: commercialMaterials,
+            final_commercial_works: commercialWorks
+          });
+        }
 
-        // Go through all positions and their BOQ items
-        positions?.forEach(position => {
-          const categoryItems = position.boq_items?.filter((item: any) => 
-            item.detail_cost_category_id === category.id
-          ) || [];
+        // If we have data from the commercial costs table, use it for direct costs too
+        if (commercialData) {
+          materialsTotal = commercialData.direct_materials || 0;
+          worksTotal = commercialData.direct_works || 0;
+          submaterialsTotal = commercialData.direct_submaterials || 0;
+          subworksTotal = commercialData.direct_subworks || 0;
+          
+          console.log('📊 Using commercial costs for category:', category.name, {
+            direct_total: commercialData.direct_total,
+            commercial_total: commercialData.commercial_total,
+            markup: commercialData.commercial_total - commercialData.direct_total
+          });
+        } else {
+          // Fallback: calculate from BOQ items if not in commercial costs table
+          positions?.forEach(position => {
+            const categoryItems = position.boq_items?.filter((item: any) => 
+              item.detail_cost_category_id === category.id
+            ) || [];
 
-          // Sum up the costs for this category using total_amount (includes delivery)
-          materialsTotal += categoryItems
-            .filter((item: any) => item.item_type === 'material')
-            .reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0);
+            // Sum up the costs for this category using total_amount (includes delivery)
+            materialsTotal += categoryItems
+              .filter((item: any) => item.item_type === 'material')
+              .reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0);
 
-          worksTotal += categoryItems
-            .filter((item: any) => item.item_type === 'work')
-            .reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0);
+            worksTotal += categoryItems
+              .filter((item: any) => item.item_type === 'work')
+              .reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0);
 
-          submaterialsTotal += categoryItems
-            .filter((item: any) => item.item_type === 'sub_material')
-            .reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0);
+            submaterialsTotal += categoryItems
+              .filter((item: any) => item.item_type === 'sub_material')
+              .reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0);
 
-          subworksTotal += categoryItems
-            .filter((item: any) => item.item_type === 'sub_work')
-            .reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0);
-        });
+            subworksTotal += categoryItems
+              .filter((item: any) => item.item_type === 'sub_work')
+              .reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0);
+          });
+        }
 
         const volume = volumes[category.id] || null;
         
@@ -476,6 +657,12 @@ const TenderConstructionCostsPage: React.FC = () => {
         const displayWorks = volume && volume > 0 ? worksTotal : 0;
         const displaySubmaterials = volume && volume > 0 ? submaterialsTotal : 0;
         const displaySubworks = volume && volume > 0 ? subworksTotal : 0;
+        
+        // Commercial costs with volume - apply volume to the TRANSFERRED commercial values
+        const displayCommercialMaterials = volume && volume > 0 ? commercialMaterials : 0;
+        const displayCommercialWorks = volume && volume > 0 ? commercialWorks : 0;
+        const displayCommercialSubmaterials = volume && volume > 0 ? commercialSubmaterials : 0;
+        const displayCommercialSubworks = volume && volume > 0 ? commercialSubworks : 0;
 
         return {
           id: category.id,
@@ -495,11 +682,42 @@ const TenderConstructionCostsPage: React.FC = () => {
           actual_materials: materialsTotal,
           actual_works: worksTotal,
           actual_submaterials: submaterialsTotal,
-          actual_subworks: subworksTotal
+          actual_subworks: subworksTotal,
+          // Commercial costs
+          commercial_materials: commercialMaterials || 0,
+          commercial_works: commercialWorks || 0,
+          commercial_submaterials: commercialSubmaterials || 0,
+          commercial_subworks: commercialSubworks || 0,
+          commercial_total: (commercialMaterials || 0) + (commercialWorks || 0) + (commercialSubmaterials || 0) + (commercialSubworks || 0),
+          // Commercial costs with volume
+          commercial_materials_with_volume: displayCommercialMaterials || 0,
+          commercial_works_with_volume: displayCommercialWorks || 0,
+          commercial_submaterials_with_volume: displayCommercialSubmaterials || 0,
+          commercial_subworks_with_volume: displayCommercialSubworks || 0,
+          commercial_total_with_volume: (displayCommercialMaterials || 0) + (displayCommercialWorks || 0) + (displayCommercialSubmaterials || 0) + (displayCommercialSubworks || 0)
         };
       });
 
       setCostsWithCalculations(calculations);
+      
+      // Debug commercial costs aggregation with corrected totals
+      const totalCommercialMaterials = calculations.reduce((sum, c) => sum + (c.commercial_materials || 0), 0);
+      const totalCommercialWorks = calculations.reduce((sum, c) => sum + (c.commercial_works || 0), 0);
+      const totalCommercialSubmaterials = calculations.reduce((sum, c) => sum + (c.commercial_submaterials || 0), 0);
+      const totalCommercialSubworks = calculations.reduce((sum, c) => sum + (c.commercial_subworks || 0), 0);
+      const grandTotalCommercial = totalCommercialMaterials + totalCommercialWorks + totalCommercialSubmaterials + totalCommercialSubworks;
+      
+      console.log('💰 COMMERCIAL TOTALS WITH TRANSFERS:');
+      console.log(`  Materials: ${totalCommercialMaterials.toLocaleString('ru-RU')} ₽`);
+      console.log(`  Works: ${totalCommercialWorks.toLocaleString('ru-RU')} ₽`);
+      console.log(`  Submaterials: ${totalCommercialSubmaterials.toLocaleString('ru-RU')} ₽`);
+      console.log(`  Subworks: ${totalCommercialSubworks.toLocaleString('ru-RU')} ₽`);
+      console.log(`  GRAND TOTAL: ${grandTotalCommercial.toLocaleString('ru-RU')} ₽`);
+      console.log(`  Expected: 21,449,186.98 ₽`);
+      
+      if (Math.abs(grandTotalCommercial - 21449186.98) > 1) {
+        console.warn('⚠️ Total mismatch! Difference:', (grandTotalCommercial - 21449186.98).toLocaleString('ru-RU'), '₽');
+      }
 
       // Calculate statistics - only count categories with volumes
       const totalMaterials = calculations.reduce((sum, c) => sum + c.materials_total, 0);
@@ -983,29 +1201,48 @@ const TenderConstructionCostsPage: React.FC = () => {
       width: 150,
       render: (_, record) => {
         const volume = volumes[record.detail_cost_category_id] || 0;
-        const totalActual = record.actual_materials + record.actual_works + record.actual_submaterials + record.actual_subworks;
-        const unitTotal = volume > 0 ? totalActual / volume : 0;
+        
+        // Выбираем итоговую сумму в зависимости от режима отображения
+        const total = showCommercialCosts 
+          ? (record.commercial_materials + record.commercial_works + record.commercial_submaterials + record.commercial_subworks)
+          : (record.actual_materials + record.actual_works + record.actual_submaterials + record.actual_subworks);
+        
+        const unitTotal = volume > 0 ? total / volume : 0;
+        
+        // Подсказка в зависимости от режима
+        const tooltipText = showCommercialCosts 
+          ? 'Коммерческая стоимость за единицу'
+          : 'Прямые затраты за единицу';
         
         return (
-          <div style={{ textAlign: 'right' }}>
-            <Text 
-              className="money-value"
-              style={{ 
-                color: unitTotal > 0 ? 'var(--color-primary-700)' : 'var(--color-neutral-400)',
-                fontWeight: 'var(--font-weight-semibold)',
-                fontSize: 'var(--font-size-sm)'
-              }}
-            >
-              {unitTotal > 0 ? `${Math.round(unitTotal).toLocaleString('ru-RU')} ₽/${record.unit || 'ед.'}` : '-'}
-            </Text>
-          </div>
+          <Tooltip title={tooltipText}>
+            <div style={{ textAlign: 'right' }}>
+              <Text 
+                className="money-value"
+                style={{ 
+                  color: unitTotal > 0 ? (showCommercialCosts ? 'var(--color-success-700)' : 'var(--color-primary-700)') : 'var(--color-neutral-400)',
+                  fontWeight: 'var(--font-weight-semibold)',
+                  fontSize: 'var(--font-size-sm)'
+                }}
+              >
+                {unitTotal > 0 ? `${Math.round(unitTotal).toLocaleString('ru-RU')} ₽/${record.unit || 'ед.'}` : '-'}
+              </Text>
+            </div>
+          </Tooltip>
         );
       },
       sorter: (a, b) => {
         const volumeA = volumes[a.detail_cost_category_id] || 0;
         const volumeB = volumes[b.detail_cost_category_id] || 0;
-        const totalA = a.actual_materials + a.actual_works + a.actual_submaterials + a.actual_subworks;
-        const totalB = b.actual_materials + b.actual_works + b.actual_submaterials + b.actual_subworks;
+        
+        // Используем соответствующие суммы для сортировки
+        const totalA = showCommercialCosts 
+          ? (a.commercial_materials + a.commercial_works + a.commercial_submaterials + a.commercial_subworks)
+          : (a.actual_materials + a.actual_works + a.actual_submaterials + a.actual_subworks);
+        const totalB = showCommercialCosts 
+          ? (b.commercial_materials + b.commercial_works + b.commercial_submaterials + b.commercial_subworks)
+          : (b.actual_materials + b.actual_works + b.actual_submaterials + b.actual_subworks);
+        
         const unitTotalA = volumeA > 0 ? totalA / volumeA : 0;
         const unitTotalB = volumeB > 0 ? totalB / volumeB : 0;
         return unitTotalA - unitTotalB;
@@ -1020,26 +1257,33 @@ const TenderConstructionCostsPage: React.FC = () => {
         const hasVolume = record.volume && record.volume > 0;
         const hasCosts = record.actual_materials > 0;
         
+        // Выбираем значение в зависимости от режима
+        const displayValue = showCommercialCosts 
+          ? (hasVolume ? (record.commercial_materials_with_volume || 0) : (record.commercial_materials || 0))  // Коммерческие затраты
+          : (record.actual_materials || 0);  // Прямые: всегда показываем фактические
+        
+        const tooltipText = showCommercialCosts
+          ? hasCosts 
+            ? hasVolume 
+              ? `Коммерческие затраты при объеме ${record.volume} ${record.unit}` 
+              : 'Введите объем для расчета коммерческих затрат'
+            : 'Нет материалов с этой категорией'
+          : hasCosts
+            ? 'Прямые затраты (фактические данные из BOQ)'
+            : 'Нет материалов с этой категорией';
+        
         return (
-          <Tooltip title={
-            hasCosts 
-              ? hasVolume 
-                ? `При объеме ${record.volume} ${record.unit}` 
-                : 'Введите объем для активации'
-              : 'Нет материалов с этой категорией'
-          }>
+          <Tooltip title={tooltipText}>
             <Text 
               className="money-value"
               style={{ 
-                color: hasCosts 
-                  ? hasVolume 
-                    ? 'var(--color-materials-600)' 
-                    : 'var(--color-neutral-400)'
+                color: displayValue > 0 
+                  ? 'var(--color-materials-600)' 
                   : 'var(--color-neutral-300)',
-                fontWeight: hasCosts ? 'var(--font-weight-medium)' : 'var(--font-weight-normal)'
+                fontWeight: displayValue > 0 ? 'var(--font-weight-medium)' : 'var(--font-weight-normal)'
               }}
             >
-              {hasVolume ? Math.round(record.materials_total).toLocaleString('ru-RU') : Math.round(record.actual_materials).toLocaleString('ru-RU')} ₽
+              {Math.round(displayValue).toLocaleString('ru-RU')} ₽
             </Text>
           </Tooltip>
         );
@@ -1055,26 +1299,33 @@ const TenderConstructionCostsPage: React.FC = () => {
         const hasVolume = record.volume && record.volume > 0;
         const hasCosts = record.actual_works > 0;
         
+        // Выбираем значение в зависимости от режима
+        const displayValue = showCommercialCosts 
+          ? (hasVolume ? (record.commercial_works_with_volume || 0) : (record.commercial_works || 0))  // Коммерческие затраты
+          : (record.actual_works || 0);  // Прямые: всегда показываем фактические
+        
+        const tooltipText = showCommercialCosts
+          ? hasCosts 
+            ? hasVolume 
+              ? `Коммерческие затраты при объеме ${record.volume} ${record.unit}` 
+              : 'Введите объем для расчета коммерческих затрат'
+            : 'Нет работ с этой категорией'
+          : hasCosts
+            ? 'Прямые затраты (фактические данные из BOQ)'
+            : 'Нет работ с этой категорией';
+        
         return (
-          <Tooltip title={
-            hasCosts 
-              ? hasVolume 
-                ? `При объеме ${record.volume} ${record.unit}` 
-                : 'Введите объем для активации'
-              : 'Нет работ с этой категорией'
-          }>
+          <Tooltip title={tooltipText}>
             <Text 
               className="money-value"
               style={{ 
-                color: hasCosts 
-                  ? hasVolume 
-                    ? 'var(--color-works-600)' 
-                    : 'var(--color-neutral-400)'
+                color: displayValue > 0 
+                  ? 'var(--color-works-600)' 
                   : 'var(--color-neutral-300)',
-                fontWeight: hasCosts ? 'var(--font-weight-medium)' : 'var(--font-weight-normal)'
+                fontWeight: displayValue > 0 ? 'var(--font-weight-medium)' : 'var(--font-weight-normal)'
               }}
             >
-              {hasVolume ? Math.round(record.works_total).toLocaleString('ru-RU') : Math.round(record.actual_works).toLocaleString('ru-RU')} ₽
+              {Math.round(displayValue).toLocaleString('ru-RU')} ₽
             </Text>
           </Tooltip>
         );
@@ -1090,26 +1341,33 @@ const TenderConstructionCostsPage: React.FC = () => {
         const hasVolume = record.volume && record.volume > 0;
         const hasCosts = record.actual_submaterials > 0;
         
+        // Выбираем значение в зависимости от режима
+        const displayValue = showCommercialCosts 
+          ? (hasVolume ? (record.commercial_submaterials_with_volume || 0) : (record.commercial_submaterials || 0))  // Коммерческие затраты
+          : (record.actual_submaterials || 0);  // Прямые: всегда показываем фактические
+        
+        const tooltipText = showCommercialCosts
+          ? hasCosts 
+            ? hasVolume 
+              ? `Коммерческие затраты при объеме ${record.volume} ${record.unit}` 
+              : 'Введите объем для расчета коммерческих затрат'
+            : 'Нет субподрядных материалов с этой категорией'
+          : hasCosts
+            ? 'Прямые затраты (фактические данные из BOQ)'
+            : 'Нет субподрядных материалов с этой категорией';
+        
         return (
-          <Tooltip title={
-            hasCosts 
-              ? hasVolume 
-                ? `При объеме ${record.volume} ${record.unit}` 
-                : 'Введите объем для активации'
-              : 'Нет субподрядных материалов с этой категорией'
-          }>
+          <Tooltip title={tooltipText}>
             <Text 
               className="money-value"
               style={{ 
-                color: hasCosts 
-                  ? hasVolume 
-                    ? 'var(--color-sub-materials-600)' 
-                    : 'var(--color-neutral-400)'
+                color: displayValue > 0 
+                  ? 'var(--color-sub-materials-600)' 
                   : 'var(--color-neutral-300)',
-                fontWeight: hasCosts ? 'var(--font-weight-medium)' : 'var(--font-weight-normal)'
+                fontWeight: displayValue > 0 ? 'var(--font-weight-medium)' : 'var(--font-weight-normal)'
               }}
             >
-              {hasVolume ? Math.round(record.submaterials_total).toLocaleString('ru-RU') : Math.round(record.actual_submaterials).toLocaleString('ru-RU')} ₽
+              {Math.round(displayValue).toLocaleString('ru-RU')} ₽
             </Text>
           </Tooltip>
         );
@@ -1125,26 +1383,33 @@ const TenderConstructionCostsPage: React.FC = () => {
         const hasVolume = record.volume && record.volume > 0;
         const hasCosts = record.actual_subworks > 0;
         
+        // Выбираем значение в зависимости от режима
+        const displayValue = showCommercialCosts 
+          ? (hasVolume ? (record.commercial_subworks_with_volume || 0) : (record.commercial_subworks || 0))  // Коммерческие затраты
+          : (record.actual_subworks || 0);  // Прямые: всегда показываем фактические
+        
+        const tooltipText = showCommercialCosts
+          ? hasCosts 
+            ? hasVolume 
+              ? `Коммерческие затраты при объеме ${record.volume} ${record.unit}` 
+              : 'Введите объем для расчета коммерческих затрат'
+            : 'Нет субподрядных работ с этой категорией'
+          : hasCosts
+            ? 'Прямые затраты (фактические данные из BOQ)'
+            : 'Нет субподрядных работ с этой категорией';
+        
         return (
-          <Tooltip title={
-            hasCosts 
-              ? hasVolume 
-                ? `При объеме ${record.volume} ${record.unit}` 
-                : 'Введите объем для активации'
-              : 'Нет субподрядных работ с этой категорией'
-          }>
+          <Tooltip title={tooltipText}>
             <Text 
               className="money-value"
               style={{ 
-                color: hasCosts 
-                  ? hasVolume 
-                    ? 'var(--color-sub-works-600)' 
-                    : 'var(--color-neutral-400)'
+                color: displayValue > 0 
+                  ? 'var(--color-sub-works-600)' 
                   : 'var(--color-neutral-300)',
-                fontWeight: hasCosts ? 'var(--font-weight-medium)' : 'var(--font-weight-normal)'
+                fontWeight: displayValue > 0 ? 'var(--font-weight-medium)' : 'var(--font-weight-normal)'
               }}
             >
-              {hasVolume ? Math.round(record.subworks_total).toLocaleString('ru-RU') : Math.round(record.actual_subworks).toLocaleString('ru-RU')} ₽
+              {Math.round(displayValue).toLocaleString('ru-RU')} ₽
             </Text>
           </Tooltip>
         );
@@ -1160,16 +1425,30 @@ const TenderConstructionCostsPage: React.FC = () => {
         const totalActual = record.actual_materials + record.actual_works + record.actual_submaterials + record.actual_subworks;
         const hasCosts = totalActual > 0;
         
+        // Выбираем значение в зависимости от режима
+        const displayValue = showCommercialCosts 
+          ? (hasVolume ? (record.commercial_total_with_volume || 0) : (record.commercial_total || 0))  // Коммерческие затраты
+          : (totalActual || 0);  // Прямые: всегда показываем фактические
+        
+        const tooltipText = showCommercialCosts
+          ? hasCosts 
+            ? hasVolume 
+              ? `Коммерческие затраты при объеме ${record.volume} ${record.unit}` 
+              : 'Введите объем для расчета коммерческих затрат'
+            : 'Нет позиций BOQ с этой категорией'
+          : hasCosts
+            ? 'Прямые затраты (фактические данные из BOQ)'
+            : 'Нет позиций BOQ с этой категорией';
+        
         return (
-          <Tooltip title={
-            hasCosts 
-              ? hasVolume 
-                ? `Активировано при объеме ${record.volume} ${record.unit}` 
-                : 'Введите объем для активации суммы'
-              : 'Нет позиций BOQ с этой категорией'
-          }>
-            <Text strong type={!hasVolume && hasCosts ? "secondary" : undefined}>
-              {hasVolume ? Math.round(record.total).toLocaleString('ru-RU') : Math.round(totalActual).toLocaleString('ru-RU')} ₽
+          <Tooltip title={tooltipText}>
+            <Text 
+              strong 
+              style={{
+                color: displayValue > 0 ? 'var(--color-primary-700)' : 'var(--color-neutral-400)'
+              }}
+            >
+              {Math.round(displayValue).toLocaleString('ru-RU')} ₽
             </Text>
           </Tooltip>
         );
@@ -1654,77 +1933,124 @@ const TenderConstructionCostsPage: React.FC = () => {
             <div style={{ 
               display: 'flex', 
               alignItems: 'center', 
+              justifyContent: 'space-between',
               gap: 'var(--spacing-md)',
               padding: 'var(--spacing-sm) 0'
             }}>
-              <SearchOutlined style={{ 
-                fontSize: 'var(--font-size-lg)', 
-                color: 'var(--color-primary-600)' 
-              }} />
-              <Search
-                placeholder="Поиск по категориям, видам затрат и локализации"
-                allowClear
-                size="large"
-                value={searchText}
-                onSearch={setSearchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                style={{ 
-                  flex: 1,
-                  maxWidth: 400
-                }}
-                enterButton="Найти"
-              />
-              
-              <Button
-                className={hideZeroCosts ? "filter-button-active" : "action-button"}
-                icon={hideZeroCosts ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
-                onClick={() => setHideZeroCosts(!hideZeroCosts)}
-                size="large"
-                style={{ 
-                  background: hideZeroCosts 
-                    ? 'var(--color-success-500)' 
-                    : 'var(--bg-card)',
-                  borderColor: hideZeroCosts 
-                    ? 'var(--color-success-500)' 
-                    : 'var(--border-medium)',
-                  color: hideZeroCosts 
-                    ? 'white' 
-                    : 'var(--color-neutral-600)',
-                  fontWeight: 'var(--font-weight-medium)',
-                  minWidth: '140px'
-                }}
-              >
-                {hideZeroCosts ? 'Показать все' : 'Скрыть нули'}
-              </Button>
+              {/* Левая часть - поиск и фильтры */}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 'var(--spacing-md)',
+                flex: 1
+              }}>
+                <SearchOutlined style={{ 
+                  fontSize: 'var(--font-size-lg)', 
+                  color: 'var(--color-primary-600)' 
+                }} />
 
-              <Space>
-                {searchText && (
+                <Search
+                  placeholder="Поиск по категориям, видам затрат и локализации"
+                  allowClear
+                  size="large"
+                  value={searchText}
+                  onSearch={setSearchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  style={{ 
+                    flex: 1,
+                    maxWidth: 400
+                  }}
+                  enterButton="Найти"
+                />
+                
+                <Button
+                  className={hideZeroCosts ? "filter-button-active" : "action-button"}
+                  icon={hideZeroCosts ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
+                  onClick={() => setHideZeroCosts(!hideZeroCosts)}
+                  size="large"
+                  style={{ 
+                    background: hideZeroCosts 
+                      ? 'var(--color-success-500)' 
+                      : 'var(--bg-card)',
+                    borderColor: hideZeroCosts 
+                      ? 'var(--color-success-500)' 
+                      : 'var(--border-medium)',
+                    color: hideZeroCosts 
+                      ? 'white' 
+                      : 'var(--color-neutral-600)',
+                    fontWeight: 'var(--font-weight-medium)',
+                    minWidth: '140px'
+                  }}
+                >
+                  {hideZeroCosts ? 'Показать все' : 'Скрыть нули'}
+                </Button>
+
+                <Space>
+                  {searchText && (
+                    <Text style={{ 
+                      color: 'var(--color-neutral-500)',
+                      fontSize: 'var(--font-size-sm)',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      Найдено: {filteredCosts.length}
+                    </Text>
+                  )}
+                  {hideZeroCosts && (
+                    <Text style={{ 
+                      color: 'var(--color-success-600)',
+                      fontSize: 'var(--font-size-sm)',
+                      whiteSpace: 'nowrap',
+                      fontWeight: 'var(--font-weight-medium)'
+                    }}>
+                      Скрыто нулевых: {zeroCostsCount}
+                    </Text>
+                  )}
                   <Text style={{ 
-                    color: 'var(--color-neutral-500)',
+                    color: 'var(--color-neutral-400)',
                     fontSize: 'var(--font-size-sm)',
                     whiteSpace: 'nowrap'
                   }}>
-                    Найдено: {filteredCosts.length}
+                    Показано: {filteredCosts.length} / {costsWithCalculations.length}
                   </Text>
-                )}
-                {hideZeroCosts && (
-                  <Text style={{ 
-                    color: 'var(--color-success-600)',
-                    fontSize: 'var(--font-size-sm)',
-                    whiteSpace: 'nowrap',
-                    fontWeight: 'var(--font-weight-medium)'
-                  }}>
-                    Скрыто нулевых: {zeroCostsCount}
-                  </Text>
-                )}
-                <Text style={{ 
-                  color: 'var(--color-neutral-400)',
-                  fontSize: 'var(--font-size-sm)',
-                  whiteSpace: 'nowrap'
+                </Space>
+              </div>
+
+              {/* Правая часть - слайдер переключения */}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '12px',
+                padding: '8px 16px',
+                background: 'var(--color-neutral-50)',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--border-light)',
+                flexShrink: 0
+              }}>
+                <span style={{ 
+                  color: showCommercialCosts ? 'var(--color-neutral-500)' : 'var(--color-primary-600)',
+                  fontWeight: showCommercialCosts ? 400 : 600,
+                  fontSize: '13px',
+                  transition: 'all 0.2s ease'
                 }}>
-                  Показано: {filteredCosts.length} / {costsWithCalculations.length}
-                </Text>
-              </Space>
+                  Прямые затраты
+                </span>
+                <Switch
+                  checked={showCommercialCosts}
+                  onChange={setShowCommercialCosts}
+                  size="default"
+                  style={{
+                    backgroundColor: showCommercialCosts ? 'var(--color-success-500)' : 'var(--color-neutral-300)'
+                  }}
+                />
+                <span style={{ 
+                  color: showCommercialCosts ? 'var(--color-success-600)' : 'var(--color-neutral-500)',
+                  fontWeight: showCommercialCosts ? 600 : 400,
+                  fontSize: '13px',
+                  transition: 'all 0.2s ease'
+                }}>
+                  Коммерческие затраты
+                </span>
+              </div>
             </div>
           </Card>
 
@@ -1757,17 +2083,29 @@ const TenderConstructionCostsPage: React.FC = () => {
               summary={(data) => {
                 const visibleData = data || filteredCosts;
                 
-                // Используем actual_ поля для показа реальных затрат, независимо от объема
-                const summaryMaterials = visibleData.reduce((sum, item) => sum + item.actual_materials, 0);
-                const summaryWorks = visibleData.reduce((sum, item) => sum + item.actual_works, 0);
-                const summarySubmaterials = visibleData.reduce((sum, item) => sum + item.actual_submaterials, 0);
-                const summarySubworks = visibleData.reduce((sum, item) => sum + item.actual_subworks, 0);
+                // Расчет зависит от режима отображения
+                const summaryMaterials = showCommercialCosts 
+                  ? visibleData.reduce((sum, item) => sum + (item.volume && item.volume > 0 ? (item.commercial_materials_with_volume || 0) : (item.commercial_materials || 0)), 0)
+                  : visibleData.reduce((sum, item) => sum + (item.actual_materials || 0), 0);
+                  
+                const summaryWorks = showCommercialCosts 
+                  ? visibleData.reduce((sum, item) => sum + (item.volume && item.volume > 0 ? (item.commercial_works_with_volume || 0) : (item.commercial_works || 0)), 0)
+                  : visibleData.reduce((sum, item) => sum + (item.actual_works || 0), 0);
+                  
+                const summarySubmaterials = showCommercialCosts 
+                  ? visibleData.reduce((sum, item) => sum + (item.volume && item.volume > 0 ? (item.commercial_submaterials_with_volume || 0) : (item.commercial_submaterials || 0)), 0)
+                  : visibleData.reduce((sum, item) => sum + (item.actual_submaterials || 0), 0);
+                  
+                const summarySubworks = showCommercialCosts 
+                  ? visibleData.reduce((sum, item) => sum + (item.volume && item.volume > 0 ? (item.commercial_subworks_with_volume || 0) : (item.commercial_subworks || 0)), 0)
+                  : visibleData.reduce((sum, item) => sum + (item.actual_subworks || 0), 0);
+                  
                 const summaryTotal = summaryMaterials + summaryWorks + summarySubmaterials + summarySubworks;
                 
                 return (
                   <Table.Summary fixed>
                     <Table.Summary.Row style={{ background: 'var(--bg-table-header)' }}>
-                      <Table.Summary.Cell index={0} colSpan={5}>
+                      <Table.Summary.Cell index={0} colSpan={6}>
                         <Text 
                           strong 
                           style={{ 
@@ -1776,10 +2114,10 @@ const TenderConstructionCostsPage: React.FC = () => {
                             fontWeight: 'var(--font-weight-semibold)'
                           }}
                         >
-                          Итого фактических затрат BOQ:
+                          {showCommercialCosts ? 'Итого коммерческие затраты:' : 'Итого прямые затраты:'}
                         </Text>
                       </Table.Summary.Cell>
-                      <Table.Summary.Cell index={5}>
+                      <Table.Summary.Cell index={6}>
                         <Text 
                           className="money-value"
                           strong 
@@ -1791,7 +2129,7 @@ const TenderConstructionCostsPage: React.FC = () => {
                           {Math.round(summaryMaterials).toLocaleString('ru-RU')} ₽
                         </Text>
                       </Table.Summary.Cell>
-                      <Table.Summary.Cell index={6}>
+                      <Table.Summary.Cell index={7}>
                         <Text 
                           className="money-value"
                           strong 
@@ -1803,7 +2141,7 @@ const TenderConstructionCostsPage: React.FC = () => {
                           {Math.round(summaryWorks).toLocaleString('ru-RU')} ₽
                         </Text>
                       </Table.Summary.Cell>
-                      <Table.Summary.Cell index={7}>
+                      <Table.Summary.Cell index={8}>
                         <Text 
                           className="money-value"
                           strong 
@@ -1815,7 +2153,7 @@ const TenderConstructionCostsPage: React.FC = () => {
                           {Math.round(summarySubmaterials).toLocaleString('ru-RU')} ₽
                         </Text>
                       </Table.Summary.Cell>
-                      <Table.Summary.Cell index={8}>
+                      <Table.Summary.Cell index={9}>
                         <Text 
                           className="money-value"
                           strong 
@@ -1827,7 +2165,7 @@ const TenderConstructionCostsPage: React.FC = () => {
                           {Math.round(summarySubworks).toLocaleString('ru-RU')} ₽
                         </Text>
                       </Table.Summary.Cell>
-                      <Table.Summary.Cell index={9}>
+                      <Table.Summary.Cell index={10}>
                         <Text 
                           className="money-value"
                           strong 
