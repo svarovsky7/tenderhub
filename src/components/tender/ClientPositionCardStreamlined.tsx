@@ -73,6 +73,7 @@ import {
   POSITION_LABELS
 } from '../../utils/clientPositionHierarchy';
 import { formatCurrency } from '../../utils/formatters';
+import { CURRENCY_OPTIONS, convertToRuble, getCurrencyRate, getCurrencySymbol } from '../../utils/currencyConverter';
 
 const { Title, Text } = Typography;
 
@@ -82,6 +83,11 @@ interface ClientPositionCardStreamlinedProps {
   onToggle: () => void;
   onUpdate: () => void;
   tenderId: string;
+  tender?: {
+    usd_rate?: number | null;
+    eur_rate?: number | null;
+    cny_rate?: number | null;
+  } | null;
 }
 
 interface QuickAddRowData {
@@ -98,6 +104,8 @@ interface QuickAddRowData {
   cost_category_display?: string;
   delivery_price_type?: 'included' | 'not_included' | 'amount';
   delivery_amount?: number;
+  currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY';
+  currency_price?: number;
 }
 
 const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps> = ({
@@ -105,9 +113,34 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   isExpanded,
   onToggle,
   onUpdate,
-  tenderId
+  tenderId,
+  tender
 }) => {
-  // console.log('🚀 ClientPositionCardStreamlined rendered:', position.id);
+  // Log tender prop when component renders
+  console.log('🎯 RAW TENDER PROP:', tender);
+  console.log('🔍 [ClientPositionCardStreamlined] Tender prop received:', {
+    tender,
+    tender_type: typeof tender,
+    is_null: tender === null,
+    is_undefined: tender === undefined,
+    usd_rate: tender?.usd_rate,
+    usd_rate_type: typeof tender?.usd_rate,
+    eur_rate: tender?.eur_rate,
+    eur_rate_type: typeof tender?.eur_rate,
+    cny_rate: tender?.cny_rate,
+    cny_rate_type: typeof tender?.cny_rate,
+    tender_keys: tender ? Object.keys(tender) : null,
+    tender_entries: tender ? Object.entries(tender) : null,
+    position_id: position.id,
+    raw_tender: JSON.stringify(tender)
+  });
+  console.log('🎯 [ClientPositionCardStreamlined] Render with tender:', {
+    positionId: position.id,
+    positionNumber: position.position_number,
+    tenderExists: !!tender,
+    tender: tender,
+    tenderId: tenderId
+  });
   console.log('📦 Position props received:', {
     id: position.id,
     manual_volume: position.manual_volume,
@@ -119,6 +152,15 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     has_linked_materials: position.boq_items?.some(item => item.work_link) || false
   });
   
+  // Debug tender currency data
+  console.log('💱 Tender currency data:', {
+    tenderId,
+    tender,
+    hasRates: tender ? !!(tender.usd_rate || tender.eur_rate || tender.cny_rate) : false,
+    usd_rate: tender?.usd_rate,
+    eur_rate: tender?.eur_rate,
+    cny_rate: tender?.cny_rate
+  });
   
   const [loading, setLoading] = useState(false);
   const [editingItem, setEditingItem] = useState<string | null>(null);
@@ -143,6 +185,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const [localWorks, setLocalWorks] = useState<BOQItemWithLibrary[]>([]);
   const [tempManualVolume, setTempManualVolume] = useState<number | null>(position.manual_volume ?? null);
   const [tempManualNote, setTempManualNote] = useState<string>(position.manual_note ?? '');
+  const [selectedCurrency, setSelectedCurrency] = useState<'RUB' | 'USD' | 'EUR' | 'CNY'>('RUB');
+  const [editSelectedCurrency, setEditSelectedCurrency] = useState<'RUB' | 'USD' | 'EUR' | 'CNY'>('RUB');
   const [tempWorkName, setTempWorkName] = useState<string>(position.work_name ?? '');
   const [tempUnit, setTempUnit] = useState<string>(position.unit ?? '');
   const [tenderMarkup, setTenderMarkup] = useState<any>(null);
@@ -800,6 +844,136 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   }, [position.id, position.boq_items, onUpdate]);
 
 
+  // Handle currency change in quick add form
+  const handleCurrencyChange = useCallback((currency: 'RUB' | 'USD' | 'EUR' | 'CNY') => {
+    console.log('💱 Currency changed:', currency);
+    console.log('🔍 Tender data available:', { tender, hasTender: !!tender });
+    setSelectedCurrency(currency);
+    
+    if (currency === 'RUB') {
+      // When switching to RUB, enable unit_rate field and clear currency price
+      quickAddForm.setFieldsValue({ 
+        currency_type: 'RUB',
+        currency_price: undefined,
+        currency_rate: 1
+      });
+    } else {
+      // When switching to foreign currency
+      let rate = 1;
+      if (tender) {
+        const fetchedRate = getCurrencyRate(currency, tender);
+        console.log('📊 Currency rate from tender:', {
+          currency,
+          fetchedRate,
+          fetchedRate_type: typeof fetchedRate,
+          tender_rates: {
+            usd: tender?.usd_rate,
+            eur: tender?.eur_rate,
+            cny: tender?.cny_rate
+          }
+        });
+        
+        if (!fetchedRate || fetchedRate === 0) {
+          console.error('❌ No valid currency rate found for', currency);
+          message.warning(`Курс ${currency} не установлен в тендере. Установите курс валюты в настройках тендера.`);
+          // Reset to RUB if no rate available
+          quickAddForm.setFieldsValue({ 
+            currency_type: 'RUB',
+            currency_price: null
+          });
+          return;
+        }
+        
+        rate = fetchedRate;
+      } else {
+        console.log('⚠️ No tender data available, cannot convert currency');
+        message.warning('Данные тендера еще не загружены. Подождите и попробуйте снова.');
+        return;
+      }
+      
+      quickAddForm.setFieldsValue({ 
+        currency_type: currency,
+        currency_rate: rate
+      });
+      
+      // Recalculate unit_rate if currency_price exists
+      const currencyPrice = quickAddForm.getFieldValue('currency_price');
+      if (currencyPrice && currencyPrice > 0) {
+        const rublePrice = currencyPrice * rate;
+        console.log('💵 Recalculating RUB price:', rublePrice);
+        setTimeout(() => {
+          quickAddForm.setFieldsValue({ unit_rate: rublePrice });
+        }, 0);
+      }
+    }
+  }, [quickAddForm, tender]);
+
+  // Handle currency price change
+  const handleCurrencyPriceChange = useCallback((value: number | null) => {
+    console.log('💰 Currency price changed:', value);
+    console.log('🔍 Current state:', { 
+      selectedCurrency, 
+      tender,
+      tenderRates: tender ? {
+        usd: tender.usd_rate,
+        eur: tender.eur_rate,
+        cny: tender.cny_rate
+      } : null
+    });
+    
+    if (selectedCurrency !== 'RUB') {
+      // Get rate from tender or use default
+      let rate = 1;
+      if (tender) {
+        const fetchedRate = getCurrencyRate(selectedCurrency, tender);
+        console.log('📊 getCurrencyRate returned:', fetchedRate);
+        console.log('🔍 Tender rates detail:', {
+          currency: selectedCurrency,
+          tender_usd: tender.usd_rate,
+          tender_eur: tender.eur_rate,
+          tender_cny: tender.cny_rate,
+          fetchedRate
+        });
+        
+        if (!fetchedRate || fetchedRate === 0) {
+          console.error('❌ handleCurrencyPriceChange: No valid rate for', selectedCurrency);
+          message.warning(`Курс ${selectedCurrency} не установлен в тендере`);
+          return;
+        }
+        
+        rate = fetchedRate;
+      } else {
+        console.log('⚠️ No tender data, cannot calculate');
+        message.warning('Данные курсов валют еще не загружены');
+        return;
+      }
+      
+      if (value !== null && value !== undefined && value > 0) {
+        const rublePrice = value * rate;
+        console.log('💵 Calculation:', {
+          currencyPrice: value,
+          rate: rate,
+          rublePrice: rublePrice,
+          formula: `${value} * ${rate} = ${rublePrice}`
+        });
+        // Use setTimeout to ensure the form updates after the current onChange cycle
+        setTimeout(() => {
+          quickAddForm.setFieldsValue({ 
+            unit_rate: rublePrice,
+            currency_rate: rate
+          });
+        }, 0);
+      } else {
+        // Clear RUB price if currency price is cleared
+        setTimeout(() => {
+          quickAddForm.setFieldsValue({ 
+            unit_rate: 0
+          });
+        }, 0);
+      }
+    }
+  }, [quickAddForm, selectedCurrency, tender]);
+
   // Quick add new item
   const handleQuickAdd = useCallback(async (values: QuickAddRowData) => {
     console.log('🚀 Quick adding item:', values);
@@ -883,6 +1057,54 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         }
       }
 
+      // Calculate currency rate from tender
+      let calculatedCurrencyRate = null;
+      console.log('🔍 [handleQuickAdd] Tender check:', {
+        tenderExists: !!tender,
+        tenderValue: tender,
+        currency_type: values.currency_type,
+        currency_price: values.currency_price,
+        unit_rate: values.unit_rate
+      });
+      
+      // For foreign currency, we MUST have a valid exchange rate
+      if (values.currency_type && values.currency_type !== 'RUB') {
+        if (!tender) {
+          console.error('❌ [handleQuickAdd] TENDER IS NULL! Cannot get currency rate');
+          message.error('Ошибка: курсы валют еще не загружены. Подождите и попробуйте снова.');
+          setLoading(false);
+          return;
+        }
+        
+        const rateFromTender = getCurrencyRate(values.currency_type, tender);
+        
+        console.log('🔍 [handleQuickAdd] getCurrencyRate result:', {
+          currency: values.currency_type,
+          tender,
+          rateFromTender,
+          tenderUsdRate: tender?.usd_rate,
+          tenderEurRate: tender?.eur_rate,
+          tenderCnyRate: tender?.cny_rate
+        });
+        
+        if (!rateFromTender || rateFromTender === 0) {
+          console.error('❌ [handleQuickAdd] No valid currency rate found for', values.currency_type);
+          message.error(`Ошибка: курс ${values.currency_type} не установлен в тендере. Обратитесь к администратору.`);
+          setLoading(false);
+          return;
+        }
+        
+        calculatedCurrencyRate = rateFromTender;
+        console.log('💱 [handleQuickAdd] Currency rate calculation:', {
+          currency: values.currency_type,
+          tender,
+          rateFromTender,
+          calculatedRate: calculatedCurrencyRate,
+          expectedUnitRate: (values.currency_price || 0) * rateFromTender
+        });
+      }
+      // For RUB, currency_rate should be NULL (not 1)
+
       const newItem: BOQItemInsert = {
         tender_id: tenderId,
         client_position_id: position.id,
@@ -894,6 +1116,13 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         item_number: `${positionNumber}.${nextSubNumber}`,
         sub_number: nextSubNumber,
         sort_order: nextSubNumber,
+        // Add currency fields
+        currency_type: values.currency_type || 'RUB',
+        currency_price: values.currency_price || null,
+        currency_rate: calculatedCurrencyRate,
+        // Add quote link and note fields
+        quote_link: values.quote_link || null,
+        note: values.note || null,
         // Add detail cost category if validated
         ...(detailCostCategoryId && { 
           detail_cost_category_id: detailCostCategoryId
@@ -1040,6 +1269,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       
       quickAddForm.resetFields();
       setQuickAddMode(false);
+      setSelectedCurrency('RUB');
       onUpdate();
     } catch (error) {
       console.error('❌ Add item error:', error);
@@ -1047,7 +1277,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     } finally {
       setLoading(false);
     }
-  }, [position, tenderId, works, quickAddForm, onUpdate]);
+  }, [position, tenderId, works, quickAddForm, onUpdate, tender]);
 
   // Open material linking modal
   const handleLinkMaterials = useCallback((workId: string) => {
@@ -1174,6 +1404,18 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       displayQuantity: displayQuantity
     });
     
+    // Calculate correct currency rate from tender
+    let correctCurrencyRate = 1;
+    if (item.currency_type && item.currency_type !== 'RUB' && tender) {
+      const rateFromTender = getCurrencyRate(item.currency_type, tender);
+      correctCurrencyRate = rateFromTender || 1;
+      console.log('💱 [handleEditMaterial] Setting correct currency rate:', {
+        itemRate: item.currency_rate,
+        tenderRate: correctCurrencyRate,
+        currency: item.currency_type
+      });
+    }
+    
     editForm.setFieldsValue({
       description: item.description,
       unit: item.unit,
@@ -1186,9 +1428,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       delivery_price_type: item.delivery_price_type || 'included',
       delivery_amount: item.delivery_amount || 0,
       item_type: item.item_type,
-      material_type: item.material_type || 'main'  // Add material type field
+      material_type: item.material_type || 'main',  // Add material type field
+      currency_type: item.currency_type || 'RUB',
+      currency_price: item.currency_price || 0,
+      currency_rate: correctCurrencyRate,
+      quote_link: item.quote_link || '',
+      note: item.note || ''
     });
-  }, [editForm, position.boq_items, localWorks]);
+  }, [editForm, position.boq_items, localWorks, tender]);
 
   // Save inline edited material
   const handleSaveInlineEdit = useCallback(async (values: any) => {
@@ -1303,19 +1550,68 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         }
       }
       
+      // Calculate currency rate from tender
+      let calculatedCurrencyRate = null;
+      
+      // For foreign currency, we MUST have a valid exchange rate
+      if (values.currency_type && values.currency_type !== 'RUB') {
+        if (!tender) {
+          console.error('❌ [handleSaveInlineEdit] TENDER IS NULL! Cannot get currency rate');
+          message.error('Ошибка: курсы валют еще не загружены. Подождите и попробуйте снова.');
+          setLoading(false);
+          return;
+        }
+        
+        const rateFromTender = getCurrencyRate(values.currency_type, tender);
+        
+        console.log('🔍 [handleSaveInlineEdit] getCurrencyRate result:', {
+          currency: values.currency_type,
+          tender,
+          rateFromTender,
+          tenderUsdRate: tender?.usd_rate,
+          tenderEurRate: tender?.eur_rate,
+          tenderCnyRate: tender?.cny_rate
+        });
+        
+        if (!rateFromTender || rateFromTender === 0) {
+          console.error('❌ [handleSaveInlineEdit] No valid currency rate found for', values.currency_type);
+          message.error(`Ошибка: курс ${values.currency_type} не установлен в тендере. Обратитесь к администратору.`);
+          setLoading(false);
+          return;
+        }
+        
+        calculatedCurrencyRate = rateFromTender;
+        console.log('💱 [handleSaveInlineEdit] Currency rate calculation:', {
+          currency: values.currency_type,
+          tender,
+          rateFromTender,
+          calculatedRate: calculatedCurrencyRate
+        });
+      }
+      // For RUB, currency_rate should be NULL (not 1)
+
       // Update the material itself INCLUDING coefficients and delivery fields
+      // IMPORTANT: Don't use values.currency_rate, always calculate from tender
+      // Remove currency_rate from values to avoid any conflicts
+      const { currency_rate: ignoredRate, ...cleanValues } = values;
+      
       const updateData: any = {
-        description: values.description,
-        unit: values.unit,
+        description: cleanValues.description,
+        unit: cleanValues.unit,
         quantity: finalQuantity,  // Use calculated quantity
-        unit_rate: values.unit_rate,
-        consumption_coefficient: values.consumption_coefficient || 1,
-        conversion_coefficient: values.conversion_coefficient || 1,
+        unit_rate: cleanValues.unit_rate,
+        consumption_coefficient: cleanValues.consumption_coefficient || 1,
+        conversion_coefficient: cleanValues.conversion_coefficient || 1,
         detail_cost_category_id: detailCostCategoryId,
-        delivery_price_type: values.delivery_price_type || 'included',
-        delivery_amount: values.delivery_amount || 0,
-        item_type: values.item_type || editingItem.item_type,
-        material_type: values.material_type || 'main'  // Add material type field
+        delivery_price_type: cleanValues.delivery_price_type || 'included',
+        delivery_amount: cleanValues.delivery_amount || 0,
+        item_type: cleanValues.item_type || editingItem.item_type,
+        material_type: cleanValues.material_type || 'main',  // Add material type field
+        currency_type: cleanValues.currency_type || 'RUB',
+        currency_price: cleanValues.currency_price || 0,
+        currency_rate: calculatedCurrencyRate,  // Always use calculated rate, never from form
+        quote_link: cleanValues.quote_link || null,
+        note: cleanValues.note || null
       };
       
       // Add base_quantity for unlinked materials
@@ -1594,7 +1890,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     } finally {
       setLoading(false);
     }
-  }, [editingMaterialId, position.id, works, editForm, onUpdate]);
+  }, [editingMaterialId, position.id, works, editForm, onUpdate, tender]);
 
   // Cancel inline edit
   const handleCancelInlineEdit = useCallback(() => {
@@ -1607,6 +1903,19 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const handleEditWork = useCallback((item: BOQItemWithLibrary) => {
     console.log('✏️ Starting inline edit for work:', item.id);
     console.log('🎯 Work detail_cost_category_id:', item.detail_cost_category_id);
+    
+    // Calculate correct currency rate from tender
+    let correctCurrencyRate = 1;
+    if (item.currency_type && item.currency_type !== 'RUB' && tender) {
+      const rateFromTender = getCurrencyRate(item.currency_type, tender);
+      correctCurrencyRate = rateFromTender || 1;
+      console.log('💱 [handleEditWork] Setting correct currency rate:', {
+        itemRate: item.currency_rate,
+        tenderRate: correctCurrencyRate,
+        currency: item.currency_type
+      });
+    }
+    
     setEditingWorkId(item.id);
     workEditForm.setFieldsValue({
       description: item.description,
@@ -1614,9 +1923,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       quantity: item.quantity,
       unit_rate: item.unit_rate,
       detail_cost_category_id: item.detail_cost_category_id || null,
-      item_type: item.item_type
+      item_type: item.item_type,
+      currency_type: item.currency_type || 'RUB',
+      currency_price: item.currency_price || 0,
+      currency_rate: correctCurrencyRate,
+      quote_link: item.quote_link || '',
+      note: item.note || ''
     });
-  }, [workEditForm]);
+  }, [workEditForm, tender]);
 
   // Save inline edited work
   const handleSaveWorkEdit = useCallback(async (values: any) => {
@@ -1656,13 +1970,81 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         }
       }
       
+      // Calculate currency rate from tender
+      let calculatedCurrencyRate = null;
+      console.log('🔍 [handleSaveWorkEdit] Tender check:', {
+        tenderExists: !!tender,
+        tenderValue: tender,
+        tender_raw: JSON.stringify(tender),
+        tender_usd_rate: tender?.usd_rate,
+        tender_eur_rate: tender?.eur_rate,
+        tender_cny_rate: tender?.cny_rate,
+        currency_type: values.currency_type,
+        currency_price: values.currency_price,
+        unit_rate: values.unit_rate
+      });
+      
+      // For foreign currency, we MUST have a valid exchange rate
+      if (values.currency_type && values.currency_type !== 'RUB') {
+        if (!tender) {
+          console.error('❌ [handleSaveWorkEdit] TENDER IS NULL! Cannot get currency rate');
+          message.error('Ошибка: курсы валют еще не загружены. Подождите и попробуйте снова.');
+          setLoading(false);
+          return;
+        }
+        
+        const rateFromTender = getCurrencyRate(values.currency_type, tender);
+        
+        console.log('🔍 [handleSaveWorkEdit] getCurrencyRate result:', {
+          currency: values.currency_type,
+          tender,
+          tender_raw: JSON.stringify(tender),
+          rateFromTender,
+          rateFromTender_type: typeof rateFromTender,
+          tenderUsdRate: tender?.usd_rate,
+          tenderEurRate: tender?.eur_rate,
+          tenderCnyRate: tender?.cny_rate
+        });
+        
+        if (!rateFromTender || rateFromTender === 0) {
+          console.error('❌ [handleSaveWorkEdit] No valid currency rate found for', values.currency_type);
+          message.error(`Ошибка: курс ${values.currency_type} не установлен в тендере. Обратитесь к администратору.`);
+          setLoading(false);
+          return;
+        }
+        
+        calculatedCurrencyRate = rateFromTender;
+        console.log('💱 [handleSaveWorkEdit] Currency rate calculation:', {
+          currency: values.currency_type,
+          tender,
+          rateFromTender,
+          calculatedRate: calculatedCurrencyRate,
+          expectedUnitRate: (values.currency_price || 0) * rateFromTender
+        });
+      }
+      // For RUB, currency_rate should be NULL (not 1)
+
+      // IMPORTANT: Don't use values.currency_rate, always calculate from tender
+      // Remove currency_rate from values to avoid overwriting
+      const { currency_rate: ignoredRate, ...cleanValues } = values;
+      
       const updateData = {
-        ...values,
+        ...cleanValues,
         detail_cost_category_id: detailCostCategoryId,
-        item_type: values.item_type || currentWorkItem.item_type
+        item_type: values.item_type || currentWorkItem.item_type,
+        currency_type: values.currency_type || 'RUB',
+        currency_price: values.currency_price || 0,
+        currency_rate: calculatedCurrencyRate,  // Always use calculated rate, never from form
+        quote_link: values.quote_link || null,
+        note: values.note || null
       };
       
-      console.log('💾 Final update data:', updateData);
+      console.log('💾 Final update data:', {
+        ...updateData,
+        valuesRate: values.currency_rate,
+        calculatedRate: calculatedCurrencyRate,
+        willSaveRate: updateData.currency_rate
+      });
       const result = await boqApi.update(editingWorkId, updateData);
       if (result.error) {
         throw new Error(result.error);
@@ -1788,7 +2170,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     } finally {
       setLoading(false);
     }
-  }, [editingWorkId, workEditForm, onUpdate, position.boq_items, position.id]);
+  }, [editingWorkId, workEditForm, onUpdate, position.boq_items, position.id, tender]);
 
   // Cancel work inline edit
   const handleCancelWorkEdit = useCallback(() => {
@@ -2053,19 +2435,65 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       )
     },
     {
+      title: 'Валюта',
+      dataIndex: 'currency_type',
+      key: 'currency_type',
+      width: 60,
+      align: 'center',
+      render: (value) => {
+        const currencySymbols = {
+          'RUB': '₽',
+          'USD': '$',
+          'EUR': '€',
+          'CNY': '¥'
+        };
+        return (
+          <div className="text-center py-1 text-sm font-medium">
+            {currencySymbols[value || 'RUB']}
+          </div>
+        );
+      }
+    },
+    {
       title: 'Цена',
       dataIndex: 'unit_rate',
       key: 'unit_rate',
       width: 85,
       align: 'right',
-      render: (value) => (
-        <div className="text-right py-1 text-sm">
-          {value?.toLocaleString('ru-RU', {
+      render: (value, record) => {
+        const currencySymbols = {
+          'RUB': '₽',
+          'USD': '$',
+          'EUR': '€',
+          'CNY': '¥'
+        };
+
+        const priceDisplay = (
+          <div className="text-right py-1 text-sm">
+            {value?.toLocaleString('ru-RU', {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 2
+            })} ₽
+          </div>
+        );
+
+        // Показываем подсказку только для элементов с валютной ценой
+        if (record.currency_type && record.currency_type !== 'RUB' && record.currency_price) {
+          const currencySymbol = currencySymbols[record.currency_type] || record.currency_type;
+          const tooltipContent = `${record.currency_price.toLocaleString('ru-RU', {
             minimumFractionDigits: 0,
             maximumFractionDigits: 2
-          })} ₽
-        </div>
-      )
+          })} ${currencySymbol}`;
+
+          return (
+            <Tooltip title={tooltipContent}>
+              {priceDisplay}
+            </Tooltip>
+          );
+        }
+
+        return priceDisplay;
+      }
     },
     {
       title: 'Доставка',
@@ -2307,6 +2735,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     const quantity = Form.useWatch('quantity', workEditForm) || 0;
     const unitRate = Form.useWatch('unit_rate', workEditForm) || 0;
     const itemType = Form.useWatch('item_type', workEditForm) || item.item_type;
+    const currencyType = Form.useWatch('currency_type', workEditForm) || 'RUB';
+    const currencyPrice = Form.useWatch('currency_price', workEditForm) || 0;
+    const currencyRate = Form.useWatch('currency_rate', workEditForm) || 1;
     
     // Calculate commercial cost
     const commercialCost = useMemo(() => {
@@ -2421,21 +2852,134 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               <Input placeholder="шт" size="small" />
             </Form.Item>
 
+            {/* Currency fields */}
+            <>
+              <Form.Item
+                name="currency_type"
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Валюта</span>}
+                className="mb-0"
+                style={{ width: '80px' }}
+              >
+                <Select size="small">
+                  <Select.Option value="RUB">₽</Select.Option>
+                  <Select.Option value="USD">$</Select.Option>
+                  <Select.Option value="EUR">€</Select.Option>
+                  <Select.Option value="CNY">¥</Select.Option>
+                </Select>
+              </Form.Item>
+
+                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.currency_type !== curr.currency_type}>
+                  {({ getFieldValue }) => {
+                    const selectedCurrency = getFieldValue('currency_type') || 'RUB';
+                    if (selectedCurrency === 'RUB') return null;
+                    
+                    const currencySymbol = getCurrencySymbol(selectedCurrency);
+                    return (
+                      <Form.Item
+                        name="currency_price"
+                        label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Цена {currencySymbol}</span>}
+                        className="mb-0"
+                        style={{ width: '100px' }}
+                      >
+                        <DecimalInput 
+                          placeholder="0.00" 
+                          min={0}
+                          precision={2}
+                          size="small"
+                          suffix={currencySymbol}
+                          onChange={(value) => {
+                            console.log('💱 [WorkEditRow] Currency price change:', {
+                              value,
+                              currency: selectedCurrency,
+                              tender,
+                              rates: tender ? {
+                                usd: tender.usd_rate,
+                                eur: tender.eur_rate,
+                                cny: tender.cny_rate
+                              } : null
+                            });
+                            
+                            // Get rate from tender data
+                            let rate = 1;
+                            if (tender && selectedCurrency !== 'RUB') {
+                              const fetchedRate = getCurrencyRate(selectedCurrency, tender);
+                              console.log('🔍 [WorkEditRow] getCurrencyRate returned:', {
+                                currency: selectedCurrency,
+                                fetchedRate,
+                                fetchedRate_type: typeof fetchedRate,
+                                tender_usd: tender?.usd_rate,
+                                tender_eur: tender?.eur_rate,
+                                tender_cny: tender?.cny_rate
+                              });
+                              
+                              if (!fetchedRate || fetchedRate === 0) {
+                                console.error('❌ [WorkEditRow] No valid rate found for', selectedCurrency);
+                                message.error(`Курс ${selectedCurrency} не установлен в тендере`);
+                                return;
+                              }
+                              
+                              rate = fetchedRate;
+                              console.log('📊 [WorkEditRow] Using rate:', rate);
+                            }
+                            
+                            const rubPrice = (value || 0) * rate;
+                            console.log('✅ [WorkEditRow] Calculated RUB price:', rubPrice);
+                            
+                            // Update both unit_rate and currency_rate fields
+                            setTimeout(() => {
+                              workEditForm.setFieldsValue({ 
+                                unit_rate: rubPrice,
+                                currency_rate: rate
+                              });
+                            }, 0);
+                          }}
+                        />
+                      </Form.Item>
+                    );
+                  }}
+                </Form.Item>
+                
+                {/* Hidden field to store currency rate */}
+                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.currency_type !== curr.currency_type}>
+                  {({ getFieldValue }) => {
+                    const selectedCurrency = getFieldValue('currency_type') || 'RUB';
+                    return (
+                      <Form.Item
+                        name="currency_rate" 
+                        hidden
+                        initialValue={tender ? getCurrencyRate(selectedCurrency, tender) : 1}
+                      >
+                        <Input />
+                      </Form.Item>
+                    );
+                  }}
+                </Form.Item>
+
+            </>
+
             {/* Price */}
-            <Form.Item
-              name="unit_rate"
-              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Цена за ед.</span>}
-              className="mb-0"
-              style={{ width: '120px' }}
-              rules={[{ required: true, message: 'Цена' }]}
-            >
-              <DecimalInput 
-                placeholder="0.00" 
-                min={0}
-                precision={2}
-                size="small"
-                suffix="₽"
-              />
+            <Form.Item noStyle shouldUpdate={(prev, curr) => prev.currency_type !== curr.currency_type}>
+              {({ getFieldValue }) => {
+                const selectedCurrency = getFieldValue('currency_type') || 'RUB';
+                return (
+                  <Form.Item
+                    name="unit_rate"
+                    label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Цена за ед.</span>}
+                    className="mb-0"
+                    style={{ width: '120px' }}
+                    rules={[{ required: true, message: 'Цена' }]}
+                  >
+                    <DecimalInput 
+                      placeholder="0.00" 
+                      min={0}
+                      precision={2}
+                      size="small"
+                      suffix="₽"
+                      disabled={selectedCurrency !== 'RUB'}
+                    />
+                  </Form.Item>
+                );
+              }}
             </Form.Item>
 
             {/* Total - стандартная ширина */}
@@ -2460,7 +3004,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             </Form.Item>
           </div>
 
-          {/* Second row with category and action buttons */}
+          {/* Second row with category */}
           <div className="flex items-end gap-2">
             <Form.Item
               name="detail_cost_category_id"
@@ -2474,7 +3018,41 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 style={{ width: '100%' }}
               />
             </Form.Item>
+          </div>
 
+          {/* Third row: Quote Link */}
+          <div className="flex items-end gap-2">
+            <Form.Item
+              name="quote_link"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Ссылка на КП</span>}
+              className="mb-0 flex-1"
+            >
+              <Input 
+                placeholder="Ссылка на коммерческое предложение"
+                size="small"
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+          </div>
+
+          {/* Fourth row: Note */}
+          <div className="flex items-end gap-2">
+            <Form.Item
+              name="note"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Примечание</span>}
+              className="mb-0 flex-1"
+            >
+              <Input.TextArea 
+                placeholder="Примечание к элементу"
+                size="small"
+                rows={2}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+          </div>
+
+          {/* Fifth row: Action Buttons */}
+          <div className="flex items-end gap-2">
             {/* Action Buttons */}
             <div className="flex gap-2" style={{ paddingBottom: '2px' }}>
               <Button 
@@ -2515,6 +3093,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     const deliveryAmount = Form.useWatch('delivery_amount', editForm) || 0;
     const consumptionCoef = Form.useWatch('consumption_coefficient', editForm) || 1;
     const conversionCoef = Form.useWatch('conversion_coefficient', editForm) || 1;
+    const currencyType = Form.useWatch('currency_type', editForm) || 'RUB';
+    const currencyPrice = Form.useWatch('currency_price', editForm) || 0;
+    const currencyRate = Form.useWatch('currency_rate', editForm) || 1;
     
     // Calculate actual quantity based on work link
     const actualQuantity = useMemo(() => {
@@ -2746,22 +3327,92 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               <Input placeholder="шт" size="small" style={{ textAlign: 'center' }} />
             </Form.Item>
 
+            {/* Currency Type */}
+            <>
+              <Form.Item
+                name="currency_type"
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Валюта</span>}
+                className="mb-0"
+                style={{ width: '80px' }}
+              >
+                <Select size="small" style={{ textAlign: 'center' }}>
+                  <Select.Option value="RUB">₽</Select.Option>
+                  <Select.Option value="USD">$</Select.Option>
+                  <Select.Option value="EUR">€</Select.Option>
+                  <Select.Option value="CNY">¥</Select.Option>
+                </Select>
+              </Form.Item>
+
+                {/* Currency Price */}
+                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.currency_type !== curr.currency_type}>
+                  {({ getFieldValue }) => {
+                    const selectedCurrency = getFieldValue('currency_type') || 'RUB';
+                    if (selectedCurrency === 'RUB') return null;
+                    
+                    const currencySymbol = getCurrencySymbol(selectedCurrency);
+                    return (
+                      <Form.Item
+                        name="currency_price"
+                        label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Цена {currencySymbol}</span>}
+                        className="mb-0"
+                        style={{ width: '90px' }}
+                      >
+                        <DecimalInput 
+                          placeholder="0.00" 
+                          min={0}
+                          precision={2}
+                          size="small"
+                          suffix={currencySymbol}
+                          style={{ textAlign: 'center' }}
+                          onChange={(value) => {
+                            // Auto-calculate RUB price based on currency rate from tender
+                            const rate = selectedCurrency === 'USD' ? tender?.usd_rate : 
+                                       selectedCurrency === 'EUR' ? tender?.eur_rate : 
+                                       selectedCurrency === 'CNY' ? tender?.cny_rate : 1;
+                            console.log('💱 Material edit - currency price change:', {
+                              currency: selectedCurrency,
+                              price: value,
+                              rate: rate,
+                              tender_rates: tender
+                            });
+                            const rubPrice = (value || 0) * (rate || 1);
+                            editForm.setFieldsValue({ 
+                              unit_rate: rubPrice,
+                              currency_rate: rate || 1
+                            });
+                          }}
+                        />
+                      </Form.Item>
+                    );
+                  }}
+                </Form.Item>
+
+            </>
+
             {/* Price */}
-            <Form.Item
-              name="unit_rate"
-              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Цена</span>}
-              className="mb-0"
-              style={{ width: '90px' }}
-              rules={[{ required: true, message: 'Цена' }]}
-            >
-              <DecimalInput 
-                placeholder="0.00" 
-                min={0}
-                precision={2}
-                size="small"
-                suffix="₽"
-                style={{ textAlign: 'center' }}
-              />
+            <Form.Item noStyle shouldUpdate={(prev, curr) => prev.currency_type !== curr.currency_type}>
+              {({ getFieldValue }) => {
+                const selectedCurrency = getFieldValue('currency_type') || 'RUB';
+                return (
+                  <Form.Item
+                    name="unit_rate"
+                    label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Цена</span>}
+                    className="mb-0"
+                    style={{ width: '90px' }}
+                    rules={[{ required: true, message: 'Цена' }]}
+                  >
+                    <DecimalInput 
+                      placeholder="0.00" 
+                      min={0}
+                      precision={2}
+                      size="small"
+                      suffix="₽"
+                      style={{ textAlign: 'center' }}
+                      disabled={selectedCurrency !== 'RUB'}
+                    />
+                  </Form.Item>
+                );
+              }}
             </Form.Item>
 
             {/* Delivery */}
@@ -2843,7 +3494,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             </Form.Item>
           </div>
 
-          {/* Second row: Category field and action buttons */}
+          {/* Second row: Category field */}
           <div className="flex items-end gap-2">
             <Form.Item
               name="detail_cost_category_id"
@@ -2857,7 +3508,41 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 style={{ width: '100%' }}
               />
             </Form.Item>
+          </div>
 
+          {/* Third row: Quote Link */}
+          <div className="flex items-end gap-2">
+            <Form.Item
+              name="quote_link"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Ссылка на КП</span>}
+              className="mb-0 flex-1"
+            >
+              <Input 
+                placeholder="Ссылка на коммерческое предложение"
+                size="small"
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+          </div>
+
+          {/* Fourth row: Note */}
+          <div className="flex items-end gap-2">
+            <Form.Item
+              name="note"
+              label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Примечание</span>}
+              className="mb-0 flex-1"
+            >
+              <Input.TextArea 
+                placeholder="Примечание к элементу"
+                size="small"
+                rows={2}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+          </div>
+
+          {/* Fifth row: Action Buttons */}
+          <div className="flex items-end gap-2">
             {/* Action Buttons */}
             <div className="flex gap-2" style={{ paddingBottom: '2px' }}>
               <Button 
@@ -3133,16 +3818,71 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 name="unit"
                 label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Ед. изм.</span>}
                 className="mb-0"
-                style={{ width: '80px' }}
+                style={{ width: '60px' }}
                 rules={[{ required: true, message: 'Ед.' }]}
               >
                 <Input placeholder="шт" size="small" style={{ textAlign: 'center' }} />
               </Form.Item>
 
-              {/* Price */}
+              {/* Currency selector - always show for testing */}
+              <Form.Item
+                name="currency_type"
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Валюта</span>}
+                className="mb-0"
+                style={{ width: '70px' }}
+                initialValue="RUB"
+              >
+                <Select 
+                  size="small" 
+                  style={{ textAlign: 'center' }}
+                  onChange={handleCurrencyChange}
+                >
+                  <Select.Option value="RUB">₽</Select.Option>
+                  <Select.Option value="USD">$</Select.Option>
+                  <Select.Option value="EUR">€</Select.Option>
+                  <Select.Option value="CNY">¥</Select.Option>
+                </Select>
+              </Form.Item>
+
+              {/* Currency price (shown only for non-RUB) */}
+              {selectedCurrency !== 'RUB' && (
+                <>
+                  <Form.Item
+                    name="currency_price"
+                    label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Цена вал.</span>}
+                    className="mb-0"
+                    style={{ width: '80px' }}
+                    rules={[
+                      { required: selectedCurrency !== 'RUB', message: 'Цена' },
+                      { type: 'number', min: 0, message: 'Цена > 0' }
+                    ]}
+                  >
+                    <DecimalInput 
+                      placeholder="0.00" 
+                      min={0}
+                      precision={2}
+                      size="small"
+                      suffix={CURRENCY_OPTIONS.find(c => c.value === selectedCurrency)?.symbol}
+                      style={{ textAlign: 'center' }}
+                      onChange={handleCurrencyPriceChange}
+                    />
+                  </Form.Item>
+                  
+                  {/* Hidden field to store currency rate */}
+                  <Form.Item
+                    name="currency_rate" 
+                    hidden
+                    initialValue={tender ? getCurrencyRate(selectedCurrency, tender) : 1}
+                  >
+                    <Input />
+                  </Form.Item>
+                </>
+              )}
+
+              {/* Price in rubles */}
               <Form.Item
                 name="unit_rate"
-                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Цена</span>}
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Цена ₽</span>}
                 className="mb-0"
                 style={{ width: '90px' }}
                 rules={[{ required: true, message: 'Цена' }]}
@@ -3154,6 +3894,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   size="small"
                   suffix="₽"
                   style={{ textAlign: 'center' }}
+                  disabled={selectedCurrency !== 'RUB'}
                 />
               </Form.Item>
 
@@ -3214,7 +3955,41 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   style={{ width: '100%' }}
                 />
               </Form.Item>
-              
+            </div>
+
+            {/* Third row: Quote Link */}
+            <div className="flex items-end gap-2">
+              <Form.Item
+                name="quote_link"
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Ссылка на КП</span>}
+                className="mb-0 flex-1"
+              >
+                <Input 
+                  placeholder="Ссылка на коммерческое предложение"
+                  size="small"
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            </div>
+
+            {/* Fourth row: Note */}
+            <div className="flex items-end gap-2">
+              <Form.Item
+                name="note"
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Примечание</span>}
+                className="mb-0 flex-1"
+              >
+                <Input.TextArea 
+                  placeholder="Примечание к элементу"
+                  size="small"
+                  rows={2}
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            </div>
+
+            {/* Fifth row: Action Buttons */}
+            <div className="flex items-end gap-2">
               {/* Action Buttons */}
               <div className="flex gap-2" style={{ paddingBottom: '2px' }}>
                 <Button 
@@ -3224,6 +3999,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                     setQuickAddMode(false);
                     quickAddForm.resetFields();
                     setQuickAddFormType('work');
+                    setSelectedCurrency('RUB');
                   }}
                   size="large"
                   danger

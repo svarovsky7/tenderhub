@@ -12,7 +12,8 @@ import {
   Card
 } from 'antd';
 import { PlusOutlined, ReloadOutlined, FolderOpenOutlined, BuildOutlined, ToolOutlined } from '@ant-design/icons';
-import { clientPositionsApi, boqApi } from '../../lib/supabase/api';
+import { clientPositionsApi, boqApi, tendersApi } from '../../lib/supabase/api';
+import { supabase } from '../../lib/supabase/client';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import ClientPositionCardStreamlined from './ClientPositionCardStreamlined';
 import type { ClientPositionInsert, ClientPositionType } from '../../lib/supabase/types';
@@ -61,6 +62,118 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
   const [expandedPositions, setExpandedPositions] = useState<Set<string>>(new Set());
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [form] = Form.useForm();
+  const [tender, setTender] = useState<{
+    usd_rate?: number | null;
+    eur_rate?: number | null;
+    cny_rate?: number | null;
+  } | null>(null);
+  const [tenderLoading, setTenderLoading] = useState(true);
+  
+  // Load tender data for currency rates
+  useEffect(() => {
+    const loadTenderData = async () => {
+      if (!tenderId) {
+        setTenderLoading(false);
+        return;
+      }
+      
+      setTenderLoading(true);
+      try {
+        console.log('🚀 Loading tender data for currency rates:', tenderId);
+        
+        // Direct Supabase query for debugging
+        const { data: directData, error: directError } = await supabase
+          .from('tenders')
+          .select('id, title, usd_rate, eur_rate, cny_rate')
+          .eq('id', tenderId)
+          .single();
+          
+        console.log('🔴 DIRECT SUPABASE QUERY RESULT:', {
+          directData,
+          directError,
+          json: JSON.stringify(directData)
+        });
+        
+        // Use direct data if available, as it has the correct currency rates
+        if (directData && !directError) {
+          // Handle both array and object responses from Supabase
+          const actualData = Array.isArray(directData) ? directData[0] : directData;
+          
+          console.log('✅ Using DIRECT Supabase data with rates:', {
+            tender_name: actualData.title,
+            usd_rate: actualData.usd_rate,
+            eur_rate: actualData.eur_rate,
+            cny_rate: actualData.cny_rate
+          });
+          
+          // Create tender object with proper rates from direct query
+          const tenderData = {
+            usd_rate: actualData.usd_rate,
+            eur_rate: actualData.eur_rate,
+            cny_rate: actualData.cny_rate
+          };
+          
+          console.log('📦 Setting tender state from DIRECT data:', tenderData);
+          console.log('📦 Tender state JSON:', JSON.stringify(tenderData));
+          setTender(tenderData);
+        } else {
+          // Fallback to API if direct query fails
+          const { data, error } = await tendersApi.getById(tenderId);
+          
+          if (error) {
+            console.error('❌ Error loading tender:', error);
+            setTenderLoading(false);
+            return;
+          }
+          
+          if (data) {
+            console.log('🔥 RAW API DATA:', data);
+            console.log('🔥 RAW API DATA JSON:', JSON.stringify(data));
+            console.log('🔥 API DATA KEYS:', Object.keys(data));
+            
+            // Log each property individually
+            console.log('📍 data.usd_rate =', data.usd_rate);
+            console.log('📍 data["usd_rate"] =', data["usd_rate"]);
+            console.log('📍 data.eur_rate =', data.eur_rate);
+            console.log('📍 data["eur_rate"] =', data["eur_rate"]);
+            console.log('📍 data.cny_rate =', data.cny_rate);
+            console.log('📍 data["cny_rate"] =', data["cny_rate"]);
+            
+            console.log('✅ Tender loaded with rates:', {
+              tender_name: data.title,
+              usd_rate: data.usd_rate,
+              usd_rate_type: typeof data.usd_rate,
+              eur_rate: data.eur_rate,
+              eur_rate_type: typeof data.eur_rate,
+              cny_rate: data.cny_rate,
+              cny_rate_type: typeof data.cny_rate,
+              full_data_keys: Object.keys(data),
+              raw_data: JSON.stringify(data)
+            });
+            
+            // Create tender object with proper rates
+            const tenderData = {
+              usd_rate: data.usd_rate || null,
+              eur_rate: data.eur_rate || null,
+              cny_rate: data.cny_rate || null
+            };
+            
+            console.log('📦 Setting tender state:', tenderData);
+            console.log('📦 Tender state JSON:', JSON.stringify(tenderData));
+            setTender(tenderData);
+          } else {
+            console.warn('⚠️ No tender data returned for ID:', tenderId);
+          }
+        }
+      } catch (error) {
+        console.error('💥 Critical error loading tender:', error);
+      } finally {
+        setTenderLoading(false);
+      }
+    };
+    
+    loadTenderData();
+  }, [tenderId]);
   
   // Track component lifecycle
   useEffect(() => {
@@ -69,6 +182,17 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
       console.log('🔴 TenderBOQManagerSimplified UNMOUNTING for tender:', tenderId);
     };
   }, []);
+
+  // Monitor tender state changes
+  useEffect(() => {
+    console.log('📊 [TenderBOQManagerSimplified] Tender state changed:', {
+      tender,
+      is_null: tender === null,
+      usd_rate: tender?.usd_rate,
+      eur_rate: tender?.eur_rate,
+      cny_rate: tender?.cny_rate
+    });
+  }, [tender]);
 
   // Calculate and update stats
   const updateStats = useCallback((positionsList: ClientPositionWithStats[]) => {
@@ -85,6 +209,16 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
       stats.materials += items.filter(item => item.item_type === 'material' || item.item_type === 'sub_material').length;
       // Use the calculated total_position_cost which includes delivery
       stats.total += position.total_position_cost || 0;
+      
+      // Include additional works (ДОП) costs
+      if (position.additional_works && position.additional_works.length > 0) {
+        position.additional_works.forEach(additionalWork => {
+          stats.total += additionalWork.total_position_cost || 0;
+          const additionalItems = additionalWork.boq_items || [];
+          stats.works += additionalItems.filter(item => item.item_type === 'work' || item.item_type === 'sub_work').length;
+          stats.materials += additionalItems.filter(item => item.item_type === 'material' || item.item_type === 'sub_material').length;
+        });
+      }
     });
 
     console.log('📊 Stats calculated:', stats);
@@ -744,6 +878,19 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
     }
   }, [tenderId, positions, form, loadPositions]);
 
+  // Show loading state while tender is loading
+  if (tenderLoading) {
+    return (
+      <div className="w-full">
+        <Card className="shadow-sm mb-3 w-full" bodyStyle={{ padding: '10px 16px' }}>
+          <div className="flex justify-center items-center py-8">
+            <Spin tip="Загрузка курсов валют..." size="large" />
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full">
       {/* Header */}
@@ -854,6 +1001,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
                 onToggle={() => togglePosition(position.id)}
                 onUpdate={loadPositions}
                 tenderId={tenderId}
+                tender={tender}
               />
               
               {/* Additional works for this position */}
@@ -906,6 +1054,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
                     onToggle={() => togglePosition(additionalWork.id)}
                     onUpdate={loadPositions}
                     tenderId={tenderId}
+                    tender={tender}
                   />
                 </div>
                 );
@@ -943,6 +1092,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
                   onToggle={() => togglePosition(orphanedWork.id)}
                   onUpdate={loadPositions}
                   tenderId={tenderId}
+                  tender={tender}
                 />
               ))}
             </>
