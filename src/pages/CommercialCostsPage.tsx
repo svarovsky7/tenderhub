@@ -220,7 +220,7 @@ const CommercialCostsPage: React.FC = () => {
       
       // Получаем проценты накруток для тендера
       const { getActiveTenderMarkup } = await import('../lib/supabase/api/tender-markup');
-      let markupsResult = await getActiveTenderMarkup(selectedTenderId);
+      const markupsResult = await getActiveTenderMarkup(selectedTenderId);
       
       let markups;
       if (markupsResult.error || !markupsResult.data) {

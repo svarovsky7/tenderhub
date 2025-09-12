@@ -430,6 +430,18 @@ const BOQPageSimplified: React.FC = () => {
                               <strong>Площадь Заказчика:</strong> {selectedTender.area_client ? formatQuantity(selectedTender.area_client, 0) + ' м²' : '—'}
                             </span>
                           </div>
+                          {/* Курсы валют на отдельной строке */}
+                          <div className="flex flex-wrap items-center justify-end gap-3 mt-1">
+                            <span className="text-sm whitespace-nowrap text-green-300" style={{ cursor: 'default' }}>
+                              <strong>Курс USD:</strong> {selectedTender.usd_rate ? `${Number(selectedTender.usd_rate).toFixed(2)} ₽/$` : '—'}
+                            </span>
+                            <span className="text-sm whitespace-nowrap text-blue-300" style={{ cursor: 'default' }}>
+                              <strong>Курс EUR:</strong> {selectedTender.eur_rate ? `${Number(selectedTender.eur_rate).toFixed(2)} ₽/€` : '—'}
+                            </span>
+                            <span className="text-sm whitespace-nowrap text-orange-300" style={{ cursor: 'default' }}>
+                              <strong>Курс CNY:</strong> {selectedTender.cny_rate ? `${Number(selectedTender.cny_rate).toFixed(2)} ₽/¥` : '—'}
+                            </span>
+                          </div>
                         </div>
                       </Col>
                     )}

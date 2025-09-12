@@ -126,6 +126,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
   // Load positions with commercial data
   const loadPositions = useCallback(async () => {
     console.log('📡 Loading commercial positions for tender:', tenderId);
+    console.log('🔍 TENDER ID FOR DISPLAY:', tenderId);
     setLoading(true);
     try {
       // Загружаем информацию о тендере
@@ -154,7 +155,11 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
       const positionsWithCommercial = await Promise.all(
         (result.data || []).map(async (pos) => {
           // Load BOQ items for this position
-          const { data: boqItems } = await boqApi.getByClientPositionId(pos.id);
+          const { data: boqItems } = await boqApi.getByClientPositionId(
+            pos.id,
+            {}, // filters
+            { limit: 1000 } // получить все BOQ items для позиции
+          );
           
           const items = boqItems || [];
           
@@ -203,35 +208,34 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
               return sum + baseCost;
             }, 0);
 
-          // Рассчитываем коммерческую стоимость материалов используя сохраненные значения из БД
+          // Рассчитываем коммерческую стоимость материалов
+          // Для основных материалов - остается базовая стоимость
+          // Для вспомогательных - остается 0
           const commercialMaterialsCost = items
             .filter(item => item.item_type === 'material' || item.item_type === 'sub_material')
             .reduce((sum, item) => {
               const isAuxiliary = item.material_type === 'auxiliary';
-              const commercialTotalCost = item.commercial_cost || 0;
+              const quantity = item.quantity || 0;
+              const baseCost = (item.unit_rate || 0) * quantity + (item.delivery_amount || 0) * quantity;
               
               if (isAuxiliary) {
-                // Вспомогательный материал: в материалах остается 0 (вся коммерческая стоимость переходит в работы)
+                // Вспомогательный материал: в материалах остается 0
                 console.log('💰 Auxiliary material (stays in materials):', {
                   description: item.description,
                   type: item.item_type,
-                  commercialCost: commercialTotalCost,
+                  baseCost,
                   staysInMaterials: 0
                 });
-                return sum + 0; // В материалах остается 0
+                return sum + 0;
               } else {
-                // Основной материал: в материалах остается только базовая стоимость  
-                const quantity = item.quantity || 0;
-                const baseCost = (item.unit_rate || 0) * quantity + (item.delivery_amount || 0) * quantity;
-                
+                // Основной материал: в материалах остается только базовая стоимость
                 console.log('💰 Main material (stays in materials):', {
                   description: item.description,
                   type: item.item_type,
                   baseCost,
-                  commercialCost: commercialTotalCost,
                   staysInMaterials: baseCost
                 });
-                return sum + baseCost; // В материалах остается только базовая стоимость
+                return sum + baseCost;
               }
             }, 0);
 
@@ -294,49 +298,58 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
           items.filter(item => item.item_type === 'material' || item.item_type === 'sub_material')
             .forEach(item => {
               const isAuxiliary = item.material_type === 'auxiliary';
-              const commercialTotalCost = item.commercial_cost || 0;
               const quantity = item.quantity || 0;
               const baseCost = (item.unit_rate || 0) * quantity + (item.delivery_amount || 0) * quantity;
-              const markup = commercialTotalCost - baseCost;
+              const coefficient = item.commercial_markup_coefficient || 1;
+              const fullCommercialCost = baseCost * coefficient;
+              const markup = fullCommercialCost - baseCost;
               
               if (item.item_type === 'material') {
                 if (isAuxiliary) {
                   // Вспомогательный материал: вся коммерческая стоимость переходит в работы
-                  auxiliaryMaterialsCost += commercialTotalCost;
+                  auxiliaryMaterialsCost += fullCommercialCost;
                   console.log('💰 Auxiliary material (full cost to works):', {
                     description: item.description,
                     type: item.item_type,
-                    commercialCost: commercialTotalCost
+                    baseCost,
+                    coefficient,
+                    fullCommercialCost,
+                    toWorks: fullCommercialCost
                   });
                 } else {
                   // Основной материал: только наценка переходит в работы
-                  mainMaterialsMarkup += (markup > 0 ? markup : 0);
+                  mainMaterialsMarkup += markup;
                   console.log('💰 Main material (markup to works):', {
                     description: item.description,
                     type: item.item_type,
                     baseCost,
-                    commercialCost: commercialTotalCost,
-                    markup: markup
+                    coefficient,
+                    fullCommercialCost,
+                    markupToWorks: markup
                   });
                 }
               } else if (item.item_type === 'sub_material') {
                 if (isAuxiliary) {
                   // Вспомогательный СУБМАТ: вся коммерческая стоимость переходит в субработы
-                  subMaterialsMarkup += commercialTotalCost;
+                  subMaterialsMarkup += fullCommercialCost;
                   console.log('💰 Auxiliary sub-material (full cost to subcontract works):', {
                     description: item.description,
                     type: item.item_type,
-                    commercialCost: commercialTotalCost
+                    baseCost,
+                    coefficient,
+                    fullCommercialCost,
+                    toSubWorks: fullCommercialCost
                   });
                 } else {
                   // Основной СУБМАТ: только наценка переходит в субработы
-                  subMaterialsMarkup += (markup > 0 ? markup : 0);
+                  subMaterialsMarkup += markup;
                   console.log('💰 Main sub-material (markup to subcontract works):', {
                     description: item.description,
                     type: item.item_type,
                     baseCost,
-                    commercialCost: commercialTotalCost,
-                    markup: markup
+                    coefficient,
+                    fullCommercialCost,
+                    markupToSubWorks: markup
                   });
                 }
               }

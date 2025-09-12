@@ -20,6 +20,13 @@ npm run lint         # Run ESLint checks (flat config)
 npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 ```
 
+**Single Component Testing:**
+```bash
+# Run dev server and manually test component at relevant route
+npm run dev
+# Navigate to specific route (e.g., /boq, /tenders, /admin/*)
+```
+
 **Testing:** No test suite implemented. Verify through:
 - Type checking: `npm run build` (will fail on type errors)
 - ESLint: `npm run lint`
@@ -35,7 +42,7 @@ npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 ## MCP (Model Context Protocol) Integration
 
 **Supabase MCP Server** is configured for direct database access:
-- Config location: `C:\Users\odintsov.a.a\AppData\Roaming\Claude\mcp.json`
+- Config location: `C:\Users\nekrasov.l.m\AppData\Roaming\Claude\mcp.json`
 - Available after Claude Code restart
 - Check connection: `/mcp list`
 - Provides tools: `mcp__supabase__*` for CRUD operations
@@ -65,7 +72,7 @@ npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 ALL database operations MUST reference:
 supabase/schemas/prod.sql
 
-This is the SINGLE SOURCE OF TRUTH (7000+ lines) for:
+This is the SINGLE SOURCE OF TRUTH for:
 - Tables, columns, types
 - Functions and procedures
 - Views and triggers
@@ -75,38 +82,37 @@ NEVER trust TypeScript types over prod.sql
 ALWAYS verify schema before ANY database work
 ```
 
-## Architecture
+**Note**: The prod.sql file must be generated using `npm run db:schema` command
+
+## High-Level Architecture
 
 ### Core Database Tables
 - `boq_items` - Bill of Quantities items with hierarchy
 - `client_positions` - Customer position groupings
-- `tenders` - Main tender records
+- `tenders` - Main tender records (includes currency rates: usd_rate, eur_rate, cny_rate)
 - `materials_library` & `works_library` - Resource libraries
 - `work_material_links` - M2M relationships between works and materials
 - `cost_categories` & `detail_cost_categories` - Cost categorization system
 - `location` - Geographic locations for costs
 - `tender_markup` & `markup_templates` - Tender markup configuration
 
-### API Layer (`src/lib/supabase/api/`)
-Modular domain-specific modules (all < 600 lines):
-- `boq/` - BOQ operations split into: crud, hierarchy, bulk, analytics, queries
+### API Layer Architecture (`src/lib/supabase/api/`)
+**Modular Domain-Specific Pattern** (all modules < 600 lines):
+- Each domain has its own API module with consistent `{domain}Api` export
+- Complex domains split into sub-modules (e.g., BOQ: crud, hierarchy, bulk, analytics, queries)
+- Barrel exports (`index.ts`) for clean imports and backward compatibility
+- Legacy compatibility maintained (e.g., `boqItemsApi` alongside `boqApi`)
+
+Key modules (33 files total):
+- `boq/` - BOQ operations split into specialized modules (crud, hierarchy, bulk, analytics, queries)
 - `tenders.ts` - Tender lifecycle management
 - `materials.ts` & `works.ts` - Library management
 - `work-material-links.ts` - Work-Material relationships
 - `client-works.ts` & `client-positions.ts` - Excel import (target: 5000 rows in ≤30s)
-- Cost management modules:
-  - `construction-costs.ts` - Main cost operations
-  - `cost-categories.ts` & `cost-categories-v2.ts` - Category management
-  - `cost-structure.ts` & `cost-structure-fixed.ts` - Cost structures
-  - `tender-construction-costs.ts` - Tender-specific costs
-  - `import-costs.ts` - Cost data import
-- `tender-markup.ts` - Markup management
-- `users.ts` - User management
-- `work-materials-management.ts` - Combined work-material operations
-- `financial-indicators.ts` - Financial metrics management
-- Real-time subscriptions ready but disabled
+- Cost management modules (construction-costs, cost-categories, cost-structure, etc.)
+- `tender-markup.ts` & `markup-templates.ts` - Markup management
 
-### Type System (`src/lib/supabase/types/`)
+### Type System Architecture (`src/lib/supabase/types/`)
 - **Database Schema**: Split into modular files (tables.ts, views.ts, functions.ts, enums.ts)
 - **Domain Types**: API types, BOQ types, cost types, tender types, UI types
 - **Extended Types**: Additional helper types for better DX
@@ -116,71 +122,70 @@ Modular domain-specific modules (all < 600 lines):
 ```
 src/components/tender/     # Core BOQ components (46 components)
   TenderBOQManagerNew.tsx  # Main BOQ interface
-  TenderBOQManagerSimplified.tsx # Alternative simplified BOQ
   ClientPositionCardStreamlined.tsx # Position card with inline editing
   BOQItemList/            # Virtual scrolling with drag-drop
   LibrarySelector/        # Material/work selection with cart
-  MaterialLinkModal.tsx   # Material linking UI
-  CostCategoryDisplay.tsx # Dynamic cost category display
 
 src/components/common/     # Shared components (7 components)
   CostDetailCascadeSelector.tsx # Combined cascade/search selector with caching
-  AutoCompleteSearch.tsx # Debounced autocomplete component
-  DecimalInput.tsx       # Formatted decimal input
-  UploadProgressModal.tsx # File upload progress
-
+  
 src/components/admin/      # Admin interfaces
   ModernImportModal.tsx  # Excel import with progress
-  EditableTable.tsx     # In-place table editing
-
+  
 src/components/financial/  # Financial components
   FinancialIndicatorsTab.tsx # Financial indicators tab
-  MarkupEditor.tsx        # Markup editing component
-  MarkupTemplateSelector.tsx # Template selection
-
-src/pages/                # Route components (40+ pages)
-  TendersPage/            # Tender management with filters/stats
-  Dashboard.tsx           # Statistics dashboard
-  admin/                  # Admin interfaces for costs/categories
+  ModernFinancialIndicators.tsx # Modern financial dashboard
 ```
 
 ### Routing (all lazy-loaded)
-- `/` → `/dashboard`
-- `/tenders/*` - Tender management
-- `/tender/:tenderId/boq` - Standard BOQ interface
-- `/boq` - Simplified BOQ interface
-- `/libraries/materials` - Materials library
-- `/libraries/works` - Works library
-- `/admin/*` - Admin pages
-- `/financial-indicators` - Financial indicators management
+- `/` → `/dashboard` - Main dashboard with statistics
+- `/tenders/*` - Tender management and listing
+- `/tender/:tenderId/boq` - Standard BOQ interface for specific tender
+- `/tender/:tenderId/construction-costs` - Construction costs for tender
+- `/tender/:tenderId/commercial-costs` - Commercial costs calculation
+- `/tender/:tenderId/markup` - Tender markup configuration
+- `/boq` - Simplified BOQ interface (standalone)
+- `/boq-classic` - Classic BOQ interface
+- `/libraries/materials` - Materials library management
+- `/libraries/works` - Works library management
+- `/libraries/work-materials` - Work-Material linking interface
+- `/construction-costs` - Global construction costs management
+- `/financial-indicators` - Financial indicators dashboard
+- `/admin/users` - User management (placeholder)
+- `/admin/settings` - System settings
+- `/admin/construction-costs` - Admin construction costs
+- `/admin/cost-selector-test` - Cost selector testing
+- `/admin/markup-tables-setup` - Markup tables configuration
 
-## Critical Implementation Rules
+### Utility Functions (`src/utils/`)
+- `calculateCommercialCost.ts` - Complex commercial cost calculations
+- `currencyConverter.ts` - Currency conversion utilities
+- `excel-templates.ts` - Excel import/export templates
+- `materialCalculations.ts` - Material quantity calculations
+- `clientPositionHierarchy.ts` - Position hierarchy management
+- `formatters.ts` - Number and date formatters
+
+## Critical Implementation Patterns
 
 ### 1. Database Operations
 - **NEVER enable RLS** - Disabled by design
 - **ALWAYS check** `supabase/schemas/prod.sql` first
-- **VERIFY** table structure before any query
 - All tables use UUID primary keys
 - Timestamps are auto-managed
 - **BOQ Items**: Uses `detail_cost_category_id` (not `cost_node_id`)
 - **Base Quantity**: `base_quantity` field stores user input for unlinked materials
 - **Total Amount**: Calculated as `(unit_rate + delivery_amount) × quantity` via database trigger
-- **Database Triggers**: Auto-calculate delivery amounts (`calculate_boq_amounts_trigger`)
+- **Currency Fields**: BOQ items support multi-currency (original_currency, original_amount, currency_rate)
 
-### 2. File Size Limits
-- **Maximum 600 lines per file**
-- Extract hooks to separate files
-- Use barrel exports for organization
-
-### 3. Logging Requirements
+### 2. Logging Pattern (Required)
 ```typescript
 console.log('🚀 [FunctionName] starting:', params);
 console.log('✅ [FunctionName] success:', result);
 console.log('❌ [FunctionName] error:', error);
 ```
-Emojis: 🚀 Start, ✅ Success, ❌ Error, 💥 Critical Error, 📡 API, 📦 Response, 🔍 Validation, 🔄 State
+Emojis: 🚀 Start, ✅ Success, ❌ Error, 💥 Critical Error, 📡 API, 📦 Response, 🔍 Validation, 🔄 State, 📊 Statistics
 
-### 4. Error Handling
+### 3. Error Handling Pattern
 ```typescript
 try {
   console.log('🔍 Validating...');
@@ -195,22 +200,24 @@ try {
 }
 ```
 
-## Key Patterns & Conventions
+### 4. File Size Limits
+- **Maximum 600 lines per file**
+- Extract hooks to separate files
+- Use barrel exports for organization
 
-### State Management
+### 5. Optimistic Updates Pattern
+- Use React Query's optimistic updates with temporary IDs (`temp-${Date.now()}`)
+- Maintain local state maps (`optimisticItems`) merged with server data
+- Rollback on failure with proper error recovery
+
+## Key Domain-Specific Patterns
+
+### State Management Architecture
 - **Server State**: TanStack Query with 5-minute staleTime
 - **Cache Strategy**: Infinite cache for static data (categories, locations)
-- **Local State**: React hooks only
-- **Form State**: react-hook-form + yup
-- **No Redux/Zustand** - Keep it simple
-
-### UI/UX Standards
-- **Language**: Russian UI throughout
-- **Components**: Ant Design with Tailwind utilities
-- **Modals**: All create/edit operations
-- **Virtual Scrolling**: Required for large lists (>100 items)
-- **Debounced Search**: 300ms default
-- **Hover Effects**: Row highlighting with type-specific colors
+- **Optimistic Updates**: Consistent pattern across all mutations
+- **Selection State**: Set-based storage for multi-select operations
+- **No Redux/Zustand** - React Query handles all server state
 
 ### BOQ Quantity Calculations
 - **Unlinked Materials**: `quantity = base_quantity * consumption_coefficient`
@@ -221,55 +228,64 @@ try {
 ### Delivery Cost System
 - **Delivery Types**: 
   - `included` - Delivery included in unit_rate (delivery_amount = 0)
-  - `not_included` - Auto-calculated 3% of unit_rate (delivery_amount = unit_rate × 0.03)
-  - `amount` - Fixed delivery amount per unit (user-specified delivery_amount)
+  - `not_included` - Auto-calculated 3% of unit_rate
+  - `amount` - Fixed delivery amount per unit
 - **Database Calculation**: Handled by trigger `calculate_boq_amounts_trigger()` 
-- **UI Display**: Shows "(3%)" label for `not_included` type for clarity
-- **Rounding**: Visual rounding to whole numbers in UI, precise decimals in database
+- **Visual Rounding**: Whole numbers in UI, precise decimals in database
 
 ### Cost Categories Architecture
-- **Detail Categories**: Central connecting table between categories and locations
-- **Display Format**: "Category → Detail → Location"
-- **Dynamic Loading**: Cost category displays loaded on-demand, not stored in DB
-- **Selector Modes**: Combined cascade selection and search (min 2 chars)
-- **Grouping**: Details grouped by name to avoid duplicates with different locations
+- **Three-Tier Structure**: Category → Detail → Location hierarchy
+- **Dynamic Display Loading**: Loaded on-demand via `CostCategoryDisplay.tsx`
+- **Combined Selector**: Cascade and search modes (min 2 chars)
+- **Caching**: 30-minute staleTime for displays
 
-### Commercial Cost Calculation System (`utils/calculateCommercialCost.ts`)
-- **Own Forces Work Formula** (uses `tender_markup_percentages` table):
-  1. Служба механизации = Работа ПЗ × % механизации
-  2. МБП+ГСМ = Работа ПЗ × % МБП+ГСМ
-  3. Гарантийный период = Работа ПЗ × % гарантии
-  4. Работа 1,6 = (Работа ПЗ + СМ) × (1 + % works_16_markup/100)
-  5. Работы Рост = (Работа 1,6 + МБП+ГСМ) × (1 + % роста)
-  6. Непредвиденные = (Работа 1,6 + МБП+ГСМ) × (1 + % непредвиденных)
-  7. ООЗ = (Работы Рост + Непредвиденные - Работа 1,6 - МБП+ГСМ) × (1 + % ООЗ)
-  8. ОФЗ = ООЗ × (1 + % ОФЗ)
-  9. Прибыль = ОФЗ × (1 + % прибыли)
-  10. Итого = Прибыль + Гарантийный период
-- **Material Types**:
-  - **Main Materials** (linked): Base cost stays, markup transfers to works
-  - **Auxiliary Materials** (unlinked): Entire cost transfers to works
-- **Subcontract Works**: Sequential multiplication with growth, overhead, profit percentages
-- **Subcontract Materials**: Base cost stays, markup transfers to subcontract works
-- **Logging**: Detailed console logs with emojis for each calculation step
-- **Database Tables Used**: `tender_markup_percentages`, `boq_items`, `materials_library`, `works_library`
+### Commercial Cost Calculation (`utils/calculateCommercialCost.ts`)
+Complex formula-based calculations with step-by-step logging:
+1. Служба механизации = Работа ПЗ × % механизации
+2. МБП+ГСМ = Работа ПЗ × % МБП+ГСМ
+3. Гарантийный период = Работа ПЗ × % гарантии
+4. Работа 1,6 = (Работа ПЗ + СМ) × (1 + % works_16_markup/100)
+5. Работы Рост = (Работа 1,6 + МБП+ГСМ) × (1 + % роста)
+6. Непредвиденные = (Работа 1,6 + МБП+ГСМ) × (1 + % непредвиденных)
+7. ООЗ = (Работы Рост + Непредвиденные - Работа 1,6 - МБП+ГСМ) × (1 + % ООЗ)
+8. ОФЗ = ООЗ × (1 + % ОФЗ)
+9. Прибыль = ОФЗ × (1 + % прибыли)
+10. Итого = Прибыль + Гарантийный период
+
+### Currency System (New)
+- **Multi-Currency Support**: BOQ items can store original currency and amounts
+- **Exchange Rates**: Stored at tender level (usd_rate, eur_rate, cny_rate)
+- **Fields**: `original_currency`, `original_amount`, `currency_rate` in boq_items
+- **Converter Utility**: `utils/currencyConverter.ts` for conversions
+
+### Drag-and-Drop Architecture
+- **@dnd-kit Integration**: Modern drag-and-drop with virtual scrolling support
+- **Hierarchical Support**: Move items between client positions
+- **Conflict Resolution**: Modal-based for complex moves
+- **Bulk Operations**: Batch moves and reordering
+
+### Excel Integration
+- **Template-Based Import**: Predefined templates in `utils/excel-templates.ts`
+- **Batch Processing**: 5000+ rows with progress tracking
+- **Progress Modals**: Real-time feedback via `UploadProgressModal.tsx`
+- **Error Reporting**: Detailed per-row error messages
 
 ### Performance Optimizations
 - Code splitting with React.lazy() for all routes
-- Virtual scrolling with react-window for BOQ lists
+- Virtual scrolling with react-window for lists >100 items
+- Memoization with React.memo and custom comparisons
 - GIN indexes for full-text search
-- Dynamic imports for heavy operations
 - Batch API operations for Excel import
 - React Query caching for static data
-- Memoization with React.memo for expensive components
+- Debounced search (300ms default)
 
-### Code Organization
-- Components grouped by feature in `components/tender/` (46 BOQ-related components)
-- Custom hooks extracted to separate files (`hooks/useBOQManagement.ts`, `hooks/useMaterialDragDrop.tsx`)
-- Types centralized in modular `lib/supabase/types/` structure
-- Domain-specific API modules with barrel exports (`src/lib/supabase/api/index.ts`)
-- Utility functions in `utils/` (excel templates, formatters, calculations)
-- Page components organized by feature with hooks/components subfolders
+## UI/UX Standards
+- **Language**: Russian UI throughout
+- **Components**: Ant Design with Tailwind utilities
+- **Modals**: All create/edit operations
+- **Virtual Scrolling**: Required for large lists (>100 items)
+- **Inline Editing**: Consistent edit-in-place pattern
+- **Hover Effects**: Row highlighting with type-specific colors
 
 ## Environment Setup
 
@@ -278,27 +294,25 @@ Create `.env.local`:
 VITE_SUPABASE_URL=https://lkmgbizyyaaacetllbzr.supabase.co
 VITE_SUPABASE_ANON_KEY=your_anon_key_here
 VITE_APP_NAME=TenderHub  # Optional: Application name
-VITE_APP_VERSION=0.0.0   # Optional: Version display (matches package.json)
+VITE_APP_VERSION=0.0.0   # Optional: Version display
 ```
 
-## Vite Configuration
+## Configuration Files
+
+### Vite Configuration
 - Dev server: port 5173, host enabled
 - HMR: overlay disabled, 5s timeout
 - lucide-react excluded from optimization
 
-## TypeScript Configuration
-- **Project References**: Root tsconfig.json references tsconfig.app.json (src/) and tsconfig.node.json (config files)
-- **Strict Mode**: All strict checks enabled (including noUnusedLocals, noUnusedParameters)
-- **Target**: ES2022 with ESNext modules and bundler resolution
-- **Type Safety**: Modular database types in `src/lib/supabase/types/database/`
-- **Path Resolution**: Configured for absolute imports from src/
+### TypeScript Configuration
+- **Project References**: Root tsconfig.json references tsconfig.app.json and tsconfig.node.json
+- **Strict Mode**: All strict checks enabled
+- **Target**: ES2022 with ESNext modules
 - **Build Info**: `.tsbuildinfo` stored in `node_modules/.tmp/`
 
-## ESLint Configuration
-- **Flat Config**: Using ESLint 9 flat config format (`eslint.config.js`)
+### ESLint Configuration
+- **Flat Config**: ESLint 9 format (`eslint.config.js`)
 - **Plugins**: React hooks, React refresh, TypeScript ESLint
-- **Globals**: Browser environment
-- **Ignores**: `dist` directory
 - **File Extensions**: `.ts` and `.tsx` files only
 
 ## Current Status
@@ -310,14 +324,14 @@ VITE_APP_VERSION=0.0.0   # Optional: Version display (matches package.json)
 - Dashboard statistics
 - Work-Material linking
 - Virtual scrolling
-- Construction cost management with cascade/search selector
-- Delivery cost auto-calculation with 3% for "not included" type
+- Construction cost management
+- Delivery cost auto-calculation (3% for "not included")
 - Base quantity tracking for unlinked materials
-- Hover effects and visual feedback
-- React Query caching for performance
-- Visual amount rounding in UI (whole numbers)
-- Automatic total_amount calculation including delivery
 - Tender markup management with templates
+- Inline editing for BOQ items
+- ДОП (additional) positions with restricted editing when collapsed
+- Multi-currency support with exchange rates
+- Financial indicators dashboard
 
 ### ⚠️ Disabled
 - Authentication (no login)
@@ -331,35 +345,17 @@ VITE_APP_VERSION=0.0.0   # Optional: Version display (matches package.json)
 - Drag-drop slow with many items
 - Some Ant Design React 19 warnings (patches applied)
 
-### Recent Improvements (December 2024 - January 2025)
-- Fixed total_amount calculation to include delivery costs
-- Added "(3%)" labels for "not included" delivery type
-- Implemented visual rounding to whole numbers in UI
-- Database trigger for automatic delivery amount calculation
-- Added tender markup functionality with templates
-- Improved inline editing for BOQ items and works
-- Added version and area fields to tenders (area_sp, area_client)
-- Fixed infinite render loops in material synchronization
-- Optimized financial calculations and cost percentage handling
-- Implemented hierarchical client positions system
-- Enhanced BOQ header UI with inline total cost display
-
-## Important Notes
+## Important Implementation Notes
 
 - **Material Linking**: Uses `MaterialLinkModal.tsx`, not drag-drop
-- **TypeScript**: Strict mode with project references (tsconfig.app.json, tsconfig.node.json)
-- **ESLint**: Flat config with React hooks/refresh plugins
 - **Connection Monitoring**: Built-in Supabase status tracking via ConnectionStatus component
 - **Excel Import**: Batch operations via `client-works.ts` and `client-positions.ts`
 - **BOQ Pages**: Two interfaces - standard (`/tender/:id/boq`) and simplified (`/boq`)
-- **Fetch Interceptor**: Custom retry logic with exponential backoff for all Supabase calls
-- **Component Count**: 46 BOQ components, 7 shared components, 20+ API modules
-- **Utilities**: Key utilities in `src/utils/`:
-  - `calculateCommercialCost.ts` - Commercial cost calculation logic
-  - `clientPositionHierarchy.ts` - Client position hierarchy helpers
-  - `excel-templates.ts` - Excel import/export templates
-  - `formatters.ts` - Number and date formatting
-  - `materialCalculations.ts` - Material quantity calculations
+- **Fetch Interceptor**: Custom retry logic with exponential backoff
+- **Component Count**: 46 BOQ components, 7 shared components, 33 API modules
+- **Error Translation**: `handleSupabaseError` provides user-friendly error messages
+- **UUID Validation**: Special handling for UUID format errors
+- **BOQ Additional Fields**: Support for quote_link, note, and is_additional (ДОП positions)
 
 ## Development Workflow
 
@@ -383,29 +379,25 @@ TenderHUB/
 │   │   ├── tender/        # BOQ-specific (46 components)
 │   │   ├── common/        # Shared components
 │   │   ├── admin/         # Admin interfaces
-│   │   ├── financial/     # Financial indicators components
-│   │   └── layout/        # Layout components (AppLayout)
+│   │   └── financial/     # Financial components
 │   ├── lib/supabase/      # Database layer
 │   │   ├── api/          # API modules (<600 lines each)
-│   │   │   └── boq/      # BOQ split: crud, hierarchy, bulk, analytics, queries
+│   │   │   └── boq/      # BOQ sub-modules (crud, hierarchy, bulk, analytics, queries)
 │   │   └── types/        # TypeScript types (modular)
-│   │       └── database/ # Database schema types
 │   ├── pages/            # Route components (lazy-loaded)
-│   │   ├── admin/        # Admin pages
-│   │   └── TendersPage/  # Tender page with components
+│   │   ├── TendersPage/  # Tender list with components
+│   │   └── admin/        # Admin pages
 │   ├── hooks/            # Custom React hooks
-│   │   ├── useAuth.ts    # Auth hook (currently disabled)
-│   │   └── useBOQManagement.ts # BOQ state management
-│   └── utils/            # Utilities
+│   └── utils/            # Utilities (7 modules)
 ├── supabase/
 │   └── schemas/
-│       └── prod.sql      # 🚨 SOURCE OF TRUTH for DB schema (7000+ lines)
+│       └── prod.sql      # 🚨 SOURCE OF TRUTH for DB schema
 ├── .env.local            # Environment variables
+├── package.json          # Dependencies & scripts
 ├── vite.config.ts        # Vite configuration
-├── tailwind.config.js    # Tailwind CSS config
 ├── tsconfig.json         # TypeScript project references
-├── tsconfig.app.json     # TypeScript app config
-└── package.json          # Dependencies & scripts
+├── tsconfig.app.json     # App TypeScript config
+└── eslint.config.js      # ESLint flat config
 ```
 
 ## Git Workflow
@@ -415,16 +407,11 @@ TenderHUB/
   - 🎯 Feature implementation
   - ✨ New features
   - 💰 Financial/cost features
+  - 💱 Currency-related features
   - 🚀 Performance improvements
   - 🐛 Bug fixes
   - 🎨 UI/UX improvements
   - 💥 Breaking changes
-- **Recent focus areas** (from commit history):
-  - Commercial cost calculations
-  - BOQ interface improvements
-  - Inline editing capabilities
-  - Database synchronization fixes
-  - Financial calculations optimization
 
 ## Common Troubleshooting
 
@@ -433,5 +420,14 @@ TenderHUB/
 - **Type Errors**: Run `npm run build` to check all TypeScript errors
 - **Database Schema Mismatch**: Always sync with `supabase/schemas/prod.sql`
 - **MCP Not Working**: Restart Claude Code completely (see MCP_SETUP.md)
+- **Empty prod.sql**: Run `npm run db:schema` to generate schema file
+- **ESLint Import Error**: If ESLint fails with import errors, ensure all packages are installed with `npm install`
+- **Vite HMR Issues**: HMR timeout set to 5s, overlay disabled in vite.config.ts
+
+## Additional Resources
+
+- **MCP Setup**: See `MCP_SETUP.md` for MCP server configuration details
+- **Database Schema**: Always regenerate `supabase/schemas/prod.sql` after database changes
+- **Type Generation**: TypeScript types in `src/lib/supabase/types/` should match prod.sql
 
 Remember: This is a simplified dev environment. Production will require authentication, RLS, and security features.

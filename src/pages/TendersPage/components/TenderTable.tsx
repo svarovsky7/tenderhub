@@ -69,17 +69,22 @@ const TenderTable: React.FC<TenderTableProps> = ({
     form.setFieldsValue({
       ...tender,
       submission_deadline: tender.submission_deadline ? dayjs(tender.submission_deadline) : null,
-      version: tender.version || 1
+      version: tender.version || 1,
+      usd_rate: tender.usd_rate || null,
+      eur_rate: tender.eur_rate || null,
+      cny_rate: tender.cny_rate || null
     });
   };
 
   const handleInlineEdit = async (tenderId: string, field: string, value: any) => {
     console.log('🔄 Inline edit:', { tenderId, field, value });
+    console.log('📝 Field type:', typeof value, 'Field name:', field);
     try {
       const updates = {
         id: tenderId,
         [field]: value
       };
+      console.log('📤 Sending updates:', updates);
       await onEditTender(updates);
       message.success('Изменения сохранены');
     } catch (error) {
@@ -93,12 +98,22 @@ const TenderTable: React.FC<TenderTableProps> = ({
     try {
       const values = await form.validateFields();
       console.log('💾 Saving tender edits:', values);
+      console.log('💾 Form values detail:');
+      console.log('  USD:', values.usd_rate);
+      console.log('  EUR:', values.eur_rate);
+      console.log('  CNY:', values.cny_rate);
       
       const updates = {
         ...values,
         id: record.id,
-        submission_deadline: values.submission_deadline?.format('YYYY-MM-DD HH:mm:ss')
+        submission_deadline: values.submission_deadline?.format('YYYY-MM-DD HH:mm:ss'),
+        // Ensure currency fields are included
+        usd_rate: values.usd_rate || null,
+        eur_rate: values.eur_rate || null,
+        cny_rate: values.cny_rate || null
       };
+      
+      console.log('📤 Final updates object:', updates);
       
       await onEditTender(updates);
       setEditingKey(null);
@@ -411,6 +426,141 @@ const TenderTable: React.FC<TenderTableProps> = ({
         );
       },
       sorter: (a, b) => (a.area_client || 0) - (b.area_client || 0)
+    },
+    {
+      title: <div className="text-center">Курс USD</div>,
+      key: 'usd_rate',
+      width: 100,
+      align: 'center' as const,
+      render: (_, record) => {
+        const isEditing = editingKey === record.id;
+        
+        if (isEditing) {
+          return (
+            <div className="text-center px-1">
+              <Form.Item
+                name="usd_rate"
+                style={{ margin: 0 }}
+              >
+                <InputNumber
+                  style={{ width: '100%', maxWidth: '90px' }}
+                  placeholder="0"
+                  prefix="$"
+                  precision={4}
+                  min={0}
+                  size="small"
+                />
+              </Form.Item>
+            </div>
+          );
+        }
+        
+        return (
+          <div className="text-center">
+            <EditableCell
+              value={record.usd_rate}
+              type="number"
+              onChange={(value) => handleInlineEdit(record.id!, 'usd_rate', value)}
+              formatter={(val) => val ? `$ ${val.toFixed(4)}` : '—'}
+              precision={4}
+              min={0}
+              className="text-sm font-semibold text-green-600"
+              showEditIcon={false}
+            />
+          </div>
+        );
+      },
+      sorter: (a, b) => (a.usd_rate || 0) - (b.usd_rate || 0)
+    },
+    {
+      title: <div className="text-center">Курс EUR</div>,
+      key: 'eur_rate',
+      width: 100,
+      align: 'center' as const,
+      render: (_, record) => {
+        const isEditing = editingKey === record.id;
+        
+        if (isEditing) {
+          return (
+            <div className="text-center px-1">
+              <Form.Item
+                name="eur_rate"
+                style={{ margin: 0 }}
+              >
+                <InputNumber
+                  style={{ width: '100%', maxWidth: '90px' }}
+                  placeholder="0"
+                  prefix="€"
+                  precision={4}
+                  min={0}
+                  size="small"
+                />
+              </Form.Item>
+            </div>
+          );
+        }
+        
+        return (
+          <div className="text-center">
+            <EditableCell
+              value={record.eur_rate}
+              type="number"
+              onChange={(value) => handleInlineEdit(record.id!, 'eur_rate', value)}
+              formatter={(val) => val ? `€ ${val.toFixed(4)}` : '—'}
+              precision={4}
+              min={0}
+              className="text-sm font-semibold text-blue-600"
+              showEditIcon={false}
+            />
+          </div>
+        );
+      },
+      sorter: (a, b) => (a.eur_rate || 0) - (b.eur_rate || 0)
+    },
+    {
+      title: <div className="text-center">Курс CNY</div>,
+      key: 'cny_rate',
+      width: 100,
+      align: 'center' as const,
+      render: (_, record) => {
+        const isEditing = editingKey === record.id;
+        
+        if (isEditing) {
+          return (
+            <div className="text-center px-1">
+              <Form.Item
+                name="cny_rate"
+                style={{ margin: 0 }}
+              >
+                <InputNumber
+                  style={{ width: '100%', maxWidth: '90px' }}
+                  placeholder="0"
+                  prefix="¥"
+                  precision={4}
+                  min={0}
+                  size="small"
+                />
+              </Form.Item>
+            </div>
+          );
+        }
+        
+        return (
+          <div className="text-center">
+            <EditableCell
+              value={record.cny_rate}
+              type="number"
+              onChange={(value) => handleInlineEdit(record.id!, 'cny_rate', value)}
+              formatter={(val) => val ? `¥ ${val.toFixed(4)}` : '—'}
+              precision={4}
+              min={0}
+              className="text-sm font-semibold text-red-600"
+              showEditIcon={false}
+            />
+          </div>
+        );
+      },
+      sorter: (a, b) => (a.cny_rate || 0) - (b.cny_rate || 0)
     },
     {
       title: <div className="text-center">Прогресс</div>,

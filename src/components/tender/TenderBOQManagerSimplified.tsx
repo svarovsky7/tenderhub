@@ -68,6 +68,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
     cny_rate?: number | null;
   } | null>(null);
   const [tenderLoading, setTenderLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0); // Add refresh key for forcing component updates
   
   // Load tender data for currency rates
   useEffect(() => {
@@ -228,8 +229,10 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
   // Load positions
   const loadPositions = useCallback(async () => {
     console.log('📡 Loading positions for tender:', tenderId);
+    console.log('🔄 Force refresh triggered at:', new Date().toISOString());
     setLoading(true);
     try {
+      // Force fresh data fetch by bypassing any potential caching
       // Use new API method to get positions with additional works
       const result = await clientPositionsApi.getPositionsWithAdditional(tenderId);
       let positionsData = [];
@@ -255,6 +258,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
       }
       
       console.log('✅ Positions loaded:', positionsData.length);
+      console.log('📊 Positions refresh complete at:', new Date().toISOString());
       if (orphanedAdditionalData.length > 0) {
         console.log('📦 Orphaned additional works:', orphanedAdditionalData.length);
       }
@@ -384,17 +388,23 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
                     }
                   }
                   
-                  let itemTotal = quantity * unitRate;
+                  // Apply currency conversion if needed
+                  const currencyMultiplier = additionalWork.currency_type && additionalWork.currency_type !== 'RUB' && additionalWork.currency_rate 
+                    ? additionalWork.currency_rate 
+                    : 1;
+                  let itemTotal = quantity * unitRate * currencyMultiplier;
                   
                   // Add delivery cost for materials
                   if (item.item_type === 'material' || item.item_type === 'sub_material') {
                     const deliveryType = item.delivery_price_type;
                     const deliveryAmount = item.delivery_amount || 0;
                     
-                    if (deliveryType === 'amount' && deliveryAmount > 0) {
+                    if (deliveryType === 'amount') {
+                      // Fixed amount per unit (already in RUB)
                       itemTotal += deliveryAmount * quantity;
                     } else if (deliveryType === 'not_included') {
-                      itemTotal += deliveryAmount * quantity;
+                      // 3% of base cost
+                      itemTotal += itemTotal * 0.03;
                     }
                   }
                   
@@ -560,17 +570,23 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
               }
             }
             
-            let itemTotal = quantity * unitRate;
+            // Apply currency conversion if needed
+            const currencyMultiplier = item.currency_type && item.currency_type !== 'RUB' && item.currency_rate 
+              ? item.currency_rate 
+              : 1;
+            let itemTotal = quantity * unitRate * currencyMultiplier;
             
             // Add delivery cost for materials
             if (item.item_type === 'material' || item.item_type === 'sub_material') {
               const deliveryType = item.delivery_price_type;
               const deliveryAmount = item.delivery_amount || 0;
               
-              if (deliveryType === 'amount' && deliveryAmount > 0) {
+              if (deliveryType === 'amount') {
+                // Fixed amount per unit (already in RUB)
                 itemTotal += deliveryAmount * quantity;
               } else if (deliveryType === 'not_included') {
-                itemTotal += deliveryAmount * quantity; // Используем значение из БД
+                // 3% of base cost
+                itemTotal += itemTotal * 0.03;
               }
             }
             
@@ -716,17 +732,23 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
                 }
               }
               
-              let itemTotal = quantity * unitRate;
+              // Apply currency conversion if needed
+              const currencyMultiplier = item.currency_type && item.currency_type !== 'RUB' && item.currency_rate 
+                ? item.currency_rate 
+                : 1;
+              let itemTotal = quantity * unitRate * currencyMultiplier;
               
               // Add delivery cost for materials
               if (item.item_type === 'material' || item.item_type === 'sub_material') {
                 const deliveryType = item.delivery_price_type;
                 const deliveryAmount = item.delivery_amount || 0;
                 
-                if (deliveryType === 'amount' && deliveryAmount > 0) {
+                if (deliveryType === 'amount') {
+                  // Fixed amount per unit (already in RUB)
                   itemTotal += deliveryAmount * quantity;
                 } else if (deliveryType === 'not_included') {
-                  itemTotal += deliveryAmount * quantity;
+                  // 3% of base cost
+                  itemTotal += itemTotal * 0.03;
                 }
               }
               
@@ -816,13 +838,15 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
       }
       setPositions(validPositions);
       updateStats(validPositions);
+      // Force component refresh after data load
+      setRefreshKey(prev => prev + 1);
     } catch (error) {
       console.error('❌ Load positions error:', error);
       message.error('Ошибка загрузки позиций');
     } finally {
       setLoading(false);
     }
-  }, [tenderId]);
+  }, [tenderId, updateStats]);
 
   useEffect(() => {
     loadPositions();
@@ -993,7 +1017,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
             }
             
             return (
-            <React.Fragment key={position.id}>
+            <React.Fragment key={`${position.id}-${refreshKey}`}>
               {/* Main position */}
               <ClientPositionCardStreamlined
                 position={position}
@@ -1081,7 +1105,7 @@ const TenderBOQManagerSimplified: React.FC<TenderBOQManagerSimplifiedProps> = ({
               
               {sortPositionsByNumber(positions.filter(p => p.is_orphaned)).map(orphanedWork => (
                 <ClientPositionCardStreamlined
-                  key={orphanedWork.id}
+                  key={`${orphanedWork.id}-${refreshKey}`}
                   position={{
                     ...orphanedWork,
                     is_additional: true,

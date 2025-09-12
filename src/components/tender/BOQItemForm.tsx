@@ -12,10 +12,11 @@ import {
   Divider
 } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
-import { boqItemsApi, materialsApi, worksApi } from '../../lib/supabase/api';
+import { boqItemsApi, materialsApi, worksApi, tendersApi } from '../../lib/supabase/api';
 import type { BOQItem, Material, WorkItem } from '../../lib/supabase/types';
 import { DecimalInput } from '../common';
 import { InputNumber } from 'antd';
+import { CURRENCY_OPTIONS, convertToRuble, getCurrencyRate } from '../../utils/currencyConverter';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -45,6 +46,7 @@ interface FormData {
   sort_order?: number;
   delivery_price_type?: 'included' | 'not_included' | 'amount';
   delivery_amount?: number;
+  currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY';
 }
 
 const BOQItemForm: React.FC<BOQItemFormProps> = ({
@@ -62,14 +64,21 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
     works: WorkItem[];
   }>({ materials: [], works: [] });
   const [searchLoading, setSearchLoading] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] = useState<'RUB' | 'USD' | 'EUR' | 'CNY'>('RUB');
+  const [tenderRates, setTenderRates] = useState<{
+    usd_rate?: number | null;
+    eur_rate?: number | null;
+    cny_rate?: number | null;
+  }>({});
 
   const isEditing = !!editingItem;
   const itemType = Form.useWatch('item_type', form);
 
-  // Load library items on mount
+  // Load library items and tender info on mount
   useEffect(() => {
     loadLibraryItems();
-  }, []);
+    loadTenderRates();
+  }, [tenderId]);
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -93,9 +102,25 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
       });
     } else if (visible) {
       form.resetFields();
+      setSelectedCurrency('RUB');
       form.setFieldsValue({ item_type: 'material', sort_order: 0, delivery_price_type: 'included', delivery_amount: 0 });
     }
   }, [visible, editingItem, form]);
+
+  const loadTenderRates = async () => {
+    try {
+      const result = await tendersApi.getById(tenderId);
+      if (result.data) {
+        setTenderRates({
+          usd_rate: result.data.usd_rate,
+          eur_rate: result.data.eur_rate,
+          cny_rate: result.data.cny_rate
+        });
+      }
+    } catch (error) {
+      console.error('Error loading tender rates:', error);
+    }
+  };
 
   const loadLibraryItems = async () => {
     setSearchLoading(true);
@@ -116,6 +141,12 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
     }
   };
 
+  const handleCurrencyChange = (currency: 'RUB' | 'USD' | 'EUR' | 'CNY') => {
+    console.log('💱 Currency changed:', currency);
+    setSelectedCurrency(currency);
+    form.setFieldsValue({ currency_type: currency });
+  };
+
   const handleLibraryItemSelect = (_value: string, option: any) => {
     const selectedItem = option.item;
     
@@ -124,8 +155,10 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
       description: selectedItem.name,
       unit: selectedItem.unit,
       unit_rate: selectedItem.base_price,
-      category: selectedItem.category || ''
+      category: selectedItem.category || '',
+      currency_type: 'RUB' // Reset to RUB when selecting from library
     });
+    setSelectedCurrency('RUB');
   };
 
   const getLibraryOptions = () => {
@@ -150,7 +183,12 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
         consumption_coefficient: (values.item_type === 'material' || values.item_type === 'sub_material') ? values.consumption_coefficient : null,
         conversion_coefficient: (values.item_type === 'material' || values.item_type === 'sub_material') ? values.conversion_coefficient : null,
         delivery_price_type: (values.item_type === 'material' || values.item_type === 'sub_material') ? values.delivery_price_type : null,
-        delivery_amount: (values.item_type === 'material' || values.item_type === 'sub_material') ? values.delivery_amount : null
+        delivery_amount: (values.item_type === 'material' || values.item_type === 'sub_material') ? values.delivery_amount : null,
+        currency_type: values.currency_type || 'RUB',
+        // unit_rate already contains the price in the selected currency
+        currency_rate: values.currency_type && values.currency_type !== 'RUB' && tenderRates
+          ? getCurrencyRate(values.currency_type, tenderRates)
+          : null
       };
 
       if (isEditing && editingItem) {
@@ -170,6 +208,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
       }
       
       form.resetFields();
+      setSelectedCurrency('RUB');
     } catch (error) {
       message.error(`Ошибка: ${error}`);
       console.error('BOQ item form error:', error);
@@ -180,6 +219,7 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
 
   const handleCancel = () => {
     form.resetFields();
+    setSelectedCurrency('RUB');
     onCancel();
   };
 
@@ -297,26 +337,42 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
         </Form.Item>
 
         <Row gutter={16}>
-          <Col span={6}>
+          <Col span={4}>
             <Form.Item
               name="unit"
-              label="Единица измерения"
-              rules={[{ required: true, message: 'Введите единицу измерения' }]}
+              label="Ед. изм."
+              rules={[{ required: true, message: 'Введите единицу' }]}
             >
               <Select
                 showSearch
-                placeholder="Выберите или введите"
+                placeholder="Выберите"
+                size="small"
               >
-                <Option value="м">м (метр)</Option>
-                <Option value="м2">м² (кв. метр)</Option>
-                <Option value="м3">м³ (куб. метр)</Option>
-                <Option value="кг">кг (килограмм)</Option>
-                <Option value="т">т (тонна)</Option>
-                <Option value="шт">шт (штука)</Option>
-                <Option value="л">л (литр)</Option>
-                <Option value="компл">компл (комплект)</Option>
+                <Option value="м">м</Option>
+                <Option value="м2">м²</Option>
+                <Option value="м3">м³</Option>
+                <Option value="кг">кг</Option>
+                <Option value="т">т</Option>
+                <Option value="шт">шт</Option>
+                <Option value="л">л</Option>
+                <Option value="компл">компл</Option>
                 <Option value="услуга">услуга</Option>
               </Select>
+            </Form.Item>
+          </Col>
+
+          {/* Currency selector */}
+          <Col span={4}>
+            <Form.Item
+              name="currency_type"
+              label="Валюта"
+              initialValue="RUB"
+            >
+              <Select
+                size="small"
+                onChange={handleCurrencyChange}
+                options={CURRENCY_OPTIONS}
+              />
             </Form.Item>
           </Col>
           
@@ -338,12 +394,13 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
             </Form.Item>
           </Col>
           
-          <Col span={6}>
+          <Col span={5}>
             <Form.Item
               name="unit_rate"
-              label="Цена за единицу"
+              label={`Цена (${CURRENCY_OPTIONS.find(c => c.value === selectedCurrency)?.symbol})`}
+              tooltip={selectedCurrency !== 'RUB' && tenderRates ? `Курс: ${getCurrencyRate(selectedCurrency as 'USD' | 'EUR' | 'CNY', tenderRates) || 'Не задан'} ₽` : undefined}
               rules={[
-                { required: true, message: 'Введите цену за единицу' },
+                { required: true, message: 'Введите цену' },
                 { type: 'number', min: 0, message: 'Цена не может быть отрицательной' }
               ]}
             >
@@ -351,18 +408,34 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
                 min={0}
                 precision={2}
                 placeholder="0.00"
-                addonAfter="₽"
+                size="small"
+                addonAfter={CURRENCY_OPTIONS.find(c => c.value === selectedCurrency)?.symbol}
                 className="w-full"
               />
             </Form.Item>
           </Col>
           
-          <Col span={6}>
+          <Col span={5}>
             <Form.Item
               label="Общая стоимость"
             >
               <DecimalInput
-                value={(Form.useWatch('quantity', form) || 0) * (Form.useWatch('unit_rate', form) || 0)}
+                value={(() => {
+                  const quantity = Form.useWatch('quantity', form) || 0;
+                  const unitRate = Form.useWatch('unit_rate', form) || 0;
+                  const currencyType = Form.useWatch('currency_type', form) || 'RUB';
+                  
+                  // Convert to rubles for display
+                  let rubleRate = unitRate;
+                  if (currencyType !== 'RUB' && tenderRates) {
+                    const rate = getCurrencyRate(currencyType as 'USD' | 'EUR' | 'CNY', tenderRates);
+                    if (rate) {
+                      rubleRate = unitRate * rate;
+                    }
+                  }
+                  
+                  return quantity * rubleRate;
+                })()}
                 precision={2}
                 addonAfter="₽"
                 disabled
@@ -388,6 +461,15 @@ const BOQItemForm: React.FC<BOQItemFormProps> = ({
                   precision={4}
                   placeholder="1.0000"
                   className="w-full"
+                  onChange={(value) => {
+                    // Ensure value is at least 1
+                    if (value && value < 1) {
+                      message.warning('Значение коэффициента расхода не может быть менее 1');
+                      form.setFieldValue('consumption_coefficient', 1);
+                      return 1;
+                    }
+                    return value;
+                  }}
                 />
               </Form.Item>
             </Col>

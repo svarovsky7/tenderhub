@@ -105,7 +105,6 @@ interface QuickAddRowData {
   delivery_price_type?: 'included' | 'not_included' | 'amount';
   delivery_amount?: number;
   currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY';
-  currency_price?: number;
 }
 
 const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps> = ({
@@ -171,6 +170,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const [linkMaterialModalVisible, setLinkMaterialModalVisible] = useState(false);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [editingWorkId, setEditingWorkId] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [form] = Form.useForm();
   const [quickAddForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -183,6 +183,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const totalCost = position.total_position_cost || 0;
   
   const [localWorks, setLocalWorks] = useState<BOQItemWithLibrary[]>([]);
+  const [localBOQItems, setLocalBOQItems] = useState<any[]>(position.boq_items || []);
   const [tempManualVolume, setTempManualVolume] = useState<number | null>(position.manual_volume ?? null);
   const [tempManualNote, setTempManualNote] = useState<string>(position.manual_note ?? '');
   const [selectedCurrency, setSelectedCurrency] = useState<'RUB' | 'USD' | 'EUR' | 'CNY'>('RUB');
@@ -206,7 +207,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     setTempManualVolume(position.manual_volume ?? null);
     setTempManualNote(position.manual_note ?? '');
     setTempUnit(position.unit ?? '');
-  }, [position.work_name, position.manual_volume, position.manual_note, position.unit]);
+    setLocalBOQItems(position.boq_items || []);
+  }, [position.work_name, position.manual_volume, position.manual_note, position.unit, position.boq_items]);
   
   // Debug logging (commented to reduce console spam)
   // console.log('🔍 Position click check:', {
@@ -337,15 +339,23 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       const commercialCost = calculateCommercialCost(item);
       
       // Calculate base cost properly based on item type - same logic as in calculateCommercialCost
-      let baseCost = (item.quantity || 0) * (item.unit_rate || 0);
+      // Include currency conversion if not RUB
+      const currencyMultiplier = item.currency_type && item.currency_type !== 'RUB' && item.currency_rate 
+        ? item.currency_rate 
+        : 1;
+      let baseCost = (item.quantity || 0) * (item.unit_rate || 0) * currencyMultiplier;
       
       // Add delivery only for materials with appropriate delivery type
       if ((item.item_type === 'material' || item.item_type === 'sub_material')) {
         const deliveryType = item.delivery_price_type || 'included';
         const deliveryAmount = item.delivery_amount || 0;
         
-        if ((deliveryType === 'amount' || deliveryType === 'not_included') && deliveryAmount > 0) {
+        if (deliveryType === 'amount') {
+          // Fixed amount per unit (already in RUB)
           baseCost = baseCost + (deliveryAmount * (item.quantity || 0));
+        } else if (deliveryType === 'not_included') {
+          // 3% of base cost
+          baseCost = baseCost + (baseCost * 0.03);
         }
       }
       
@@ -650,7 +660,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
   // Sort BOQ items: works first, then their linked materials, then unlinked materials
   const sortedBOQItems = useMemo(() => {
-    if (!position.boq_items || position.boq_items.length === 0) {
+    if (!localBOQItems || localBOQItems.length === 0) {
       return [];
     }
 
@@ -658,14 +668,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     if (position.is_additional) {
       console.log('🔄 Sorting BOQ items for ДОП работа:', {
         work_name: position.work_name,
-        total_items: position.boq_items.length,
-        works: position.boq_items.filter(i => i.item_type === 'work').length,
-        materials: position.boq_items.filter(i => i.item_type === 'material').length,
-        linked_materials: position.boq_items.filter(i => i.work_link).length
+        total_items: localBOQItems.length,
+        works: localBOQItems.filter(i => i.item_type === 'work').length,
+        materials: localBOQItems.filter(i => i.item_type === 'material').length,
+        linked_materials: localBOQItems.filter(i => i.work_link).length
       });
     }
     
-    const items = [...position.boq_items];
+    const items = [...localBOQItems];
     const sortedItems: BOQItemWithLibrary[] = [];
     
     // Get all works and sub-works sorted by sub_number
@@ -727,7 +737,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     }
     
     return sortedItems;
-  }, [position.boq_items]);
+  }, [localBOQItems]);
 
   // Delete BOQ item
   const handleManualVolumeChange = useCallback(async (value: number | null) => {
@@ -851,10 +861,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     setSelectedCurrency(currency);
     
     if (currency === 'RUB') {
-      // When switching to RUB, enable unit_rate field and clear currency price
+      // When switching to RUB, enable unit_rate field
       quickAddForm.setFieldsValue({ 
         currency_type: 'RUB',
-        currency_price: undefined,
         currency_rate: 1
       });
     } else {
@@ -878,8 +887,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           message.warning(`Курс ${currency} не установлен в тендере. Установите курс валюты в настройках тендера.`);
           // Reset to RUB if no rate available
           quickAddForm.setFieldsValue({ 
-            currency_type: 'RUB',
-            currency_price: null
+            currency_type: 'RUB'
           });
           return;
         }
@@ -896,83 +904,10 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         currency_rate: rate
       });
       
-      // Recalculate unit_rate if currency_price exists
-      const currencyPrice = quickAddForm.getFieldValue('currency_price');
-      if (currencyPrice && currencyPrice > 0) {
-        const rublePrice = currencyPrice * rate;
-        console.log('💵 Recalculating RUB price:', rublePrice);
-        setTimeout(() => {
-          quickAddForm.setFieldsValue({ unit_rate: rublePrice });
-        }, 0);
-      }
+      // No need to recalculate unit_rate since it's entered directly in the currency
     }
   }, [quickAddForm, tender]);
 
-  // Handle currency price change
-  const handleCurrencyPriceChange = useCallback((value: number | null) => {
-    console.log('💰 Currency price changed:', value);
-    console.log('🔍 Current state:', { 
-      selectedCurrency, 
-      tender,
-      tenderRates: tender ? {
-        usd: tender.usd_rate,
-        eur: tender.eur_rate,
-        cny: tender.cny_rate
-      } : null
-    });
-    
-    if (selectedCurrency !== 'RUB') {
-      // Get rate from tender or use default
-      let rate = 1;
-      if (tender) {
-        const fetchedRate = getCurrencyRate(selectedCurrency, tender);
-        console.log('📊 getCurrencyRate returned:', fetchedRate);
-        console.log('🔍 Tender rates detail:', {
-          currency: selectedCurrency,
-          tender_usd: tender.usd_rate,
-          tender_eur: tender.eur_rate,
-          tender_cny: tender.cny_rate,
-          fetchedRate
-        });
-        
-        if (!fetchedRate || fetchedRate === 0) {
-          console.error('❌ handleCurrencyPriceChange: No valid rate for', selectedCurrency);
-          message.warning(`Курс ${selectedCurrency} не установлен в тендере`);
-          return;
-        }
-        
-        rate = fetchedRate;
-      } else {
-        console.log('⚠️ No tender data, cannot calculate');
-        message.warning('Данные курсов валют еще не загружены');
-        return;
-      }
-      
-      if (value !== null && value !== undefined && value > 0) {
-        const rublePrice = value * rate;
-        console.log('💵 Calculation:', {
-          currencyPrice: value,
-          rate: rate,
-          rublePrice: rublePrice,
-          formula: `${value} * ${rate} = ${rublePrice}`
-        });
-        // Use setTimeout to ensure the form updates after the current onChange cycle
-        setTimeout(() => {
-          quickAddForm.setFieldsValue({ 
-            unit_rate: rublePrice,
-            currency_rate: rate
-          });
-        }, 0);
-      } else {
-        // Clear RUB price if currency price is cleared
-        setTimeout(() => {
-          quickAddForm.setFieldsValue({ 
-            unit_rate: 0
-          });
-        }, 0);
-      }
-    }
-  }, [quickAddForm, selectedCurrency, tender]);
 
   // Quick add new item
   const handleQuickAdd = useCallback(async (values: QuickAddRowData) => {
@@ -1063,7 +998,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         tenderExists: !!tender,
         tenderValue: tender,
         currency_type: values.currency_type,
-        currency_price: values.currency_price,
         unit_rate: values.unit_rate
       });
       
@@ -1100,7 +1034,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           tender,
           rateFromTender,
           calculatedRate: calculatedCurrencyRate,
-          expectedUnitRate: (values.currency_price || 0) * rateFromTender
+          unitRate: values.unit_rate
         });
       }
       // For RUB, currency_rate should be NULL (not 1)
@@ -1118,7 +1052,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         sort_order: nextSubNumber,
         // Add currency fields
         currency_type: values.currency_type || 'RUB',
-        currency_price: values.currency_price || null,
         currency_rate: calculatedCurrencyRate,
         // Add quote link and note fields
         quote_link: values.quote_link || null,
@@ -1430,7 +1363,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       item_type: item.item_type,
       material_type: item.material_type || 'main',  // Add material type field
       currency_type: item.currency_type || 'RUB',
-      currency_price: item.currency_price || 0,
       currency_rate: correctCurrencyRate,
       quote_link: item.quote_link || '',
       note: item.note || ''
@@ -1608,7 +1540,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         item_type: cleanValues.item_type || editingItem.item_type,
         material_type: cleanValues.material_type || 'main',  // Add material type field
         currency_type: cleanValues.currency_type || 'RUB',
-        currency_price: cleanValues.currency_price || 0,
         currency_rate: calculatedCurrencyRate,  // Always use calculated rate, never from form
         quote_link: cleanValues.quote_link || null,
         note: cleanValues.note || null
@@ -1880,9 +1811,24 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       }, 100); // Small delay to let the UI update first
       
       console.log('✅ Material updated successfully');
+      
+      // Update local data with the fresh data from API
+      if (result.data) {
+        const updatedItem = result.data;
+        const itemIndex = localBOQItems.findIndex((item: any) => item.id === editingMaterialId);
+        if (itemIndex !== -1) {
+          // Create a new array with updated item to trigger re-render
+          const updatedItems = [...localBOQItems];
+          updatedItems[itemIndex] = { ...updatedItems[itemIndex], ...updatedItem };
+          setLocalBOQItems(updatedItems);
+          console.log('📝 Updated local item data:', updatedItems[itemIndex]);
+        }
+      }
+      
       message.success('Материал обновлен и коэффициенты сохранены');
       setEditingMaterialId(null);
       editForm.resetFields();
+      setRefreshKey(prev => prev + 1); // Force refresh
       onUpdate();
     } catch (error) {
       console.error('❌ Update error:', error);
@@ -1925,7 +1871,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       detail_cost_category_id: item.detail_cost_category_id || null,
       item_type: item.item_type,
       currency_type: item.currency_type || 'RUB',
-      currency_price: item.currency_price || 0,
       currency_rate: correctCurrencyRate,
       quote_link: item.quote_link || '',
       note: item.note || ''
@@ -1980,7 +1925,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         tender_eur_rate: tender?.eur_rate,
         tender_cny_rate: tender?.cny_rate,
         currency_type: values.currency_type,
-        currency_price: values.currency_price,
         unit_rate: values.unit_rate
       });
       
@@ -2019,7 +1963,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           tender,
           rateFromTender,
           calculatedRate: calculatedCurrencyRate,
-          expectedUnitRate: (values.currency_price || 0) * rateFromTender
+          unitRate: values.unit_rate
         });
       }
       // For RUB, currency_rate should be NULL (not 1)
@@ -2033,7 +1977,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         detail_cost_category_id: detailCostCategoryId,
         item_type: values.item_type || currentWorkItem.item_type,
         currency_type: values.currency_type || 'RUB',
-        currency_price: values.currency_price || 0,
         currency_rate: calculatedCurrencyRate,  // Always use calculated rate, never from form
         quote_link: values.quote_link || null,
         note: values.note || null
@@ -2160,9 +2103,24 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       }, 100); // Small delay to let the UI update first
       
       console.log('✅ Work updated successfully');
+      
+      // Update local data with the fresh data from API
+      if (result.data) {
+        const updatedItem = result.data;
+        const itemIndex = localBOQItems.findIndex((item: any) => item.id === editingWorkId);
+        if (itemIndex !== -1) {
+          // Create a new array with updated item to trigger re-render
+          const updatedItems = [...localBOQItems];
+          updatedItems[itemIndex] = { ...updatedItems[itemIndex], ...updatedItem };
+          setLocalBOQItems(updatedItems);
+          console.log('📝 Updated local work data:', updatedItems[itemIndex]);
+        }
+      }
+      
       message.success('Работа обновлена');
       setEditingWorkId(null);
       workEditForm.resetFields();
+      setRefreshKey(prev => prev + 1); // Force refresh
       onUpdate();
     } catch (error) {
       console.error('❌ Update error:', error);
@@ -2346,7 +2304,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       dataIndex: 'quantity',
       key: 'quantity',
       width: 85,
-      align: 'right',
+      align: 'center',
       render: (value, record) => {
         // For materials linked to works (including sub-materials linked to sub-works)
         if ((record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link) {
@@ -2377,7 +2335,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             
             return (
               <Tooltip title={`${workQuantity} × ${consumptionCoef} × ${conversionCoef}`}>
-                <div className="text-right py-1">
+                <div className="text-center py-1">
                   <div className="font-medium text-blue-600 text-sm">
                     {calculatedQuantity.toLocaleString('ru-RU', {
                       minimumFractionDigits: 0,
@@ -2401,7 +2359,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             // Show base quantity and coefficient in tooltip
             return (
               <Tooltip title={`Базовое: ${record.base_quantity.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} × Коэф: ${consumptionCoef} = ${value.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 3 })}`}>
-                <div className="text-right py-1">
+                <div className="text-center py-1">
                   <div className="font-medium text-green-600 text-sm">
                     {value?.toLocaleString('ru-RU', {
                       minimumFractionDigits: 0,
@@ -2415,7 +2373,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         }
         
         return (
-          <div className="text-right py-1 text-sm">
+          <div className="text-center py-1 text-sm">
             {value?.toLocaleString('ru-RU', {
               minimumFractionDigits: 0,
               maximumFractionDigits: 2
@@ -2435,31 +2393,11 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       )
     },
     {
-      title: 'Валюта',
-      dataIndex: 'currency_type',
-      key: 'currency_type',
-      width: 60,
-      align: 'center',
-      render: (value) => {
-        const currencySymbols = {
-          'RUB': '₽',
-          'USD': '$',
-          'EUR': '€',
-          'CNY': '¥'
-        };
-        return (
-          <div className="text-center py-1 text-sm font-medium">
-            {currencySymbols[value || 'RUB']}
-          </div>
-        );
-      }
-    },
-    {
       title: 'Цена',
       dataIndex: 'unit_rate',
       key: 'unit_rate',
       width: 85,
-      align: 'right',
+      align: 'center',
       render: (value, record) => {
         const currencySymbols = {
           'RUB': '₽',
@@ -2468,22 +2406,30 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           'CNY': '¥'
         };
 
+        // Определяем какой символ валюты показывать
+        const displayCurrency = record.currency_type || 'RUB';
+        const displaySymbol = currencySymbols[displayCurrency] || displayCurrency;
+        
         const priceDisplay = (
-          <div className="text-right py-1 text-sm">
+          <div className="text-center py-1 text-sm">
             {value?.toLocaleString('ru-RU', {
               minimumFractionDigits: 0,
               maximumFractionDigits: 2
-            })} ₽
+            })} {displaySymbol}
           </div>
         );
 
         // Показываем подсказку только для элементов с валютной ценой
-        if (record.currency_type && record.currency_type !== 'RUB' && record.currency_price) {
+        if (record.currency_type && record.currency_type !== 'RUB' && record.currency_rate) {
           const currencySymbol = currencySymbols[record.currency_type] || record.currency_type;
-          const tooltipContent = `${record.currency_price.toLocaleString('ru-RU', {
+          const priceInRubles = value * record.currency_rate;
+          const tooltipContent = `${value?.toLocaleString('ru-RU', {
             minimumFractionDigits: 0,
             maximumFractionDigits: 2
-          })} ${currencySymbol}`;
+          })} ${currencySymbol} × ${record.currency_rate} = ${priceInRubles?.toLocaleString('ru-RU', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+          })} ₽`;
 
           return (
             <Tooltip title={tooltipContent}>
@@ -2542,7 +2488,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       title: 'Сумма',
       key: 'total',
       width: 110,
-      align: 'right',
+      align: 'center',
       render: (_, record) => {
         // Получаем дополнительные данные для расчета
         let quantity = record.quantity || 0;
@@ -2577,7 +2523,11 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         }
         
         // Calculate total based on current quantity and unit rate
-        const baseTotal = quantity * unitRate;
+        // Include currency conversion if not RUB
+        const currencyMultiplier = record.currency_type && record.currency_type !== 'RUB' && record.currency_rate 
+          ? record.currency_rate 
+          : 1;
+        const baseTotal = quantity * unitRate * currencyMultiplier;
         let total = baseTotal;
         
         // Add delivery costs for materials
@@ -2585,47 +2535,92 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           const deliveryType = record.delivery_price_type || 'included';
           const deliveryAmount = record.delivery_amount || 0;
           
-          if (deliveryType === 'amount' && deliveryAmount > 0) {
+          if (deliveryType === 'amount') {
+            // Fixed amount per unit (already in RUB)
             total = baseTotal + (deliveryAmount * quantity);
-          } else if (deliveryType === 'not_included' && deliveryAmount > 0) {
-            total = baseTotal + (deliveryAmount * quantity);
+          } else if (deliveryType === 'not_included') {
+            // 3% of base cost
+            total = baseTotal + (baseTotal * 0.03);
           }
         }
         
-        // Create tooltip content for materials with delivery
+        // Create tooltip content for all items
         let tooltipContent = null;
+        
+        // Get currency symbol
+        const currencySymbols = {
+          'RUB': '₽',
+          'USD': '$',
+          'EUR': '€',
+          'CNY': '¥'
+        };
+        const currencySymbol = currencySymbols[record.currency_type || 'RUB'] || record.currency_type || '₽';
+        
+        // Build calculation formula parts
+        const formulaParts = [];
+        
+        // Get unit of measurement
+        const unit = record.unit || '';
+        
+        // Basic formula: quantity × unit_rate
+        formulaParts.push(`${quantity.toLocaleString('ru-RU', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 3
+        })} ${unit} × ${unitRate.toLocaleString('ru-RU', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2
+        })} ${currencySymbol}`);
+        
+        // Add currency conversion if not RUB
+        if (record.currency_type && record.currency_type !== 'RUB' && record.currency_rate) {
+          formulaParts.push(`× ${record.currency_rate}`);
+        }
+        
+        // Calculate base total for display
+        const baseFormula = formulaParts.join(' ');
+        const baseTotalForDisplay = `${baseTotal.toLocaleString('ru-RU', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2
+        })} ₽`;
+        
+        // For materials with delivery, create detailed tooltip
         if ((record.item_type === 'material' || record.item_type === 'sub_material')) {
           const deliveryType = record.delivery_price_type || 'included';
           const deliveryAmount = record.delivery_amount || 0;
           
-          if (deliveryType === 'amount' && record.delivery_amount > 0) {
-            const deliveryTotal = record.delivery_amount * quantity;
+          if (deliveryType === 'amount' && deliveryAmount > 0) {
+            const deliveryTotal = deliveryAmount * quantity;
             tooltipContent = (
               <div>
-                <div>Материал: {baseTotal.toLocaleString('ru-RU')} ₽</div>
-                <div>Доставка: {deliveryTotal.toLocaleString('ru-RU')} ₽</div>
+                <div>{baseFormula} = {baseTotalForDisplay}</div>
+                <div>Доставка: {quantity.toLocaleString('ru-RU')} {unit} × {deliveryAmount.toLocaleString('ru-RU')} ₽ = {deliveryTotal.toLocaleString('ru-RU')} ₽</div>
                 <div className="border-t pt-1 mt-1">
                   <strong>Итого: {total.toLocaleString('ru-RU')} ₽</strong>
                 </div>
               </div>
             );
           } else if (deliveryType === 'not_included') {
-            const deliveryPerUnit = deliveryAmount || 0; // Используем значение из БД
-            const deliveryTotal = deliveryPerUnit * quantity;
+            const deliveryTotal = baseTotal * 0.03;
             tooltipContent = (
               <div>
-                <div>Материал: {baseTotal.toLocaleString('ru-RU')} ₽</div>
-                <div>Доставка: {deliveryTotal.toLocaleString('ru-RU')} ₽</div>
+                <div>{baseFormula} = {baseTotalForDisplay}</div>
+                <div>Доставка (3%): {deliveryTotal.toLocaleString('ru-RU')} ₽</div>
                 <div className="border-t pt-1 mt-1">
                   <strong>Итого: {total.toLocaleString('ru-RU')} ₽</strong>
                 </div>
               </div>
             );
+          } else {
+            // Included delivery or no delivery - show simple formula
+            tooltipContent = `${baseFormula} = ${baseTotalForDisplay}`;
           }
+        } else {
+          // For works and sub-works - show simple formula
+          tooltipContent = `${baseFormula} = ${baseTotalForDisplay}`;
         }
         
         const totalElement = (
-          <div className="whitespace-nowrap text-right">
+          <div className="whitespace-nowrap text-center">
             <Text strong className="text-green-600 text-sm">
               {Math.round(total).toLocaleString('ru-RU')} ₽
             </Text>
@@ -2648,6 +2643,58 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       render: (detailCategoryId) => (
         <CostCategoryDisplay detailCategoryId={detailCategoryId} />
       )
+    },
+    {
+      title: 'Ссылка на КП',
+      dataIndex: 'quote_link',
+      key: 'quote_link',
+      width: 150,
+      align: 'center',
+      render: (value) => {
+        if (!value) return <div className="text-center">-</div>;
+        // Если ссылка начинается с http, делаем её кликабельной
+        if (value.startsWith('http')) {
+          return (
+            <div className="text-center">
+              <a 
+                href={value} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 text-xs"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {value}
+              </a>
+            </div>
+          );
+        }
+        // Иначе просто показываем текст полностью
+        return (
+          <div className="text-center">
+            <span className="text-xs">
+              {value}
+            </span>
+          </div>
+        );
+      }
+    },
+    {
+      title: 'Примечание',
+      dataIndex: 'note',
+      key: 'note',
+      width: 200,
+      align: 'center',
+      render: (value) => {
+        if (!value) return <div className="text-center">-</div>;
+        // Показываем текст полностью, с переносом строк если нужно
+        return (
+          <div className="text-center">
+            <span className="text-xs whitespace-pre-wrap">
+              {value}
+            </span>
+          </div>
+        );
+      }
     },
     {
       title: '',
@@ -2736,14 +2783,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     const unitRate = Form.useWatch('unit_rate', workEditForm) || 0;
     const itemType = Form.useWatch('item_type', workEditForm) || item.item_type;
     const currencyType = Form.useWatch('currency_type', workEditForm) || 'RUB';
-    const currencyPrice = Form.useWatch('currency_price', workEditForm) || 0;
     const currencyRate = Form.useWatch('currency_rate', workEditForm) || 1;
     
     // Calculate commercial cost
     const commercialCost = useMemo(() => {
       if (!tenderMarkup || !unitRate || !quantity) return 0;
       
-      const baseCost = quantity * unitRate;
+      const currencyMultiplier = currencyType !== 'RUB' && currencyRate ? currencyRate : 1;
+      const baseCost = quantity * unitRate * currencyMultiplier;
       
       if (itemType === 'work') {
         return calculateWorkCommercialCost(baseCost, tenderMarkup);
@@ -2779,20 +2826,20 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
     return (
     <tr>
-      <td colSpan={11} style={{ padding: 0 }}>
+      <td colSpan={13} style={{ padding: 0 }}>
         <Form
           form={workEditForm}
-          layout="vertical"
-          onFinish={handleSaveWorkEdit}
-          className="w-full"
-          style={{ 
-            padding: '12px', 
-            backgroundColor: getEditBackgroundColor(), 
-            borderRadius: '4px',
-            border: `2px solid ${getBorderColor()}`,
-            boxShadow: `0 2px 4px ${getBorderColor()}33`
-          }}
-        >
+            layout="vertical"
+            onFinish={handleSaveWorkEdit}
+            className="w-full"
+            style={{ 
+              padding: '12px', 
+              backgroundColor: getEditBackgroundColor(), 
+              borderRadius: '4px',
+              border: `2px solid ${getBorderColor()}`,
+              boxShadow: `0 2px 4px ${getBorderColor()}33`
+            }}
+          >
           {/* First row with main fields */}
           <div className="flex items-end gap-2 mb-3">
             {/* Type */}
@@ -2860,7 +2907,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 className="mb-0"
                 style={{ width: '80px' }}
               >
-                <Select size="small">
+                <Select 
+                  size="small"
+                  onChange={(value) => {
+                    // Update currency rate when currency changes
+                    const newRate = value !== 'RUB' && tender ? getCurrencyRate(value, tender) : null;
+                    workEditForm.setFieldValue('currency_rate', newRate);
+                  }}
+                >
                   <Select.Option value="RUB">₽</Select.Option>
                   <Select.Option value="USD">$</Select.Option>
                   <Select.Option value="EUR">€</Select.Option>
@@ -2868,91 +2922,13 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 </Select>
               </Form.Item>
 
-                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.currency_type !== curr.currency_type}>
-                  {({ getFieldValue }) => {
-                    const selectedCurrency = getFieldValue('currency_type') || 'RUB';
-                    if (selectedCurrency === 'RUB') return null;
-                    
-                    const currencySymbol = getCurrencySymbol(selectedCurrency);
-                    return (
-                      <Form.Item
-                        name="currency_price"
-                        label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Цена {currencySymbol}</span>}
-                        className="mb-0"
-                        style={{ width: '100px' }}
-                      >
-                        <DecimalInput 
-                          placeholder="0.00" 
-                          min={0}
-                          precision={2}
-                          size="small"
-                          suffix={currencySymbol}
-                          onChange={(value) => {
-                            console.log('💱 [WorkEditRow] Currency price change:', {
-                              value,
-                              currency: selectedCurrency,
-                              tender,
-                              rates: tender ? {
-                                usd: tender.usd_rate,
-                                eur: tender.eur_rate,
-                                cny: tender.cny_rate
-                              } : null
-                            });
-                            
-                            // Get rate from tender data
-                            let rate = 1;
-                            if (tender && selectedCurrency !== 'RUB') {
-                              const fetchedRate = getCurrencyRate(selectedCurrency, tender);
-                              console.log('🔍 [WorkEditRow] getCurrencyRate returned:', {
-                                currency: selectedCurrency,
-                                fetchedRate,
-                                fetchedRate_type: typeof fetchedRate,
-                                tender_usd: tender?.usd_rate,
-                                tender_eur: tender?.eur_rate,
-                                tender_cny: tender?.cny_rate
-                              });
-                              
-                              if (!fetchedRate || fetchedRate === 0) {
-                                console.error('❌ [WorkEditRow] No valid rate found for', selectedCurrency);
-                                message.error(`Курс ${selectedCurrency} не установлен в тендере`);
-                                return;
-                              }
-                              
-                              rate = fetchedRate;
-                              console.log('📊 [WorkEditRow] Using rate:', rate);
-                            }
-                            
-                            const rubPrice = (value || 0) * rate;
-                            console.log('✅ [WorkEditRow] Calculated RUB price:', rubPrice);
-                            
-                            // Update both unit_rate and currency_rate fields
-                            setTimeout(() => {
-                              workEditForm.setFieldsValue({ 
-                                unit_rate: rubPrice,
-                                currency_rate: rate
-                              });
-                            }, 0);
-                          }}
-                        />
-                      </Form.Item>
-                    );
-                  }}
-                </Form.Item>
                 
                 {/* Hidden field to store currency rate */}
-                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.currency_type !== curr.currency_type}>
-                  {({ getFieldValue }) => {
-                    const selectedCurrency = getFieldValue('currency_type') || 'RUB';
-                    return (
-                      <Form.Item
-                        name="currency_rate" 
-                        hidden
-                        initialValue={tender ? getCurrencyRate(selectedCurrency, tender) : 1}
-                      >
-                        <Input />
-                      </Form.Item>
-                    );
-                  }}
+                <Form.Item
+                  name="currency_rate" 
+                  hidden
+                >
+                  <Input />
                 </Form.Item>
 
             </>
@@ -2961,6 +2937,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             <Form.Item noStyle shouldUpdate={(prev, curr) => prev.currency_type !== curr.currency_type}>
               {({ getFieldValue }) => {
                 const selectedCurrency = getFieldValue('currency_type') || 'RUB';
+                const currencySymbol = getCurrencySymbol(selectedCurrency);
                 return (
                   <Form.Item
                     name="unit_rate"
@@ -2974,8 +2951,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                       min={0}
                       precision={2}
                       size="small"
-                      suffix="₽"
-                      disabled={selectedCurrency !== 'RUB'}
+                      suffix={currencySymbol}
                     />
                   </Form.Item>
                 );
@@ -2999,13 +2975,13 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 fontWeight: 'normal',
                 color: '#000'
               }}>
-                {formatCurrency(quantity * unitRate)}
+                {formatCurrency(quantity * unitRate * (currencyType !== 'RUB' && currencyRate ? currencyRate : 1))}
               </div>
             </Form.Item>
           </div>
 
           {/* Second row with category */}
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-2 mb-3">
             <Form.Item
               name="detail_cost_category_id"
               label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Категория затрат</span>}
@@ -3021,7 +2997,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           </div>
 
           {/* Third row: Quote Link */}
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-2 mb-3">
             <Form.Item
               name="quote_link"
               label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Ссылка на КП</span>}
@@ -3030,38 +3006,32 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               <Input 
                 placeholder="Ссылка на коммерческое предложение"
                 size="small"
-                style={{ width: '100%' }}
               />
             </Form.Item>
           </div>
 
-          {/* Fourth row: Note */}
-          <div className="flex items-end gap-2">
+          {/* Fourth row: Note + Action Buttons */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2">
             <Form.Item
               name="note"
               label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Примечание</span>}
               className="mb-0 flex-1"
             >
-              <Input.TextArea 
+              <Input 
                 placeholder="Примечание к элементу"
                 size="small"
-                rows={2}
-                style={{ width: '100%' }}
               />
             </Form.Item>
-          </div>
-
-          {/* Fifth row: Action Buttons */}
-          <div className="flex items-end gap-2">
-            {/* Action Buttons */}
-            <div className="flex gap-2" style={{ paddingBottom: '2px' }}>
+            
+            {/* Action Buttons - same row on desktop */}
+            <div className="flex gap-2 flex-shrink-0 sm:pb-1">
               <Button 
                 type="default" 
                 icon={<CloseOutlined />} 
                 onClick={handleCancelWorkEdit}
-                size="large"
+                size="middle"
                 danger
-                style={{ height: '36px', fontSize: '14px' }}
+                style={{ height: '32px', fontSize: '13px' }}
               >
                 Отмена
               </Button>
@@ -3069,8 +3039,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 type="primary" 
                 htmlType="submit" 
                 icon={<SaveOutlined />} 
-                size="large"
-                style={{ height: '36px', fontSize: '14px' }}
+                size="middle"
+                style={{ height: '32px', fontSize: '13px' }}
               >
                 Сохранить
               </Button>
@@ -3094,7 +3064,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     const consumptionCoef = Form.useWatch('consumption_coefficient', editForm) || 1;
     const conversionCoef = Form.useWatch('conversion_coefficient', editForm) || 1;
     const currencyType = Form.useWatch('currency_type', editForm) || 'RUB';
-    const currencyPrice = Form.useWatch('currency_price', editForm) || 0;
     const currencyRate = Form.useWatch('currency_rate', editForm) || 1;
     
     // Calculate actual quantity based on work link
@@ -3105,44 +3074,51 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         const workQuantity = linkedWork?.quantity || 0;
         return workQuantity * consumptionCoef * conversionCoef;
       }
-      return quantity;
+      // For unlinked materials, apply consumption coefficient to base quantity
+      return quantity * consumptionCoef;
     }, [workId, quantity, consumptionCoef, conversionCoef, works]);
     
-    // Calculate delivery cost
+    // Calculate delivery cost per unit
     const deliveryCost = useMemo(() => {
+      const currencyMultiplier = currencyType !== 'RUB' && currencyRate ? currencyRate : 1;
       if (deliveryType === 'included') return 0;
-      if (deliveryType === 'not_included') return unitRate * 0.03;
-      if (deliveryType === 'amount') return deliveryAmount;
+      if (deliveryType === 'not_included') return unitRate * currencyMultiplier * 0.03;
+      if (deliveryType === 'amount') return deliveryAmount; // deliveryAmount is already in RUB per unit
       return 0;
-    }, [deliveryType, deliveryAmount, unitRate]);
+    }, [deliveryType, deliveryAmount, unitRate, currencyType, currencyRate]);
     
     // Calculate commercial cost
     const commercialCost = useMemo(() => {
       if (!tenderMarkup || !unitRate) return 0;
       
-      // Base cost includes delivery
-      const baseCostPerUnit = unitRate + deliveryCost;
+      // Apply currency conversion
+      const currencyMultiplier = currencyType !== 'RUB' && currencyRate ? currencyRate : 1;
+      
+      // Calculate total base cost with delivery
+      const baseCostPerUnit = unitRate * currencyMultiplier;
       const totalBaseCost = actualQuantity * baseCostPerUnit;
+      const totalDeliveryCost = actualQuantity * deliveryCost;
+      const totalCostWithDelivery = totalBaseCost + totalDeliveryCost;
       
       if (itemType === 'material') {
         // Check if it's linked (main) or unlinked (auxiliary)
         const isLinked = !!workId;
         if (isLinked) {
           // For main materials, return just the base cost (markup goes to works)
-          const result = calculateMainMaterialCommercialCost(totalBaseCost, tenderMarkup);
+          const result = calculateMainMaterialCommercialCost(totalCostWithDelivery, tenderMarkup);
           return result.materialCost;
         } else {
           // For auxiliary materials, return 0 (all cost goes to works)
-          const result = calculateAuxiliaryMaterialCommercialCost(totalBaseCost, tenderMarkup);
+          const result = calculateAuxiliaryMaterialCommercialCost(totalCostWithDelivery, tenderMarkup);
           return result.materialCost; // This will be 0
         }
       } else if (itemType === 'sub_material') {
         // For sub-materials
-        const result = calculateSubcontractMaterialCommercialCost(totalBaseCost, tenderMarkup);
+        const result = calculateSubcontractMaterialCommercialCost(totalCostWithDelivery, tenderMarkup);
         return result.materialCost;
       }
       
-      return totalBaseCost;
+      return totalCostWithDelivery;
     }, [actualQuantity, unitRate, deliveryCost, itemType, workId, tenderMarkup]);
     
     // Determine background color based on item type and link status
@@ -3170,20 +3146,20 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
     return (
     <tr>
-      <td colSpan={11} style={{ padding: 0 }}>
+      <td colSpan={13} style={{ padding: 0 }}>
         <Form
           form={editForm}
-          layout="vertical"
-          onFinish={handleSaveInlineEdit}
-          className="w-full"
-          style={{ 
-            padding: '12px', 
-            backgroundColor: getEditBackgroundColor(), 
-            borderRadius: '4px',
-            border: `2px solid ${getBorderColor()}`,
-            boxShadow: `0 2px 4px ${getBorderColor()}33`
-          }}
-        >
+            layout="vertical"
+            onFinish={handleSaveInlineEdit}
+            className="w-full"
+            style={{ 
+              padding: '12px', 
+              backgroundColor: getEditBackgroundColor(), 
+              borderRadius: '4px',
+              border: `2px solid ${getBorderColor()}`,
+              boxShadow: `0 2px 4px ${getBorderColor()}33`
+            }}
+          >
           {/* Single row with all main fields - compact table-like layout */}
           <div className="flex items-end gap-2 mb-3">
             {/* Type - expanded */}
@@ -3261,13 +3237,24 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>К.расх</span>}
               className="mb-0"
               style={{ width: '70px' }}
+              rules={[
+                { type: 'number', min: 1, message: 'Значение коэффициента расхода не может быть менее 1' }
+              ]}
             >
               <DecimalInput 
                 placeholder="1.00" 
-                min={0}
+                min={1}
                 precision={4}
                 size="small"
-                onChange={handleCoefficientChange}
+                onChange={(value) => {
+                  // Ensure value is at least 1
+                  const validValue = value && value < 1 ? 1 : value;
+                  if (value && value < 1) {
+                    message.warning('Значение коэффициента расхода не может быть менее 1');
+                    editForm.setFieldValue('consumption_coefficient', 1);
+                  }
+                  handleCoefficientChange(validValue);
+                }}
                 style={{ textAlign: 'center' }}
               />
             </Form.Item>
@@ -3335,7 +3322,15 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 className="mb-0"
                 style={{ width: '80px' }}
               >
-                <Select size="small" style={{ textAlign: 'center' }}>
+                <Select 
+                  size="small" 
+                  style={{ textAlign: 'center' }}
+                  onChange={(value) => {
+                    // Update currency rate when currency changes
+                    const newRate = value !== 'RUB' && tender ? getCurrencyRate(value, tender) : null;
+                    editForm.setFieldValue('currency_rate', newRate);
+                  }}
+                >
                   <Select.Option value="RUB">₽</Select.Option>
                   <Select.Option value="USD">$</Select.Option>
                   <Select.Option value="EUR">€</Select.Option>
@@ -3343,56 +3338,20 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 </Select>
               </Form.Item>
 
-                {/* Currency Price */}
-                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.currency_type !== curr.currency_type}>
-                  {({ getFieldValue }) => {
-                    const selectedCurrency = getFieldValue('currency_type') || 'RUB';
-                    if (selectedCurrency === 'RUB') return null;
-                    
-                    const currencySymbol = getCurrencySymbol(selectedCurrency);
-                    return (
-                      <Form.Item
-                        name="currency_price"
-                        label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Цена {currencySymbol}</span>}
-                        className="mb-0"
-                        style={{ width: '90px' }}
-                      >
-                        <DecimalInput 
-                          placeholder="0.00" 
-                          min={0}
-                          precision={2}
-                          size="small"
-                          suffix={currencySymbol}
-                          style={{ textAlign: 'center' }}
-                          onChange={(value) => {
-                            // Auto-calculate RUB price based on currency rate from tender
-                            const rate = selectedCurrency === 'USD' ? tender?.usd_rate : 
-                                       selectedCurrency === 'EUR' ? tender?.eur_rate : 
-                                       selectedCurrency === 'CNY' ? tender?.cny_rate : 1;
-                            console.log('💱 Material edit - currency price change:', {
-                              currency: selectedCurrency,
-                              price: value,
-                              rate: rate,
-                              tender_rates: tender
-                            });
-                            const rubPrice = (value || 0) * (rate || 1);
-                            editForm.setFieldsValue({ 
-                              unit_rate: rubPrice,
-                              currency_rate: rate || 1
-                            });
-                          }}
-                        />
-                      </Form.Item>
-                    );
-                  }}
-                </Form.Item>
-
+              {/* Hidden field to store currency rate */}
+              <Form.Item
+                name="currency_rate" 
+                hidden
+              >
+                <Input />
+              </Form.Item>
             </>
 
             {/* Price */}
             <Form.Item noStyle shouldUpdate={(prev, curr) => prev.currency_type !== curr.currency_type}>
               {({ getFieldValue }) => {
                 const selectedCurrency = getFieldValue('currency_type') || 'RUB';
+                const currencySymbol = getCurrencySymbol(selectedCurrency);
                 return (
                   <Form.Item
                     name="unit_rate"
@@ -3406,9 +3365,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                       min={0}
                       precision={2}
                       size="small"
-                      suffix="₽"
+                      suffix={currencySymbol}
                       style={{ textAlign: 'center' }}
-                      disabled={selectedCurrency !== 'RUB'}
                     />
                   </Form.Item>
                 );
@@ -3474,18 +3432,22 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 whiteSpace: 'nowrap'
               }}>
                 {(() => {
-                  const quantity = editForm.getFieldValue('quantity') || 0;
+                  // Use actualQuantity which includes coefficients calculation
                   const unitRate = editForm.getFieldValue('unit_rate') || 0;
                   const deliveryType = editForm.getFieldValue('delivery_price_type') || 'included';
                   const deliveryAmount = editForm.getFieldValue('delivery_amount') || 0;
+                  const currencyType = editForm.getFieldValue('currency_type') || 'RUB';
+                  const currencyRate = editForm.getFieldValue('currency_rate') || 1;
                   
-                  let baseTotal = quantity * unitRate;
+                  const currencyMultiplier = currencyType !== 'RUB' && currencyRate ? currencyRate : 1;
+                  const baseTotal = actualQuantity * unitRate * currencyMultiplier;
                   let deliveryCost = 0;
                   
                   if (deliveryType === 'not_included') {
                     deliveryCost = baseTotal * 0.03;
                   } else if (deliveryType === 'amount') {
-                    deliveryCost = deliveryAmount * quantity;
+                    // deliveryAmount is per unit in RUB, no need to multiply by currencyMultiplier
+                    deliveryCost = deliveryAmount * actualQuantity;
                   }
                   
                   return formatCurrency(baseTotal + deliveryCost);
@@ -3520,38 +3482,32 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               <Input 
                 placeholder="Ссылка на коммерческое предложение"
                 size="small"
-                style={{ width: '100%' }}
               />
             </Form.Item>
           </div>
 
-          {/* Fourth row: Note */}
-          <div className="flex items-end gap-2">
+          {/* Fourth row: Note + Action Buttons */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2">
             <Form.Item
               name="note"
               label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Примечание</span>}
               className="mb-0 flex-1"
             >
-              <Input.TextArea 
+              <Input 
                 placeholder="Примечание к элементу"
                 size="small"
-                rows={2}
-                style={{ width: '100%' }}
               />
             </Form.Item>
-          </div>
-
-          {/* Fifth row: Action Buttons */}
-          <div className="flex items-end gap-2">
-            {/* Action Buttons */}
-            <div className="flex gap-2" style={{ paddingBottom: '2px' }}>
+            
+            {/* Action Buttons - same row on desktop */}
+            <div className="flex gap-2 flex-shrink-0 sm:pb-1">
               <Button 
                 type="default" 
                 icon={<CloseOutlined />} 
                 onClick={handleCancelInlineEdit}
-                size="large"
+                size="middle"
                 danger
-                style={{ height: '36px', fontSize: '14px' }}
+                style={{ height: '32px', fontSize: '13px' }}
               >
                 Отмена
               </Button>
@@ -3559,9 +3515,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 type="primary" 
                 htmlType="submit" 
                 icon={<CheckOutlined />} 
-                size="large"
+                size="middle"
                 loading={loading}
-                style={{ height: '36px', fontSize: '14px' }}
+                style={{ height: '32px', fontSize: '13px' }}
               >
                 Сохранить
               </Button>
@@ -3736,14 +3692,23 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                     className="mb-0"
                     initialValue={1}
                     style={{ width: '70px' }}
+                    rules={[
+                      { type: 'number', min: 1, message: 'Значение коэффициента расхода не может быть менее 1' }
+                    ]}
                   >
                     <DecimalInput 
                       placeholder="1.00" 
-                      min={0}
+                      min={1}
                       precision={4}
                       size="small"
                       style={{ textAlign: 'center' }}
-                      onChange={() => {
+                      onChange={(value) => {
+                        // Ensure value is at least 1
+                        const validValue = value && value < 1 ? 1 : value;
+                        if (value && value < 1) {
+                          message.warning('Значение коэффициента расхода не может быть менее 1');
+                          quickAddForm.setFieldValue('consumption_coefficient', 1);
+                        }
                         const workId = quickAddForm.getFieldValue('work_id');
                         if (!workId) return;
                         const work = works.find(w => w.id === workId);
@@ -3844,45 +3809,23 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 </Select>
               </Form.Item>
 
-              {/* Currency price (shown only for non-RUB) */}
+              {/* Hidden field to store currency rate */}
               {selectedCurrency !== 'RUB' && (
-                <>
-                  <Form.Item
-                    name="currency_price"
-                    label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Цена вал.</span>}
-                    className="mb-0"
-                    style={{ width: '80px' }}
-                    rules={[
-                      { required: selectedCurrency !== 'RUB', message: 'Цена' },
-                      { type: 'number', min: 0, message: 'Цена > 0' }
-                    ]}
-                  >
-                    <DecimalInput 
-                      placeholder="0.00" 
-                      min={0}
-                      precision={2}
-                      size="small"
-                      suffix={CURRENCY_OPTIONS.find(c => c.value === selectedCurrency)?.symbol}
-                      style={{ textAlign: 'center' }}
-                      onChange={handleCurrencyPriceChange}
-                    />
-                  </Form.Item>
-                  
-                  {/* Hidden field to store currency rate */}
-                  <Form.Item
-                    name="currency_rate" 
-                    hidden
-                    initialValue={tender ? getCurrencyRate(selectedCurrency, tender) : 1}
-                  >
-                    <Input />
-                  </Form.Item>
-                </>
+                <Form.Item
+                  name="currency_rate" 
+                  hidden
+                  initialValue={tender ? getCurrencyRate(selectedCurrency, tender) : 1}
+                >
+                  <Input />
+                </Form.Item>
               )}
 
-              {/* Price in rubles */}
+              {/* Price */}
               <Form.Item
                 name="unit_rate"
-                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Цена ₽</span>}
+                label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>
+                  Цена {selectedCurrency === 'RUB' ? '₽' : CURRENCY_OPTIONS.find(c => c.value === selectedCurrency)?.symbol}
+                </span>}
                 className="mb-0"
                 style={{ width: '90px' }}
                 rules={[{ required: true, message: 'Цена' }]}
@@ -3892,9 +3835,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   min={0}
                   precision={2}
                   size="small"
-                  suffix="₽"
+                  suffix={selectedCurrency === 'RUB' ? '₽' : CURRENCY_OPTIONS.find(c => c.value === selectedCurrency)?.symbol}
                   style={{ textAlign: 'center' }}
-                  disabled={selectedCurrency !== 'RUB'}
                 />
               </Form.Item>
 
@@ -3942,7 +3884,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             </div>
 
             {/* Second row: Category field and Action Buttons */}
-            <div className="flex items-end gap-2">
+            <div className="flex items-end gap-2 mb-3">
               <Form.Item
                 name="detail_cost_category_id"
                 label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Категория затрат</span>}
@@ -3958,7 +3900,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             </div>
 
             {/* Third row: Quote Link */}
-            <div className="flex items-end gap-2">
+            <div className="flex items-end gap-2 mb-3">
               <Form.Item
                 name="quote_link"
                 label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Ссылка на КП</span>}
@@ -3972,8 +3914,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               </Form.Item>
             </div>
 
-            {/* Fourth row: Note */}
-            <div className="flex items-end gap-2">
+            {/* Fourth row: Note + Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2">
               <Form.Item
                 name="note"
                 label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Примечание</span>}
@@ -3986,12 +3928,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   style={{ width: '100%' }}
                 />
               </Form.Item>
-            </div>
-
-            {/* Fifth row: Action Buttons */}
-            <div className="flex items-end gap-2">
-              {/* Action Buttons */}
-              <div className="flex gap-2" style={{ paddingBottom: '2px' }}>
+              
+              {/* Action Buttons - same row on desktop */}
+              <div className="flex gap-2 flex-shrink-0 sm:pb-1">
                 <Button 
                   type="default" 
                   icon={<CloseOutlined />} 
@@ -4001,9 +3940,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                     setQuickAddFormType('work');
                     setSelectedCurrency('RUB');
                   }}
-                  size="large"
+                  size="middle"
                   danger
-                  style={{ height: '36px', fontSize: '14px' }}
+                  style={{ height: '32px', fontSize: '13px' }}
                 >
                   Отмена
                 </Button>
@@ -4011,8 +3950,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   type="primary"
                   icon={<CheckOutlined />}
                   htmlType="submit"
-                  size="large"
-                  style={{ height: '36px', fontSize: '14px' }}
+                  size="middle"
+                  style={{ height: '32px', fontSize: '13px' }}
                 >
                   Добавить
                 </Button>
@@ -4169,68 +4108,84 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                       <Tag color="orange" style={{ marginRight: 0 }}>
                         ДОП
                       </Tag>
-                      <Input
-                        value={tempWorkName.replace(/^ДОП:\s*/, '')} // Убираем префикс "ДОП: " при отображении
-                        onChange={(e) => {
-                          // Сохраняем без префикса, он добавится при сохранении если нужно
-                          const newValue = e.target.value;
-                          setTempWorkName(newValue.startsWith('ДОП:') ? newValue : `ДОП: ${newValue}`);
-                        }}
-                        onBlur={async () => {
-                          const displayName = tempWorkName.replace(/^ДОП:\s*/, '');
-                          if (!displayName.trim()) {
-                            message.warning('Название не может быть пустым');
-                            setTempWorkName(position.work_name); // Restore original value
-                            return;
-                          }
-                          
-                          // Убеждаемся, что в БД сохраняется с префиксом "ДОП: "
-                          const nameToSave = tempWorkName.startsWith('ДОП:') ? tempWorkName : `ДОП: ${tempWorkName}`;
-                          
-                          if (nameToSave === position.work_name) {
-                            return; // No changes
-                          }
-                          
-                          console.log('📝 Updating additional work name:', {
-                            id: position.id,
-                            oldName: position.work_name,
-                            newName: nameToSave
-                          });
-                          
-                          setLoading(true);
-                          try {
-                            const result = await clientPositionsApi.update(position.id, {
-                              work_name: nameToSave
+                      {isExpanded ? (
+                        <Input
+                          value={tempWorkName.replace(/^ДОП:\s*/, '')} // Убираем префикс "ДОП: " при отображении
+                          onChange={(e) => {
+                            // Сохраняем без префикса, он добавится при сохранении если нужно
+                            const newValue = e.target.value;
+                            setTempWorkName(newValue.startsWith('ДОП:') ? newValue : `ДОП: ${newValue}`);
+                          }}
+                          onBlur={async () => {
+                            const displayName = tempWorkName.replace(/^ДОП:\s*/, '');
+                            if (!displayName.trim()) {
+                              message.warning('Название не может быть пустым');
+                              setTempWorkName(position.work_name); // Restore original value
+                              return;
+                            }
+                            
+                            // Убеждаемся, что в БД сохраняется с префиксом "ДОП: "
+                            const nameToSave = tempWorkName.startsWith('ДОП:') ? tempWorkName : `ДОП: ${tempWorkName}`;
+                            
+                            if (nameToSave === position.work_name) {
+                              return; // No changes
+                            }
+                            
+                            console.log('📝 Updating additional work name:', {
+                              id: position.id,
+                              oldName: position.work_name,
+                              newName: nameToSave
                             });
                             
-                            if (result.error) {
-                              message.error(result.error);
+                            setLoading(true);
+                            try {
+                              const result = await clientPositionsApi.update(position.id, {
+                                work_name: nameToSave
+                              });
+                              
+                              if (result.error) {
+                                message.error(result.error);
+                                setTempWorkName(position.work_name); // Restore on error
+                              } else {
+                                message.success('Название ДОП работы обновлено');
+                                onUpdate();
+                              }
+                            } catch (error) {
+                              console.error('💥 Error updating additional work name:', error);
+                              message.error('Ошибка при обновлении названия');
                               setTempWorkName(position.work_name); // Restore on error
-                            } else {
-                              message.success('Название ДОП работы обновлено');
-                              onUpdate();
+                            } finally {
+                              setLoading(false);
                             }
-                          } catch (error) {
-                            console.error('💥 Error updating additional work name:', error);
-                            message.error('Ошибка при обновлении названия');
-                            setTempWorkName(position.work_name); // Restore on error
-                          } finally {
-                            setLoading(false);
-                          }
-                        }}
-                        onPressEnter={(e) => e.currentTarget.blur()}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex-1"
-                        disabled={loading}
-                        style={{
-                          fontWeight: fontWeight === 'bold' ? '700' : 
-                                     fontWeight === 'semibold' ? '600' : 
-                                     fontWeight === 'medium' ? '500' : '400',
-                          color: positionColors.text,
-                          fontSize: textSize === 'text-base' ? '16px' : 
-                                   textSize === 'text-lg' ? '18px' : '14px'
-                        }}
-                      />
+                          }}
+                          onPressEnter={(e) => e.currentTarget.blur()}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex-1"
+                          disabled={loading}
+                          style={{
+                            fontWeight: fontWeight === 'bold' ? '700' : 
+                                       fontWeight === 'semibold' ? '600' : 
+                                       fontWeight === 'medium' ? '500' : '400',
+                            color: positionColors.text,
+                            fontSize: textSize === 'text-base' ? '16px' : 
+                                     textSize === 'text-lg' ? '18px' : '14px'
+                          }}
+                        />
+                      ) : (
+                        <Text 
+                          className="flex-1"
+                          style={{
+                            fontWeight: fontWeight === 'bold' ? '700' : 
+                                       fontWeight === 'semibold' ? '600' : 
+                                       fontWeight === 'medium' ? '500' : '400',
+                            color: positionColors.text,
+                            fontSize: textSize === 'text-base' ? '16px' : 
+                                     textSize === 'text-lg' ? '18px' : '14px'
+                          }}
+                        >
+                          {tempWorkName.replace(/^ДОП:\s*/, '')}
+                        </Text>
+                      )}
                     </div>
                   ) : (
                     <Title 
@@ -4274,26 +4229,37 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   </div>
                 )}
                 
-                {/* Second row - GP Note - always editable for ДОП, conditional for others */}
+                {/* Second row - GP Note - editable only when expanded for ДОП, conditional for others */}
                 {position.is_additional ? (
-                  // For ДОП positions - always show editable field
-                  <div className="flex items-center gap-2 w-full" onClick={(e) => e.stopPropagation()}>
-                    <Text className="text-sm text-gray-500 whitespace-nowrap font-semibold">Примечание ГП:</Text>
-                    <Input
-                      size="small"
-                      value={tempManualNote ?? undefined}
-                      placeholder="Примечание"
-                      className="flex-1"
-                      disabled={loading}
-                      style={{ fontSize: '13px', width: '100%' }}
-                      onChange={(e) => setTempManualNote(e.target.value)}
-                      onBlur={() => {
-                        if (tempManualNote !== position.manual_note) {
-                          handleManualNoteChange(tempManualNote);
-                        }
-                      }}
-                    />
-                  </div>
+                  // For ДОП positions - show editable field only when expanded
+                  isExpanded ? (
+                    <div className="flex items-center gap-2 w-full" onClick={(e) => e.stopPropagation()}>
+                      <Text className="text-sm text-gray-500 whitespace-nowrap font-semibold">Примечание ГП:</Text>
+                      <Input
+                        size="small"
+                        value={tempManualNote ?? undefined}
+                        placeholder="Примечание"
+                        className="flex-1"
+                        disabled={loading}
+                        style={{ fontSize: '13px', width: '100%' }}
+                        onChange={(e) => setTempManualNote(e.target.value)}
+                        onBlur={() => {
+                          if (tempManualNote !== position.manual_note) {
+                            handleManualNoteChange(tempManualNote);
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    position.manual_note && (
+                      <div className="flex items-center gap-1">
+                        <Text className="text-sm text-gray-500 font-semibold">Примечание ГП:</Text>
+                        <Text className="text-sm text-green-600 flex-1" ellipsis={{ tooltip: position.manual_note }}>
+                          <strong>{position.manual_note}</strong>
+                        </Text>
+                      </div>
+                    )
+                  )
                 ) : (
                   // For regular positions - existing logic
                   (canAddItems ? (
@@ -4359,72 +4325,90 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   </div>
                 )}
                 
-                {/* Fourth row - GP Quantity - editable for ДОП positions always, for others when expanded */}
+                {/* Fourth row - GP Quantity - editable for ДОП positions only when expanded, for others when expanded */}
                 {position.is_additional ? (
-                  // For ДОП positions - always show editable fields
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <Text className="text-sm text-gray-500 font-semibold whitespace-nowrap">Объем ГП:</Text>
-                    <InputNumber
-                      size="small"
-                      min={0}
-                      value={tempManualVolume ?? undefined}
-                      placeholder="0"
-                      className="w-20"
-                      disabled={loading}
-                      onChange={(value) => setTempManualVolume(value)}
-                      onBlur={() => {
-                        if (tempManualVolume !== position.manual_volume) {
-                          handleManualVolumeChange(tempManualVolume);
-                        }
-                      }}
-                      style={{ fontSize: '13px' }}
-                    />
-                    <Select
-                      size="small"
-                      value={tempUnit || 'компл.'}
-                      onChange={async (value) => {
-                        setTempUnit(value);
-                        console.log('📝 Updating additional work unit:', {
-                          id: position.id,
-                          oldUnit: position.unit,
-                          newUnit: value
-                        });
-                        
-                        setLoading(true);
-                        try {
-                          const result = await clientPositionsApi.update(position.id, {
-                            unit: value
+                  // For ДОП positions - show editable fields only when expanded
+                  isExpanded ? (
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Text className="text-sm text-gray-500 font-semibold whitespace-nowrap">Объем ГП:</Text>
+                      <InputNumber
+                        size="small"
+                        min={0}
+                        value={tempManualVolume ?? undefined}
+                        placeholder="0"
+                        className="w-20"
+                        disabled={loading}
+                        onChange={(value) => setTempManualVolume(value)}
+                        onBlur={() => {
+                          if (tempManualVolume !== position.manual_volume) {
+                            handleManualVolumeChange(tempManualVolume);
+                          }
+                        }}
+                        style={{ fontSize: '13px' }}
+                      />
+                      <Select
+                        size="small"
+                        value={tempUnit || 'компл.'}
+                        onChange={async (value) => {
+                          setTempUnit(value);
+                          console.log('📝 Updating additional work unit:', {
+                            id: position.id,
+                            oldUnit: position.unit,
+                            newUnit: value
                           });
                           
-                          if (result.error) {
-                            message.error(result.error);
+                          setLoading(true);
+                          try {
+                            const result = await clientPositionsApi.update(position.id, {
+                              unit: value
+                            });
+                            
+                            if (result.error) {
+                              message.error(result.error);
+                              setTempUnit(position.unit); // Restore on error
+                            } else {
+                              message.success('Единица измерения обновлена');
+                              onUpdate();
+                            }
+                          } catch (error) {
+                            console.error('💥 Error updating unit:', error);
+                            message.error('Ошибка при обновлении единицы');
                             setTempUnit(position.unit); // Restore on error
-                          } else {
-                            message.success('Единица измерения обновлена');
-                            onUpdate();
+                          } finally {
+                            setLoading(false);
                           }
-                        } catch (error) {
-                          console.error('💥 Error updating unit:', error);
-                          message.error('Ошибка при обновлении единицы');
-                          setTempUnit(position.unit); // Restore on error
-                        } finally {
-                          setLoading(false);
-                        }
-                      }}
-                      disabled={loading}
-                      className="w-24"
-                      style={{ fontSize: '13px' }}
-                    >
-                      <Select.Option value="компл.">компл.</Select.Option>
-                      <Select.Option value="шт">шт</Select.Option>
-                      <Select.Option value="м²">м²</Select.Option>
-                      <Select.Option value="м³">м³</Select.Option>
-                      <Select.Option value="м.п.">м.п.</Select.Option>
-                      <Select.Option value="т">т</Select.Option>
-                      <Select.Option value="кг">кг</Select.Option>
-                      <Select.Option value="л">л</Select.Option>
-                    </Select>
-                  </div>
+                        }}
+                        disabled={loading}
+                        className="w-24"
+                        style={{ fontSize: '13px' }}
+                      >
+                        <Select.Option value="компл.">компл.</Select.Option>
+                        <Select.Option value="шт">шт</Select.Option>
+                        <Select.Option value="м²">м²</Select.Option>
+                        <Select.Option value="м³">м³</Select.Option>
+                        <Select.Option value="м.п.">м.п.</Select.Option>
+                        <Select.Option value="т">т</Select.Option>
+                        <Select.Option value="кг">кг</Select.Option>
+                        <Select.Option value="л">л</Select.Option>
+                      </Select>
+                    </div>
+                  ) : (
+                    (position.manual_volume || position.unit) && (
+                      <div className="flex items-center gap-1">
+                        <Text className="text-sm text-gray-500 font-semibold">Объем ГП:</Text>
+                        {position.manual_volume && (
+                          <Text className="text-sm text-green-600">
+                            <strong>{position.manual_volume}</strong>
+                          </Text>
+                        )}
+                        {position.unit && (
+                          <Text className="text-sm text-green-600 ml-1">
+                            <strong>{position.unit}</strong>
+                          </Text>
+                        )}
+                      </div>
+                    )
+                  )
                 ) : (
                   // For regular positions - show based on expanded state
                   canAddItems && (
@@ -4658,6 +4642,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             {totalItems > 0 ? (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" style={{ width: '100%', minWidth: '1200px' }}>
                   <Table
+                  key={refreshKey}
                   columns={columns}
                   dataSource={sortedBOQItems}
                   rowKey="id"
@@ -4737,17 +4722,23 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                       }
                     }
                     
-                    let itemTotal = quantity * unitRate;
+                    // Apply currency conversion if needed
+                    const currencyMultiplier = item.currency_type && item.currency_type !== 'RUB' && item.currency_rate 
+                      ? item.currency_rate 
+                      : 1;
+                    let itemTotal = quantity * unitRate * currencyMultiplier;
                     
                     // Add delivery cost for materials
                     if (item.item_type === 'material' || item.item_type === 'sub_material') {
                       const deliveryType = item.delivery_price_type;
                       const deliveryAmount = item.delivery_amount || 0;
                       
-                      if (deliveryType === 'amount' && deliveryAmount > 0) {
+                      if (deliveryType === 'amount') {
+                        // Fixed amount per unit (already in RUB)
                         itemTotal += deliveryAmount * quantity;
                       } else if (deliveryType === 'not_included') {
-                        itemTotal += deliveryAmount * quantity; // Используем значение из БД
+                        // 3% of base cost
+                        itemTotal += itemTotal * 0.03;
                       }
                     }
                     
@@ -4758,14 +4749,17 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                       <Table.Summary.Row style={{ backgroundColor: '#f8f9fa' }}>
                         <Table.Summary.Cell index={0} colSpan={8} align="right">
                         </Table.Summary.Cell>
-                        <Table.Summary.Cell index={1} align="right">
+                        <Table.Summary.Cell index={8} align="right">
                           <div className="whitespace-nowrap">
                             <Text strong className="text-lg text-green-700">
                               {Math.round(total).toLocaleString('ru-RU')} ₽
                             </Text>
                           </div>
                         </Table.Summary.Cell>
-                        <Table.Summary.Cell index={2} />
+                        <Table.Summary.Cell index={9} />
+                        <Table.Summary.Cell index={10} />
+                        <Table.Summary.Cell index={11} />
+                        <Table.Summary.Cell index={12} />
                       </Table.Summary.Row>
                     </Table.Summary>
                   );

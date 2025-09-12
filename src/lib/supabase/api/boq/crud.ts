@@ -299,7 +299,15 @@ export const boqCrudApi = {
    * Update BOQ item
    */
   async update(id: string, updates: BOQItemUpdate): Promise<ApiResponse<BOQItem>> {
-    console.log('🚀 boqCrudApi.update called with:', { id, updates });
+    console.log('🚀 boqCrudApi.update called with:', { 
+      id, 
+      updates,
+      currency_fields: {
+        currency_type: updates.currency_type,
+        currency_rate: updates.currency_rate,
+        unit_rate: updates.unit_rate
+      }
+    });
     
     try {
       console.log('📡 Updating BOQ item in database...');
@@ -310,7 +318,12 @@ export const boqCrudApi = {
         .select()
         .single();
 
-      console.log('📦 Update response:', { data, error });
+      console.log('📦 Update response:', { 
+        data, 
+        error,
+        saved_currency_rate: data?.currency_rate,
+        saved_unit_rate: data?.unit_rate
+      });
 
       if (error) {
         console.error('❌ Update failed:', error);

@@ -4,6 +4,18 @@
 export const handleSupabaseError = (error: unknown, operation: string): string => {
   console.error(`${operation} error:`, error);
   
+  const errorMessage = (error as any)?.message || '';
+  
+  // Handle UUID format errors
+  if (errorMessage.includes('invalid input syntax for type uuid')) {
+    console.error('❌ UUID Error Details:', {
+      operation,
+      message: errorMessage,
+      error
+    });
+    return 'Ошибка: некорректный идентификатор записи. Попробуйте обновить страницу.';
+  }
+  
   if ((error as any)?.code === 'PGRST116') {
     return 'No records found';
   }
@@ -20,7 +32,12 @@ export const handleSupabaseError = (error: unknown, operation: string): string =
     return 'Insufficient permissions for this operation';
   }
   
-  return (error as any)?.message || `Failed to ${operation.toLowerCase()}`;
+  if ((error as any)?.code === '22P02') {
+    // PostgreSQL invalid text representation
+    return 'Ошибка формата данных. Проверьте корректность введенных значений.';
+  }
+  
+  return errorMessage || `Failed to ${operation.toLowerCase()}`;
 };
 
 // Generic pagination helper

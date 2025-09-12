@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PlusOutlined, EditOutlined, CloseOutlined, DisconnectOutlined, HolderOutlined, LinkOutlined, PlusCircleOutlined, SwapOutlined, SendOutlined, DeleteOutlined } from '@ant-design/icons';
-import { message, Spin, InputNumber, Tooltip, Modal, Button, Input, Radio, List, Empty } from 'antd';
+import { message, Spin, InputNumber, Tooltip, Modal, Button, Input, Radio, List, Empty, Select } from 'antd';
 // Drag-and-drop disabled - using modal for material movement
-import { clientPositionsApi, boqItemsApi, boqApi } from '../../lib/supabase/api';
+import { clientPositionsApi, boqItemsApi, boqApi, tendersApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import { supabase } from '../../lib/supabase/client';
 import AutoCompleteSearch from '../common/AutoCompleteSearch';
 import { CostCascadeSelector } from '../common';
 import { formatCurrency, formatQuantity, formatUnitRate } from '../../utils/formatters';
+import { CURRENCY_SYMBOLS, CURRENCY_OPTIONS } from '../../utils/currencyConverter';
 import { calculateMaterialVolume, updateLinkWithCalculatedVolume } from '../../utils/materialCalculations';
 // Components for drag-and-drop removed - using modal approach
 import type { ClientPosition, BOQItem, BOQItemInsert, DeliveryPriceType } from '../../lib/supabase/types';
@@ -62,6 +63,8 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     delivery_amount?: number;
     cost_node_id?: string | null;
     cost_node_display?: string | null;
+    currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY';
+    currency_rate?: number | null;
   }>({
     description: '',
     quantity: 0,
@@ -69,7 +72,8 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     consumption_coefficient: 1,
     conversion_coefficient: 1,
     delivery_price_type: 'included',
-    delivery_amount: 0
+    delivery_amount: 0,
+    currency_type: 'RUB'
   });
   
   // Conflict resolution modal state
@@ -105,11 +109,70 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     cost_node_id: null as string | null,
     cost_node_display: null as string | null
   });
+  
+  // Состояние для курсов валют из тендера
+  const [tenderRates, setTenderRates] = useState<{
+    usd_rate: number | null;
+    eur_rate: number | null;
+    cny_rate: number | null;
+  }>({
+    usd_rate: null,
+    eur_rate: null,
+    cny_rate: null
+  });
   // Remove these states as AutoCompleteSearch handles loading
   // const [materials, setMaterials] = useState<Material[]>([]);
   // const [works, setWorks] = useState<WorkItem[]>([]);
 
   const units = ['м²', 'м³', 'шт.', 'кг', 'т', 'м.п.', 'компл.'];
+  
+  // Функция форматирования цены с символом валюты
+  const formatPriceWithCurrency = (price: number, currencyType?: string) => {
+    const currency = currencyType || 'RUB';
+    const symbol = CURRENCY_SYMBOLS[currency] || '₽';
+    
+    if (currency === 'RUB') {
+      return formatCurrency(price);
+    }
+    
+    // Для валют показываем символ перед суммой
+    return `${symbol}${price.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  };
+  
+  // Функция расчета итоговой суммы с учетом валюты
+  const calculateTotalAmount = (item: {
+    item_type: string;
+    unit_rate: number;
+    quantity: number;
+    currency_type?: string;
+    currency_rate?: number | null;
+    delivery_price_type?: string;
+    delivery_amount?: number | null;
+  }) => {
+    // Конвертируем цену в рубли если указана валюта
+    const priceInRub = item.currency_type && item.currency_type !== 'RUB' && item.currency_rate
+      ? item.unit_rate * item.currency_rate
+      : item.unit_rate;
+    
+    // Для материалов учитываем доставку
+    if (item.item_type === 'material' || item.item_type === 'sub_material') {
+      let deliveryAmount = 0;
+      
+      if (item.delivery_price_type === 'not_included') {
+        // 3% от цены в рублях
+        deliveryAmount = priceInRub * 0.03;
+      } else if (item.delivery_price_type === 'amount') {
+        // Фиксированная сумма (в рублях)
+        deliveryAmount = item.delivery_amount || 0;
+      }
+      // Для 'included' deliveryAmount остается 0
+      
+      return (priceInRub + deliveryAmount) * item.quantity;
+    }
+    
+    // Для работ просто умножаем на количество
+    return priceInRub * item.quantity;
+  };
   
   // Helper function to calculate total cost including all works and materials
   const calculatePositionTotalCost = (items: BOQItem[], workLinks: Record<string, any[]>) => {
@@ -266,11 +329,39 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
 
   // Library data is now handled by AutoCompleteSearch component
 
+  // Загрузка курсов валют из тендера
+  const loadTenderRates = useCallback(async () => {
+    console.log('💱 Loading tender rates for:', tenderId);
+    try {
+      const result = await tendersApi.getById(tenderId);
+      if (result.error) {
+        console.error('❌ Error loading tender rates:', result.error);
+        return;
+      }
+      
+      if (result.data) {
+        setTenderRates({
+          usd_rate: result.data.usd_rate || null,
+          eur_rate: result.data.eur_rate || null,
+          cny_rate: result.data.cny_rate || null
+        });
+        console.log('✅ Tender rates loaded:', {
+          usd: result.data.usd_rate,
+          eur: result.data.eur_rate,
+          cny: result.data.cny_rate
+        });
+      }
+    } catch (error) {
+      console.error('💥 Exception loading tender rates:', error);
+    }
+  }, [tenderId]);
+
   useEffect(() => {
     if (tenderId) {
       loadPositions();
+      loadTenderRates();
     }
-  }, [tenderId, loadPositions]);
+  }, [tenderId, loadPositions, loadTenderRates]);
 
   // Load links for all works in a position
   const loadLinksForPosition = useCallback(async (positionId: string) => {
@@ -836,7 +927,9 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
           delivery_price_type: item.delivery_price_type || 'included',
           delivery_amount: item.delivery_amount || 0,
           cost_node_id: (item as any).cost_node_id || null,
-          cost_node_display: (item as any).cost_node_display || null
+          cost_node_display: (item as any).cost_node_display || null,
+          currency_type: item.currency_type || 'RUB',
+          currency_rate: item.currency_rate || null
         });
       } else {
         // For works, use simpler form
@@ -845,7 +938,9 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
           quantity: item.quantity || 0,
           unit_rate: item.unit_rate || 0,
           cost_node_id: (item as any).cost_node_id || null,
-          cost_node_display: (item as any).cost_node_display || null
+          cost_node_display: (item as any).cost_node_display || null,
+          currency_type: item.currency_type || 'RUB',
+          currency_rate: item.currency_rate || null
         });
       }
       return;
@@ -950,12 +1045,31 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     
     console.log('💾 Saving edited item:', editingItem.id);
     
+    // Валидация курса валюты
+    if (editFormData.currency_type !== 'RUB' && !editFormData.currency_rate) {
+      message.error(`Не задан курс для ${editFormData.currency_type}. Обновите курсы валют в настройках тендера.`);
+      return;
+    }
+    
     try {
-      // Don't update total_amount - it's calculated automatically in the database
+      // Рассчитываем total_amount на клиенте
+      const totalAmount = calculateTotalAmount({
+        item_type: editingItem.item_type,
+        unit_rate: editFormData.unit_rate,
+        quantity: editFormData.quantity,
+        currency_type: editFormData.currency_type,
+        currency_rate: editFormData.currency_rate,
+        delivery_price_type: editFormData.delivery_price_type,
+        delivery_amount: editFormData.delivery_amount
+      });
+      
       const updates: Partial<BOQItem> = {
         description: editFormData.description,
         quantity: editFormData.quantity,
-        unit_rate: editFormData.unit_rate
+        unit_rate: editFormData.unit_rate,
+        currency_type: editFormData.currency_type || 'RUB',
+        currency_rate: editFormData.currency_rate,
+        total_amount: totalAmount
       };
       
       // Call the update function with updates
@@ -966,14 +1080,15 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
       setEditFormData({
         description: '',
         quantity: 0,
-        unit_rate: 0
+        unit_rate: 0,
+        currency_type: 'RUB'
       });
       
     } catch (error) {
       console.error('💥 Save edit error:', error);
       message.error('Ошибка сохранения изменений');
     }
-  }, [editingItem, editFormData, updateSubItem]);
+  }, [editingItem, editFormData, updateSubItem, calculateTotalAmount]);
 
   // Handle update for BOQ item (materials with all fields)
   const handleUpdateBOQItem = useCallback(async () => {
@@ -981,13 +1096,33 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     
     console.log('💾 Saving edited BOQ item:', editingItem.id);
     
+    // Валидация курса валюты
+    if (editFormData.currency_type !== 'RUB' && !editFormData.currency_rate) {
+      message.error(`Не задан курс для ${editFormData.currency_type}. Обновите курсы валют в настройках тендера.`);
+      return;
+    }
+    
     try {
+      // Рассчитываем total_amount на клиенте
+      const totalAmount = calculateTotalAmount({
+        item_type: editingItem.item_type,
+        unit_rate: editFormData.unit_rate,
+        quantity: editFormData.quantity,
+        currency_type: editFormData.currency_type,
+        currency_rate: editFormData.currency_rate,
+        delivery_price_type: editFormData.delivery_price_type,
+        delivery_amount: editFormData.delivery_amount
+      });
+      
       // Prepare updates based on item type
       const updates: Partial<BOQItem> = {
         description: editFormData.description,
         quantity: editFormData.quantity,
         unit_rate: editFormData.unit_rate,
-        cost_node_id: editFormData.cost_node_id
+        cost_node_id: editFormData.cost_node_id,
+        currency_type: editFormData.currency_type || 'RUB',
+        currency_rate: editFormData.currency_rate,
+        total_amount: totalAmount
       } as any;
       
       // Add material-specific fields
@@ -1010,14 +1145,15 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
         consumption_coefficient: 1,
         conversion_coefficient: 1,
         delivery_price_type: 'included',
-        delivery_amount: 0
+        delivery_amount: 0,
+        currency_type: 'RUB'
       });
       
     } catch (error) {
       console.error('💥 Save edit error:', error);
       message.error('Ошибка сохранения изменений');
     }
-  }, [editingItem, editFormData, updateSubItem]);
+  }, [editingItem, editFormData, updateSubItem, calculateTotalAmount]);
 
   // Открытие модального окна для перемещения материала
   const openMoveModal = useCallback((materialId: string, materialName: string, currentWorkId: string | null = null, isLinked: boolean = false, linkId?: string) => {
@@ -1667,6 +1803,26 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                                   placeholder="Кол-во"
                                                 />
                                                 <span className="text-xs text-gray-500">{subItem.unit}</span>
+                                                <Select
+                                                  size="small"
+                                                  value={editFormData.currency_type || 'RUB'}
+                                                  onChange={(value) => {
+                                                    const rate = value !== 'RUB' ? tenderRates[`${value.toLowerCase()}_rate`] : null;
+                                                    setEditFormData({
+                                                      ...editFormData, 
+                                                      currency_type: value,
+                                                      currency_rate: rate
+                                                    });
+                                                  }}
+                                                  className="w-20"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                >
+                                                  {CURRENCY_OPTIONS.map(opt => (
+                                                    <Select.Option key={opt.value} value={opt.value}>
+                                                      {opt.symbol}
+                                                    </Select.Option>
+                                                  ))}
+                                                </Select>
                                                 <input
                                                   type="number"
                                                   value={editFormData.unit_rate}
@@ -1675,8 +1831,23 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                                   placeholder="Цена за ед."
                                                   step="0.01"
                                                 />
+                                                {editFormData.currency_type !== 'RUB' && editFormData.currency_rate && (
+                                                  <Tooltip title={`Курс: 1${CURRENCY_SYMBOLS[editFormData.currency_type]} = ${editFormData.currency_rate}₽`}>
+                                                    <span className="text-xs text-gray-500">
+                                                      = {formatCurrency(editFormData.unit_rate * editFormData.currency_rate)}
+                                                    </span>
+                                                  </Tooltip>
+                                                )}
                                                 <span className="text-sm font-semibold text-green-600">
-                                                  = {formatCurrency(editFormData.quantity * editFormData.unit_rate)}
+                                                  Σ {formatCurrency(calculateTotalAmount({
+                                                    item_type: subItem.item_type,
+                                                    unit_rate: editFormData.unit_rate,
+                                                    quantity: editFormData.quantity,
+                                                    currency_type: editFormData.currency_type,
+                                                    currency_rate: editFormData.currency_rate,
+                                                    delivery_price_type: editFormData.delivery_price_type,
+                                                    delivery_amount: editFormData.delivery_amount
+                                                  }))}
                                                 </span>
                                                 <button
                                                   onClick={(e) => {
@@ -1722,7 +1893,7 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                                 <div className="flex items-center gap-2">
                                                   <span className="text-sm font-semibold">🔧 {subItem.description}</span>
                                                   <span className="text-xs text-gray-500">
-                                                    {subItem.quantity} {subItem.unit} × {formatCurrency(subItem.unit_rate || 0)}/{subItem.unit}
+                                                    {subItem.quantity} {subItem.unit} × {formatPriceWithCurrency(subItem.unit_rate || 0, subItem.currency_type)}/{subItem.unit}
                                                   </span>
                                                 </div>
                                               </div>
@@ -2057,7 +2228,14 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
                                                 )}
                                               </div>
                                               <div className="text-xs text-gray-600 mt-1">
-                                                Цена: {formatCurrency(subItem.unit_rate || 0)}/{subItem.unit}
+                                                Цена: {formatPriceWithCurrency(subItem.unit_rate || 0, subItem.currency_type)}/{subItem.unit}
+                                                {subItem.currency_type && subItem.currency_type !== 'RUB' && subItem.currency_rate && (
+                                                  <Tooltip title={`Курс: 1${CURRENCY_SYMBOLS[subItem.currency_type]} = ${subItem.currency_rate}₽`}>
+                                                    <span className="ml-2 text-xs text-blue-600 cursor-help">
+                                                      ({formatCurrency(subItem.unit_rate * subItem.currency_rate)})
+                                                    </span>
+                                                  </Tooltip>
+                                                )}
                                                 {(subItem as any).cost_node_display && (
                                                   <span className="ml-2 text-xs text-purple-600">
                                                     Затраты: {(subItem as any).cost_node_display}

@@ -64,6 +64,7 @@ export const tendersApi = {
         };
       }
 
+
       // Calculate total BOQ value for each tender from client_positions
       const tendersWithBOQValue = (data || []).map(tender => {
         const clientPositions = (tender as any).client_positions || [];
@@ -72,6 +73,14 @@ export const tendersApi = {
           const worksCost = parseFloat(pos.total_works_cost || 0);
           return sum + materialsCost + worksCost;
         }, 0);
+        
+        // Log currency rates for debugging
+        console.log('🔍 Tender currency rates:');
+        console.log('  ID:', tender.id);
+        console.log('  Title:', (tender as any).title);
+        console.log('  USD Rate:', (tender as any).usd_rate);
+        console.log('  EUR Rate:', (tender as any).eur_rate);
+        console.log('  CNY Rate:', (tender as any).cny_rate);
         
         // Remove client_positions from the result and add boq_total_value
         const { client_positions, ...tenderData } = tender as any;
@@ -174,26 +183,52 @@ export const tendersApi = {
 
   // Update tender
   async update(id: string, updates: TenderUpdate): Promise<ApiResponse<Tender>> {
-    console.log('🔄 tendersApi.update called with:', { id, updates });
-    console.log('🔍 New fields in update:', { 
-      version: updates.version, 
-      area_sp: updates.area_sp, 
-      area_client: updates.area_client 
-    });
+    console.log('🔄 tendersApi.update called with ID:', id);
+    console.log('🔍 Updates being sent:');
+    console.log('  Version:', updates.version);
+    console.log('  Area SP:', updates.area_sp);
+    console.log('  Area Client:', updates.area_client);
+    console.log('  USD Rate:', updates.usd_rate);
+    console.log('  EUR Rate:', updates.eur_rate);
+    console.log('  CNY Rate:', updates.cny_rate);
     
     try {
-      const { data, error } = await supabase
+      // First perform the update
+      const { error: updateError } = await supabase
         .from('tenders')
         .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+        .eq('id', id);
 
-      console.log('📦 Supabase update response:', { data, error });
+      console.log('📦 Supabase update response:', { updateError });
 
-      if (error) {
+      if (updateError) {
         return {
-          error: handleSupabaseError(error, 'Update tender'),
+          error: handleSupabaseError(updateError, 'Update tender'),
+        };
+      }
+
+      // Then fetch the updated record
+      const { data: fetchedData, error: fetchError } = await supabase
+        .from('tenders')
+        .select('*')
+        .eq('id', id);
+
+      console.log('📦 Raw fetched data:', fetchedData);
+      
+      // Handle array response
+      const data = Array.isArray(fetchedData) ? fetchedData[0] : fetchedData;
+      
+      console.log('📦 Fetched updated tender:');
+      console.log('  ID:', data?.id);
+      console.log('  Title:', data?.title); 
+      console.log('  USD Rate:', data?.usd_rate);
+      console.log('  EUR Rate:', data?.eur_rate);
+      console.log('  CNY Rate:', data?.cny_rate);
+      if (fetchError) console.log('  Error:', fetchError);
+
+      if (fetchError) {
+        return {
+          error: handleSupabaseError(fetchError, 'Fetch updated tender'),
         };
       }
 

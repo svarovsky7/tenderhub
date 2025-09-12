@@ -11,7 +11,8 @@ import {
   Input,
   Typography,
   Tooltip,
-  Spin
+  Spin,
+  Select
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -25,6 +26,7 @@ import { materialsApi, worksApi } from '../../lib/supabase/api';
 import type { Material, Work } from '../../lib/supabase/types';
 import EnhancedAutocomplete from './EnhancedAutocomplete';
 import { CostCascadeSelector } from '../common';
+import { CURRENCY_OPTIONS, convertToRuble, getCurrencyRate } from '../../utils/currencyConverter';
 import styles from '../../styles/EnhancedQuickAddCard.module.css';
 
 const { Title } = Typography;
@@ -33,6 +35,11 @@ interface EnhancedQuickAddCardProps {
   type: 'work' | 'material';
   onAdd: (data: any) => Promise<void>;
   loading?: boolean;
+  tender?: {
+    usd_rate?: number | null;
+    eur_rate?: number | null;
+    cny_rate?: number | null;
+  } | null;
 }
 
 interface FormValues {
@@ -44,6 +51,7 @@ interface FormValues {
   conversion_coefficient?: number;
   cost_node_id?: string | null;
   cost_node_display?: string;
+  currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY';
 }
 
 interface SubmissionState {
@@ -56,9 +64,10 @@ interface SubmissionState {
 const EnhancedQuickAddCard: React.FC<EnhancedQuickAddCardProps> = React.memo(({ 
   type, 
   onAdd, 
-  loading = false 
+  loading = false,
+  tender 
 }) => {
-  console.log('🚀 EnhancedQuickAddCard rendered', { type });
+  console.log('🚀 EnhancedQuickAddCard rendered', { type, tender });
   
   const [form] = Form.useForm<FormValues>();
   const [searchTerm, setSearchTerm] = useState('');
@@ -71,6 +80,7 @@ const EnhancedQuickAddCard: React.FC<EnhancedQuickAddCardProps> = React.memo(({
   });
   const [showSuccess, setShowSuccess] = useState(false);
   const [totalCost, setTotalCost] = useState(0);
+  const [selectedCurrency, setSelectedCurrency] = useState<'RUB' | 'USD' | 'EUR' | 'CNY'>('RUB');
 
   const isWork = type === 'work';
   
@@ -133,20 +143,44 @@ const EnhancedQuickAddCard: React.FC<EnhancedQuickAddCardProps> = React.memo(({
     return () => clearTimeout(debounceTimer);
   }, [searchTerm, loadSuggestions]);
 
+  // Handle currency change
+  const handleCurrencyChange = useCallback((currency: 'RUB' | 'USD' | 'EUR' | 'CNY') => {
+    console.log('💱 Currency changed:', currency);
+    setSelectedCurrency(currency);
+    form.setFieldsValue({ currency_type: currency });
+  }, [form]);
+
+  // Handle unit rate change - now stores the price in selected currency
+  const handleUnitRateChange = useCallback((value: number | null) => {
+    console.log('💰 Unit rate changed:', value, 'Currency:', selectedCurrency);
+    // unit_rate now stores the price in the selected currency
+    // No conversion needed here
+  }, [selectedCurrency]);
+
   // Calculate total cost when values change
   const handleFormValuesChange = useCallback(() => {
     const quantity = form.getFieldValue('quantity') || 0;
     const unitRate = form.getFieldValue('unit_rate') || 0;
     const consumptionCoeff = form.getFieldValue('consumption_coefficient') || 1;
     const conversionCoeff = form.getFieldValue('conversion_coefficient') || 1;
+    const currencyType = form.getFieldValue('currency_type') || 'RUB';
     
-    let cost = quantity * unitRate;
+    // Convert to rubles for display
+    let rubleRate = unitRate;
+    if (currencyType !== 'RUB' && tender) {
+      const rate = getCurrencyRate(currencyType as 'USD' | 'EUR' | 'CNY', tender);
+      if (rate) {
+        rubleRate = unitRate * rate;
+      }
+    }
+    
+    let cost = quantity * rubleRate;
     if (!isWork) {
       cost = cost * consumptionCoeff * conversionCoeff;
     }
     
     setTotalCost(cost);
-  }, [form, isWork]);
+  }, [form, isWork, tender]);
 
   // Progress simulation for better UX
   const simulateProgress = useCallback(async () => {
@@ -176,14 +210,22 @@ const EnhancedQuickAddCard: React.FC<EnhancedQuickAddCardProps> = React.memo(({
       // Simulate progress
       await simulateProgress();
       
-      // Actual submission
-      await onAdd({
+      // Prepare submission data with currency info
+      const submissionData: any = {
         ...values,
+        currency_type: values.currency_type || 'RUB',
+        // unit_rate already contains the price in the selected currency
+        currency_rate: values.currency_type && values.currency_type !== 'RUB' && tender 
+          ? getCurrencyRate(values.currency_type, tender) 
+          : null,
         type,
         item_type: type,
         cost_node_id: values.cost_node_id || null,
         cost_node_display: values.cost_node_display || null
-      });
+      };
+      
+      // Actual submission
+      await onAdd(submissionData);
 
       // Success state
       setShowSuccess(true);
@@ -191,6 +233,7 @@ const EnhancedQuickAddCard: React.FC<EnhancedQuickAddCardProps> = React.memo(({
       setSearchTerm('');
       setSuggestions([]);
       setTotalCost(0);
+      setSelectedCurrency('RUB');
       
       message.success({
         content: `${isWork ? 'Работа' : 'Материал'} успешно добавлен${isWork ? '' : ''}`,
@@ -227,10 +270,12 @@ const EnhancedQuickAddCard: React.FC<EnhancedQuickAddCardProps> = React.memo(({
     
     form.setFieldsValue({
       description: suggestion.name,
-      unit: suggestion.unit
+      unit: suggestion.unit,
+      currency_type: 'RUB' // Reset to RUB when selecting from library
     });
     setSearchTerm(suggestion.name);
     setSuggestions([]);
+    setSelectedCurrency('RUB');
     
     // Trigger cost calculation
     setTimeout(handleFormValuesChange, 100);
@@ -317,7 +362,7 @@ const EnhancedQuickAddCard: React.FC<EnhancedQuickAddCardProps> = React.memo(({
 
           {/* Basic Fields Row */}
           <Row gutter={16}>
-            <Col xs={24} sm={8}>
+            <Col xs={24} sm={4}>
               <Form.Item
                 name="unit"
                 label={<span className={styles.label}>Ед. изм.</span>}
@@ -328,6 +373,23 @@ const EnhancedQuickAddCard: React.FC<EnhancedQuickAddCardProps> = React.memo(({
                   placeholder="м², шт, кг"
                   size="large"
                   className={styles.input}
+                />
+              </Form.Item>
+            </Col>
+
+            {/* Currency selector */}
+            <Col xs={24} sm={4}>
+              <Form.Item
+                name="currency_type"
+                label={<span className={styles.label}>Валюта</span>}
+                className={styles.formItem}
+                initialValue="RUB"
+              >
+                <Select
+                  size="large"
+                  className={styles.input}
+                  onChange={handleCurrencyChange}
+                  options={CURRENCY_OPTIONS}
                 />
               </Form.Item>
             </Col>
@@ -353,7 +415,16 @@ const EnhancedQuickAddCard: React.FC<EnhancedQuickAddCardProps> = React.memo(({
             <Col xs={24} sm={8}>
               <Form.Item
                 name="unit_rate"
-                label={<span className={styles.label}>Цена за ед.</span>}
+                label={
+                  <span className={styles.label}>
+                    Цена за ед. ({CURRENCY_OPTIONS.find(c => c.value === selectedCurrency)?.symbol})
+                    {selectedCurrency !== 'RUB' && tender && (
+                      <Tooltip title={`Курс: ${getCurrencyRate(selectedCurrency as 'USD' | 'EUR' | 'CNY', tender) || 'Не задан'} ₽`}>
+                        <InfoCircleOutlined className="ml-1 opacity-60" />
+                      </Tooltip>
+                    )}
+                  </span>
+                }
                 rules={[{ required: true, message: 'Введите цену' }]}
                 className={styles.formItem}
               >
@@ -364,7 +435,9 @@ const EnhancedQuickAddCard: React.FC<EnhancedQuickAddCardProps> = React.memo(({
                   placeholder="0.00"
                   size="large"
                   className={`${styles.input} ${styles.numberInput}`}
-                  addonAfter="₽"
+                  addonAfter={CURRENCY_OPTIONS.find(c => c.value === selectedCurrency)?.symbol}
+                  onChange={handleUnitRateChange}
+                  style={{ width: '100%' }}
                 />
               </Form.Item>
             </Col>

@@ -161,6 +161,17 @@ export const useTenderActions = (
       if ('area_client' in values) {
         updates.area_client = values.area_client ?? null;
       }
+      
+      // Handle currency rate fields
+      if ('usd_rate' in values) {
+        updates.usd_rate = values.usd_rate ?? null;
+      }
+      if ('eur_rate' in values) {
+        updates.eur_rate = values.eur_rate ?? null;
+      }
+      if ('cny_rate' in values) {
+        updates.cny_rate = values.cny_rate ?? null;
+      }
 
       console.log('📡 Calling tendersApi.update with updates:', updates);
       const result = await tendersApi.update(tenderId, updates);

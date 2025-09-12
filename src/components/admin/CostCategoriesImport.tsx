@@ -92,7 +92,7 @@ export const CostCategoriesImport: React.FC = () => {
       // Импортируем данные пакетами для отображения прогресса
       const batchSize = 10;
       const totalBatches = Math.ceil(previewData.length / batchSize);
-      let allResults = {
+      const allResults = {
         success: 0,
         failed: 0,
         errors: [] as string[]

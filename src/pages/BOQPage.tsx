@@ -42,8 +42,8 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TenderBOQManagerNew from '../components/tender/TenderBOQManagerNew';
 import EnhancedQuickAddCard from '../components/tender/EnhancedQuickAddCard';
-import { tendersApi, boqApi, materialsApi, worksApi } from '../lib/supabase/api';
-import type { Tender, BOQItem, Material, Work } from '../lib/supabase/types';
+import { tendersApi, boqApi, materialsApi, worksApi, clientPositionsApi } from '../lib/supabase/api';
+import type { Tender, BOQItem, Material, Work, ClientPosition } from '../lib/supabase/types';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -109,6 +109,7 @@ const BOQPage: React.FC = () => {
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [tendersLoading, setTendersLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [boqStats, setBOQStats] = useState({
     totalWorks: 0,
     totalMaterials: 0,
@@ -175,11 +176,11 @@ const BOQPage: React.FC = () => {
     } finally {
       setTendersLoading(false);
     }
-  }, [selectedTenderId, searchParams, loadBOQStats]);
+  }, [searchParams, loadBOQStats]);
 
   useEffect(() => {
     loadTenders();
-  }, [loadTenders]);
+  }, []); // Remove dependency to avoid infinite loop
 
   const handleTenderChange = useCallback((tenderId: string) => {
     console.log('🔄 Tender selection changed:', tenderId);
@@ -196,12 +197,79 @@ const BOQPage: React.FC = () => {
     }
 
     try {
-      // This would call the appropriate API endpoint
-      // For now, just show success message
-      console.log('✅ Item added successfully');
+      // Get or create client position for this tender
+      console.log('🔍 Getting client positions for tender:', selectedTenderId);
+      const positionsResult = await clientPositionsApi.getByTenderId(selectedTenderId);
+      
+      let positionId: string;
+      
+      if (positionsResult.data && positionsResult.data.items.length > 0) {
+        // Use first existing position
+        positionId = positionsResult.data.items[0].id;
+        console.log('✅ Using existing position:', positionId);
+      } else {
+        // Create a default position if none exists
+        console.log('📝 Creating default client position...');
+        const newPositionResult = await clientPositionsApi.create({
+          tender_id: selectedTenderId,
+          position_number: 1,
+          position_name: 'Основная позиция',
+          is_expanded: true
+        });
+        
+        if (newPositionResult.error || !newPositionResult.data) {
+          throw new Error(newPositionResult.error || 'Failed to create client position');
+        }
+        
+        positionId = newPositionResult.data.id;
+        console.log('✅ Created new position:', positionId);
+      }
+
+      // Prepare BOQ item data
+      const boqItemData = {
+        tender_id: selectedTenderId,
+        client_position_id: positionId,
+        item_type: data.item_type || data.type,
+        description: data.description,
+        unit: data.unit,
+        quantity: data.quantity,
+        unit_rate: data.unit_rate, // This already contains the price in selected currency
+        // Currency fields
+        currency_type: data.currency_type || 'RUB',
+        currency_rate: data.currency_rate || null,
+        // Material/Work specific fields
+        material_id: data.item_type === 'material' ? data.material_id : null,
+        work_id: data.item_type === 'work' ? data.work_id : null,
+        consumption_coefficient: data.consumption_coefficient || 1,
+        conversion_coefficient: data.conversion_coefficient || 1,
+        // Delivery fields for materials
+        delivery_price_type: data.item_type === 'material' ? (data.delivery_price_type || 'included') : null,
+        delivery_amount: data.item_type === 'material' ? (data.delivery_amount || 0) : null,
+        // Cost category
+        cost_node_id: data.cost_node_id || null,
+        cost_node_display: data.cost_node_display || null,
+        // Additional fields
+        notes: data.notes || ''
+      };
+
+      console.log('💾 Creating BOQ item:', boqItemData);
+      
+      // Create the BOQ item
+      const result = await boqApi.create(boqItemData);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      console.log('✅ BOQ item created successfully:', result.data);
+      
+      // Refresh the BOQ manager component by updating a key
+      setRefreshKey(prev => prev + 1);
       
       // Refresh stats after adding
       loadBOQStats(selectedTenderId);
+      
+      return result.data;
     } catch (error) {
       console.error('❌ Failed to add item:', error);
       throw error; // Re-throw for QuickAddCard to handle
@@ -239,17 +307,18 @@ const BOQPage: React.FC = () => {
   ], [boqStats]);
 
   // Memoized selected tender info
-  const selectedTender = useMemo(() => 
-    tenders.find(t => t.id === selectedTenderId), 
-    [tenders, selectedTenderId]
-  );
+  const selectedTender = useMemo(() => {
+    return tenders.find(t => t.id === selectedTenderId);
+  }, [tenders, selectedTenderId]);
 
   const handleRefresh = useCallback(() => {
     console.log('🔄 Refreshing BOQ data...');
     setLoading(true);
+    // Force reload tenders with fresh data
+    loadTenders();
     // The TenderBOQManager will handle its own refresh
     setTimeout(() => setLoading(false), 500);
-  }, []);
+  }, [loadTenders]);
 
   const handleNavigateToTender = useCallback(() => {
     if (selectedTenderId) {
@@ -350,9 +419,25 @@ const BOQPage: React.FC = () => {
                 
                 {selectedTender && (
                   <div className="mt-4 pt-4 border-t border-white/20">
-                    <div className="flex items-center gap-6 text-sm text-blue-100">
-                      <span><strong>Статус:</strong> {selectedTender.status}</span>
+                    <div className="flex items-center gap-6 text-sm text-blue-100 flex-wrap mb-2">
+                      <span><strong>Версия:</strong> {selectedTender.version}</span>
                       <span><strong>Создан:</strong> {new Date(selectedTender.created_at).toLocaleDateString('ru-RU')}</span>
+                      {selectedTender.area_client && (
+                        <span><strong>Площадь от заказчика:</strong> {selectedTender.area_client.toLocaleString('ru-RU')} м²</span>
+                      )}
+                    </div>
+                    
+                    {/* Курсы валют на отдельной строке */}
+                    <div className="flex items-center gap-6 text-sm flex-wrap">
+                      <span className="text-green-200">
+                        <strong>Курс USD:</strong> {selectedTender.usd_rate ? `${Number(selectedTender.usd_rate).toFixed(2)} ₽/$` : '—'}
+                      </span>
+                      <span className="text-blue-200">
+                        <strong>Курс EUR:</strong> {selectedTender.eur_rate ? `${Number(selectedTender.eur_rate).toFixed(2)} ₽/€` : '—'}
+                      </span>
+                      <span className="text-orange-200">
+                        <strong>Курс CNY:</strong> {selectedTender.cny_rate ? `${Number(selectedTender.cny_rate).toFixed(2)} ₽/¥` : '—'}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -403,11 +488,13 @@ const BOQPage: React.FC = () => {
                     type="work" 
                     onAdd={handleQuickAdd}
                     loading={loading}
+                    tender={selectedTender}
                   />
                   <EnhancedQuickAddCard 
                     type="material" 
                     onAdd={handleQuickAdd}
                     loading={loading}
+                    tender={selectedTender}
                   />
                 </div>
 
@@ -421,7 +508,7 @@ const BOQPage: React.FC = () => {
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                   <TenderBOQManagerNew 
                     tenderId={selectedTenderId} 
-                    key={selectedTenderId}
+                    key={`${selectedTenderId}-${refreshKey}`}
                   />
                 </div>
               </div>

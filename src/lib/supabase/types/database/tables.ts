@@ -34,6 +34,8 @@ export type DatabaseTables = {
       created_at: string;
       updated_at: string;
       imported_at: string | null;
+      currency_type: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
+      currency_rate: number | null;
     };
     Insert: {
       id?: string;
@@ -61,6 +63,8 @@ export type DatabaseTables = {
       imported_at?: string | null;
       created_at?: string;
       updated_at?: string;
+      currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
+      currency_rate?: number | null;
     };
     Update: {
       id?: string;
@@ -88,6 +92,8 @@ export type DatabaseTables = {
       imported_at?: string | null;
       created_at?: string;
       updated_at?: string;
+      currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
+      currency_rate?: number | null;
     };
     Relationships: [
       {
@@ -138,6 +144,8 @@ export type DatabaseTables = {
       client_note: string | null; // Примечание из Excel
       position_type: 'article' | 'section' | 'subsection' | 'header' | 'subheader' | 'executable'; // Тип позиции
       hierarchy_level: number;    // Уровень иерархии (1-6)
+      is_additional: boolean;    // Флаг для ДОП работ
+      parent_position_id: string | null; // Ссылка на родительскую позицию для ДОП работ
     };
     Insert: {
       id?: string;
@@ -154,6 +162,8 @@ export type DatabaseTables = {
       client_note?: string | null; // Примечание из Excel
       position_type?: 'article' | 'section' | 'subsection' | 'header' | 'subheader' | 'executable'; // Тип позиции
       hierarchy_level?: number;   // Уровень иерархии (1-6)
+      is_additional?: boolean;   // Флаг для ДОП работ
+      parent_position_id?: string | null; // Ссылка на родительскую позицию для ДОП работ
       created_at?: string;
       updated_at?: string;
     };
@@ -172,6 +182,8 @@ export type DatabaseTables = {
       client_note?: string | null; // Примечание из Excel
       position_type?: 'article' | 'section' | 'subsection' | 'header' | 'subheader' | 'executable'; // Тип позиции
       hierarchy_level?: number;   // Уровень иерархии (1-6)
+      is_additional?: boolean;   // Флаг для ДОП работ
+      parent_position_id?: string | null; // Ссылка на родительскую позицию для ДОП работ
       created_at?: string;
       updated_at?: string;
     };
@@ -188,6 +200,13 @@ export type DatabaseTables = {
         columns: ['tender_id'];
         isOneToOne: false;
         referencedRelation: 'tenders';
+        referencedColumns: ['id'];
+      },
+      {
+        foreignKeyName: 'client_positions_parent_position_id_fkey';
+        columns: ['parent_position_id'];
+        isOneToOne: false;
+        referencedRelation: 'client_positions';
         referencedColumns: ['id'];
       }
     ];
@@ -343,6 +362,9 @@ export type DatabaseTables = {
       version: number;
       area_sp: number | null;
       area_client: number | null;
+      usd_rate: number | null;
+      eur_rate: number | null;
+      cny_rate: number | null;
     };
     Insert: {
       id?: string;
@@ -356,6 +378,9 @@ export type DatabaseTables = {
       version?: number;
       area_sp?: number | null;
       area_client?: number | null;
+      usd_rate?: number | null;
+      eur_rate?: number | null;
+      cny_rate?: number | null;
     };
     Update: {
       id?: string;
@@ -369,6 +394,9 @@ export type DatabaseTables = {
       version?: number;
       area_sp?: number | null;
       area_client?: number | null;
+      usd_rate?: number | null;
+      eur_rate?: number | null;
+      cny_rate?: number | null;
     };
     Relationships: [
       {

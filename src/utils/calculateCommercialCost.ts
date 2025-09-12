@@ -14,6 +14,7 @@ export function calculateWorkCommercialCost(
   console.log('🚀 Расчет коммерческой стоимости работы (исправленная формула)');
   console.log('📊 Базовая стоимость (Работа ПЗ):', baseCost);
   console.log('📊 Проценты накруток:', markups);
+  console.log('🔍 DEBUG: baseCost type:', typeof baseCost, 'value:', baseCost);
 
   // 1. Служба механизации (СМ)
   const mechanizationCost = baseCost * (markups.mechanization_service / 100);
@@ -66,7 +67,14 @@ export function calculateWorkCommercialCost(
   const totalCommercialCost = profit + warrantyCost;
   
   console.log('✅ ИТОГО коммерческая стоимость:', totalCommercialCost);
-  console.log('📈 Коэффициент увеличения:', (totalCommercialCost / baseCost).toFixed(2));
+  console.log('📈 Коэффициент увеличения:', (totalCommercialCost / baseCost).toFixed(8));
+  console.log('🔍 DEBUG: Returning value:', totalCommercialCost, 'type:', typeof totalCommercialCost);
+  
+  // Проверка на явно заниженное значение
+  if (baseCost > 1000 && totalCommercialCost < baseCost) {
+    console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: коммерческая стоимость меньше базовой!');
+    console.error(`   baseCost: ${baseCost}, commercial: ${totalCommercialCost}`);
+  }
   
   return totalCommercialCost;
 }
@@ -303,17 +311,26 @@ export function calculateBOQItemCommercialCost(
     case 'work':
       return calculateWorkCommercialCost(baseCost, markups);
     case 'material':
-      return calculateMaterialCommercialCost(baseCost, markups, isLinked);
+      // Для материалов возвращаем ПОЛНУЮ коммерческую стоимость для правильного расчета коэффициента
+      if (isLinked) {
+        const result = calculateMainMaterialCommercialCost(baseCost, markups);
+        return result.materialCost + result.workMarkup; // Возвращаем полную стоимость
+      } else {
+        const result = calculateAuxiliaryMaterialCommercialCost(baseCost, markups);
+        return result.materialCost + result.workMarkup; // Возвращаем полную стоимость
+      }
     case 'sub_work':
       return calculateSubcontractWorkCommercialCost(baseCost, markups);
     case 'sub_material':
+      // Для субматериалов также возвращаем ПОЛНУЮ коммерческую стоимость
       if (isLinked) {
-        // Основной субматериал - возвращаем только базовую стоимость
+        // Основной субматериал
         const result = calculateSubcontractMaterialCommercialCost(baseCost, markups);
-        return result.materialCost; // Возвращаем Субмат ПЗ
+        return result.materialCost + result.workMarkup; // Возвращаем полную стоимость
       } else {
-        // Вспомогательный субматериал - возвращаем 0 (все переходит в работы)
-        return 0;
+        // Вспомогательный субматериал
+        const result = calculateAuxiliarySubcontractMaterialCommercialCost(baseCost, markups);
+        return result.materialCost + result.workMarkup; // Возвращаем полную стоимость
       }
     default:
       console.warn('⚠️ Неизвестный тип элемента:', itemType);

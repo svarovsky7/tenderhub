@@ -1,6 +1,6 @@
 # MCP Server для Supabase - Инструкция по настройке
 
-## ✅ Переустановка завершена (22.08.2025)
+## ✅ Переустановка завершена (12.09.2025)
 
 MCP сервер для Supabase успешно установлен и настроен.
 
@@ -8,10 +8,9 @@ MCP сервер для Supabase успешно установлен и наст
 
 1. **Установлен MCP сервер Supabase**
    - Глобально: `@supabase/mcp-server-supabase`
-   - Локально в проект: как dev-зависимость
 
 2. **Создан конфигурационный файл MCP**
-   - Путь: `C:\Users\odintsov.a.a\AppData\Roaming\Claude\mcp.json`
+   - Путь: `C:\Users\nekrasov.l.m\AppData\Roaming\Claude\mcp.json`
    - Содержит настройки для подключения к Supabase
 
 3. **Настроены переменные окружения**
@@ -59,12 +58,17 @@ MCP сервер для Supabase успешно установлен и наст
 
 1. Убедитесь, что файл конфигурации существует:
    ```
-   C:\Users\odintsov.a.a\AppData\Roaming\Claude\mcp.json
+   C:\Users\nekrasov.l.m\AppData\Roaming\Claude\mcp.json
    ```
 
 2. Проверьте, что MCP сервер установлен глобально:
    ```bash
    npm list -g @supabase/mcp-server-supabase
+   ```
+   
+   Если не установлен, установите его:
+   ```bash
+   npm install -g @supabase/mcp-server-supabase
    ```
 
 3. Полностью закройте все окна Claude и откройте заново
