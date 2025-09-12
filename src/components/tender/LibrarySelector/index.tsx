@@ -2,7 +2,9 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Modal,
   Tabs,
-  message
+  message,
+  Pagination,
+  Space
 } from 'antd';
 import { materialsApi, worksApi } from '../../../lib/supabase/api';
 import type { 
@@ -18,6 +20,9 @@ import WorkSelector from './WorkSelector';
 import Cart from './Cart';
 
 const { TabPane } = Tabs;
+
+// Optimized with pagination
+const ITEMS_PER_PAGE = 50; // Load only 50 items at a time
 
 const LibrarySelector: React.FC<LibrarySelectorProps> = ({
   visible,
@@ -37,6 +42,12 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
   const [loading, setLoading] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   
+  // Pagination state
+  const [materialPage, setMaterialPage] = useState(1);
+  const [materialTotal, setMaterialTotal] = useState(0);
+  const [workPage, setWorkPage] = useState(1);
+  const [workTotal, setWorkTotal] = useState(0);
+  
   // Filters
   const [materialFilters, setMaterialFilters] = useState<MaterialFilters>({
     search: '',
@@ -51,13 +62,20 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
   const [selectedMaterialKeys, setSelectedMaterialKeys] = useState<string[]>([]);
   const [selectedWorkKeys, setSelectedWorkKeys] = useState<string[]>([]);
 
-  // Load data
-  const loadMaterials = useCallback(async () => {
-    console.log('📡 Loading materials with filters:', materialFilters);
+  // Load materials with pagination
+  const loadMaterials = useCallback(async (page: number = 1) => {
+    console.log('📡 Loading materials page:', page, 'with filters:', materialFilters);
     setLoading(true);
     try {
-      const result = await materialsApi.getAll(materialFilters, { limit: 1000 });
-      console.log('📦 Materials API response:', { data: result.data?.length, error: result.error });
+      const result = await materialsApi.getAll(materialFilters, { 
+        page, 
+        limit: ITEMS_PER_PAGE 
+      });
+      console.log('📦 Materials API response:', { 
+        data: result.data?.length, 
+        pagination: result.pagination,
+        error: result.error 
+      });
       
       if (result.error) {
         console.error('❌ Materials API error:', result.error);
@@ -66,6 +84,8 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
       
       console.log('✅ Materials loaded successfully:', result.data?.length);
       setMaterials(result.data || []);
+      setMaterialTotal(result.pagination?.total || 0);
+      setMaterialPage(page);
     } catch (error) {
       console.error('💥 Load materials error:', error);
       message.error('Ошибка загрузки материалов');
@@ -74,12 +94,20 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
     }
   }, [materialFilters]);
 
-  const loadWorks = useCallback(async () => {
-    console.log('📡 Loading works with filters:', workFilters);
+  // Load works with pagination
+  const loadWorks = useCallback(async (page: number = 1) => {
+    console.log('📡 Loading works page:', page, 'with filters:', workFilters);
     setLoading(true);
     try {
-      const result = await worksApi.getAll(workFilters, { limit: 1000 });
-      console.log('📦 Works API response:', { data: result.data?.length, error: result.error });
+      const result = await worksApi.getAll(workFilters, { 
+        page, 
+        limit: ITEMS_PER_PAGE 
+      });
+      console.log('📦 Works API response:', { 
+        data: result.data?.length, 
+        pagination: result.pagination,
+        error: result.error 
+      });
       
       if (result.error) {
         console.error('❌ Works API error:', result.error);
@@ -88,6 +116,8 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
       
       console.log('✅ Works loaded successfully:', result.data?.length);
       setWorks(result.data || []);
+      setWorkTotal(result.pagination?.total || 0);
+      setWorkPage(page);
     } catch (error) {
       console.error('💥 Load works error:', error);
       message.error('Ошибка загрузки работ');
@@ -99,11 +129,24 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
   // Effects
   useEffect(() => {
     if (visible) {
-      console.log('🔄 Modal opened, loading data...');
-      loadMaterials();
-      loadWorks();
+      console.log('🔄 Modal opened, loading first page...');
+      loadMaterials(1);
+      loadWorks(1);
     }
-  }, [visible, loadMaterials, loadWorks]);
+  }, [visible]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    if (visible) {
+      loadMaterials(1);
+    }
+  }, [materialFilters, visible]);
+
+  useEffect(() => {
+    if (visible) {
+      loadWorks(1);
+    }
+  }, [workFilters, visible]);
 
   useEffect(() => {
     if (visible) {
@@ -111,6 +154,8 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
       setCart([]);
       setSelectedMaterialKeys([]);
       setSelectedWorkKeys([]);
+      setMaterialPage(1);
+      setWorkPage(1);
     }
   }, [visible]);
 
@@ -123,7 +168,7 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
       type,
       name: item.name,
       unit: item.unit,
-      basePrice: 0, // Base price not available in simplified schema
+      basePrice: 0,
       quantity: 1,
       originalItem: item
     }));
@@ -150,108 +195,126 @@ const LibrarySelector: React.FC<LibrarySelectorProps> = ({
     ));
   }, []);
 
-  const updateCartItemNotes = useCallback((itemId: string, notes: string) => {
-    console.log('📝 Updating cart item notes:', { itemId, notesLength: notes.length });
-    setCart(prev => prev.map(item => 
-      item.id === itemId ? { ...item, notes } : item
-    ));
-  }, []);
-
-  const clearCart = useCallback(() => {
-    console.log('🧹 Clearing cart');
-    setCart([]);
-    setSelectedMaterialKeys([]);
-    setSelectedWorkKeys([]);
-  }, []);
-
-  // Handlers
-  const handleConfirmSelection = useCallback(() => {
-    console.log('✅ Confirming selection with cart:', cart);
+  // Handle submit
+  const handleSubmit = useCallback(async () => {
+    console.log('💾 Submitting cart:', cart);
     
     if (cart.length === 0) {
       message.warning('Корзина пуста');
       return;
     }
 
-    const boqItems: BOQItemInsert[] = cart.map(cartItem => ({
-      tender_id: 'temp', // Will be set by parent
-      item_type: cartItem.type,
-      description: cartItem.name,
-      unit: cartItem.unit,
-      quantity: cartItem.quantity,
-      unit_rate: cartItem.basePrice,
-      material_id: cartItem.type === 'material' ? cartItem.originalItem.id : null,
-      work_id: cartItem.type === 'work' ? cartItem.originalItem.id : null,
-      library_material_id: cartItem.type === 'material' ? cartItem.originalItem.id : null,
-      library_work_id: cartItem.type === 'work' ? cartItem.originalItem.id : null,
-      notes: cartItem.notes,
-      created_by: 'system' // This should be replaced with actual user ID
+    // Convert cart items to BOQ items
+    const boqItems: Partial<BOQItemInsert>[] = cart.map(item => ({
+      item_type: item.type,
+      description: item.name,
+      unit: item.unit,
+      quantity: item.quantity,
+      unit_rate: item.basePrice || 0,
+      material_id: item.type === 'material' ? item.originalItem.id : undefined,
+      work_id: item.type === 'work' ? item.originalItem.id : undefined
     }));
 
-    console.log('📤 Sending BOQ items to parent:', boqItems);
-    onSelect(boqItems);
-  }, [cart, onSelect]);
+    console.log('📤 BOQ items to submit:', boqItems);
+    await onSelect(boqItems);
+    onClose();
+  }, [cart, onSelect, onClose]);
 
+  // Get unique categories
+  const materialCategories = useMemo(() => {
+    const categories = new Set<string>();
+    materials.forEach(m => {
+      if (m.category) categories.add(m.category);
+    });
+    return Array.from(categories);
+  }, [materials]);
 
-
-  const handleTabChange = useCallback((key: string) => {
-    console.log('🔄 Tab changed:', key);
-    setActiveTab(key as 'materials' | 'works');
-  }, []);
+  const workCategories = useMemo(() => {
+    const categories = new Set<string>();
+    works.forEach(w => {
+      if (w.category) categories.add(w.category);
+    });
+    return Array.from(categories);
+  }, [works]);
 
   return (
     <Modal
       title="Выбор из библиотеки"
-      visible={visible}
+      open={visible}
       onCancel={onClose}
-      width={1200}
-      footer={null}
-      destroyOnClose
+      onOk={handleSubmit}
+      width={1400}
+      okText="Добавить выбранное"
+      cancelText="Отмена"
+      okButtonProps={{ disabled: cart.length === 0 }}
     >
-      <div className="space-y-4">
-        <Tabs activeKey={activeTab} onChange={handleTabChange}>
-          <TabPane 
-            tab="Материалы" 
-            key="materials"
-          >
-            <MaterialSelector
-              materials={materials}
-              loading={loading}
-              selectedKeys={selectedMaterialKeys}
-              onSelectionChange={setSelectedMaterialKeys}
-              onAddToCart={(items) => addToCart(items, 'material')}
-              onFiltersChange={setMaterialFilters}
-              filters={materialFilters}
-            />
-          </TabPane>
-          
-          <TabPane 
-            tab="Работы" 
-            key="works"
-          >
-            <WorkSelector
-              works={works}
-              loading={loading}
-              selectedKeys={selectedWorkKeys}
-              onSelectionChange={setSelectedWorkKeys}
-              onAddToCart={(items) => addToCart(items, 'work')}
-              onFiltersChange={setWorkFilters}
-              filters={workFilters}
-            />
-          </TabPane>
-        </Tabs>
-
-        <Cart
-          items={cart}
-          onUpdateQuantity={updateCartItemQuantity}
-          onUpdateNotes={updateCartItemNotes}
-          onRemoveItem={removeFromCart}
-          onClear={clearCart}
-          onConfirm={handleConfirmSelection}
-        />
+      <div className="flex gap-4" style={{ height: '600px' }}>
+        <div className="flex-1">
+          <Tabs activeKey={activeTab} onChange={(key) => setActiveTab(key as 'materials' | 'works')}>
+            <TabPane tab="Материалы" key="materials">
+              <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                <MaterialSelector
+                  materials={materials}
+                  loading={loading}
+                  selectedKeys={selectedMaterialKeys}
+                  onSelectionChange={setSelectedMaterialKeys}
+                  onAddToCart={(items) => addToCart(items, 'material')}
+                  onFiltersChange={setMaterialFilters}
+                  filters={materialFilters}
+                  categories={materialCategories}
+                />
+                {materialTotal > ITEMS_PER_PAGE && (
+                  <div className="flex justify-center mt-4">
+                    <Pagination
+                      current={materialPage}
+                      total={materialTotal}
+                      pageSize={ITEMS_PER_PAGE}
+                      onChange={loadMaterials}
+                      showSizeChanger={false}
+                      showTotal={(total, range) => `${range[0]}-${range[1]} из ${total}`}
+                    />
+                  </div>
+                )}
+              </Space>
+            </TabPane>
+            <TabPane tab="Работы" key="works">
+              <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                <WorkSelector
+                  works={works}
+                  loading={loading}
+                  selectedKeys={selectedWorkKeys}
+                  onSelectionChange={setSelectedWorkKeys}
+                  onAddToCart={(items) => addToCart(items, 'work')}
+                  onFiltersChange={setWorkFilters}
+                  filters={workFilters}
+                  categories={workCategories}
+                />
+                {workTotal > ITEMS_PER_PAGE && (
+                  <div className="flex justify-center mt-4">
+                    <Pagination
+                      current={workPage}
+                      total={workTotal}
+                      pageSize={ITEMS_PER_PAGE}
+                      onChange={loadWorks}
+                      showSizeChanger={false}
+                      showTotal={(total, range) => `${range[0]}-${range[1]} из ${total}`}
+                    />
+                  </div>
+                )}
+              </Space>
+            </TabPane>
+          </Tabs>
+        </div>
+        <div className="w-96">
+          <Cart
+            items={cart}
+            onRemove={removeFromCart}
+            onQuantityChange={updateCartItemQuantity}
+          />
+        </div>
       </div>
     </Modal>
   );
 };
 
-export default LibrarySelector;
+export default React.memo(LibrarySelector);

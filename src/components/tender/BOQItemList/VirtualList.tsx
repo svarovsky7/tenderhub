@@ -99,4 +99,18 @@ const VirtualList: React.FC<VirtualListProps> = ({
   );
 };
 
-export default VirtualList;
+export default React.memo(VirtualList, (prevProps, nextProps) => {
+  // Re-render only if critical props changed
+  return (
+    prevProps.items.length === nextProps.items.length &&
+    prevProps.height === nextProps.height &&
+    prevProps.editingItem?.id === nextProps.editingItem?.id &&
+    prevProps.isLoading === nextProps.isLoading &&
+    prevProps.editable === nextProps.editable &&
+    // Check if items themselves changed (shallow comparison of IDs)
+    prevProps.items.every((item, index) => 
+      item.id === nextProps.items[index]?.id && 
+      item.updated_at === nextProps.items[index]?.updated_at
+    )
+  );
+});

@@ -8,6 +8,7 @@ import type {
   BOQItemWithLibrary,
 } from '../../types';
 import { handleSupabaseError, applyPagination, type PaginationOptions } from '../utils';
+import { batchLoadCostCategories, applyCostCategoryDisplays } from './helpers';
 
 /**
  * Extended BOQ item with linked materials information
@@ -188,22 +189,37 @@ export const boqQueryApi = {
 
       const { page = 1, limit = 20 } = pagination;
       
-      // Load cost_node_display for each item with cost_node_id
-      const itemsWithCostDisplay = await Promise.all(
-        (data || []).map(async (item) => {
-          if (item.cost_node_id) {
-            try {
-              const { data: displayName } = await supabase
-                .rpc('get_cost_node_display', { p_cost_node_id: item.cost_node_id });
-              return { ...item, cost_node_display: displayName };
-            } catch (err) {
-              console.error('❌ Failed to get cost_node_display for:', item.cost_node_id);
-              return item;
-            }
+      // Batch load cost categories for all items with detail_cost_category_id
+      const itemsWithCategoryIds = (data || []).filter(item => item.detail_cost_category_id);
+      let categoryDisplayMap: Record<string, string> = {};
+      
+      if (itemsWithCategoryIds.length > 0) {
+        const categoryIds = [...new Set(itemsWithCategoryIds.map(item => item.detail_cost_category_id).filter(Boolean))];
+        console.log('🔍 Batch loading cost categories for', categoryIds.length, 'unique IDs');
+        
+        try {
+          const { data: categories } = await supabase
+            .from('detail_cost_categories')
+            .select('id, name, cost_categories!inner(name), location!inner(name)')
+            .in('id', categoryIds);
+          
+          if (categories) {
+            categoryDisplayMap = categories.reduce((acc: any, cat: any) => {
+              acc[cat.id] = `${cat.cost_categories.name} → ${cat.name} → ${cat.location.name}`;
+              return acc;
+            }, {});
           }
-          return item;
-        })
-      );
+        } catch (err) {
+          console.error('❌ Failed to batch load cost categories:', err);
+        }
+      }
+      
+      const itemsWithCostDisplay = (data || []).map(item => {
+        if (item.detail_cost_category_id && categoryDisplayMap[item.detail_cost_category_id]) {
+          return { ...item, cost_category_display: categoryDisplayMap[item.detail_cost_category_id] };
+        }
+        return item;
+      });
       
       console.log('✅ Position BOQ items retrieved successfully');
       return {
@@ -246,22 +262,37 @@ export const boqQueryApi = {
         };
       }
 
-      // Load cost_node_display for each item with cost_node_id
-      const itemsWithCostDisplay = await Promise.all(
-        (data || []).map(async (item) => {
-          if (item.cost_node_id) {
-            try {
-              const { data: displayName } = await supabase
-                .rpc('get_cost_node_display', { p_cost_node_id: item.cost_node_id });
-              return { ...item, cost_node_display: displayName };
-            } catch (err) {
-              console.error('❌ Failed to get cost_node_display for:', item.cost_node_id);
-              return item;
-            }
+      // Batch load cost categories for all items with detail_cost_category_id
+      const itemsWithCategoryIds = (data || []).filter(item => item.detail_cost_category_id);
+      let categoryDisplayMap: Record<string, string> = {};
+      
+      if (itemsWithCategoryIds.length > 0) {
+        const categoryIds = [...new Set(itemsWithCategoryIds.map(item => item.detail_cost_category_id).filter(Boolean))];
+        console.log('🔍 Batch loading cost categories for', categoryIds.length, 'unique IDs');
+        
+        try {
+          const { data: categories } = await supabase
+            .from('detail_cost_categories')
+            .select('id, name, cost_categories!inner(name), location!inner(name)')
+            .in('id', categoryIds);
+          
+          if (categories) {
+            categoryDisplayMap = categories.reduce((acc: any, cat: any) => {
+              acc[cat.id] = `${cat.cost_categories.name} → ${cat.name} → ${cat.location.name}`;
+              return acc;
+            }, {});
           }
-          return item;
-        })
-      );
+        } catch (err) {
+          console.error('❌ Failed to batch load cost categories:', err);
+        }
+      }
+      
+      const itemsWithCostDisplay = (data || []).map(item => {
+        if (item.detail_cost_category_id && categoryDisplayMap[item.detail_cost_category_id]) {
+          return { ...item, cost_category_display: categoryDisplayMap[item.detail_cost_category_id] };
+        }
+        return item;
+      });
 
       console.log('✅ Tender BOQ items retrieved successfully');
       return {
@@ -299,22 +330,37 @@ export const boqQueryApi = {
         };
       }
 
-      // Load cost_node_display for each item with cost_node_id
-      const itemsWithCostDisplay = await Promise.all(
-        (data || []).map(async (item) => {
-          if (item.cost_node_id) {
-            try {
-              const { data: displayName } = await supabase
-                .rpc('get_cost_node_display', { p_cost_node_id: item.cost_node_id });
-              return { ...item, cost_node_display: displayName };
-            } catch (err) {
-              console.error('❌ Failed to get cost_node_display for:', item.cost_node_id);
-              return item;
-            }
+      // Batch load cost categories for all items with detail_cost_category_id
+      const itemsWithCategoryIds = (data || []).filter(item => item.detail_cost_category_id);
+      let categoryDisplayMap: Record<string, string> = {};
+      
+      if (itemsWithCategoryIds.length > 0) {
+        const categoryIds = [...new Set(itemsWithCategoryIds.map(item => item.detail_cost_category_id).filter(Boolean))];
+        console.log('🔍 Batch loading cost categories for', categoryIds.length, 'unique IDs');
+        
+        try {
+          const { data: categories } = await supabase
+            .from('detail_cost_categories')
+            .select('id, name, cost_categories!inner(name), location!inner(name)')
+            .in('id', categoryIds);
+          
+          if (categories) {
+            categoryDisplayMap = categories.reduce((acc: any, cat: any) => {
+              acc[cat.id] = `${cat.cost_categories.name} → ${cat.name} → ${cat.location.name}`;
+              return acc;
+            }, {});
           }
-          return item;
-        })
-      );
+        } catch (err) {
+          console.error('❌ Failed to batch load cost categories:', err);
+        }
+      }
+      
+      const itemsWithCostDisplay = (data || []).map(item => {
+        if (item.detail_cost_category_id && categoryDisplayMap[item.detail_cost_category_id]) {
+          return { ...item, cost_category_display: categoryDisplayMap[item.detail_cost_category_id] };
+        }
+        return item;
+      });
 
       console.log('✅ Position BOQ items retrieved successfully');
       return {
