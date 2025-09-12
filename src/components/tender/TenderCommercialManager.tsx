@@ -26,7 +26,10 @@ import {
   calculateBOQItemCommercialCost,
   calculateMainMaterialCommercialCost,
   calculateAuxiliaryMaterialCommercialCost,
-  calculateWorkCommercialCost as calcWorkCost,
+  calculateWorkCommercialCost,
+  calculateSubcontractWorkCommercialCost,
+  calculateSubcontractMaterialCommercialCost,
+  calculateAuxiliarySubcontractMaterialCommercialCost,
   calculateMaterialCommercialCost
 } from '../../utils/calculateCommercialCost';
 import { exportCommercialCostsToExcel } from '../../utils/excel-templates';
@@ -167,20 +170,14 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
           const baseMaterialsCost = items
             .filter(item => item.item_type === 'material' || item.item_type === 'sub_material')
             .reduce((sum, item) => {
-              // Для базовой стоимости используем unit_rate * quantity, а не total_amount
-              const quantity = item.quantity || 0;
-              const unitRate = item.unit_rate || 0;
-              const deliveryAmount = item.delivery_amount || 0;
-              const baseCost = (unitRate + deliveryAmount) * quantity;
+              // Используем total_amount - всегда правильная сумма в рублях
+              const baseCost = item.total_amount || 0;
               
               console.log('💰 Material base cost calculation:', {
                 description: item.description,
                 type: item.item_type,
-                quantity,
-                unitRate,
-                deliveryAmount,
                 baseCost,
-                totalAmount: item.total_amount // Для сравнения
+                totalAmount: item.total_amount
               });
               
               return sum + baseCost;
@@ -189,20 +186,14 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
           const baseWorksCost = items
             .filter(item => item.item_type === 'work' || item.item_type === 'sub_work')
             .reduce((sum, item) => {
-              // Для базовой стоимости используем unit_rate * quantity, а не total_amount
-              const quantity = item.quantity || 0;
-              const unitRate = item.unit_rate || 0;
-              const deliveryAmount = item.delivery_amount || 0;
-              const baseCost = (unitRate + deliveryAmount) * quantity;
+              // Используем total_amount - всегда правильная сумма в рублях
+              const baseCost = item.total_amount || 0;
               
               console.log('💰 Work base cost calculation:', {
                 description: item.description,
                 type: item.item_type,
-                quantity,
-                unitRate,
-                deliveryAmount,
                 baseCost,
-                totalAmount: item.total_amount // Для сравнения
+                totalAmount: item.total_amount
               });
               
               return sum + baseCost;
@@ -216,7 +207,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
             .reduce((sum, item) => {
               const isAuxiliary = item.material_type === 'auxiliary';
               const quantity = item.quantity || 0;
-              const baseCost = (item.unit_rate || 0) * quantity + (item.delivery_amount || 0) * quantity;
+              const baseCost = item.total_amount || 0;
               
               if (isAuxiliary) {
                 // Вспомогательный материал: в материалах остается 0
@@ -247,10 +238,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
           const ownWorksBaseCost = items
             .filter(item => item.item_type === 'work')
             .reduce((sum, item) => {
-              const quantity = item.quantity || 0;
-              const unitRate = item.unit_rate || 0;
-              const deliveryAmount = item.delivery_amount || 0;
-              const baseCost = (unitRate + deliveryAmount) * quantity;
+              const baseCost = item.total_amount || 0;
               return sum + baseCost;
             }, 0);
 
@@ -269,10 +257,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
           const subcontractWorksBaseCost = items
             .filter(item => item.item_type === 'sub_work')
             .reduce((sum, item) => {
-              const quantity = item.quantity || 0;
-              const unitRate = item.unit_rate || 0;
-              const deliveryAmount = item.delivery_amount || 0;
-              const baseCost = (unitRate + deliveryAmount) * quantity;
+              const baseCost = item.total_amount || 0;
               return sum + baseCost;
             }, 0);
 
@@ -299,7 +284,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
             .forEach(item => {
               const isAuxiliary = item.material_type === 'auxiliary';
               const quantity = item.quantity || 0;
-              const baseCost = (item.unit_rate || 0) * quantity + (item.delivery_amount || 0) * quantity;
+              const baseCost = item.total_amount || 0;
               const coefficient = item.commercial_markup_coefficient || 1;
               const fullCommercialCost = baseCost * coefficient;
               const markup = fullCommercialCost - baseCost;
@@ -423,14 +408,58 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
           const materialsTotalCost = commercialMaterialsCost; // Используем уже рассчитанную коммерческую стоимость материалов
           const materialsUnitPrice = materialsTotalVolume > 0 ? materialsTotalCost / materialsTotalVolume : 0;
           
-          // Сохраняем коммерческие стоимости в БД
+          // Сохраняем коммерческие стоимости в БД и обновляем коэффициенты BOQ items
           const saveCommercialCosts = async () => {
             try {
+              // Сохраняем коммерческие стоимости позиции
               await clientPositionsApi.updateCommercialCosts(
                 pos.id,
                 materialsTotalCost,
                 worksTotalCost
               );
+              
+              // Обновляем коэффициенты для каждого BOQ item
+              for (const item of items) {
+                const baseCost = item.total_amount || 0;
+                if (baseCost === 0) continue;
+                
+                let fullCommercialCost = 0;
+                const isAuxiliary = item.material_type === 'auxiliary';
+                
+                // Рассчитываем полную коммерческую стоимость
+                switch (item.item_type) {
+                  case 'work':
+                    fullCommercialCost = calculateWorkCommercialCost(baseCost, markupsData);
+                    break;
+                  case 'material':
+                    if (isAuxiliary) {
+                      const auxResult = calculateAuxiliaryMaterialCommercialCost(baseCost, markupsData);
+                      fullCommercialCost = auxResult.materialCost + auxResult.workMarkup;
+                    } else {
+                      const mainResult = calculateMainMaterialCommercialCost(baseCost, markupsData);
+                      fullCommercialCost = mainResult.materialCost + mainResult.workMarkup;
+                    }
+                    break;
+                  case 'sub_work':
+                    fullCommercialCost = calculateSubcontractWorkCommercialCost(baseCost, markupsData);
+                    break;
+                  case 'sub_material':
+                    if (isAuxiliary) {
+                      const subAuxResult = calculateAuxiliarySubcontractMaterialCommercialCost(baseCost, markupsData);
+                      fullCommercialCost = subAuxResult.materialCost + subAuxResult.workMarkup;
+                    } else {
+                      const subMainResult = calculateSubcontractMaterialCommercialCost(baseCost, markupsData);
+                      fullCommercialCost = subMainResult.materialCost + subMainResult.workMarkup;
+                    }
+                    break;
+                }
+                
+                const coefficient = baseCost > 0 ? fullCommercialCost / baseCost : 1;
+                
+                // Обновляем коэффициенты в БД
+                await boqApi.updateCommercialFields(item.id, fullCommercialCost, coefficient);
+                console.log(`✅ Updated coefficients for item ${item.item_number}: cost=${fullCommercialCost}, coef=${coefficient}`);
+              }
             } catch (error) {
               console.error('❌ Failed to save commercial costs for position:', pos.id, error);
             }
