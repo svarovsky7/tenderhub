@@ -9,6 +9,7 @@ import { boqQueryApi } from './queries';
 import { boqBulkApi } from './bulk';
 import { boqHierarchyApi } from './hierarchy';
 import { boqAnalyticsApi } from './analytics';
+import { boqCurrencyApi } from './currency';
 
 // Main BOQ API object that combines all modules
 export const boqApi = {
@@ -39,6 +40,10 @@ export const boqApi = {
   getCategoryAnalytics: boqAnalyticsApi.getCategoryAnalytics,
   getCostDistribution: boqAnalyticsApi.getCostDistribution,
   getCompletionStats: boqAnalyticsApi.getCompletionStats,
+  
+  // Currency operations
+  updateCurrencyRatesForTender: boqCurrencyApi.updateCurrencyRatesForTender,
+  getCurrencyStatsForTender: boqCurrencyApi.getCurrencyStatsForTender,
 };
 
 // Legacy compatibility API (maintains backward compatibility)
@@ -60,3 +65,4 @@ export { boqQueryApi, type BOQItemWithLinkedMaterials } from './queries';
 export { boqBulkApi } from './bulk';
 export { boqHierarchyApi } from './hierarchy';
 export { boqAnalyticsApi } from './analytics';
+export { boqCurrencyApi, type CurrencyUpdateResult } from './currency';

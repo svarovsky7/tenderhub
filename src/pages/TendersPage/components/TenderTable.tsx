@@ -29,11 +29,11 @@ import {
   DollarOutlined,
   ClockCircleOutlined,
   CheckOutlined,
-  CloseOutlined
+  CloseOutlined,
+  SyncOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
-import type { Dayjs } from 'dayjs';
 import ExcelUpload from './ExcelUpload';
 import EditableCell from './EditableCell';
 // Note: status-related imports removed as status field was removed from schema
@@ -49,7 +49,8 @@ const TenderTable: React.FC<TenderTableProps> = ({
   onViewTender,
   onEditTender,
   onDeleteTender,
-  onExcelUpload
+  onExcelUpload,
+  onUpdateBOQCurrencyRates
 }) => {
   console.log('🚀 TenderTable component rendered');
   console.log('📊 Tenders count:', tenders.length);
@@ -85,7 +86,7 @@ const TenderTable: React.FC<TenderTableProps> = ({
         [field]: value
       };
       console.log('📤 Sending updates:', updates);
-      await onEditTender(updates);
+      await onEditTender(updates as any);
       message.success('Изменения сохранены');
     } catch (error) {
       console.error('❌ Inline edit failed:', error);
@@ -133,6 +134,18 @@ const TenderTable: React.FC<TenderTableProps> = ({
   const handleDeleteTender = (tenderId: string) => {
     console.log('🗑️ Delete tender clicked:', tenderId);
     onDeleteTender(tenderId);
+  };
+
+  const handleUpdateCurrencyRates = async (tenderId: string) => {
+    console.log('💱 Update currency rates clicked:', tenderId);
+    if (onUpdateBOQCurrencyRates) {
+      try {
+        await onUpdateBOQCurrencyRates(tenderId);
+      } catch (error) {
+        console.error('❌ Failed to update currency rates:', error);
+        message.error('Ошибка обновления курсов валют');
+      }
+    }
   };
 
   const handleExcelUpload = async (tenderId: string, file: File) => {
@@ -648,6 +661,9 @@ const TenderTable: React.FC<TenderTableProps> = ({
           );
         }
         
+        // Check if tender has any currency rates defined
+        const hasCurrencyRates = record.usd_rate || record.eur_rate || record.cny_rate;
+        
         return (
           <Space size="small">
             <ExcelUpload 
@@ -670,6 +686,17 @@ const TenderTable: React.FC<TenderTableProps> = ({
                 onClick={() => handleEditTender(record)}
               />
             </Tooltip>
+            {hasCurrencyRates && onUpdateBOQCurrencyRates && (
+              <Tooltip title="Обновить курсы валют в позициях BOQ">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<SyncOutlined />}
+                  onClick={() => handleUpdateCurrencyRates(record.id!)}
+                  style={{ color: '#1890ff' }}
+                />
+              </Tooltip>
+            )}
             <Tooltip title="Удалить">
               <Button
                 type="text"

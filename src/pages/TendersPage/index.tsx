@@ -27,7 +27,7 @@ const TendersPage: React.FC = () => {
   const {
     filters,
     handleSearch,
-    // handleStatusFilter removed as status field was removed from schema
+    handleStatusFilter,
     handleDateFilter,
     handleFiltersChange
   } = useTenderFilters(resetPaginationCallback);
@@ -69,7 +69,8 @@ const TendersPage: React.FC = () => {
     handleEditTender,
     handleDeleteTender,
     handleViewTender,
-    handleExcelUpload
+    handleExcelUpload,
+    handleUpdateBOQCurrencyRates
   } = useTenderActions(loadTenders);
 
   // Handle delete tender action from table
@@ -211,7 +212,7 @@ const TendersPage: React.FC = () => {
           <TenderFilters
             filters={filters}
             onSearch={handleSearch}
-            // onStatusFilter removed as status field was removed from schema
+            onStatusFilter={handleStatusFilter}
             onDateFilter={handleDateFilter}
             onFiltersChange={handleFiltersChange}
           />
@@ -226,6 +227,7 @@ const TendersPage: React.FC = () => {
             onEditTender={handleEditTenderFromTable}
             onDeleteTender={handleDeleteTenderFromTable}
             onExcelUpload={handleExcelUpload}
+            onUpdateBOQCurrencyRates={handleUpdateBOQCurrencyRates}
           />
 
           {/* Modals */}

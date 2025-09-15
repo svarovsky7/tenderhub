@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { tendersApi } from '../../../lib/supabase/api';
+import { tendersApi, boqApi } from '../../../lib/supabase/api';
 import type { TenderWithSummary, TenderInsert, TenderUpdate } from '../types';
 
 interface UseTenderActionsReturn {
@@ -29,6 +29,7 @@ interface UseTenderActionsReturn {
   handleDeleteTender: () => Promise<void>;
   handleViewTender: (tender: TenderWithSummary) => void;
   handleExcelUpload: (tenderId: string, file: File) => Promise<void>;
+  handleUpdateBOQCurrencyRates: (tenderId: string) => Promise<void>;
 }
 
 export const useTenderActions = (
@@ -186,6 +187,49 @@ export const useTenderActions = (
       console.log('✅ Tender updated successfully');
       message.success('Тендер обновлен');
       
+      // Check if any currency rates were updated and trigger BOQ update
+      // For inline editing (editingTender is null), we check if currency rate fields are in the updates
+      // For modal editing, we also compare with previous values
+      const currencyRatesUpdated = 
+        'usd_rate' in values || 
+        'eur_rate' in values || 
+        'cny_rate' in values;
+      
+      if (currencyRatesUpdated) {
+        console.log('💱 Currency rates changed, updating BOQ items...');
+        console.log('📊 Currency rate values:', {
+          usd_rate: values.usd_rate,
+          eur_rate: values.eur_rate, 
+          cny_rate: values.cny_rate,
+          tenderId
+        });
+        try {
+          // Передаем новые курсы валют, если они были обновлены
+          const currencyOptions = {
+            usd_rate: 'usd_rate' in values ? values.usd_rate : undefined,
+            eur_rate: 'eur_rate' in values ? values.eur_rate : undefined,
+            cny_rate: 'cny_rate' in values ? values.cny_rate : undefined
+          };
+          
+          const boqUpdateResult = await boqApi.updateCurrencyRatesForTender(tenderId, currencyOptions);
+          if (boqUpdateResult.error) {
+            console.error('❌ Failed to update BOQ currency rates:', boqUpdateResult.error);
+            message.warning(`Тендер обновлен, но не удалось обновить курсы в позициях: ${boqUpdateResult.error}`);
+          } else if (boqUpdateResult.data) {
+            const { updated_items_count } = boqUpdateResult.data;
+            if (updated_items_count > 0) {
+              console.log('✅ BOQ currency rates updated:', updated_items_count);
+              message.success(`Тендер обновлен. Курсы валют обновлены в ${updated_items_count} позициях BOQ`);
+            } else {
+              console.log('ℹ️ No BOQ items required currency rate updates');
+            }
+          }
+        } catch (error) {
+          console.error('💥 Exception updating BOQ currency rates:', error);
+          message.warning('Тендер обновлен, но произошла ошибка при обновлении курсов в позициях');
+        }
+      }
+      
       // Only hide modal if we were using modal editing
       if (editingTender) {
         hideEditModal();
@@ -268,6 +312,66 @@ export const useTenderActions = (
     }
   }, [onDataChange]);
 
+  const handleUpdateBOQCurrencyRates = useCallback(async (tenderId: string) => {
+    console.log('🚀 handleUpdateBOQCurrencyRates called for tender:', tenderId);
+    
+    if (!tenderId) {
+      console.error('❌ No tender ID provided for BOQ currency update');
+      message.error('Не указан ID тендера для обновления курсов');
+      return;
+    }
+
+    setActionLoading(true);
+    
+    try {
+      console.log('💱 Manually updating BOQ currency rates...');
+      const result = await boqApi.updateCurrencyRatesForTender(tenderId);
+      
+      console.log('📦 BOQ currency update result:', result);
+      
+      if (result.error) {
+        console.error('❌ Failed to update BOQ currency rates:', result.error);
+        message.error(`Ошибка обновления курсов валют: ${result.error}`);
+        return;
+      }
+
+      if (result.data) {
+        const { 
+          updated_items_count,
+          updated_usd_items,
+          updated_eur_items,
+          updated_cny_items 
+        } = result.data;
+        
+        console.log('✅ BOQ currency rates updated successfully:', result.data);
+        
+        if (updated_items_count > 0) {
+          const details = [];
+          if (updated_usd_items > 0) details.push(`USD: ${updated_usd_items}`);
+          if (updated_eur_items > 0) details.push(`EUR: ${updated_eur_items}`);
+          if (updated_cny_items > 0) details.push(`CNY: ${updated_cny_items}`);
+          
+          const detailsText = details.length > 0 ? ` (${details.join(', ')})` : '';
+          
+          message.success(`Курсы валют обновлены в ${updated_items_count} позициях BOQ${detailsText}`);
+        } else {
+          message.info('Нет позиций BOQ, требующих обновления курсов валют');
+        }
+      }
+
+      if (onDataChange) {
+        console.log('🔄 Refreshing data after currency update...');
+        await onDataChange();
+      }
+      
+    } catch (error) {
+      console.error('💥 Exception in handleUpdateBOQCurrencyRates:', error);
+      message.error('Произошла ошибка при обновлении курсов валют в позициях BOQ');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [onDataChange]);
+
   return {
     // Modal states
     createModalVisible,
@@ -291,6 +395,7 @@ export const useTenderActions = (
     handleEditTender,
     handleDeleteTender,
     handleViewTender,
-    handleExcelUpload
+    handleExcelUpload,
+    handleUpdateBOQCurrencyRates
   };
 };

@@ -154,7 +154,13 @@ const TenderConstructionCostsPage: React.FC = () => {
     actualTotalWorks: 0,
     actualTotalSubmaterials: 0,
     actualTotalSubworks: 0,
-    actualTotalCost: 0
+    actualTotalCost: 0,
+    // Коммерческие итоги (независимо от объема)
+    commercialTotalMaterials: 0,
+    commercialTotalWorks: 0,
+    commercialTotalSubmaterials: 0,
+    commercialTotalSubworks: 0,
+    commercialTotalCost: 0
   });
 
   // Get unique tender names/titles
@@ -744,7 +750,12 @@ const TenderConstructionCostsPage: React.FC = () => {
         actualTotalWorks,
         actualTotalSubmaterials,
         actualTotalSubworks,
-        actualTotalCost: actualTotalMaterials + actualTotalWorks + actualTotalSubmaterials + actualTotalSubworks
+        actualTotalCost: actualTotalMaterials + actualTotalWorks + actualTotalSubmaterials + actualTotalSubworks,
+        commercialTotalMaterials: totalCommercialMaterials,
+        commercialTotalWorks: totalCommercialWorks,
+        commercialTotalSubmaterials: totalCommercialSubmaterials,
+        commercialTotalSubworks: totalCommercialSubworks,
+        commercialTotalCost: totalCommercialMaterials + totalCommercialWorks + totalCommercialSubmaterials + totalCommercialSubworks
       });
 
       console.log('✅ [calculateCosts] Calculated costs for', calculations.length, 'categories');
@@ -1649,9 +1660,11 @@ const TenderConstructionCostsPage: React.FC = () => {
             {selectedTenderId && (
               <div className={`flex flex-col justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
                 <div>
-                  <Text className="text-sm text-gray-600 block mb-1" style={{ cursor: 'default' }}>Общая стоимость</Text>
+                  <Text className="text-sm text-gray-600 block mb-1" style={{ cursor: 'default' }}>
+                    {showCommercialCosts ? 'Коммерческая стоимость' : 'Общая стоимость'}
+                  </Text>
                   <div className="text-3xl font-bold text-green-700" style={{ cursor: 'default' }}>
-                    {Math.round(stats.actualTotalCost).toLocaleString('ru-RU')} ₽
+                    {Math.round(showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost).toLocaleString('ru-RU')} ₽
                   </div>
                 </div>
               </div>
@@ -1716,14 +1729,15 @@ const TenderConstructionCostsPage: React.FC = () => {
                           <InboxOutlined style={{ fontSize: '32px', color: 'var(--color-materials-500)', opacity: 0.8 }} />
                         </div>
                         <div className="stats-card-value money-value" style={{ color: 'var(--color-materials-600)' }}>
-                          {Math.round(stats.actualTotalMaterials).toLocaleString('ru-RU')} ₽
+                          {Math.round(showCommercialCosts ? stats.commercialTotalMaterials : stats.actualTotalMaterials).toLocaleString('ru-RU')} ₽
                         </div>
                         <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-neutral-500)', marginBottom: 'var(--spacing-sm)' }}>
-                          Включая доставку
+                          {showCommercialCosts ? 'Коммерческая стоимость' : 'Включая доставку'}
                         </div>
                         <Progress 
-                          percent={stats.actualTotalCost > 0 ? 
-                            Number((stats.actualTotalMaterials / stats.actualTotalCost * 100).toFixed(1)) : 0
+                          percent={(showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost) > 0 ? 
+                            Number(((showCommercialCosts ? stats.commercialTotalMaterials : stats.actualTotalMaterials) / 
+                                   (showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost) * 100).toFixed(1)) : 0
                           }
                           size="small"
                           strokeColor="var(--color-materials-500)"
@@ -1737,8 +1751,9 @@ const TenderConstructionCostsPage: React.FC = () => {
                           fontWeight: 'var(--font-weight-medium)',
                           textAlign: 'center'
                         }}>
-                          {stats.actualTotalCost > 0 ? 
-                            `${((stats.actualTotalMaterials / stats.actualTotalCost) * 100).toFixed(1)}% от общих затрат` : 
+                          {(showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost) > 0 ? 
+                            `${(((showCommercialCosts ? stats.commercialTotalMaterials : stats.actualTotalMaterials) / 
+                                 (showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost)) * 100).toFixed(1)}% от общих затрат` : 
                             '0% от общих затрат'
                           }
                         </div>
@@ -1756,14 +1771,15 @@ const TenderConstructionCostsPage: React.FC = () => {
                 <BuildOutlined style={{ fontSize: '32px', color: 'var(--color-works-500)', opacity: 0.8 }} />
               </div>
               <div className="stats-card-value money-value" style={{ color: 'var(--color-works-600)' }}>
-                {Math.round(stats.actualTotalWorks).toLocaleString('ru-RU')} ₽
+                {Math.round(showCommercialCosts ? stats.commercialTotalWorks : stats.actualTotalWorks).toLocaleString('ru-RU')} ₽
               </div>
               <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-neutral-500)', marginBottom: 'var(--spacing-sm)' }}>
-                Строительные работы
+                {showCommercialCosts ? 'Коммерческая стоимость' : 'Строительные работы'}
               </div>
               <Progress 
-                percent={stats.actualTotalCost > 0 ? 
-                  Number((stats.actualTotalWorks / stats.actualTotalCost * 100).toFixed(1)) : 0
+                percent={(showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost) > 0 ? 
+                  Number(((showCommercialCosts ? stats.commercialTotalWorks : stats.actualTotalWorks) / 
+                         (showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost) * 100).toFixed(1)) : 0
                 }
                 size="small"
                 strokeColor="var(--color-works-500)"
@@ -1777,8 +1793,9 @@ const TenderConstructionCostsPage: React.FC = () => {
                 fontWeight: 'var(--font-weight-medium)',
                 textAlign: 'center'
               }}>
-                {stats.actualTotalCost > 0 ? 
-                  `${((stats.actualTotalWorks / stats.actualTotalCost) * 100).toFixed(1)}% от общих затрат` : 
+                {(showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost) > 0 ? 
+                  `${(((showCommercialCosts ? stats.commercialTotalWorks : stats.actualTotalWorks) / 
+                       (showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost)) * 100).toFixed(1)}% от общих затрат` : 
                   '0% от общих затрат'
                 }
               </div>
@@ -1796,14 +1813,15 @@ const TenderConstructionCostsPage: React.FC = () => {
                 <ToolOutlined style={{ fontSize: '32px', color: 'var(--color-sub-materials-500)', opacity: 0.8 }} />
               </div>
               <div className="stats-card-value money-value" style={{ color: 'var(--color-sub-materials-600)' }}>
-                {Math.round(stats.actualTotalSubmaterials).toLocaleString('ru-RU')} ₽
+                {Math.round(showCommercialCosts ? stats.commercialTotalSubmaterials : stats.actualTotalSubmaterials).toLocaleString('ru-RU')} ₽
               </div>
               <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-neutral-500)', marginBottom: 'var(--spacing-sm)' }}>
-                Субподрядные материалы
+                {showCommercialCosts ? 'Коммерческая стоимость' : 'Субподрядные материалы'}
               </div>
               <Progress 
-                percent={stats.actualTotalCost > 0 ? 
-                  Number((stats.actualTotalSubmaterials / stats.actualTotalCost * 100).toFixed(1)) : 0
+                percent={(showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost) > 0 ? 
+                  Number(((showCommercialCosts ? stats.commercialTotalSubmaterials : stats.actualTotalSubmaterials) / 
+                         (showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost) * 100).toFixed(1)) : 0
                 }
                 size="small"
                 strokeColor="var(--color-sub-materials-500)"
@@ -1817,8 +1835,9 @@ const TenderConstructionCostsPage: React.FC = () => {
                 fontWeight: 'var(--font-weight-medium)',
                 textAlign: 'center'
               }}>
-                {stats.actualTotalCost > 0 ? 
-                  `${((stats.actualTotalSubmaterials / stats.actualTotalCost) * 100).toFixed(1)}% от общих затрат` : 
+                {(showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost) > 0 ? 
+                  `${(((showCommercialCosts ? stats.commercialTotalSubmaterials : stats.actualTotalSubmaterials) / 
+                       (showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost)) * 100).toFixed(1)}% от общих затрат` : 
                   '0% от общих затрат'
                 }
               </div>
@@ -1836,14 +1855,15 @@ const TenderConstructionCostsPage: React.FC = () => {
                 <TeamOutlined style={{ fontSize: '32px', color: 'var(--color-sub-works-500)', opacity: 0.8 }} />
               </div>
               <div className="stats-card-value money-value" style={{ color: 'var(--color-sub-works-600)' }}>
-                {Math.round(stats.actualTotalSubworks).toLocaleString('ru-RU')} ₽
+                {Math.round(showCommercialCosts ? stats.commercialTotalSubworks : stats.actualTotalSubworks).toLocaleString('ru-RU')} ₽
               </div>
               <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-neutral-500)', marginBottom: 'var(--spacing-sm)' }}>
-                Субподрядные работы
+                {showCommercialCosts ? 'Коммерческая стоимость' : 'Субподрядные работы'}
               </div>
               <Progress 
-                percent={stats.actualTotalCost > 0 ? 
-                  Number((stats.actualTotalSubworks / stats.actualTotalCost * 100).toFixed(1)) : 0
+                percent={(showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost) > 0 ? 
+                  Number(((showCommercialCosts ? stats.commercialTotalSubworks : stats.actualTotalSubworks) / 
+                         (showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost) * 100).toFixed(1)) : 0
                 }
                 size="small"
                 strokeColor="var(--color-sub-works-500)"
@@ -1857,8 +1877,9 @@ const TenderConstructionCostsPage: React.FC = () => {
                 fontWeight: 'var(--font-weight-medium)',
                 textAlign: 'center'
               }}>
-                {stats.actualTotalCost > 0 ? 
-                  `${((stats.actualTotalSubworks / stats.actualTotalCost) * 100).toFixed(1)}% от общих затрат` : 
+                {(showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost) > 0 ? 
+                  `${(((showCommercialCosts ? stats.commercialTotalSubworks : stats.actualTotalSubworks) / 
+                       (showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost)) * 100).toFixed(1)}% от общих затрат` : 
                   '0% от общих затрат'
                 }
               </div>
@@ -1866,14 +1887,14 @@ const TenderConstructionCostsPage: React.FC = () => {
 
             <Card className="stats-card" style={{ height: '100%', minHeight: '180px', padding: 'var(--spacing-md)', background: 'linear-gradient(135deg, var(--color-primary-50) 0%, var(--color-primary-100) 100%)' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--spacing-sm)' }}>
-                <div className="stats-card-title">Общая сумма</div>
+                <div className="stats-card-title">{showCommercialCosts ? 'Коммерческая сумма' : 'Общая сумма'}</div>
                 <DollarOutlined style={{ fontSize: '32px', color: 'var(--color-primary-600)', opacity: 0.8 }} />
               </div>
               <div className="stats-card-value money-value" style={{ color: 'var(--color-primary-700)', fontWeight: 'var(--font-weight-bold)' }}>
-                {Math.round(stats.actualTotalCost).toLocaleString('ru-RU')} ₽
+                {Math.round(showCommercialCosts ? stats.commercialTotalCost : stats.actualTotalCost).toLocaleString('ru-RU')} ₽
               </div>
               <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-primary-600)', marginBottom: 'var(--spacing-sm)' }}>
-                Итог по тендеру
+                {showCommercialCosts ? 'Итог с наценками' : 'Итог по тендеру'}
               </div>
               <Progress 
                 percent={100}

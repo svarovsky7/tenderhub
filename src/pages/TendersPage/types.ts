@@ -69,6 +69,7 @@ export interface TenderTableProps {
   onEditTender: (tender: TenderWithSummary) => void;
   onDeleteTender: (tenderId: string) => void;
   onExcelUpload: (tenderId: string, file: File) => Promise<void>;
+  onUpdateBOQCurrencyRates?: (tenderId: string) => Promise<void>;
 }
 
 export interface CreateTenderModalProps {
