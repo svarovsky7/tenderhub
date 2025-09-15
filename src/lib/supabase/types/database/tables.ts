@@ -259,6 +259,14 @@ export type DatabaseTables = {
       description: string | null;
       unit: string;
       category: string | null;
+      item_type: string | null;
+      material_type: string | null;
+      consumption_coefficient: number | null;
+      unit_rate: number | null;
+      currency_type: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
+      delivery_price_type: 'included' | 'not_included' | 'amount' | null;
+      delivery_amount: number | null;
+      quote_link: string | null;
       created_at: string;
       updated_at: string;
     };
@@ -268,6 +276,14 @@ export type DatabaseTables = {
       description?: string | null;
       unit: string;
       category?: string | null;
+      item_type?: string | null;
+      material_type?: string | null;
+      consumption_coefficient?: number | null;
+      unit_rate?: number | null;
+      currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
+      delivery_price_type?: 'included' | 'not_included' | 'amount' | null;
+      delivery_amount?: number | null;
+      quote_link?: string | null;
       created_at?: string;
       updated_at?: string;
     };
@@ -277,6 +293,14 @@ export type DatabaseTables = {
       description?: string | null;
       unit?: string;
       category?: string | null;
+      item_type?: string | null;
+      material_type?: string | null;
+      consumption_coefficient?: number | null;
+      unit_rate?: number | null;
+      currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
+      delivery_price_type?: 'included' | 'not_included' | 'amount' | null;
+      delivery_amount?: number | null;
+      quote_link?: string | null;
       created_at?: string;
       updated_at?: string;
     };
@@ -450,6 +474,10 @@ export type DatabaseTables = {
       name: string;
       description: string | null;
       unit: string;
+      item_type: string | null;
+      unit_rate: number | null;
+      currency_type: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
+      category: string | null;
       created_at: string;
       updated_at: string;
     };
@@ -458,6 +486,10 @@ export type DatabaseTables = {
       name: string;
       description?: string | null;
       unit: string;
+      item_type?: string | null;
+      unit_rate?: number | null;
+      currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
+      category?: string | null;
       created_at?: string;
       updated_at?: string;
     };
@@ -466,6 +498,10 @@ export type DatabaseTables = {
       name?: string;
       description?: string | null;
       unit?: string;
+      item_type?: string | null;
+      unit_rate?: number | null;
+      currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
+      category?: string | null;
       created_at?: string;
       updated_at?: string;
     };
@@ -533,6 +569,80 @@ export type DatabaseTables = {
         columns: ['material_boq_item_id'];
         isOneToOne: false;
         referencedRelation: 'boq_items';
+        referencedColumns: ['id'];
+      }
+    ];
+  };
+  work_material_templates: {
+    Row: {
+      id: string;
+      template_name: string;
+      template_description: string | null;
+      work_library_id: string | null;
+      sub_work_library_id: string | null;
+      material_library_id: string | null;
+      sub_material_library_id: string | null;
+      conversion_coefficient: number;
+      is_linked_to_work: boolean;
+      notes: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+    Insert: {
+      id?: string;
+      template_name: string;
+      template_description?: string | null;
+      work_library_id?: string | null;
+      sub_work_library_id?: string | null;
+      material_library_id?: string | null;
+      sub_material_library_id?: string | null;
+      conversion_coefficient?: number;
+      is_linked_to_work?: boolean;
+      notes?: string | null;
+      created_at?: string;
+      updated_at?: string;
+    };
+    Update: {
+      id?: string;
+      template_name?: string;
+      template_description?: string | null;
+      work_library_id?: string | null;
+      sub_work_library_id?: string | null;
+      material_library_id?: string | null;
+      sub_material_library_id?: string | null;
+      conversion_coefficient?: number;
+      is_linked_to_work?: boolean;
+      notes?: string | null;
+      created_at?: string;
+      updated_at?: string;
+    };
+    Relationships: [
+      {
+        foreignKeyName: 'work_material_templates_work_library_id_fkey';
+        columns: ['work_library_id'];
+        isOneToOne: false;
+        referencedRelation: 'works_library';
+        referencedColumns: ['id'];
+      },
+      {
+        foreignKeyName: 'work_material_templates_sub_work_library_id_fkey';
+        columns: ['sub_work_library_id'];
+        isOneToOne: false;
+        referencedRelation: 'works_library';
+        referencedColumns: ['id'];
+      },
+      {
+        foreignKeyName: 'work_material_templates_material_library_id_fkey';
+        columns: ['material_library_id'];
+        isOneToOne: false;
+        referencedRelation: 'materials_library';
+        referencedColumns: ['id'];
+      },
+      {
+        foreignKeyName: 'work_material_templates_sub_material_library_id_fkey';
+        columns: ['sub_material_library_id'];
+        isOneToOne: false;
+        referencedRelation: 'materials_library';
         referencedColumns: ['id'];
       }
     ];
