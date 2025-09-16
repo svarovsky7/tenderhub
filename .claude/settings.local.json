@@ -39,7 +39,11 @@
       "Bash(claude --version)",
       "Bash(git add:*)",
       "mcp__github__search_repositories",
-      "mcp__supabase__supabase_query"
+      "mcp__supabase__supabase_query",
+      "mcp__supabase__supabase_schema",
+      "Bash(supabase link:*)",
+      "Read(//c/Users/odintsov.a.a/AppData/Roaming/Claude/**)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

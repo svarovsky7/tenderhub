@@ -15,7 +15,6 @@ import {
   Select,
   Input,
   message,
-  AutoComplete,
 } from 'antd';
 import {
   PlusOutlined,
@@ -145,10 +144,18 @@ const Dashboard: React.FC = () => {
   };
 
   const filteredTenders = tenders.filter(tender => {
-    const matchesSearch = tender.title.toLowerCase().includes(searchText.toLowerCase()) ||
-                         tender.client_name.toLowerCase().includes(searchText.toLowerCase()) ||
-                         tender.tender_number.toLowerCase().includes(searchText.toLowerCase());
-    // Status filtering disabled since status field removed from schema
+    if (!searchText.trim()) {
+      return true; // Show all tenders when search is empty
+    }
+
+    const searchLower = searchText.toLowerCase();
+    const matchesSearch =
+      tender.title.toLowerCase().includes(searchLower) ||
+      tender.client_name.toLowerCase().includes(searchLower) ||
+      tender.tender_number.toLowerCase().includes(searchLower) ||
+      (tender.description && tender.description.toLowerCase().includes(searchLower)) ||
+      (tender.version && tender.version.toString().includes(searchText.trim()));
+
     return matchesSearch;
   });
 
@@ -490,7 +497,7 @@ const Dashboard: React.FC = () => {
             {/* Statistics in Header */}
             <div className="dashboard-stats-container">
               <Row gutter={[16, 16]}>
-                <Col xs={24} sm={12} lg={6}>
+                <Col xs={24} sm={12} lg={8}>
                   <Card>
                     <Statistic
                       title="Всего тендеров"
@@ -500,7 +507,7 @@ const Dashboard: React.FC = () => {
                     />
                   </Card>
                 </Col>
-                <Col xs={24} sm={12} lg={6}>
+                <Col xs={24} sm={12} lg={8}>
                   <Card>
                     <Statistic
                       title="Активные тендеры"
@@ -510,7 +517,7 @@ const Dashboard: React.FC = () => {
                     />
                   </Card>
                 </Col>
-                <Col xs={24} sm={12} lg={6}>
+                <Col xs={24} sm={12} lg={8}>
                   <Card>
                     <Statistic
                       title="Общая стоимость"
@@ -518,17 +525,6 @@ const Dashboard: React.FC = () => {
                       prefix={<DollarOutlined />}
                       formatter={(value) => formatCurrency(Number(value))}
                       valueStyle={{ color: '#722ed1' }}
-                    />
-                  </Card>
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                  <Card>
-                    <Statistic
-                      title="Процент побед"
-                      value={stats.winRate}
-                      prefix={<TrophyOutlined />}
-                      suffix="%"
-                      valueStyle={{ color: '#fa8c16' }}
                     />
                   </Card>
                 </Col>
@@ -543,36 +539,22 @@ const Dashboard: React.FC = () => {
           <Card>
         {/* Filters */}
         <div className="mb-4">
-          <AutoComplete
-            placeholder="Поиск по названию тендера или заказчику..."
-            value={searchText}
-            onChange={(value) => setSearchText(value)}
-            style={{ width: '100%', maxWidth: 600 }}
-            allowClear
-            options={searchText.length > 0 ? filteredTenders.slice(0, 10).map(tender => ({
-              value: tender.title,
-              label: (
-                <div
-                  style={{ padding: '4px 0', cursor: 'pointer' }}
-                  onClick={() => {
-                    setSearchText('');
-                    navigate(`/boq?tender=${tender.id}`);
-                  }}
-                >
-                  <div style={{ fontWeight: 500 }}>{tender.title}</div>
-                  <div style={{ fontSize: '12px', color: '#888' }}>
-                    {tender.client_name} • {tender.tender_number}
-                  </div>
-                </div>
-              ),
-            })) : []}
-            filterOption={false}
-          >
+          <div className="flex items-center gap-4">
             <Input
+              placeholder="Поиск по названию, номеру, заказчику, описанию или версии..."
               prefix={<SearchOutlined />}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              style={{ width: '100%', maxWidth: 600 }}
               size="large"
+              allowClear
             />
-          </AutoComplete>
+            {searchText.trim() && (
+              <Text type="secondary" className="whitespace-nowrap">
+                Найдено: {filteredTenders.length} из {tenders.length}
+              </Text>
+            )}
+          </div>
         </div>
 
         <Table
