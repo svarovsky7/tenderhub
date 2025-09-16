@@ -45,7 +45,7 @@ export interface TemplateGroup {
     name: string;
     description?: string;
     unit: string;
-    type: 'material' | 'sub_material';
+    type: 'material' | 'sub_material' | 'work' | 'sub_work';
     category?: string;
     material_type?: string;
     consumption_coefficient?: number;
@@ -68,6 +68,8 @@ export interface TemplateGroup {
     sub_work_library?: any;
     material_library?: any;
     sub_material_library?: any;
+    linked_work_id?: string;
+    linked_work_name?: string;
   }>;
   created_at?: string;
   updated_at?: string;
@@ -179,42 +181,121 @@ export const workMaterialTemplatesApi = {
         return { error: error.message };
       }
 
+      // Проверяем конкретно "Новый шаблон"
+      const newTemplateItems = data?.filter((item: any) => item.template_name === 'Новый шаблон');
+      console.log('🔍 "Новый шаблон" items:', newTemplateItems);
+
+      // Сортируем данные так, чтобы сначала обрабатывались записи только с работами
+      // Это важно для правильного порядка добавления в массив materials
+      const sortedData = data?.sort((a: any, b: any) => {
+        const aHasWork = !!(a.work_library_id || a.sub_work_library_id);
+        const aHasMaterial = !!(a.material_library_id || a.sub_material_library_id);
+        const bHasWork = !!(b.work_library_id || b.sub_work_library_id);
+        const bHasMaterial = !!(b.material_library_id || b.sub_material_library_id);
+
+        // Приоритет: только работа > работа+материал > только материал
+        const aPriority = aHasWork && !aHasMaterial ? 0 : (aHasWork && aHasMaterial ? 1 : 2);
+        const bPriority = bHasWork && !bHasMaterial ? 0 : (bHasWork && bHasMaterial ? 1 : 2);
+
+        if (aPriority !== bPriority) return aPriority - bPriority;
+
+        // Если приоритет одинаковый, сортируем по имени шаблона и дате создания
+        if (a.template_name !== b.template_name) {
+          return a.template_name.localeCompare(b.template_name);
+        }
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+
       // Группируем по template_name
       const grouped = new Map<string, TemplateGroup>();
 
-      data?.forEach((item: any) => {
+      sortedData?.forEach((item: any) => {
         const templateName = item.template_name;
 
-        if (!grouped.has(templateName)) {
-          // Определяем данные работы
-          const workData = item.work_library || item.sub_work_library;
-          const workType = item.work_library ? 'work' : 'sub_work';
+        console.log('📋 Processing template item:', {
+          id: item.id,
+          template_name: item.template_name,
+          work_library_id: item.work_library_id,
+          sub_work_library_id: item.sub_work_library_id,
+          material_library_id: item.material_library_id,
+          sub_material_library_id: item.sub_material_library_id,
+          is_linked: item.is_linked_to_work,
+          work_name: item.work_library?.name || item.sub_work_library?.name || 'NO WORK',
+          material_name: item.material_library?.name || item.sub_material_library?.name || 'NO MATERIAL'
+        });
 
+        // Создаем группу если ее еще нет
+        if (!grouped.has(templateName)) {
           grouped.set(templateName, {
             template_name: templateName,
             template_description: item.template_description,
-            work_data: workData ? {
-              id: workData.id,
-              name: workData.name,
-              description: workData.description,
-              unit: workData.unit,
-              type: workType,
-              unit_rate: workData.unit_rate,
-              currency_type: workData.currency_type,
-              category: workData.category
-            } : undefined,
+            work_data: undefined, // Будет заполнено позже
             materials: [],
             created_at: item.created_at,
             updated_at: item.updated_at
           });
         }
 
-        // Добавляем материал
-        const materialData = item.material_library || item.sub_material_library;
-        const materialType = item.material_library ? 'material' : 'sub_material';
+        const group = grouped.get(templateName)!;
 
-        if (materialData) {
-          grouped.get(templateName)!.materials.push({
+        // Определяем данные работы и материала
+        const workData = item.work_library || item.sub_work_library;
+        const materialData = item.material_library || item.sub_material_library;
+
+        console.log('📊 Extracted data:', {
+          hasWork: !!workData,
+          hasMaterial: !!materialData,
+          workName: workData?.name,
+          materialName: materialData?.name
+        });
+
+        // Если есть работа и материал - это связка
+        if (workData && materialData) {
+          // Сначала добавляем работу как отдельный элемент, если ее еще нет в списке
+          const workType = item.sub_work_library ? 'sub_work' : 'work';
+          const workAlreadyExists = group.materials.some(m =>
+            m.id === workData.id && (m.type === 'work' || m.type === 'sub_work')
+          );
+
+          console.log(`    🔍 Work "${workData.name}" (${workData.id}) already exists: ${workAlreadyExists}`);
+
+          if (!workAlreadyExists) {
+            console.log(`    ➕ Adding work "${workData.name}" to materials list`);
+            // Добавляем работу как отдельный элемент
+            group.materials.push({
+              id: workData.id,
+              name: workData.name,
+              description: workData.description,
+              unit: workData.unit,
+              type: workType as any,
+              category: workData.category,
+              material_type: undefined,
+              consumption_coefficient: 1,
+              unit_rate: workData.unit_rate,
+              currency_type: workData.currency_type,
+              delivery_price_type: undefined,
+              delivery_amount: undefined,
+              quote_link: undefined,
+              conversion_coefficient: 1,
+              is_linked_to_work: false,
+              notes: undefined,
+              template_item_id: item.id,
+              template_name: item.template_name,
+              template_description: item.template_description,
+              work_library_id: item.work_library_id,
+              sub_work_library_id: item.sub_work_library_id,
+              material_library_id: undefined,
+              sub_material_library_id: undefined,
+              work_library: item.work_library,
+              sub_work_library: item.sub_work_library,
+              material_library: undefined,
+              sub_material_library: undefined
+            });
+          }
+
+          // Добавляем материал привязанный к работе
+          const materialType = item.sub_material_library ? 'sub_material' : 'material';
+          group.materials.push({
             id: materialData.id,
             name: materialData.name,
             description: materialData.description,
@@ -231,7 +312,7 @@ export const workMaterialTemplatesApi = {
             conversion_coefficient: item.conversion_coefficient,
             is_linked_to_work: item.is_linked_to_work,
             notes: item.notes,
-            template_item_id: item.id, // ID элемента шаблона для редактирования
+            template_item_id: item.id,
             template_name: item.template_name,
             template_description: item.template_description,
             work_library_id: item.work_library_id,
@@ -241,6 +322,105 @@ export const workMaterialTemplatesApi = {
             work_library: item.work_library,
             sub_work_library: item.sub_work_library,
             material_library: item.material_library,
+            sub_material_library: item.sub_material_library,
+            // Добавляем ссылку на работу для правильной группировки
+            linked_work_id: workData.id,
+            linked_work_name: workData.name
+          });
+
+          // Также сохраняем работу если ее еще нет
+          if (!group.work_data && item.is_linked_to_work) {
+            group.work_data = {
+              id: workData.id,
+              name: workData.name,
+              description: workData.description,
+              unit: workData.unit,
+              type: workType,
+              unit_rate: workData.unit_rate,
+              currency_type: workData.currency_type,
+              category: workData.category
+            };
+          }
+        }
+        // Если только работа без материала
+        else if (workData && !materialData) {
+          const workType = item.sub_work_library ? 'sub_work' : 'work';
+          // Для работ без материалов добавляем их как специальную запись в materials
+          // чтобы они отображались в таблице
+          group.materials.push({
+            id: workData.id,
+            name: workData.name,
+            description: workData.description,
+            unit: workData.unit,
+            type: workType as any,
+            category: workData.category,
+            material_type: undefined,
+            consumption_coefficient: 1,
+            unit_rate: workData.unit_rate,
+            currency_type: workData.currency_type,
+            delivery_price_type: undefined,
+            delivery_amount: undefined,
+            quote_link: undefined,
+            conversion_coefficient: 1,
+            is_linked_to_work: false,
+            notes: 'Работа без материалов',
+            template_item_id: item.id,
+            template_name: item.template_name,
+            template_description: item.template_description,
+            work_library_id: item.work_library_id,
+            sub_work_library_id: item.sub_work_library_id,
+            material_library_id: null,
+            sub_material_library_id: null,
+            work_library: item.work_library,
+            sub_work_library: item.sub_work_library,
+            material_library: null,
+            sub_material_library: null
+          });
+
+          // Также сохраняем как work_data если это первая работа
+          if (!group.work_data) {
+            group.work_data = {
+              id: workData.id,
+              name: workData.name,
+              description: workData.description,
+              unit: workData.unit,
+              type: workType,
+              unit_rate: workData.unit_rate,
+              currency_type: workData.currency_type,
+              category: workData.category
+            };
+          }
+        }
+        // Если только материал без работы
+        else if (!workData && materialData) {
+          const materialType = item.material_library ? 'material' : 'sub_material';
+          group.materials.push({
+            id: materialData.id,
+            name: materialData.name,
+            description: materialData.description,
+            unit: materialData.unit,
+            type: materialType,
+            category: materialData.category,
+            material_type: materialData.material_type,
+            consumption_coefficient: materialData.consumption_coefficient,
+            unit_rate: materialData.unit_rate,
+            currency_type: materialData.currency_type,
+            delivery_price_type: materialData.delivery_price_type,
+            delivery_amount: materialData.delivery_amount,
+            quote_link: materialData.quote_link,
+            conversion_coefficient: item.conversion_coefficient,
+            is_linked_to_work: false,
+            notes: item.notes,
+            template_item_id: item.id,
+            template_name: item.template_name,
+            template_description: item.template_description,
+            work_library_id: null,
+            sub_work_library_id: null,
+            material_library_id: item.material_library_id,
+            sub_material_library_id: item.sub_material_library_id,
+            work_library: null,
+            sub_work_library: null,
+            material_library: item.material_library,
             sub_material_library: item.sub_material_library
           });
         }
@@ -248,6 +428,24 @@ export const workMaterialTemplatesApi = {
 
       const templates = Array.from(grouped.values());
       console.log('✅ Templates grouped:', templates.length);
+
+      // Проверяем конкретно "Новый шаблон" после группировки
+      const newTemplate = templates.find(t => t.template_name === 'Новый шаблон');
+      if (newTemplate) {
+        console.log('🎯 "Новый шаблон" after grouping:', {
+          name: newTemplate.template_name,
+          materials_count: newTemplate.materials?.length,
+          materials: newTemplate.materials?.map(m => ({
+            id: m.id,
+            name: m.name,
+            type: m.type,
+            linked_work_id: m.linked_work_id,
+            linked_work_name: m.linked_work_name,
+            is_linked_to_work: m.is_linked_to_work
+          }))
+        });
+      }
+
       return { data: templates };
     } catch (error) {
       console.error('💥 Exception in getTemplates:', error);

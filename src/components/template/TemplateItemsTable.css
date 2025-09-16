@@ -1,0 +1,36 @@
+/* Override Ant Design table hover styles for template items */
+
+/* Work rows */
+.ant-table-tbody > tr.template-work-row:hover > td {
+  background-color: rgb(254 215 170) !important; /* orange-100 */
+}
+
+/* Sub-work rows */
+.ant-table-tbody > tr.template-sub-work-row:hover > td {
+  background-color: rgb(233 213 255) !important; /* purple-100 */
+}
+
+/* Material rows */
+.ant-table-tbody > tr.template-material-row:hover > td {
+  background-color: rgb(219 234 254) !important; /* blue-100 */
+}
+
+/* Auxiliary material rows */
+.ant-table-tbody > tr.template-material-aux-row:hover > td {
+  background-color: rgb(224 242 254) !important; /* sky-100 */
+}
+
+/* Sub-material rows */
+.ant-table-tbody > tr.template-sub-material-row:hover > td {
+  background-color: rgb(220 252 231) !important; /* green-100 */
+}
+
+/* Auxiliary sub-material rows */
+.ant-table-tbody > tr.template-sub-material-aux-row:hover > td {
+  background-color: rgb(209 250 229) !important; /* emerald-100 */
+}
+
+/* Smooth transition for all hover effects */
+.ant-table-tbody > tr > td {
+  transition: background-color 0.2s ease;
+}

@@ -23,6 +23,7 @@ import type { ColumnsType } from 'antd/es/table';
 
 interface TemplateListProps {
   onAddToTemplate?: (templateName: string) => void;
+  showContent?: boolean;
 }
 
 interface TemplateItem {
@@ -64,8 +65,8 @@ interface TemplateItem {
   linked_work_name?: string;
 }
 
-const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate }) => {
-  console.log('🚀 TemplateList render');
+const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showContent = false }) => {
+  console.log('🚀 TemplateList render', { showContent });
 
   const [expandedTemplates, setExpandedTemplates] = useState<string[]>([]);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -81,6 +82,33 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate }) => {
   const [newTemplateName, setNewTemplateName] = useState<string>('');
 
   const queryClient = useQueryClient();
+
+  // Загрузка шаблонов
+  const { data: templates = [], isLoading, error } = useQuery({
+    queryKey: ['work-material-templates'],
+    queryFn: async () => {
+      console.log('📡 Загрузка шаблонов');
+      const response = await workMaterialTemplatesApi.getTemplates();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      console.log('✅ Шаблоны загружены:', response.data?.length);
+      return response.data || [];
+    }
+  });
+
+  // Update collapsed state when showContent changes or templates load
+  useEffect(() => {
+    if (!templates || templates.length === 0) return;
+
+    if (showContent) {
+      // Show content - clear collapsed templates
+      setCollapsedTemplates(new Set());
+    } else {
+      // Hide content - collapse all templates
+      setCollapsedTemplates(new Set(templates.map((t: TemplateGroup) => t.template_name)));
+    }
+  }, [showContent, templates]);
 
   // Load library data
   useEffect(() => {
@@ -101,110 +129,155 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate }) => {
     loadLibraryData();
   }, []);
 
-  // Загрузка шаблонов
-  const { data: templates = [], isLoading, error } = useQuery({
-    queryKey: ['work-material-templates'],
-    queryFn: async () => {
-      console.log('📡 Загрузка шаблонов');
-      const response = await workMaterialTemplatesApi.getTemplates();
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      console.log('✅ Шаблоны загружены:', response.data?.length);
-      return response.data || [];
-    }
-  });
-
   // Transform template data for hierarchical display
   const transformedTemplates = useMemo(() => {
     return templates.map((template: TemplateGroup) => {
       const items: TemplateItem[] = [];
 
-      // First add work if exists
-      if (template.work_data) {
-        const workType = template.work_data.type || 'work';
+      // Process all items (works and materials are now all in materials array)
+      const allItems = template.materials || [];
+
+      console.log(`📋 Transforming template "${template.template_name}":`, {
+        total_items: allItems.length,
+        items: allItems.map(item => ({
+          id: item.id,
+          name: item.name,
+          type: item.type,
+          linked_work_id: item.linked_work_id
+        }))
+      });
+
+      // Separate works and materials
+      const works = allItems.filter(item => item.type === 'work' || item.type === 'sub_work');
+      const materials = allItems.filter(item => item.type === 'material' || item.type === 'sub_material');
+
+      console.log(`  📊 Found ${works.length} works and ${materials.length} materials`);
+      console.log(`  Works:`, works.map(w => ({ id: w.id, name: w.name, type: w.type })));
+      console.log(`  Materials:`, materials.map(m => ({
+        id: m.id,
+        name: m.name,
+        type: m.type,
+        linked_work_id: m.linked_work_id,
+        is_linked: m.is_linked_to_work
+      })));
+
+      // Process items to create proper hierarchy
+      const processedMaterialIds = new Set<string>();
+
+      // Add each work with its linked materials immediately after
+      works.forEach((work: any) => {
+        // Add the work
+        const workItemId = `${template.template_name}-work-${work.id}`;
         items.push({
-          id: `${template.template_name}-work`,
+          id: workItemId,
           template_name: template.template_name,
           template_description: template.template_description,
-          work_id: template.work_data.id,
-          work_name: template.work_data.name,
-          work_type: workType,
-          work_unit: template.work_data.unit,
-          work_unit_rate: template.work_data.unit_rate,
-          work_currency_type: template.work_data.currency_type,
-          work_category: template.work_data.category,
-          item_type: workType,
+          work_id: work.id,
+          work_name: work.name,
+          work_type: work.type,
+          work_unit: work.unit,
+          work_unit_rate: work.unit_rate,
+          work_currency_type: work.currency_type,
+          work_category: work.category,
+          item_type: work.type,
           conversion_coefficient: 1,
           is_linked_to_work: false,
-          display_order: 1,
+          display_order: items.length + 1,  // Dynamic order based on position
           indent: false
         });
-      }
 
-      // Group materials by whether they're linked
-      const linkedMaterials = template.materials.filter(m => m.is_linked_to_work);
-      const unlinkedMaterials = template.materials.filter(m => !m.is_linked_to_work);
+        // Immediately add materials linked to this work
+        const linkedToThisWork = materials.filter(m => {
+          const isLinked = m.linked_work_id === work.id;
+          if (isLinked) {
+            console.log(`    ✅ Material "${m.name}" is linked to work "${work.name}"`);
+          }
+          return isLinked;
+        });
+        console.log(`  🔗 Work "${work.name}" (${work.id}) has ${linkedToThisWork.length} linked materials`);
 
-      // Add linked materials right after work
-      linkedMaterials.forEach((material: any) => {
-        const materialType = material.type || 'material';
-        items.push({
-          id: material.template_item_id || material.id,
-          template_name: template.template_name,
-          template_description: template.template_description,
-          material_id: material.id,
-          material_name: material.name,
-          material_type: materialType,
-          material_unit: material.unit,
-          material_unit_rate: material.unit_rate,
-          material_currency_type: material.currency_type,
-          material_category: material.category,
-          material_material_type: material.material_type, // Add material_type from API
-          material_consumption_coefficient: material.consumption_coefficient,
-          material_delivery_price_type: material.delivery_price_type,
-          material_delivery_amount: material.delivery_amount,
-          material_quote_link: material.quote_link,
-          conversion_coefficient: material.conversion_coefficient,
-          is_linked_to_work: true,
-          item_type: materialType,
-          display_order: 2,
-          indent: true,
-          linked_work_name: template.work_data?.name
+        linkedToThisWork.forEach((material: any) => {
+          const materialItemId = `${template.template_name}-material-${material.id}`;
+          items.push({
+            id: materialItemId,
+            template_name: template.template_name,
+            template_description: template.template_description,
+            material_id: material.id,
+            material_name: material.name,
+            material_type: material.type,
+            material_unit: material.unit,
+            material_unit_rate: material.unit_rate,
+            material_currency_type: material.currency_type,
+            material_category: material.category,
+            material_material_type: material.material_type,
+            material_consumption_coefficient: material.consumption_coefficient,
+            material_delivery_price_type: material.delivery_price_type,
+            material_delivery_amount: material.delivery_amount,
+            material_quote_link: material.quote_link,
+            conversion_coefficient: material.conversion_coefficient,
+            is_linked_to_work: true,
+            linked_work_id: work.id,  // Add linked_work_id for statistics
+            item_type: material.type,
+            display_order: items.length + 1,  // Dynamic order based on position
+            indent: true,
+            linked_work_name: work.name
+          });
+          processedMaterialIds.add(material.id);
         });
       });
 
       // Add unlinked materials at the end
+      const unlinkedMaterials = materials.filter(m => !m.linked_work_id && !processedMaterialIds.has(m.id));
+      console.log(`  📦 ${unlinkedMaterials.length} unlinked materials`);
+
       unlinkedMaterials.forEach((material: any) => {
-        const materialType = material.type || 'material';
+        const materialItemId = `${template.template_name}-unlinked-material-${material.id}`;
         items.push({
-          id: material.template_item_id || material.id,
+          id: materialItemId,
           template_name: template.template_name,
           template_description: template.template_description,
           material_id: material.id,
           material_name: material.name,
-          material_type: materialType,
+          material_type: material.type,
           material_unit: material.unit,
           material_unit_rate: material.unit_rate,
           material_currency_type: material.currency_type,
           material_category: material.category,
-          material_material_type: material.material_type, // Add material_type from API
+          material_material_type: material.material_type,
           material_consumption_coefficient: material.consumption_coefficient,
           material_delivery_price_type: material.delivery_price_type,
           material_delivery_amount: material.delivery_amount,
           material_quote_link: material.quote_link,
           conversion_coefficient: material.conversion_coefficient,
           is_linked_to_work: false,
-          item_type: materialType,
-          display_order: 3,
+          item_type: material.type,
+          display_order: items.length + 1,  // Dynamic order based on position
           indent: false
         });
+      });
+
+      // Items are already in correct order, no need to sort
+      console.log(`  📝 Final items order for "${template.template_name}":`,
+        items.map(item => ({
+          name: item.work_name || item.material_name,
+          type: item.item_type,
+          indent: item.indent
+        }))
+      );
+
+      // Count linked items for debugging
+      const linkedCount = items.filter(item => item.linked_work_id).length;
+      console.log(`  📊 Template "${template.template_name}" statistics:`, {
+        total_items: items.length,
+        works: items.filter(i => i.item_type === 'work' || i.item_type === 'sub_work').length,
+        materials: items.filter(i => i.item_type === 'material' || i.item_type === 'sub_material').length,
+        linked: linkedCount
       });
 
       return {
         template_name: template.template_name,
         template_description: template.template_description,
-        items: items.sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+        items: items
       };
     });
   }, [templates]);
@@ -897,7 +970,156 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate }) => {
   };
 
   return (
-    <div className="space-y-4">
+    <>
+      <style>
+        {`
+          .template-card {
+            background: linear-gradient(135deg, #fdf4ff 0%, #f0f9ff 50%, #f0fdfa 100%);
+            border-radius: 16px !important;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid rgba(139, 92, 246, 0.2) !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          }
+
+          .template-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #8b5cf6 0%, #3b82f6 50%, #06b6d4 100%);
+            animation: shimmer 3s ease infinite;
+          }
+
+          @keyframes shimmer {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+          }
+
+          .template-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(139, 92, 246, 0.15) !important;
+            border-color: rgba(139, 92, 246, 0.3) !important;
+          }
+
+          .template-card .ant-card-head {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%);
+            border-bottom: 1px solid rgba(139, 92, 246, 0.1) !important;
+            padding: 16px 20px;
+          }
+
+          .template-card .ant-card-head-title {
+            padding: 0;
+          }
+
+          .template-card-header {
+            position: relative;
+            z-index: 1;
+          }
+
+          .template-card-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            margin-right: 12px;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+            animation: float 3s ease-in-out infinite;
+          }
+
+          @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+          }
+
+          .template-name {
+            font-size: 18px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+          }
+
+          .template-card .ant-btn-primary {
+            background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%) !important;
+            border: none !important;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+            transition: all 0.3s ease;
+          }
+
+          .template-card .ant-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+          }
+
+          .template-card .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous) {
+            border-color: rgba(139, 92, 246, 0.3);
+            color: #8b5cf6;
+          }
+
+          .template-card .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):hover {
+            border-color: #8b5cf6;
+            color: #8b5cf6;
+            background: rgba(139, 92, 246, 0.05);
+          }
+
+          .template-stats {
+            display: flex;
+            gap: 16px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.03) 0%, rgba(59, 130, 246, 0.03) 100%);
+            border-radius: 8px;
+            margin-top: 8px;
+          }
+
+          .template-stat-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #6b7280;
+          }
+
+          .template-stat-value {
+            font-weight: 600;
+            color: #8b5cf6;
+          }
+
+          /* Анимированный фон для карточки при наведении */
+          .template-card::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.1) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            animation: rotate 30s linear infinite;
+            pointer-events: none;
+          }
+
+          .template-card:hover::after {
+            opacity: 1;
+          }
+
+          @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+      <div className="space-y-4">
       {transformedTemplates.length === 0 ? (
         <Card>
           <Empty description="Нет созданных шаблонов" />
@@ -906,9 +1128,13 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate }) => {
         transformedTemplates.map((template: any) => (
           <Card
             key={template.template_name}
+            className="template-card"
             title={
-              <div className="flex justify-between items-center">
+              <div className="template-card-header flex justify-between items-center">
                 <div className="flex items-center gap-2">
+                  <div className="template-card-icon">
+                    <BuildOutlined />
+                  </div>
                   <Tooltip title={collapsedTemplates.has(template.template_name) ? "Развернуть" : "Свернуть"}>
                     <Button
                       size="small"
@@ -944,7 +1170,7 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate }) => {
                     </Space>
                   ) : (
                     <>
-                      <span className="text-lg font-semibold">{template.template_name}</span>
+                      <span className="template-name">{template.template_name}</span>
                       <Tooltip title="Редактировать название">
                         <Button
                           size="small"
@@ -997,8 +1223,23 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate }) => {
                 </Space>
               </div>
             }
-            className="shadow-sm"
           >
+            {/* Template statistics */}
+            <div className="template-stats">
+              <div className="template-stat-item">
+                <ToolOutlined style={{ color: '#8b5cf6' }} />
+                <span>Работ: <span className="template-stat-value">{template.items.filter((i: any) => i.item_type === 'work' || i.item_type === 'sub_work').length}</span></span>
+              </div>
+              <div className="template-stat-item">
+                <AppstoreOutlined style={{ color: '#3b82f6' }} />
+                <span>Материалов: <span className="template-stat-value">{template.items.filter((i: any) => i.item_type === 'material' || i.item_type === 'sub_material').length}</span></span>
+              </div>
+              <div className="template-stat-item">
+                <LinkOutlined style={{ color: '#06b6d4' }} />
+                <span>Связей: <span className="template-stat-value">{template.items.filter((i: any) => i.linked_work_id).length}</span></span>
+              </div>
+            </div>
+
             {/* Show quick add form when adding to this template */}
             {addingToTemplate === template.template_name && (
               <QuickAddRow templateName={template.template_name} />
@@ -1062,7 +1303,8 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate }) => {
           </Card>
         ))
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
