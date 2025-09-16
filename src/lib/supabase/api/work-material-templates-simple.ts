@@ -9,7 +9,6 @@ export interface WorkMaterialTemplate {
   sub_work_library_id?: string;
   material_library_id?: string;
   sub_material_library_id?: string;
-  conversion_coefficient: number;
   is_linked_to_work: boolean;
   notes?: string;
   created_at?: string;

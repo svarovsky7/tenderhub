@@ -30,11 +30,9 @@ export type Work = Database['public']['Tables']['works_library']['Row'];
 
 // Filter types for libraries
 export interface MaterialFilters {
-  category?: string[];
   search?: string;
 }
 
 export interface WorkItemFilters {
-  category?: string[];
   search?: string;
 }

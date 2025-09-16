@@ -10,7 +10,6 @@ export interface WorkMaterialTemplate {
   sub_work_library_id?: string;
   material_library_id?: string;
   sub_material_library_id?: string;
-  conversion_coefficient: number;
   is_linked_to_work: boolean;
   notes?: string;
   created_at?: string;
@@ -84,7 +83,6 @@ export const workMaterialTemplatesApi = {
       template_name: template.template_name,
       work_id: template.work_library_id || template.sub_work_library_id,
       material_id: template.material_library_id || template.sub_material_library_id,
-      conversion_coefficient: template.conversion_coefficient,
       is_linked_to_work: template.is_linked_to_work
     });
 
@@ -125,7 +123,6 @@ export const workMaterialTemplatesApi = {
           sub_work_library_id: template.sub_work_library_id || null,
           material_library_id: template.material_library_id || null,
           sub_material_library_id: template.sub_material_library_id || null,
-          conversion_coefficient: template.conversion_coefficient || 1.0,
           is_linked_to_work: template.is_linked_to_work !== false,
           notes: template.notes?.trim() || null
         })
@@ -154,25 +151,75 @@ export const workMaterialTemplatesApi = {
     console.log('🚀 Getting all templates');
 
     try {
-      const { data, error } = await supabase
+      // First get templates with library data
+      const { data: templatesData, error: templatesError } = await supabase
         .from('work_material_templates')
         .select(`
           *,
           work_library:works_library!work_library_id(
-            id, name, description, unit, item_type, unit_rate, currency_type, category
+            id, name_id, item_type, unit_rate, currency_type
           ),
           sub_work_library:works_library!sub_work_library_id(
-            id, name, description, unit, item_type, unit_rate, currency_type, category
+            id, name_id, item_type, unit_rate, currency_type
           ),
           material_library:materials_library!material_library_id(
-            id, name, description, unit, category, item_type, material_type, consumption_coefficient, unit_rate, currency_type, delivery_price_type, delivery_amount, quote_link
+            id, name_id, item_type, material_type, consumption_coefficient, conversion_coefficient, unit_rate, currency_type, delivery_price_type, delivery_amount, quote_link
           ),
           sub_material_library:materials_library!sub_material_library_id(
-            id, name, description, unit, category, item_type, material_type, consumption_coefficient, unit_rate, currency_type, delivery_price_type, delivery_amount, quote_link
+            id, name_id, item_type, material_type, consumption_coefficient, conversion_coefficient, unit_rate, currency_type, delivery_price_type, delivery_amount, quote_link
           )
         `)
         .order('template_name', { ascending: true })
         .order('created_at', { ascending: true });
+
+      if (templatesError) {
+        console.error('❌ Failed to fetch templates:', templatesError);
+        return { error: templatesError.message };
+      }
+
+      // Now get all name_ids to fetch names
+      const workNameIds = new Set<string>();
+      const materialNameIds = new Set<string>();
+
+      templatesData?.forEach((item: any) => {
+        if (item.work_library?.name_id) workNameIds.add(item.work_library.name_id);
+        if (item.sub_work_library?.name_id) workNameIds.add(item.sub_work_library.name_id);
+        if (item.material_library?.name_id) materialNameIds.add(item.material_library.name_id);
+        if (item.sub_material_library?.name_id) materialNameIds.add(item.sub_material_library.name_id);
+      });
+
+      // Fetch work names
+      const workNamesMap = new Map<string, { name: string; unit: string }>();
+      if (workNameIds.size > 0) {
+        const { data: workNames } = await supabase
+          .from('work_names')
+          .select('id, name, unit')
+          .in('id', Array.from(workNameIds));
+
+        workNames?.forEach(n => workNamesMap.set(n.id, { name: n.name, unit: n.unit }));
+      }
+
+      // Fetch material names
+      const materialNamesMap = new Map<string, { name: string; unit: string }>();
+      if (materialNameIds.size > 0) {
+        const { data: materialNames } = await supabase
+          .from('material_names')
+          .select('id, name, unit')
+          .in('id', Array.from(materialNameIds));
+
+        materialNames?.forEach(n => materialNamesMap.set(n.id, { name: n.name, unit: n.unit }));
+      }
+
+      // Combine data with names
+      const data = templatesData?.map((item: any) => ({
+        ...item,
+        work_name: item.work_library?.name_id ? workNamesMap.get(item.work_library.name_id) : null,
+        sub_work_name: item.sub_work_library?.name_id ? workNamesMap.get(item.sub_work_library.name_id) : null,
+        material_name: item.material_library?.name_id ? materialNamesMap.get(item.material_library.name_id) : null,
+        sub_material_name: item.sub_material_library?.name_id ? materialNamesMap.get(item.sub_material_library.name_id) : null
+      }));
+
+      const error = null;
 
       console.log('📦 Templates fetched:', { count: data?.length, error });
 
@@ -220,8 +267,8 @@ export const workMaterialTemplatesApi = {
           material_library_id: item.material_library_id,
           sub_material_library_id: item.sub_material_library_id,
           is_linked: item.is_linked_to_work,
-          work_name: item.work_library?.name || item.sub_work_library?.name || 'NO WORK',
-          material_name: item.material_library?.name || item.sub_material_library?.name || 'NO MATERIAL'
+          work_name: item.work_name?.name || item.sub_work_name?.name || 'NO WORK',
+          material_name: item.material_name?.name || item.sub_material_name?.name || 'NO MATERIAL'
         });
 
         // Создаем группу если ее еще нет
@@ -239,8 +286,14 @@ export const workMaterialTemplatesApi = {
         const group = grouped.get(templateName)!;
 
         // Определяем данные работы и материала
-        const workData = item.work_library || item.sub_work_library;
-        const materialData = item.material_library || item.sub_material_library;
+        const workLibrary = item.work_library || item.sub_work_library;
+        const workNameData = item.work_name || item.sub_work_name;
+        const materialLibrary = item.material_library || item.sub_material_library;
+        const materialNameData = item.material_name || item.sub_material_name;
+
+        // Объединяем данные из библиотеки и имени
+        const workData = workLibrary ? { ...workLibrary, name: workNameData?.name, unit: workNameData?.unit } : null;
+        const materialData = materialLibrary ? { ...materialLibrary, name: materialNameData?.name, unit: materialNameData?.unit } : null;
 
         console.log('📊 Extracted data:', {
           hasWork: !!workData,
@@ -265,10 +318,10 @@ export const workMaterialTemplatesApi = {
             group.materials.push({
               id: workData.id,
               name: workData.name,
-              description: workData.description,
+              description: undefined,
               unit: workData.unit,
               type: workType as any,
-              category: workData.category,
+              category: undefined,
               material_type: undefined,
               consumption_coefficient: 1,
               unit_rate: workData.unit_rate,
@@ -298,10 +351,10 @@ export const workMaterialTemplatesApi = {
           group.materials.push({
             id: materialData.id,
             name: materialData.name,
-            description: materialData.description,
+            description: undefined,
             unit: materialData.unit,
             type: materialType,
-            category: materialData.category,
+            category: undefined,
             material_type: materialData.material_type,
             consumption_coefficient: materialData.consumption_coefficient,
             unit_rate: materialData.unit_rate,
@@ -309,7 +362,7 @@ export const workMaterialTemplatesApi = {
             delivery_price_type: materialData.delivery_price_type,
             delivery_amount: materialData.delivery_amount,
             quote_link: materialData.quote_link,
-            conversion_coefficient: item.conversion_coefficient,
+            conversion_coefficient: materialData?.conversion_coefficient || 1,
             is_linked_to_work: item.is_linked_to_work,
             notes: item.notes,
             template_item_id: item.id,
@@ -333,12 +386,12 @@ export const workMaterialTemplatesApi = {
             group.work_data = {
               id: workData.id,
               name: workData.name,
-              description: workData.description,
+              description: undefined,
               unit: workData.unit,
               type: workType,
               unit_rate: workData.unit_rate,
               currency_type: workData.currency_type,
-              category: workData.category
+              category: undefined
             };
           }
         }
@@ -382,12 +435,12 @@ export const workMaterialTemplatesApi = {
             group.work_data = {
               id: workData.id,
               name: workData.name,
-              description: workData.description,
+              description: undefined,
               unit: workData.unit,
               type: workType,
               unit_rate: workData.unit_rate,
               currency_type: workData.currency_type,
-              category: workData.category
+              category: undefined
             };
           }
         }
@@ -397,10 +450,10 @@ export const workMaterialTemplatesApi = {
           group.materials.push({
             id: materialData.id,
             name: materialData.name,
-            description: materialData.description,
+            description: undefined,
             unit: materialData.unit,
             type: materialType,
-            category: materialData.category,
+            category: undefined,
             material_type: materialData.material_type,
             consumption_coefficient: materialData.consumption_coefficient,
             unit_rate: materialData.unit_rate,
@@ -408,7 +461,7 @@ export const workMaterialTemplatesApi = {
             delivery_price_type: materialData.delivery_price_type,
             delivery_amount: materialData.delivery_amount,
             quote_link: materialData.quote_link,
-            conversion_coefficient: item.conversion_coefficient,
+            conversion_coefficient: materialData?.conversion_coefficient || 1,
             is_linked_to_work: false,
             notes: item.notes,
             template_item_id: item.id,
@@ -460,25 +513,75 @@ export const workMaterialTemplatesApi = {
     console.log('🚀 Getting template by name:', templateName);
 
     try {
-      const { data, error } = await supabase
+      // First get templates with library data
+      const { data: templatesData, error: templatesError } = await supabase
         .from('work_material_templates')
         .select(`
           *,
           work_library:works_library!work_library_id(
-            id, name, description, unit, item_type, unit_rate, currency_type, category
+            id, name_id, item_type, unit_rate, currency_type
           ),
           sub_work_library:works_library!sub_work_library_id(
-            id, name, description, unit, item_type, unit_rate, currency_type, category
+            id, name_id, item_type, unit_rate, currency_type
           ),
           material_library:materials_library!material_library_id(
-            id, name, description, unit, category, item_type, material_type, consumption_coefficient, unit_rate, currency_type, delivery_price_type, delivery_amount, quote_link
+            id, name_id, item_type, material_type, consumption_coefficient, conversion_coefficient, unit_rate, currency_type, delivery_price_type, delivery_amount, quote_link
           ),
           sub_material_library:materials_library!sub_material_library_id(
-            id, name, description, unit, category, item_type, material_type, consumption_coefficient, unit_rate, currency_type, delivery_price_type, delivery_amount, quote_link
+            id, name_id, item_type, material_type, consumption_coefficient, conversion_coefficient, unit_rate, currency_type, delivery_price_type, delivery_amount, quote_link
           )
         `)
         .eq('template_name', templateName)
         .order('created_at', { ascending: true });
+
+      if (templatesError) {
+        console.error('❌ Failed to fetch templates:', templatesError);
+        return { error: templatesError.message };
+      }
+
+      // Now get all name_ids to fetch names
+      const workNameIds = new Set<string>();
+      const materialNameIds = new Set<string>();
+
+      templatesData?.forEach((item: any) => {
+        if (item.work_library?.name_id) workNameIds.add(item.work_library.name_id);
+        if (item.sub_work_library?.name_id) workNameIds.add(item.sub_work_library.name_id);
+        if (item.material_library?.name_id) materialNameIds.add(item.material_library.name_id);
+        if (item.sub_material_library?.name_id) materialNameIds.add(item.sub_material_library.name_id);
+      });
+
+      // Fetch work names
+      const workNamesMap = new Map<string, { name: string; unit: string }>();
+      if (workNameIds.size > 0) {
+        const { data: workNames } = await supabase
+          .from('work_names')
+          .select('id, name, unit')
+          .in('id', Array.from(workNameIds));
+
+        workNames?.forEach(n => workNamesMap.set(n.id, { name: n.name, unit: n.unit }));
+      }
+
+      // Fetch material names
+      const materialNamesMap = new Map<string, { name: string; unit: string }>();
+      if (materialNameIds.size > 0) {
+        const { data: materialNames } = await supabase
+          .from('material_names')
+          .select('id, name, unit')
+          .in('id', Array.from(materialNameIds));
+
+        materialNames?.forEach(n => materialNamesMap.set(n.id, { name: n.name, unit: n.unit }));
+      }
+
+      // Combine data with names
+      const data = templatesData?.map((item: any) => ({
+        ...item,
+        work_name: item.work_library?.name_id ? workNamesMap.get(item.work_library.name_id) : null,
+        sub_work_name: item.sub_work_library?.name_id ? workNamesMap.get(item.sub_work_library.name_id) : null,
+        material_name: item.material_library?.name_id ? materialNamesMap.get(item.material_library.name_id) : null,
+        sub_material_name: item.sub_material_library?.name_id ? materialNamesMap.get(item.sub_material_library.name_id) : null
+      }));
+
+      const error = null;
 
       console.log('📦 Template items fetched:', { count: data?.length, error });
 
@@ -509,7 +612,7 @@ export const workMaterialTemplatesApi = {
       if (updates.sub_work_library_id !== undefined) updateData.sub_work_library_id = updates.sub_work_library_id;
       if (updates.material_library_id !== undefined) updateData.material_library_id = updates.material_library_id;
       if (updates.sub_material_library_id !== undefined) updateData.sub_material_library_id = updates.sub_material_library_id;
-      if (updates.conversion_coefficient !== undefined) updateData.conversion_coefficient = updates.conversion_coefficient;
+      // conversion_coefficient is now in materials_library, not here
       if (updates.is_linked_to_work !== undefined) updateData.is_linked_to_work = updates.is_linked_to_work;
       if (updates.notes !== undefined) updateData.notes = updates.notes?.trim() || null;
 
@@ -615,7 +718,7 @@ export const workMaterialTemplatesApi = {
         sub_work_library_id: item.sub_work_library_id,
         material_library_id: item.material_library_id,
         sub_material_library_id: item.sub_material_library_id,
-        conversion_coefficient: item.conversion_coefficient,
+        // conversion_coefficient is now in materials_library
         is_linked_to_work: item.is_linked_to_work,
         notes: item.notes
       }));
@@ -636,6 +739,155 @@ export const workMaterialTemplatesApi = {
       return { data };
     } catch (error) {
       console.error('💥 Exception in duplicateTemplate:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  /**
+   * Обновить работу из шаблона
+   */
+  async updateWorkFromTemplate(
+    workId: string,
+    isSubWork: boolean,
+    updates: {
+      name?: string;
+      unit?: string;
+      unit_rate?: number;
+      currency_type?: string;
+    }
+  ) {
+    console.log('🚀 Updating work from template:', { workId, isSubWork, updates });
+
+    try {
+      const { name, unit, ...workData } = updates;
+
+      // Если обновляется имя или единица измерения
+      if (name || unit) {
+        // Получаем текущую работу
+        const { data: currentWork, error: fetchError } = await supabase
+          .from('works_library')
+          .select('name_id')
+          .eq('id', workId)
+          .single();
+
+        if (fetchError) {
+          console.error('❌ Failed to fetch work:', fetchError);
+          return { error: fetchError.message };
+        }
+
+        // Обновляем запись в work_names
+        if (currentWork?.name_id) {
+          const nameUpdates: any = {};
+          if (name) nameUpdates.name = name;
+          if (unit) nameUpdates.unit = unit;
+
+          const { error: nameError } = await supabase
+            .from('work_names')
+            .update(nameUpdates)
+            .eq('id', currentWork.name_id);
+
+          if (nameError) {
+            console.error('❌ Failed to update work name:', nameError);
+            return { error: nameError.message };
+          }
+          console.log('✅ Work name updated');
+        }
+      }
+
+      // Обновляем остальные данные в works_library
+      if (Object.keys(workData).length > 0) {
+        const { error: updateError } = await supabase
+          .from('works_library')
+          .update(workData)
+          .eq('id', workId);
+
+        if (updateError) {
+          console.error('❌ Failed to update work library:', updateError);
+          return { error: updateError.message };
+        }
+        console.log('✅ Work library updated');
+      }
+
+      return { data: { success: true } };
+    } catch (error) {
+      console.error('💥 Exception in updateWorkFromTemplate:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  /**
+   * Обновить материал из шаблона
+   */
+  async updateMaterialFromTemplate(
+    materialId: string,
+    isSubMaterial: boolean,
+    updates: {
+      name?: string;
+      unit?: string;
+      unit_rate?: number;
+      currency_type?: string;
+      consumption_coefficient?: number;
+      conversion_coefficient?: number;
+      delivery_price_type?: string;
+      delivery_amount?: number;
+      material_type?: string;
+    }
+  ) {
+    console.log('🚀 Updating material from template:', { materialId, isSubMaterial, updates });
+
+    try {
+      const { name, unit, ...materialData } = updates;
+
+      // Если обновляется имя или единица измерения
+      if (name || unit) {
+        // Получаем текущий материал
+        const { data: currentMaterial, error: fetchError } = await supabase
+          .from('materials_library')
+          .select('name_id')
+          .eq('id', materialId)
+          .single();
+
+        if (fetchError) {
+          console.error('❌ Failed to fetch material:', fetchError);
+          return { error: fetchError.message };
+        }
+
+        // Обновляем запись в material_names
+        if (currentMaterial?.name_id) {
+          const nameUpdates: any = {};
+          if (name) nameUpdates.name = name;
+          if (unit) nameUpdates.unit = unit;
+
+          const { error: nameError } = await supabase
+            .from('material_names')
+            .update(nameUpdates)
+            .eq('id', currentMaterial.name_id);
+
+          if (nameError) {
+            console.error('❌ Failed to update material name:', nameError);
+            return { error: nameError.message };
+          }
+          console.log('✅ Material name updated');
+        }
+      }
+
+      // Обновляем остальные данные в materials_library
+      if (Object.keys(materialData).length > 0) {
+        const { error: updateError } = await supabase
+          .from('materials_library')
+          .update(materialData)
+          .eq('id', materialId);
+
+        if (updateError) {
+          console.error('❌ Failed to update material library:', updateError);
+          return { error: updateError.message };
+        }
+        console.log('✅ Material library updated');
+      }
+
+      return { data: { success: true } };
+    } catch (error) {
+      console.error('💥 Exception in updateMaterialFromTemplate:', error);
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   },
@@ -665,11 +917,15 @@ export const workMaterialTemplatesApi = {
 
       for (const templateItem of templateItems) {
         // Определяем работу
-        const workData = templateItem.work_library || templateItem.sub_work_library;
+        const workLibrary = templateItem.work_library || templateItem.sub_work_library;
+        const workNameData = templateItem.work_name || templateItem.sub_work_name;
+        const workData = workLibrary ? { ...workLibrary, name: workNameData?.name, unit: workNameData?.unit } : null;
         const workType = templateItem.work_library ? 'work' : 'sub_work';
 
         // Определяем материал
-        const materialData = templateItem.material_library || templateItem.sub_material_library;
+        const materialLibrary = templateItem.material_library || templateItem.sub_material_library;
+        const materialNameData = templateItem.material_name || templateItem.sub_material_name;
+        const materialData = materialLibrary ? { ...materialLibrary, name: materialNameData?.name, unit: materialNameData?.unit } : null;
         const materialType = templateItem.material_library ? 'material' : 'sub_material';
 
         if (!workData || !materialData) {
@@ -704,7 +960,7 @@ export const workMaterialTemplatesApi = {
           unit_rate: 0, // Будет заполнено пользователем
           work_id: templateItem.is_linked_to_work ? workData.id : null,
           material_id: materialData.id,
-          conversion_coefficient: templateItem.conversion_coefficient,
+          // conversion_coefficient comes from material library now
           consumption_coefficient: materialData.consumption_coefficient || 1.0,
           notes: templateItem.notes || null,
           delivery_price_type: 'included' as const,

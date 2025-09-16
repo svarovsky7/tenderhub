@@ -4744,6 +4744,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                     
                     return sum + itemTotal;
                   }, 0);
+                  
                   return (
                     <Table.Summary fixed>
                       <Table.Summary.Row style={{ backgroundColor: '#f8f9fa' }}>

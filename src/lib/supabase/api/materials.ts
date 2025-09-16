@@ -17,25 +17,14 @@ export const materialsApi = {
     pagination: PaginationOptions = {}
   ): Promise<PaginatedResponse<Material>> {
     try {
+      // Используем представление, которое уже включает name из material_names
       let query = supabase
-        .from('materials_library')
+        .from('materials_library_with_names')
         .select('*', { count: 'exact' });
 
       // Apply filters
-      if (filters.category?.length) {
-        query = query.in('category', filters.category);
-      }
-      
-      if (filters.supplier?.length) {
-        query = query.in('supplier', filters.supplier);
-      }
-      
-      if (filters.price_range) {
-        query = query.gte('base_price', filters.price_range[0]).lte('base_price', filters.price_range[1]);
-      }
-      
       if (filters.search) {
-        query = query.or(`name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+        query = query.ilike('name', `%${filters.search}%`);
       }
 
       // Apply pagination

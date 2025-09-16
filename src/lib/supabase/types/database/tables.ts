@@ -256,12 +256,11 @@ export type DatabaseTables = {
     Row: {
       id: string;
       name: string;
-      description: string | null;
       unit: string;
-      category: string | null;
       item_type: string | null;
       material_type: string | null;
       consumption_coefficient: number | null;
+      conversion_coefficient: number | null;
       unit_rate: number | null;
       currency_type: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
       delivery_price_type: 'included' | 'not_included' | 'amount' | null;
@@ -273,12 +272,11 @@ export type DatabaseTables = {
     Insert: {
       id?: string;
       name: string;
-      description?: string | null;
       unit: string;
-      category?: string | null;
       item_type?: string | null;
       material_type?: string | null;
       consumption_coefficient?: number | null;
+      conversion_coefficient?: number | null;
       unit_rate?: number | null;
       currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
       delivery_price_type?: 'included' | 'not_included' | 'amount' | null;
@@ -290,12 +288,11 @@ export type DatabaseTables = {
     Update: {
       id?: string;
       name?: string;
-      description?: string | null;
       unit?: string;
-      category?: string | null;
       item_type?: string | null;
       material_type?: string | null;
       consumption_coefficient?: number | null;
+      conversion_coefficient?: number | null;
       unit_rate?: number | null;
       currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
       delivery_price_type?: 'included' | 'not_included' | 'amount' | null;
@@ -472,36 +469,30 @@ export type DatabaseTables = {
     Row: {
       id: string;
       name: string;
-      description: string | null;
       unit: string;
       item_type: string | null;
       unit_rate: number | null;
       currency_type: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
-      category: string | null;
       created_at: string;
       updated_at: string;
     };
     Insert: {
       id?: string;
       name: string;
-      description?: string | null;
       unit: string;
       item_type?: string | null;
       unit_rate?: number | null;
       currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
-      category?: string | null;
       created_at?: string;
       updated_at?: string;
     };
     Update: {
       id?: string;
       name?: string;
-      description?: string | null;
       unit?: string;
       item_type?: string | null;
       unit_rate?: number | null;
       currency_type?: 'RUB' | 'USD' | 'EUR' | 'CNY' | null;
-      category?: string | null;
       created_at?: string;
       updated_at?: string;
     };
@@ -582,7 +573,6 @@ export type DatabaseTables = {
       sub_work_library_id: string | null;
       material_library_id: string | null;
       sub_material_library_id: string | null;
-      conversion_coefficient: number;
       is_linked_to_work: boolean;
       notes: string | null;
       created_at: string;
@@ -596,7 +586,6 @@ export type DatabaseTables = {
       sub_work_library_id?: string | null;
       material_library_id?: string | null;
       sub_material_library_id?: string | null;
-      conversion_coefficient?: number;
       is_linked_to_work?: boolean;
       notes?: string | null;
       created_at?: string;
@@ -610,7 +599,6 @@ export type DatabaseTables = {
       sub_work_library_id?: string | null;
       material_library_id?: string | null;
       sub_material_library_id?: string | null;
-      conversion_coefficient?: number;
       is_linked_to_work?: boolean;
       notes?: string | null;
       created_at?: string;

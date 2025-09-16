@@ -17,26 +17,19 @@ export const worksApi = {
     pagination: PaginationOptions = {}
   ): Promise<PaginatedResponse<WorkItem>> {
     try {
+      // Используем представление, которое уже включает name из work_names
       let query = supabase
-        .from('works_library')
+        .from('works_library_with_names')
         .select('*', { count: 'exact' });
 
       // Apply filters
-      if (filters.category?.length) {
-        query = query.in('category', filters.category);
-      }
-      
-      if (filters.price_range) {
-        query = query.gte('base_price', filters.price_range[0]).lte('base_price', filters.price_range[1]);
-      }
-      
       if (filters.search) {
-        query = query.or(`name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+        query = query.ilike('name', `%${filters.search}%`);
       }
 
       // Apply pagination
       const paginatedQuery = applyPagination(query, pagination);
-      
+
       const { data, error, count } = await paginatedQuery.order('name');
 
       if (error) {

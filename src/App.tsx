@@ -12,8 +12,8 @@ const TendersPage = React.lazy(() => import('./pages/TendersPage'));
 const TenderBoq = React.lazy(() => import('./pages/TenderBoq'));
 const BOQPage = React.lazy(() => import('./pages/BOQPage'));
 const BOQPageSimplified = React.lazy(() => import('./pages/BOQPageSimplified'));
-const Materials = React.lazy(() => import('./pages/Materials'));
-const Works = React.lazy(() => import('./pages/Works'));
+const MaterialsPage = React.lazy(() => import('./pages/MaterialsPage'));
+const WorksPage = React.lazy(() => import('./pages/WorksPage'));
 const UsersPage = React.lazy(() => import('./pages/admin/UsersPage'));
 const SettingsPage = React.lazy(() => import('./pages/admin/SettingsPage'));
 const ConstructionCostsPage = React.lazy(() => import('./pages/admin/ConstructionCostsPage'));
@@ -85,19 +85,19 @@ function App() {
 
             {/* Libraries */}
             <Route path="libraries">
-              <Route 
-                path="materials" 
+              <Route
+                path="materials"
                 element={
                   <React.Suspense fallback={<div>Загрузка...</div>}>
-                    <Materials />
+                    <MaterialsPage />
                   </React.Suspense>
-                } 
+                }
               />
-              <Route 
-                path="works" 
+              <Route
+                path="works"
                 element={
                   <React.Suspense fallback={<div>Загрузка...</div>}>
-                    <Works />
+                    <WorksPage />
                   </React.Suspense>
                 } 
               />

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Card, Table, Button, Space, Tag, Tooltip, Modal, message, Empty, Form, Input, Select, InputNumber } from 'antd';
+import { Card, Table, Button, Space, Tag, Tooltip, Modal, message, Empty, Form, Input, Select, InputNumber, AutoComplete, Switch } from 'antd';
 import {
   EditOutlined,
   DeleteOutlined,
@@ -19,6 +19,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { workMaterialTemplatesApi, type TemplateGroup } from '../../lib/supabase/api/work-material-templates';
 import { materialsApi, worksApi } from '../../lib/supabase/api';
 import { DecimalInput } from '../common';
+import { supabase } from '../../lib/supabase/client';
 import type { ColumnsType } from 'antd/es/table';
 
 interface TemplateListProps {
@@ -33,6 +34,8 @@ interface TemplateItem {
 
   // Work data
   work_id?: string;
+  work_library_id?: string;
+  sub_work_library_id?: string;
   work_name?: string;
   work_type?: 'work' | 'sub_work';
   work_unit?: string;
@@ -42,6 +45,8 @@ interface TemplateItem {
 
   // Material data
   material_id?: string;
+  material_library_id?: string;
+  sub_material_library_id?: string;
   material_name?: string;
   material_type?: 'material' | 'sub_material';
   material_unit?: string;
@@ -173,6 +178,8 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
           template_name: template.template_name,
           template_description: template.template_description,
           work_id: work.id,
+          work_library_id: work.work_library_id,
+          sub_work_library_id: work.sub_work_library_id,
           work_name: work.name,
           work_type: work.type,
           work_unit: work.unit,
@@ -203,6 +210,8 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
             template_name: template.template_name,
             template_description: template.template_description,
             material_id: material.id,
+            material_library_id: material.material_library_id,
+            sub_material_library_id: material.sub_material_library_id,
             material_name: material.name,
             material_type: material.type,
             material_unit: material.unit,
@@ -237,6 +246,8 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
           template_name: template.template_name,
           template_description: template.template_description,
           material_id: material.id,
+          material_library_id: material.material_library_id,
+          sub_material_library_id: material.sub_material_library_id,
           material_name: material.name,
           material_type: material.type,
           material_unit: material.unit,
@@ -281,6 +292,17 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
       };
     });
   }, [templates]);
+
+  // Список всех элементов для поиска и редактирования
+  const flattenedTemplates = useMemo(() => {
+    const allItems: TemplateItem[] = [];
+    transformedTemplates.forEach(template => {
+      template.items.forEach(item => {
+        allItems.push(item);
+      });
+    });
+    return allItems;
+  }, [transformedTemplates]);
 
   // Удаление шаблона
   const deleteMutation = useMutation({
@@ -386,31 +408,293 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
         id: item.id,
         description: item.work_name,
         unit: item.work_unit,
+        item_type: item.item_type,
         unit_rate: item.work_unit_rate,
         currency_type: item.work_currency_type
       });
     } else {
+      // Определяем linked_work_id из данных элемента
+      const linkedWorkId = item.linked_work_id || item.work_library_id || item.sub_work_library_id;
+
       editForm.setFieldsValue({
         id: item.id,
         description: item.material_name,
         unit: item.material_unit,
+        item_type: item.item_type,
+        material_material_type: item.material_material_type || 'main',
+        is_linked_to_work: item.is_linked_to_work || false,
+        linked_work_id: linkedWorkId,
         unit_rate: item.material_unit_rate,
         currency_type: item.material_currency_type,
         consumption_coefficient: item.material_consumption_coefficient,
         conversion_coefficient: item.conversion_coefficient,
-        delivery_price_type: item.material_delivery_price_type,
+        delivery_price_type: item.material_delivery_price_type || 'included',
         delivery_amount: item.material_delivery_amount,
         quote_link: item.material_quote_link
       });
     }
   }, [editForm]);
 
-  const handleSaveEdit = useCallback(() => {
-    editForm.validateFields().then(values => {
+  const handleSaveEdit = useCallback(async () => {
+    try {
+      const values = await editForm.validateFields();
       console.log('💾 Saving edit:', values);
-      updateMutation.mutate(values);
-    });
-  }, [editForm, updateMutation]);
+
+      // Находим редактируемый элемент
+      const itemToEdit = flattenedTemplates.find(item => item.id === values.id);
+      if (!itemToEdit) {
+        message.error('Элемент не найден');
+        return;
+      }
+
+      // Если тип элемента или наименование изменились, нужно обновить ссылки в шаблоне
+      if (values.item_type !== itemToEdit.item_type || values.description !== (itemToEdit.work_name || itemToEdit.material_name)) {
+        console.log('🔄 Type or name changed:', {
+          oldType: itemToEdit.item_type,
+          newType: values.item_type,
+          oldName: itemToEdit.work_name || itemToEdit.material_name,
+          newName: values.description
+        });
+
+        // Для изменения типа или имени нужно найти новый элемент в библиотеке
+        let newLibraryItem;
+        if (values.item_type === 'work' || values.item_type === 'sub_work') {
+          newLibraryItem = libraryData.works.find(w => w.name === values.description && w.item_type === values.item_type);
+        } else {
+          newLibraryItem = libraryData.materials.find(m => m.name === values.description && m.item_type === values.item_type);
+        }
+
+        if (!newLibraryItem) {
+          message.error('Элемент не найден в библиотеке');
+          return;
+        }
+
+        // Извлекаем информацию о текущем шаблоне и UUID из ID
+        // Формат ID: "template_name-work-uuid" или "template_name-material-uuid" или "template_name-unlinked-material-uuid"
+        const idParts = itemToEdit.id.split('-');
+
+        // UUID всегда последние 5 частей (формат: 8-4-4-4-12)
+        const uuidParts = idParts.slice(-5);
+        const oldIdPart = uuidParts.join('-');
+
+        // Извлекаем имя шаблона (все части до типа и UUID)
+        let templateName: string;
+        if (itemToEdit.id.includes('-unlinked-material-')) {
+          // Для unlinked материалов
+          const idx = itemToEdit.id.indexOf('-unlinked-material-');
+          templateName = itemToEdit.id.substring(0, idx);
+        } else if (itemToEdit.id.includes('-material-')) {
+          // Для обычных материалов
+          const idx = itemToEdit.id.indexOf('-material-');
+          templateName = itemToEdit.id.substring(0, idx);
+        } else if (itemToEdit.id.includes('-work-')) {
+          // Для работ
+          const idx = itemToEdit.id.indexOf('-work-');
+          templateName = itemToEdit.id.substring(0, idx);
+        } else {
+          console.error('❌ Unknown ID format:', itemToEdit.id);
+          message.error('Неверный формат идентификатора');
+          return;
+        }
+
+        console.log('📋 Parsed ID:', {
+          originalId: itemToEdit.id,
+          templateName,
+          oldUuid: oldIdPart
+        })
+
+        // Определяем старые поля для WHERE условий
+        const whereConditions: any = {
+          template_name: templateName
+        };
+
+        // Добавляем условие для старого элемента
+        if (itemToEdit.item_type === 'work') {
+          whereConditions.work_library_id = oldIdPart;
+        } else if (itemToEdit.item_type === 'sub_work') {
+          whereConditions.sub_work_library_id = oldIdPart;
+        } else if (itemToEdit.item_type === 'material') {
+          whereConditions.material_library_id = oldIdPart;
+        } else {
+          whereConditions.sub_material_library_id = oldIdPart;
+        }
+
+        // Подготавливаем новые данные для обновления
+        const updateData: any = {
+          work_library_id: null,
+          sub_work_library_id: null,
+          material_library_id: null,
+          sub_material_library_id: null
+        };
+
+        // Устанавливаем новые ссылки
+        if (values.item_type === 'work') {
+          updateData.work_library_id = newLibraryItem.id;
+        } else if (values.item_type === 'sub_work') {
+          updateData.sub_work_library_id = newLibraryItem.id;
+        } else if (values.item_type === 'material') {
+          updateData.material_library_id = newLibraryItem.id;
+        } else {
+          updateData.sub_material_library_id = newLibraryItem.id;
+        }
+
+        // Обновляем запись в work_material_templates
+        const { error } = await supabase
+          .from('work_material_templates')
+          .update(updateData)
+          .match(whereConditions);
+
+        if (error) {
+          message.error(`Ошибка изменения: ${error.message}`);
+          return;
+        }
+      }
+
+      // Обновляем библиотеку работ или материалов (только цены и другие параметры, НЕ имена)
+      // Имена изменяются только через выбор из библиотеки
+      if (values.item_type === 'work' || values.item_type === 'sub_work') {
+        // Обновляем только данные работы (без имени)
+        const workId = itemToEdit.work_id || itemToEdit.work_library_id || itemToEdit.sub_work_library_id;
+        if (workId && (values.unit_rate !== itemToEdit.work_unit_rate || values.currency_type !== itemToEdit.work_currency_type)) {
+          const updateResult = await workMaterialTemplatesApi.updateWorkFromTemplate(
+            workId,
+            values.item_type === 'sub_work',
+            {
+              // НЕ обновляем name и unit - они берутся из библиотеки
+              unit_rate: values.unit_rate,
+              currency_type: values.currency_type
+            }
+          );
+
+          if (updateResult.error) {
+            message.error(`Ошибка обновления работы: ${updateResult.error}`);
+            return;
+          }
+        }
+      } else if (values.item_type === 'material' || values.item_type === 'sub_material') {
+        // Обновляем только данные материала (без имени)
+        const materialId = itemToEdit.material_id || itemToEdit.material_library_id || itemToEdit.sub_material_library_id;
+        if (materialId) {
+          const updateResult = await workMaterialTemplatesApi.updateMaterialFromTemplate(
+            materialId,
+            values.item_type === 'sub_material',
+            {
+              // НЕ обновляем name и unit - они берутся из библиотеки
+              unit_rate: values.unit_rate,
+              currency_type: values.currency_type,
+              consumption_coefficient: values.consumption_coefficient,
+              conversion_coefficient: values.conversion_coefficient,
+              delivery_price_type: values.delivery_price_type,
+              delivery_amount: values.delivery_amount,
+              material_type: values.material_material_type || 'main'
+            }
+          );
+
+          if (updateResult.error) {
+            message.error(`Ошибка обновления материала: ${updateResult.error}`);
+            return;
+          }
+        }
+
+        // Обновляем привязку к работе в work_material_templates
+        if (values.is_linked_to_work !== itemToEdit.is_linked_to_work || values.linked_work_id !== itemToEdit.linked_work_id) {
+          // Извлекаем UUID из ID элемента шаблона
+          // Формат ID: "template_name-material-uuid" или "template_name-unlinked-material-uuid"
+          const idParts = itemToEdit.id.split('-');
+
+          // UUID всегда последние 5 частей (формат: 8-4-4-4-12)
+          const uuidParts = idParts.slice(-5);
+          const materialIdPart = uuidParts.join('-');
+
+          let templateName: string;
+          if (itemToEdit.id.includes('-unlinked-material-')) {
+            const idx = itemToEdit.id.indexOf('-unlinked-material-');
+            templateName = itemToEdit.id.substring(0, idx);
+          } else if (itemToEdit.id.includes('-material-')) {
+            const idx = itemToEdit.id.indexOf('-material-');
+            templateName = itemToEdit.id.substring(0, idx);
+          } else {
+            console.error('❌ Unexpected ID format for material:', itemToEdit.id);
+            message.error('Неверный формат идентификатора материала');
+            return;
+          }
+
+          console.log('📋 Parsed material ID:', {
+            originalId: itemToEdit.id,
+            templateName,
+            materialUuid: materialIdPart
+          })
+
+          const templateUpdateData: any = {
+            template_name: templateName,
+            is_linked_to_work: values.is_linked_to_work || false
+          };
+
+          // Добавляем правильное поле для материала
+          if (itemToEdit.item_type === 'material') {
+            templateUpdateData.material_library_id = materialIdPart;
+            templateUpdateData.sub_material_library_id = null;
+          } else {
+            templateUpdateData.sub_material_library_id = materialIdPart;
+            templateUpdateData.material_library_id = null;
+          }
+
+          // Если материал привязан к работе, обновляем ссылку на работу
+          if (values.is_linked_to_work && values.linked_work_id) {
+            // Определяем тип работы по ID
+            const linkedWork = libraryData.works.find(w => w.id === values.linked_work_id);
+            if (linkedWork) {
+              if (linkedWork.item_type === 'work') {
+                templateUpdateData.work_library_id = values.linked_work_id;
+                templateUpdateData.sub_work_library_id = null;
+              } else {
+                templateUpdateData.sub_work_library_id = values.linked_work_id;
+                templateUpdateData.work_library_id = null;
+              }
+            }
+          } else {
+            // Если привязка убрана, очищаем ссылки на работы
+            templateUpdateData.work_library_id = null;
+            templateUpdateData.sub_work_library_id = null;
+          }
+
+          // Используем правильный метод для обновления
+          const { error } = await supabase
+            .from('work_material_templates')
+            .update({
+              is_linked_to_work: templateUpdateData.is_linked_to_work,
+              work_library_id: templateUpdateData.work_library_id,
+              sub_work_library_id: templateUpdateData.sub_work_library_id
+            })
+            .eq('template_name', templateName)
+            .eq(itemToEdit.item_type === 'material' ? 'material_library_id' : 'sub_material_library_id', materialIdPart);
+
+          if (error) {
+            message.error(`Ошибка обновления привязки: ${error.message}`);
+            return;
+          }
+        }
+      }
+
+      // Сохраняем состояние развернутых шаблонов перед обновлением
+      const preservedCollapsedState = new Set(collapsedTemplates);
+
+      // Обновляем данные в шаблоне (ссылки на работы/материалы остаются те же)
+      await queryClient.invalidateQueries({ queryKey: ['work-material-templates'] });
+      await queryClient.invalidateQueries({ queryKey: ['works-library'] });
+      await queryClient.invalidateQueries({ queryKey: ['materials-library'] });
+
+      // Восстанавливаем состояние развернутых шаблонов
+      setCollapsedTemplates(preservedCollapsedState);
+
+      message.success('Данные успешно обновлены');
+      setEditingItemId(null);
+      editForm.resetFields();
+    } catch (error) {
+      console.error('❌ Error saving edit:', error);
+      message.error('Ошибка сохранения');
+    }
+  }, [editForm, flattenedTemplates, queryClient]);
 
   const handleCancelEdit = useCallback(() => {
     setEditingItemId(null);
@@ -451,7 +735,82 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
 
   // Inline edit row component
   const EditRow = ({ item }: { item: TemplateItem }) => {
-    const isMaterial = item.item_type === 'material' || item.item_type === 'sub_material';
+    const [selectedFromList, setSelectedFromList] = useState(true);
+    const [isLinkedToWork, setIsLinkedToWork] = useState(item.is_linked_to_work || false);
+    const [deliveryType, setDeliveryType] = useState(item.material_delivery_price_type || 'included');
+    const [currentItemType, setCurrentItemType] = useState(item.item_type);
+
+    const isMaterial = currentItemType === 'material' || currentItemType === 'sub_material';
+    const isWork = currentItemType === 'work' || currentItemType === 'sub_work';
+
+    // Получаем опции для автокомплита - БЕЗ фильтрации по типу
+    const getNameOptions = useMemo(() => {
+      if (isWork) {
+        // Показываем ВСЕ работы (и обычные, и суб-работы)
+        return libraryData.works
+          .map(w => ({
+            value: w.name,
+            label: `${w.name} (${w.item_type === 'work' ? 'работа' : 'суб-работа'})`,
+            unit: w.unit,
+            type: w.item_type
+          }));
+      } else {
+        // Показываем ВСЕ материалы (и обычные, и суб-материалы)
+        return libraryData.materials
+          .map(m => ({
+            value: m.name,
+            label: `${m.name} (${m.item_type === 'material' ? 'материал' : 'суб-материал'})`,
+            unit: m.unit,
+            type: m.item_type
+          }));
+      }
+    }, [isWork, libraryData]);
+
+    // Опции для выбора работы при привязке материала - только работы из текущего шаблона
+    const workOptionsForLinking = useMemo(() => {
+      // Найдем текущий шаблон
+      const currentTemplate = transformedTemplates.find(t =>
+        t.items.some(i => i.id === item.id)
+      );
+
+      if (!currentTemplate) return [];
+
+      // Получаем только работы из этого шаблона
+      const worksInTemplate = currentTemplate.items
+        .filter(i => i.item_type === 'work' || i.item_type === 'sub_work')
+        .map(i => ({
+          value: i.work_id || i.work_library_id || i.sub_work_library_id || i.id,
+          label: `${i.work_name} (${i.item_type === 'work' ? 'работа' : 'суб-работа'})`
+        }));
+
+      return worksInTemplate;
+    }, [item.id, transformedTemplates]);
+
+    // Обработчик выбора наименования из автокомплита
+    const handleNameSelect = (value: string, option: any) => {
+      setSelectedFromList(true);
+      // Автоматически заполняем единицу измерения
+      if (option.unit) {
+        editForm.setFieldValue('unit', option.unit);
+      }
+      // Также обновляем тип элемента если он изменился
+      if (option.type) {
+        editForm.setFieldValue('item_type', option.type);
+        setCurrentItemType(option.type); // Обновляем локальное состояние для реактивности
+      }
+    };
+
+    // Обработчик потери фокуса для автокомплита
+    const handleNameBlur = () => {
+      const currentValue = editForm.getFieldValue('description');
+      const exists = getNameOptions.some(opt => opt.value === currentValue);
+
+      if (currentValue && !exists) {
+        message.warning('Выберите наименование из библиотеки');
+        editForm.setFieldValue('description', '');
+        setSelectedFromList(false);
+      }
+    };
 
     return (
       <tr>
@@ -478,12 +837,27 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
                 <Input />
               </Form.Item>
 
-              <Form.Item name="description" label="Наименование" rules={[{ required: true }]} style={{ marginBottom: 0 }}>
-                <Input style={{ width: 350 }} />
+              <Form.Item
+                name="description"
+                label="Наименование"
+                rules={[{ required: true, message: 'Выберите наименование из библиотеки' }]}
+                style={{ marginBottom: 0 }}
+              >
+                <AutoComplete
+                  style={{ width: 350 }}
+                  options={getNameOptions}
+                  onSelect={handleNameSelect}
+                  onBlur={handleNameBlur}
+                  onChange={() => setSelectedFromList(false)}
+                  filterOption={(inputValue, option) =>
+                    option?.label?.toLowerCase().includes(inputValue.toLowerCase()) || false
+                  }
+                  placeholder="Начните вводить для поиска..."
+                />
               </Form.Item>
 
               <Form.Item name="unit" label={<div style={{ textAlign: 'center', width: '100%' }}>Единица</div>} style={{ marginBottom: 0 }}>
-                <Select style={{ width: 100 }}>
+                <Select style={{ width: 100 }} disabled>
                   <Select.Option value="м²">м²</Select.Option>
                   <Select.Option value="м³">м³</Select.Option>
                   <Select.Option value="м">м</Select.Option>
@@ -495,15 +869,110 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
                 </Select>
               </Form.Item>
 
+              <Form.Item name="item_type" label={<div style={{ textAlign: 'center', width: '100%' }}>Тип</div>} style={{ marginBottom: 0 }}>
+                <Select
+                  style={{ width: 120 }}
+                  onChange={(value) => {
+                    setCurrentItemType(value);
+                    // При смене типа также очищаем поля привязки для материалов
+                    if (value === 'work' || value === 'sub_work') {
+                      setIsLinkedToWork(false);
+                      editForm.setFieldValue('is_linked_to_work', false);
+                      editForm.setFieldValue('linked_work_id', undefined);
+                    }
+
+                    // Сбрасываем выбор только если меняется основной тип
+                    const oldIsWork = item.item_type === 'work' || item.item_type === 'sub_work';
+                    const newIsWork = value === 'work' || value === 'sub_work';
+                    if (oldIsWork !== newIsWork) {
+                      editForm.setFieldValue('description', '');
+                      editForm.setFieldValue('unit', undefined);
+                      setSelectedFromList(false);
+                    }
+                  }}
+                >
+                  {/* Ограничиваем выбор типа в зависимости от исходного типа */}
+                  {(item.item_type === 'work' || item.item_type === 'sub_work') ? (
+                    <>
+                      <Select.Option value="work">Работа</Select.Option>
+                      <Select.Option value="sub_work">Суб-работа</Select.Option>
+                    </>
+                  ) : (
+                    <>
+                      <Select.Option value="material">Материал</Select.Option>
+                      <Select.Option value="sub_material">Суб-материал</Select.Option>
+                    </>
+                  )}
+                </Select>
+              </Form.Item>
+
               {isMaterial && (
                 <>
-                  <Form.Item name="consumption_coefficient" label={<div style={{ textAlign: 'center', width: '100%' }}>Коэф. расхода</div>} style={{ marginBottom: 0 }}>
-                    <DecimalInput min={0.0001} precision={4} style={{ width: 120 }} />
+                  <Form.Item name="material_material_type" label={<div style={{ textAlign: 'center', width: '100%' }}>Тип материала</div>} style={{ marginBottom: 0 }}>
+                    <Select style={{ width: 140 }}>
+                      <Select.Option value="main">Основной</Select.Option>
+                      <Select.Option value="auxiliary">Вспомогательный</Select.Option>
+                    </Select>
                   </Form.Item>
 
-                  <Form.Item name="conversion_coefficient" label={<div style={{ textAlign: 'center', width: '100%' }}>Коэф. перевода</div>} style={{ marginBottom: 0 }}>
-                    <DecimalInput min={0.0001} precision={4} style={{ width: 120 }} />
+                  <Form.Item
+                    name="is_linked_to_work"
+                    label="Привязка к работе"
+                    valuePropName="checked"
+                    style={{ marginBottom: 0 }}
+                  >
+                    <Switch
+                      checkedChildren="Да"
+                      unCheckedChildren="Нет"
+                      onChange={(checked) => {
+                        setIsLinkedToWork(checked);
+                        if (!checked) {
+                          editForm.setFieldValue('linked_work_id', undefined);
+                        }
+                      }}
+                    />
                   </Form.Item>
+
+                  {isLinkedToWork && (
+                    <Form.Item
+                      name="linked_work_id"
+                      label="Выбор работы"
+                      rules={[{ required: true, message: 'Выберите работу для привязки' }]}
+                      style={{ marginBottom: 0 }}
+                    >
+                      <Select
+                        showSearch
+                        style={{ width: 250 }}
+                        placeholder="Выберите работу"
+                        options={workOptionsForLinking}
+                        filterOption={(input, option) =>
+                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                        }
+                      />
+                    </Form.Item>
+                  )}
+
+                  <Form.Item name="consumption_coefficient" label={<div style={{ textAlign: 'center', width: '100%' }}>Коэф. расхода</div>} style={{ marginBottom: 0 }}>
+                    <DecimalInput
+                      min={1.0}
+                      precision={4}
+                      style={{ width: 120 }}
+                      onChange={(value) => {
+                        if (value && value < 1) {
+                          message.warning('Коэффициент расхода не может быть меньше 1.0');
+                          editForm.setFieldValue('consumption_coefficient', 1.0);
+                          return 1.0;
+                        }
+                        return value;
+                      }}
+                    />
+                  </Form.Item>
+
+                  {isLinkedToWork && (
+                    <Form.Item name="conversion_coefficient" label={<div style={{ textAlign: 'center', width: '100%' }}>Коэф. перевода</div>} style={{ marginBottom: 0 }}>
+                      <DecimalInput min={0.0001} precision={4} style={{ width: 120 }} />
+                    </Form.Item>
+                  )}
                 </>
               )}
 
@@ -522,17 +991,26 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
 
               {isMaterial && (
                 <>
-                  <Form.Item name="delivery_price_type" label={<div style={{ textAlign: 'center', width: '100%' }}>Тип доставки</div>} style={{ marginBottom: 0 }}>
-                    <Select style={{ width: 150 }}>
+                  <Form.Item
+                    name="delivery_price_type"
+                    label={<div style={{ textAlign: 'center', width: '100%' }}>Тип доставки</div>}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <Select
+                      style={{ width: 150 }}
+                      onChange={(value) => setDeliveryType(value)}
+                    >
                       <Select.Option value="included">Включена</Select.Option>
                       <Select.Option value="not_included">3% от суммы</Select.Option>
                       <Select.Option value="amount">Фикс. сумма</Select.Option>
                     </Select>
                   </Form.Item>
 
-                  <Form.Item name="delivery_amount" label={<div style={{ textAlign: 'center', width: '100%' }}>Сумма доставки</div>} style={{ marginBottom: 0 }}>
-                    <DecimalInput min={0} precision={2} style={{ width: 130 }} />
-                  </Form.Item>
+                  {deliveryType === 'amount' && (
+                    <Form.Item name="delivery_amount" label={<div style={{ textAlign: 'center', width: '100%' }}>Сумма доставки</div>} style={{ marginBottom: 0 }}>
+                      <DecimalInput min={0} precision={2} style={{ width: 130 }} />
+                    </Form.Item>
+                  )}
 
                   <Form.Item name="quote_link" label={<div style={{ textAlign: 'center', width: '100%' }}>Ссылка на КП</div>} style={{ marginBottom: 0, textAlign: 'center' }}>
                     <Input style={{ width: 250 }} placeholder="URL" />
