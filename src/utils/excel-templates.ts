@@ -220,3 +220,109 @@ export const exportConstructionCostsToExcel = (costs: any[], fileName = 'constru
 
   console.log('✅ [exportConstructionCostsToExcel] Export completed');
 };
+
+/**
+ * Export all tenders to Excel with comprehensive information
+ */
+export const exportTendersToExcel = (tenders: any[], fileName = 'all_tenders.xlsx') => {
+  console.log('🚀 [exportTendersToExcel] Exporting tenders:', tenders.length);
+
+  const exportData = tenders.map((tender, index) => {
+    // Format submission deadline
+    const submissionDeadline = tender.submission_deadline
+      ? new Date(tender.submission_deadline).toLocaleDateString('ru-RU', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      : '';
+
+    // Format creation date
+    const createdAt = new Date(tender.created_at).toLocaleDateString('ru-RU', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+
+    // Calculate deadline status
+    const getDeadlineStatus = () => {
+      if (!tender.submission_deadline) return 'Не указан';
+
+      const now = new Date();
+      const deadline = new Date(tender.submission_deadline);
+      const diffTime = deadline.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 0) return 'Завершен';
+      if (diffDays === 0) return 'Сегодня';
+      if (diffDays <= 3) return `${diffDays} дн. (критично)`;
+      if (diffDays <= 7) return `${diffDays} дн. (близко)`;
+      return `${diffDays} дн.`;
+    };
+
+    return {
+      '№': index + 1,
+      'ID': tender.id || '',
+      'Номер тендера': tender.tender_number || '',
+      'Название': tender.title || '',
+      'Заказчик': tender.client_name || '',
+      'Версия': tender.version || 1,
+      'Описание': tender.description || '',
+      'Дедлайн подачи': submissionDeadline,
+      'Статус дедлайна': getDeadlineStatus(),
+      'Площадь по СП (м²)': tender.area_sp || '',
+      'Площадь клиента (м²)': tender.area_client || '',
+      'Курс USD': tender.usd_rate || '',
+      'Курс EUR': tender.eur_rate || '',
+      'Курс CNY': tender.cny_rate || '',
+      'Итоговая стоимость КП (₽)': tender.commercial_total_value
+        ? tender.commercial_total_value.toLocaleString('ru-RU')
+        : 'Не рассчитано',
+      'Стоимость за м² (₽/м²)': (tender.commercial_total_value && tender.area_sp)
+        ? Math.round(tender.commercial_total_value / tender.area_sp).toLocaleString('ru-RU')
+        : '',
+      'Создан': createdAt,
+      'Обновлен': new Date(tender.updated_at).toLocaleDateString('ru-RU', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      })
+    };
+  });
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(exportData);
+
+  // Set column widths for better readability
+  const colWidths = [
+    { wch: 5 },   // №
+    { wch: 36 },  // ID
+    { wch: 15 },  // Номер тендера
+    { wch: 40 },  // Название
+    { wch: 30 },  // Заказчик
+    { wch: 8 },   // Версия
+    { wch: 50 },  // Описание
+    { wch: 18 },  // Дедлайн подачи
+    { wch: 18 },  // Статус дедлайна
+    { wch: 15 },  // Площадь по СП
+    { wch: 15 },  // Площадь клиента
+    { wch: 12 },  // Курс USD
+    { wch: 12 },  // Курс EUR
+    { wch: 12 },  // Курс CNY
+    { wch: 20 },  // Итоговая стоимость КП
+    { wch: 18 },  // Стоимость за м²
+    { wch: 12 },  // Создан
+    { wch: 12 }   // Обновлен
+  ];
+  ws['!cols'] = colWidths;
+
+  // Add some styling to headers (freeze first row)
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Тендеры');
+  XLSX.writeFile(wb, fileName);
+
+  console.log('✅ [exportTendersToExcel] Export completed:', fileName);
+};

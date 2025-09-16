@@ -18,14 +18,14 @@ export const tendersApi = {
     pagination: PaginationOptions = {}
   ): Promise<PaginatedResponse<TenderWithSummary>> {
     try {
-      // Get tenders with client positions total cost
+      // Get tenders with client positions for commercial cost calculation
       let query = supabase
         .from('tenders')
         .select(`
           *,
           client_positions (
-            total_materials_cost,
-            total_works_cost
+            total_commercial_materials_cost,
+            total_commercial_works_cost
           )
         `, { count: 'exact' });
 
@@ -49,7 +49,21 @@ export const tendersApi = {
       }
       
       if (filters.search) {
-        query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%,tender_number.ilike.%${filters.search}%`);
+        // Build search conditions array
+        const searchConditions = [
+          `title.ilike.%${filters.search}%`,
+          `description.ilike.%${filters.search}%`,
+          `tender_number.ilike.%${filters.search}%`,
+          `client_name.ilike.%${filters.search}%`
+        ];
+
+        // Add version search if the search term is numeric
+        if (!isNaN(Number(filters.search)) && filters.search.trim() !== '') {
+          searchConditions.push(`version.eq.${Number(filters.search)}`);
+        }
+
+        // Apply all search conditions with OR
+        query = query.or(searchConditions.join(','));
       }
 
       // Apply pagination
@@ -65,15 +79,15 @@ export const tendersApi = {
       }
 
 
-      // Calculate total BOQ value for each tender from client_positions
-      const tendersWithBOQValue = (data || []).map(tender => {
+      // Calculate total commercial value for each tender from client_positions
+      const tendersWithCommercialValue = (data || []).map(tender => {
         const clientPositions = (tender as any).client_positions || [];
-        const totalBOQValue = clientPositions.reduce((sum: number, pos: any) => {
-          const materialsCost = parseFloat(pos.total_materials_cost || 0);
-          const worksCost = parseFloat(pos.total_works_cost || 0);
+        const totalCommercialValue = clientPositions.reduce((sum: number, position: any) => {
+          const materialsCost = parseFloat(position.total_commercial_materials_cost || 0);
+          const worksCost = parseFloat(position.total_commercial_works_cost || 0);
           return sum + materialsCost + worksCost;
         }, 0);
-        
+
         // Log currency rates for debugging
         console.log('🔍 Tender currency rates:');
         console.log('  ID:', tender.id);
@@ -81,19 +95,20 @@ export const tendersApi = {
         console.log('  USD Rate:', (tender as any).usd_rate);
         console.log('  EUR Rate:', (tender as any).eur_rate);
         console.log('  CNY Rate:', (tender as any).cny_rate);
-        
-        // Remove client_positions from the result and add boq_total_value
+        console.log('  Commercial Total:', totalCommercialValue);
+
+        // Remove client_positions from the result and add commercial_total_value
         const { client_positions, ...tenderData } = tender as any;
         return {
           ...tenderData,
-          boq_total_value: totalBOQValue
+          commercial_total_value: totalCommercialValue
         } as TenderWithSummary;
       });
 
       const { page = 1, limit = 20 } = pagination;
       
       return {
-        data: tendersWithBOQValue,
+        data: tendersWithCommercialValue,
         pagination: {
           page,
           limit,
@@ -129,23 +144,23 @@ export const tendersApi = {
         };
       }
 
-      // Calculate total BOQ value from client_positions
+      // Calculate total commercial value from client_positions
       const clientPositions = (data as any).client_positions || [];
-      const totalBOQValue = clientPositions.reduce((sum: number, pos: any) => {
-        const materialsCost = parseFloat(pos.total_materials_cost || 0);
-        const worksCost = parseFloat(pos.total_works_cost || 0);
+      const totalCommercialValue = clientPositions.reduce((sum: number, pos: any) => {
+        const materialsCost = parseFloat(pos.total_commercial_materials_cost || 0);
+        const worksCost = parseFloat(pos.total_commercial_works_cost || 0);
         return sum + materialsCost + worksCost;
       }, 0);
-      
-      // Remove client_positions from the result and add boq_total_value
+
+      // Remove client_positions from the result and add commercial_total_value
       const { client_positions, ...tenderData } = data as any;
-      const tenderWithBOQValue = {
+      const tenderWithCommercialValue = {
         ...tenderData,
-        boq_total_value: totalBOQValue
+        commercial_total_value: totalCommercialValue
       } as TenderWithSummary;
 
       return {
-        data: tenderWithBOQValue,
+        data: tenderWithCommercialValue,
         message: 'Tender loaded successfully',
       };
     } catch (error) {

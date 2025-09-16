@@ -1,17 +1,17 @@
 import React from 'react';
-import { Card, Row, Col, Input, Select, DatePicker, Button, Space } from 'antd';
-import { FilterOutlined, ExportOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
+import { Card, Row, Col, Input, Button } from 'antd';
+import { ExportOutlined } from '@ant-design/icons';
 import type { TenderFiltersProps } from '../types';
 
-const { RangePicker } = DatePicker;
+interface TenderFiltersExtendedProps extends TenderFiltersProps {
+  onExportAll?: () => void;
+}
 
-const TenderFilters: React.FC<TenderFiltersProps> = ({
+const TenderFilters: React.FC<TenderFiltersExtendedProps> = ({
   filters,
   onSearch,
-  // onStatusFilter removed as status field was removed from schema
-  onDateFilter,
-  onFiltersChange
+  onFiltersChange,
+  onExportAll
 }) => {
   console.log('🚀 TenderFilters component rendered');
   console.log('📋 Current filters:', filters);
@@ -26,46 +26,31 @@ const TenderFilters: React.FC<TenderFiltersProps> = ({
     onSearch(value);
   };
 
-  // Note: status filter handlers removed as status field was removed from schema
-
-  const handleDateChange = (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
-    console.log('📅 Date filter changed:', dates);
-    onDateFilter(dates);
+  const handleExportAll = () => {
+    console.log('📊 Export all tenders requested');
+    onExportAll?.();
   };
 
   return (
     <Card className="mb-6">
       <Row gutter={16} align="middle">
-        <Col span={10}>
+        <Col span={18}>
           <Input.Search
-            placeholder="Поиск по названию, номеру или клиенту..."
+            placeholder="Поиск по названию, номеру, клиенту или версии..."
             value={filters.search}
             onChange={handleSearchChange}
             onSearch={handleSearchSubmit}
             allowClear
           />
         </Col>
-        {/* Note: status filter removed as status field was removed from schema */}
         <Col span={6}>
-          <RangePicker
-            placeholder={['Дата от', 'Дата до']}
-            onChange={handleDateChange}
+          <Button
+            icon={<ExportOutlined />}
+            onClick={handleExportAll}
             className="w-full"
-            value={filters.date_from && filters.date_to ? [
-              dayjs(filters.date_from),
-              dayjs(filters.date_to)
-            ] : null}
-          />
-        </Col>
-        <Col span={4}>
-          <Space>
-            <Button icon={<FilterOutlined />}>
-              Фильтры
-            </Button>
-            <Button icon={<ExportOutlined />}>
-              Экспорт
-            </Button>
-          </Space>
+          >
+            Экспорт всех тендеров
+          </Button>
         </Col>
       </Row>
     </Card>

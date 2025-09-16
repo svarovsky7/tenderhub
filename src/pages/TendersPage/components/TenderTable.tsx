@@ -44,8 +44,6 @@ const { Text } = Typography;
 const TenderTable: React.FC<TenderTableProps> = ({
   tenders,
   loading,
-  pagination,
-  onTableChange,
   onViewTender,
   onEditTender,
   onDeleteTender,
@@ -54,7 +52,6 @@ const TenderTable: React.FC<TenderTableProps> = ({
 }) => {
   console.log('🚀 TenderTable component rendered');
   console.log('📊 Tenders count:', tenders.length);
-  console.log('📄 Pagination:', pagination);
 
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [form] = Form.useForm();
@@ -261,20 +258,72 @@ const TenderTable: React.FC<TenderTableProps> = ({
       width: 380
     },
     {
-      title: <div className="text-center">Создан</div>,
-      dataIndex: 'created_at',
-      key: 'created',
-      width: 100,
+      title: <div className="text-center">Время до дедлайна</div>,
+      key: 'deadline_countdown',
+      width: 150,
       align: 'center' as const,
-      render: (created) => (
-        <div className="text-center">
-          <ClockCircleOutlined className="mb-1 block text-gray-400" />
-          <Text type="secondary" className="text-xs">
-            {dayjs(created).format('DD.MM.YYYY')}
-          </Text>
-        </div>
-      ),
-      sorter: (a, b) => dayjs(a.created_at).unix() - dayjs(b.created_at).unix()
+      render: (_, record) => {
+        if (!record.submission_deadline) {
+          return <Text type="secondary">Не указан</Text>;
+        }
+
+        const deadline = dayjs(record.submission_deadline);
+        const now = dayjs();
+        const daysLeft = deadline.diff(now, 'day');
+        const hoursLeft = deadline.diff(now, 'hour');
+        const isExpired = deadline.isBefore(now);
+
+        // Helper functions for Russian declension
+        const getDayWord = (days: number): string => {
+          const lastDigit = days % 10;
+          const lastTwoDigits = days % 100;
+          if (lastTwoDigits >= 11 && lastTwoDigits <= 14) return 'дней';
+          if (lastDigit === 1) return 'день';
+          if (lastDigit >= 2 && lastDigit <= 4) return 'дня';
+          return 'дней';
+        };
+
+        const getHourWord = (hours: number): string => {
+          const lastDigit = hours % 10;
+          const lastTwoDigits = hours % 100;
+          if (lastTwoDigits >= 11 && lastTwoDigits <= 14) return 'часов';
+          if (lastDigit === 1) return 'час';
+          if (lastDigit >= 2 && lastDigit <= 4) return 'часа';
+          return 'часов';
+        };
+
+        if (isExpired) {
+          return (
+            <Tag color="green" icon={<CheckOutlined />}>
+              Завершен
+            </Tag>
+          );
+        }
+
+        let color = 'green';
+        let icon = <ClockCircleOutlined />;
+        let text = '';
+
+        if (daysLeft <= 0) {
+          color = 'red';
+          icon = <CloseOutlined />;
+          text = hoursLeft > 0 ? `${hoursLeft} ${getHourWord(hoursLeft)}` : 'Сегодня';
+        } else if (daysLeft <= 3) {
+          color = 'red';
+          text = `${daysLeft} ${getDayWord(daysLeft)}`;
+        } else if (daysLeft <= 7) {
+          color = 'orange';
+          text = `${daysLeft} ${getDayWord(daysLeft)}`;
+        } else {
+          text = `${daysLeft} ${getDayWord(daysLeft)}`;
+        }
+
+        return (
+          <Tag color={color} icon={icon}>
+            {text}
+          </Tag>
+        );
+      }
     },
     {
       title: <div className="text-center">Дедлайн</div>,
@@ -287,7 +336,7 @@ const TenderTable: React.FC<TenderTableProps> = ({
         const date = deadline ? dayjs(deadline) : null;
         const isOverdue = date && date.isBefore(dayjs());
         const isNear = date && date.diff(dayjs(), 'days') <= 3;
-        
+
         // Show Form.Item in edit mode, otherwise show EditableCell for inline editing
         if (isEditing) {
           return (
@@ -308,7 +357,7 @@ const TenderTable: React.FC<TenderTableProps> = ({
             </div>
           );
         }
-        
+
         return (
           <div className={`text-center ${isOverdue ? 'text-red-500' : isNear ? 'text-orange-500' : ''}`}>
             <CalendarOutlined className="mb-1 block" />
@@ -326,25 +375,30 @@ const TenderTable: React.FC<TenderTableProps> = ({
       sorter: (a, b) => dayjs(a.submission_deadline || 0).unix() - dayjs(b.submission_deadline || 0).unix()
     },
     {
-      title: <div className="text-center">Стоимость позиций</div>,
-      key: 'boq_value',
-      width: 140,
+      title: <div className="text-center">Итоговая стоимость КП</div>,
+      key: 'commercial_value',
+      width: 160,
       align: 'center' as const,
-      render: (_, record) => (
-        <div className="text-center">
-          <DollarOutlined className="mb-1 block text-green-500" />
-          {record.boq_total_value ? (
-            <Text strong className="text-sm block">
-              {(record.boq_total_value / 1000000).toFixed(1)}М ₽
-            </Text>
-          ) : (
-            <Text type="secondary" className="text-sm block">
-              Не заполнено
-            </Text>
-          )}
-        </div>
-      ),
-      sorter: (a, b) => (a.boq_total_value || 0) - (b.boq_total_value || 0)
+      render: (_, record) => {
+        // Use commercial total value from client_positions
+        const total = record.commercial_total_value || 0;
+
+        return (
+          <div className="text-center">
+            <DollarOutlined className="mb-1 block text-green-500" />
+            {total > 0 ? (
+              <Text strong className="text-sm block">
+                {total.toLocaleString('ru-RU')} ₽
+              </Text>
+            ) : (
+              <Text type="secondary" className="text-sm block">
+                Не рассчитано
+              </Text>
+            )}
+          </div>
+        );
+      },
+      sorter: (a, b) => (a.commercial_total_value || 0) - (b.commercial_total_value || 0)
     },
     {
       title: <div className="text-center">Площадь по СП</div>,
@@ -576,29 +630,20 @@ const TenderTable: React.FC<TenderTableProps> = ({
       sorter: (a, b) => (a.cny_rate || 0) - (b.cny_rate || 0)
     },
     {
-      title: <div className="text-center">Прогресс</div>,
-      key: 'progress',
-      width: 120,
+      title: <div className="text-center">Создан</div>,
+      dataIndex: 'created_at',
+      key: 'created',
+      width: 100,
       align: 'center' as const,
-      render: (_, record) => {
-        const progress = 75; // Temporarily hardcoded until backend supports this field
-        const itemsCount = record.total_items || 0;
-        
-        return (
-          <div className="text-center">
-            <Progress 
-              type="circle" 
-              size={40} 
-              percent={progress} 
-              strokeColor="#52c41a"
-              format={() => `${progress}%`}
-            />
-            <Text type="secondary" className="text-xs block mt-1">
-              {itemsCount} позиций
-            </Text>
-          </div>
-        );
-      }
+      render: (created) => (
+        <div className="text-center">
+          <ClockCircleOutlined className="mb-1 block text-gray-400" />
+          <Text type="secondary" className="text-xs">
+            {dayjs(created).format('DD.MM.YYYY')}
+          </Text>
+        </div>
+      ),
+      sorter: (a, b) => dayjs(a.created_at).unix() - dayjs(b.created_at).unix()
     },
     {
       title: <div className="text-center">Описание</div>,
@@ -733,8 +778,7 @@ const TenderTable: React.FC<TenderTableProps> = ({
           dataSource={tenders}
           rowKey="id"
           loading={loading}
-          pagination={pagination}
-          onChange={onTableChange}
+          pagination={false}
           locale={{
           emptyText: (
             <Empty

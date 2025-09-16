@@ -1,6 +1,7 @@
 import React from 'react';
-import { Typography, Button } from 'antd';
+import { Typography, Button, message } from 'antd';
 import { PlusOutlined, FolderOpenOutlined } from '@ant-design/icons';
+import { exportTendersToExcel } from '../../utils/excel-templates';
 
 // Components
 import {
@@ -27,8 +28,6 @@ const TendersPage: React.FC = () => {
   const {
     filters,
     handleSearch,
-    handleStatusFilter,
-    handleDateFilter,
     handleFiltersChange
   } = useTenderFilters(resetPaginationCallback);
 
@@ -36,18 +35,9 @@ const TendersPage: React.FC = () => {
   const {
     tenders,
     loading,
-    pagination,
     stats,
-    loadTenders,
-    handleTableChange
-  } = useTenders(filters, {
-    current: 1,
-    pageSize: 20,
-    total: 0,
-    showSizeChanger: true,
-    showQuickJumper: true,
-    showTotal: (total, range) => `${range[0]}-${range[1]} из ${total} тендеров`
-  });
+    loadTenders
+  } = useTenders(filters);
 
   // Initialize actions hook
   const {
@@ -89,6 +79,43 @@ const TendersPage: React.FC = () => {
   const handleEditTenderFromTable = async (updates: any) => {
     console.log('✏️ Edit tender updates from table:', updates);
     await handleEditTender(updates);
+  };
+
+  // Handle export all tenders to Excel
+  const handleExportAllTenders = async () => {
+    console.log('📊 Export all tenders initiated');
+
+    try {
+      if (tenders.length === 0) {
+        message.warning('Нет тендеров для экспорта');
+        return;
+      }
+
+      // Generate filename with current date
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('ru-RU').replace(/\./g, '-');
+      const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      const fileName = `Тендеры_${dateStr}_${timeStr}.xlsx`;
+
+      console.log('📊 Exporting', tenders.length, 'tenders to Excel file:', fileName);
+
+      // Show loading message
+      const hideLoading = message.loading('Экспорт тендеров в Excel...', 0);
+
+      try {
+        // Export tenders to Excel
+        exportTendersToExcel(tenders, fileName);
+
+        message.success(`Экспорт завершен! Файл: ${fileName}`);
+        console.log('✅ Export completed successfully');
+      } finally {
+        hideLoading();
+      }
+
+    } catch (error) {
+      console.error('❌ Export failed:', error);
+      message.error('Ошибка экспорта тендеров');
+    }
   };
 
   console.log('📊 Current page state:', {
@@ -212,17 +239,14 @@ const TendersPage: React.FC = () => {
           <TenderFilters
             filters={filters}
             onSearch={handleSearch}
-            onStatusFilter={handleStatusFilter}
-            onDateFilter={handleDateFilter}
             onFiltersChange={handleFiltersChange}
+            onExportAll={handleExportAllTenders}
           />
 
           {/* Table */}
           <TenderTable
             tenders={tenders}
             loading={loading}
-            pagination={pagination}
-            onTableChange={handleTableChange}
             onViewTender={handleViewTender}
             onEditTender={handleEditTenderFromTable}
             onDeleteTender={handleDeleteTenderFromTable}
