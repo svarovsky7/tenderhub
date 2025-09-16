@@ -329,10 +329,10 @@ const BOQPageSimplified: React.FC = () => {
                       fontWeight: 500
                     }}
                     size="large"
-                    icon={<FolderOpenOutlined />}
-                    onClick={() => navigate('/tenders')}
+                    icon={<DashboardOutlined />}
+                    onClick={() => navigate('/dashboard')}
                   >
-                    К тендерам
+                    К дашборду
                   </Button>
                   <Button
                     className="boq-action-btn"
@@ -431,14 +431,14 @@ const BOQPageSimplified: React.FC = () => {
                             </span>
                           </div>
                           {/* Курсы валют на отдельной строке */}
-                          <div className="flex flex-wrap items-center justify-end gap-3 mt-1">
-                            <span className="text-sm whitespace-nowrap text-green-300" style={{ cursor: 'default' }}>
+                          <div className="flex flex-wrap items-center justify-end gap-3 mt-1" style={{ position: 'relative', zIndex: 10 }}>
+                            <span className="text-sm whitespace-nowrap text-green-500" style={{ cursor: 'default', fontWeight: 600 }}>
                               <strong>Курс USD:</strong> {selectedTender.usd_rate ? `${Number(selectedTender.usd_rate).toFixed(2)} ₽/$` : '—'}
                             </span>
-                            <span className="text-sm whitespace-nowrap text-blue-300" style={{ cursor: 'default' }}>
+                            <span className="text-sm whitespace-nowrap text-blue-500" style={{ cursor: 'default', fontWeight: 600 }}>
                               <strong>Курс EUR:</strong> {selectedTender.eur_rate ? `${Number(selectedTender.eur_rate).toFixed(2)} ₽/€` : '—'}
                             </span>
-                            <span className="text-sm whitespace-nowrap text-orange-300" style={{ cursor: 'default' }}>
+                            <span className="text-sm whitespace-nowrap text-orange-500" style={{ cursor: 'default', fontWeight: 600 }}>
                               <strong>Курс CNY:</strong> {selectedTender.cny_rate ? `${Number(selectedTender.cny_rate).toFixed(2)} ₽/¥` : '—'}
                             </span>
                           </div>

@@ -356,13 +356,13 @@ const BOQPage: React.FC = () => {
                   </div>
                 </div>
                 <Space size="large">
-                  <Button 
-                    icon={<FolderOpenOutlined />}
-                    onClick={() => navigate('/tenders')}
+                  <Button
+                    icon={<DashboardOutlined />}
+                    onClick={() => navigate('/dashboard')}
                     size="large"
                     className="bg-white/10 border-white/30 text-white hover:bg-white/20 transition-all duration-300"
                   >
-                    К тендерам
+                    К дашборду
                   </Button>
                   <Button 
                     icon={<ReloadOutlined />} 
@@ -429,13 +429,13 @@ const BOQPage: React.FC = () => {
                     
                     {/* Курсы валют на отдельной строке */}
                     <div className="flex items-center gap-6 text-sm flex-wrap">
-                      <span className="text-green-200">
+                      <span className="text-green-500">
                         <strong>Курс USD:</strong> {selectedTender.usd_rate ? `${Number(selectedTender.usd_rate).toFixed(2)} ₽/$` : '—'}
                       </span>
-                      <span className="text-blue-200">
+                      <span className="text-blue-500">
                         <strong>Курс EUR:</strong> {selectedTender.eur_rate ? `${Number(selectedTender.eur_rate).toFixed(2)} ₽/€` : '—'}
                       </span>
-                      <span className="text-orange-200">
+                      <span className="text-orange-500">
                         <strong>Курс CNY:</strong> {selectedTender.cny_rate ? `${Number(selectedTender.cny_rate).toFixed(2)} ₽/¥` : '—'}
                       </span>
                     </div>
@@ -542,13 +542,13 @@ const BOQPage: React.FC = () => {
                     <Text type="secondary" className="text-lg">
                       Выберите тендер из списка выше для начала работы с BOQ
                     </Text>
-                    <Button 
-                      type="primary" 
-                      size="large" 
-                      onClick={() => navigate('/tenders')}
+                    <Button
+                      type="primary"
+                      size="large"
+                      onClick={() => navigate('/dashboard')}
                       className="mt-4 bg-gradient-to-r from-indigo-600 to-purple-600 border-0"
                     >
-                      Перейти к тендерам
+                      Перейти к дашборду
                     </Button>
                   </div>
                 )}

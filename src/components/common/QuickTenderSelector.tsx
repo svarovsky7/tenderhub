@@ -1,21 +1,23 @@
 import React, { useMemo } from 'react';
-import { Card, Typography, Row, Col, Badge, Tooltip, Spin } from 'antd';
-import { 
-  ProjectOutlined, 
-  HomeOutlined, 
-  ShopOutlined, 
+import { Card, Typography, Row, Col, Badge, Tooltip, Spin, Tag } from 'antd';
+import {
+  ProjectOutlined,
+  HomeOutlined,
+  ShopOutlined,
   BankOutlined,
   EnvironmentOutlined,
   TeamOutlined,
   ToolOutlined,
   MedicineBoxOutlined,
-  DollarCircleOutlined
+  DollarCircleOutlined,
+  UserOutlined,
+  AreaChartOutlined
 } from '@ant-design/icons';
 import type { Tender } from '../../lib/supabase/types';
 import { formatQuantity } from '../../utils/formatters';
 import dayjs from 'dayjs';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
 interface QuickTenderSelectorProps {
   tenders: Tender[];
@@ -153,110 +155,297 @@ const QuickTenderSelector: React.FC<QuickTenderSelectorProps> = ({
     <>
       <style>
         {`
-          .quick-tender-card {
-            background: rgba(255, 255, 255, 0.15);
+          .modern-tender-card {
+            background: rgba(255, 255, 255, 0.12);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 16px;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 12px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             cursor: pointer;
             position: relative;
-            overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            overflow: visible;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+            min-height: 170px;
+            height: 170px;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
           }
-          
-          .quick-tender-card::before {
+
+          .modern-tender-card::before {
             content: '';
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
             opacity: 0;
-            transition: all 0.4s ease;
-            border-radius: 16px;
+            transition: all 0.25s ease;
+            border-radius: 12px;
           }
-          
-          .quick-tender-card:hover::before {
+
+          .modern-tender-card:hover::before {
             opacity: 1;
           }
-          
-          .quick-tender-card:hover {
-            transform: translateY(-8px) scale(1.03);
-            border-color: rgba(255, 255, 255, 0.4);
-            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.3);
-            background: rgba(255, 255, 255, 0.25);
+
+          .modern-tender-card:hover {
+            transform: translateY(-3px) scale(1.01);
+            border-color: rgba(255, 255, 255, 0.35);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.18);
           }
-          
-          .quick-tender-card.selected {
-            transform: scale(1.05);
-            background: rgba(255, 255, 255, 0.3);
-            border-color: rgba(59, 130, 246, 0.6);
-            box-shadow: 0 16px 40px rgba(59, 130, 246, 0.3), 0 0 0 2px rgba(59, 130, 246, 0.4);
+
+          .modern-tender-card.selected {
+            transform: scale(1.02);
+            background: rgba(255, 255, 255, 0.22);
+            border-color: rgba(24, 144, 255, 0.6);
+            box-shadow: 0 12px 30px rgba(24, 144, 255, 0.2), 0 0 0 2px rgba(24, 144, 255, 0.4);
           }
-          
-          .quick-tender-icon-wrapper {
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
+
+          .modern-tender-card.selected::before {
+            opacity: 1;
+            background: linear-gradient(145deg, rgba(24, 144, 255, 0.12) 0%, rgba(24, 144, 255, 0.06) 100%);
+          }
+
+          .tender-title-text {
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 18px;
+            line-height: 1.3;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-height: 48px;
+            margin-bottom: 8px;
+            text-align: center;
+          }
+
+          .tender-client-text {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+            font-size: 15px;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            text-align: center;
+            margin-bottom: 12px;
+            padding: 0 8px;
+          }
+
+          .title-client-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 4px 0;
+            min-height: 65px;
+          }
+
+          .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+            height: 36px;
+          }
+
+          .card-footer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 32px;
+            padding: 0;
+            margin-top: auto;
+          }
+
+          .tender-area-badge {
+            background: linear-gradient(135deg, rgba(82, 196, 26, 0.85) 0%, rgba(82, 196, 26, 0.65) 100%);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 13px;
+            padding: 6px 12px;
+            border-radius: 12px;
+            box-shadow: 0 3px 10px rgba(82, 196, 26, 0.3);
+            transition: all 0.25s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+          }
+
+          .tender-version-badge {
+            background: linear-gradient(135deg, rgba(24, 144, 255, 0.9) 0%, rgba(24, 144, 255, 0.7) 100%);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 12px;
+            padding: 6px 10px;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(24, 144, 255, 0.3);
+            transition: all 0.25s ease;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+          }
+
+          .modern-tender-card:hover .tender-area-badge {
+            transform: scale(1.03);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          }
+
+          .modern-tender-card:hover .tender-version-badge {
+            transform: scale(1.03);
+            box-shadow: 0 4px 12px rgba(82, 196, 26, 0.3);
+          }
+
+          .tender-icon-wrapper {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.15) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
           }
-          
-          .quick-tender-card:hover .quick-tender-icon-wrapper {
-            background: rgba(255, 255, 255, 0.3);
+
+          .modern-tender-card:hover .tender-icon-wrapper {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.22) 100%);
             border-color: rgba(255, 255, 255, 0.5);
-            transform: scale(1.15) rotate(5deg);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            transform: scale(1.08) rotate(3deg);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
           }
-          
-          .quick-tender-stats-badge {
-            background: rgba(255, 255, 255, 0.2);
+
+          .priority-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15);
             backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            z-index: 10;
+            border: 1px solid rgba(255, 255, 255, 0.2);
           }
-          
-          .quick-tender-card:hover .quick-tender-stats-badge {
-            background: rgba(255, 255, 255, 0.3);
-            border-color: rgba(255, 255, 255, 0.5);
-            transform: scale(1.05);
+
+          .deadline-badge {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: rgba(255, 165, 0, 0.8);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            z-index: 10;
+            border: 1px solid rgba(255, 255, 255, 0.2);
           }
-          
-          .quick-tender-text {
-            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+
+          .no-area-tag {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: rgba(255, 255, 255, 0.7);
+            border-radius: 10px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
           }
-          
-          .quick-tender-text-secondary {
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+
+          @media (max-width: 768px) {
+            .tender-title-text {
+              font-size: 15px;
+              max-height: 40px;
+            }
+
+            .tender-client-text {
+              font-size: 13px;
+            }
+
+            .modern-tender-card {
+              height: 120px;
+            }
+
+            .tender-icon-wrapper {
+              width: 36px;
+              height: 36px;
+            }
+
+            .tender-area-badge {
+              font-size: 11px;
+              padding: 5px 10px;
+            }
+
+            .tender-version-badge {
+              font-size: 10px;
+              padding: 5px 8px;
+            }
           }
-          
-          @keyframes gentle-float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-2px); }
-          }
-          
-          .quick-tender-card:nth-child(odd) {
-            animation: gentle-float 6s ease-in-out infinite;
-          }
-          
-          .quick-tender-card:nth-child(even) {
-            animation: gentle-float 6s ease-in-out infinite reverse;
+
+          @media (max-width: 576px) {
+            .tender-title-text {
+              font-size: 14px;
+              max-height: 38px;
+              -webkit-line-clamp: 2;
+            }
+
+            .tender-client-text {
+              font-size: 12px;
+            }
+
+            .modern-tender-card {
+              height: 120px;
+            }
+
+            .tender-icon-wrapper {
+              width: 32px;
+              height: 32px;
+            }
+
+            .tender-area-badge {
+              font-size: 10px;
+              padding: 4px 8px;
+            }
+
+            .tender-version-badge {
+              font-size: 9px;
+              padding: 4px 6px;
+            }
+
+            .no-area-tag {
+              font-size: 10px;
+              padding: 4px 8px;
+            }
           }
         `}
       </style>
-      
-      {/* Cards grid without wrapper card */}
+
+      {/* Compact Cards Grid */}
       <div className="mb-6">
-        <Row gutter={[16, 16]}>
+        <Row gutter={[12, 12]}>
           {prioritizedTenders.map((tender, index) => {
             const Icon = getTenderIcon(tender.title, tender.client_name || '');
             const color = getTenderColor(tender.title);
@@ -264,132 +453,107 @@ const QuickTenderSelector: React.FC<QuickTenderSelectorProps> = ({
             const daysSinceCreated = dayjs().diff(dayjs(tender.created_at), 'days');
             const hasDeadline = tender.submission_deadline;
             const daysToDeadline = hasDeadline ? dayjs(tender.submission_deadline).diff(dayjs(), 'days') : null;
-            
+
             return (
               <Col xs={12} sm={8} md={6} lg={4} xl={4} key={tender.id}>
-              <Tooltip
-                title={
-                  <div>
-                    <div className="font-semibold mb-2">{tender.title}</div>
-                    <div className="text-xs mb-1 text-gray-300">Заказчик: {tender.client_name || 'Не указан'}</div>
-                    {tender.area_sp && (
-                      <div className="text-xs mb-1 text-gray-300">Площадь СП: {formatQuantity(tender.area_sp, 0)} м²</div>
-                    )}
-                    {tender.area_client && (
-                      <div className="text-xs mb-1 text-gray-300">Площадь заказчика: {formatQuantity(tender.area_client, 0)} м²</div>
-                    )}
-                    <div className="text-xs text-gray-400 mt-2">
-                      Создан: {dayjs(tender.created_at).format('DD.MM.YYYY')}
-                    </div>
-                    {hasDeadline && (
-                      <div className="text-xs text-gray-400">
-                        {daysToDeadline && daysToDeadline > 0 
-                          ? `До срока: ${daysToDeadline} дн.` 
-                          : 'Срок истек'}
+                <Tooltip
+                  title={
+                    <div className="p-2">
+                      <div className="font-semibold mb-2 text-sm">{tender.title}</div>
+                      <div className="text-xs mb-2 text-gray-200">
+                        <UserOutlined className="mr-1" />
+                        {tender.client_name || 'Не указан'}
                       </div>
-                    )}
-                  </div>
-                }
-                placement="top"
-              >
-                <div
-                  className={`quick-tender-card ${isSelected ? 'selected' : ''} relative z-10`}
-                  onClick={() => handleTenderClick(tender)}
-                >
-                  {/* Priority Badge */}
-                  {index < 3 && (
-                    <Badge 
-                      count={index === 0 ? "🔥" : index === 1 ? "⭐" : "📈"} 
-                      style={{ 
-                        position: 'absolute', 
-                        top: -2, 
-                        right: -2, 
-                        zIndex: 2 
-                      }} 
-                    />
-                  )}
-                  
-                  {/* Deadline Warning */}
-                  {hasDeadline && daysToDeadline !== null && daysToDeadline <= 7 && daysToDeadline > 0 && (
-                    <Badge 
-                      count="⚡" 
-                      style={{ 
-                        position: 'absolute', 
-                        top: -2, 
-                        left: -2, 
-                        zIndex: 2 
-                      }} 
-                      title={`Осталось ${daysToDeadline} дней до срока`}
-                    />
-                  )}
-                  
-                  <div className="p-4 text-center relative z-10">
-                    {/* Icon */}
-                    <div className="quick-tender-icon-wrapper w-16 h-16 mb-4">
-                      <Icon style={{ fontSize: 26, color: '#ffffff' }} />
-                    </div>
-                    
-                    {/* Title */}
-                    <div className="mb-3">
-                      <Text 
-                        className="quick-tender-text text-sm font-bold leading-tight block text-white" 
-                        style={{ 
-                          height: '34px', 
-                          overflow: 'hidden',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          wordBreak: 'break-word'
-                        }}
-                      >
-                        {tender.title}
-                      </Text>
-                    </div>
-                    
-                    {/* Client */}
-                    <div className="mb-3">
-                      <Text 
-                        className="quick-tender-text-secondary text-xs text-white opacity-80 leading-tight block" 
-                        style={{ 
-                          height: '16px', 
-                          overflow: 'hidden',
-                          whiteSpace: 'nowrap',
-                          textOverflow: 'ellipsis'
-                        }}
-                      >
-                        {tender.client_name || 'Заказчик не указан'}
-                      </Text>
-                    </div>
-                    
-                    {/* Stats */}
-                    <div className="flex justify-between items-center">
-                      <div className="text-left">
-                        {tender.area_sp ? (
-                          <Text className="quick-tender-text-secondary text-xs text-white opacity-70">
-                            {formatQuantity(tender.area_sp, 0)} м²
-                          </Text>
-                        ) : (
-                          <Text className="quick-tender-text-secondary text-xs text-white opacity-50">—</Text>
+                      {tender.area_sp && (
+                        <div className="text-xs mb-1 text-gray-200">
+                          <AreaChartOutlined className="mr-1" />
+                          СП: {formatQuantity(tender.area_sp, 0)} м²
+                        </div>
+                      )}
+                      {tender.area_client && (
+                        <div className="text-xs mb-1 text-gray-200">
+                          <AreaChartOutlined className="mr-1" />
+                          Заказчик: {formatQuantity(tender.area_client, 0)} м²
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-600">
+                        {dayjs(tender.created_at).format('DD.MM.YY')}
+                        {hasDeadline && daysToDeadline !== null && (
+                          <span className="ml-2">
+                            {daysToDeadline > 0 ? `${daysToDeadline}д` : 'Просрочен'}
+                          </span>
                         )}
                       </div>
-                      <div 
-                        className="quick-tender-stats-badge px-3 py-1 rounded-full text-white font-bold text-xs"
-                      >
-                        v{tender.version || 1}
+                    </div>
+                  }
+                  placement="top"
+                  overlayStyle={{ maxWidth: '250px' }}
+                >
+                  <div
+                    className={`modern-tender-card ${isSelected ? 'selected' : ''} relative`}
+                    onClick={() => handleTenderClick(tender)}
+                  >
+
+                    {/* Compact Deadline Warning */}
+                    {hasDeadline && daysToDeadline !== null && daysToDeadline <= 7 && daysToDeadline > 0 && (
+                      <div className="deadline-badge" title={`${daysToDeadline} дн.`}>
+                        ⚡
+                      </div>
+                    )}
+
+                    <div className="relative z-5 flex flex-col" style={{ height: '100%' }}>
+                      {/* Header with Icon and Version */}
+                      <div className="card-header">
+                        <div className="tender-icon-wrapper">
+                          <Icon style={{ fontSize: 20, color: '#ffffff' }} />
+                        </div>
+                        <div className="tender-version-badge">
+                          v{tender.version || 1}
+                        </div>
+                      </div>
+
+                      {/* Main Content - Title and Client */}
+                      <div className="title-client-section">
+                        <div className="tender-title-text" title={tender.title}>
+                          {tender.title}
+                        </div>
+                        <div className="tender-client-text" title={tender.client_name || 'Не указан'}>
+                          {tender.client_name || 'Не указан'}
+                        </div>
+                      </div>
+
+                      {/* Footer with Area Information */}
+                      <div className="card-footer">
+                        {tender.area_sp ? (
+                          <div className="tender-area-badge">
+                            <AreaChartOutlined style={{ fontSize: 12 }} />
+                            {formatQuantity(tender.area_sp, 0)}м²
+                          </div>
+                        ) : (
+                          <div className="no-area-tag">
+                            Нет данных
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                </div>
-              </Tooltip>
-            </Col>
-          );
-        })}
+                </Tooltip>
+              </Col>
+            );
+          })}
         </Row>
-        
-        {/* Optional counter text */}
-        <div className="text-center mt-4">
-          <Text className="text-xs text-white opacity-60 quick-tender-text-secondary">
-            {prioritizedTenders.length} из {tenders.length} актуальных тендеров
+
+        {/* Counter with improved styling */}
+        <div className="text-center mt-6">
+          <Text
+            className="text-sm text-white opacity-75"
+            style={{
+              textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+              fontSize: '13px',
+              fontWeight: 500
+            }}
+          >
+            Показано {prioritizedTenders.length} из {tenders.length} актуальных тендеров
           </Text>
         </div>
       </div>

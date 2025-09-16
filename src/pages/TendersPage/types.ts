@@ -55,16 +55,12 @@ export interface TenderStatsProps {
 export interface TenderFiltersProps {
   filters: TenderFilters;
   onSearch: (value: string) => void;
-  onStatusFilter: (status: TenderStatus[]) => void;
-  onDateFilter: (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => void;
   onFiltersChange: (filters: Partial<TenderFilters>) => void;
 }
 
 export interface TenderTableProps {
   tenders: TenderWithSummary[];
   loading: boolean;
-  pagination: TablePaginationConfig;
-  onTableChange: (pagination: TablePaginationConfig) => void;
   onViewTender: (tender: TenderWithSummary) => void;
   onEditTender: (tender: TenderWithSummary) => void;
   onDeleteTender: (tenderId: string) => void;

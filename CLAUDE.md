@@ -42,10 +42,10 @@ npm run dev
 ## MCP (Model Context Protocol) Integration
 
 **Supabase MCP Server** is configured for direct database access:
-- Config location: `C:\Users\nekrasov.l.m\AppData\Roaming\Claude\mcp.json`
+- Config location: User-specific `%APPDATA%\Claude\mcp.json` (Windows) or `~/Library/Application Support/Claude/mcp.json` (Mac)
 - Available after Claude Code restart
 - Check connection: `/mcp list`
-- Provides tools: `mcp__supabase__*` for CRUD operations
+- Provides tools: `mcp__supabase__*` for CRUD operations (query, insert, update, delete, rpc, schema)
 - See `MCP_SETUP.md` for troubleshooting
 
 **GitHub MCP Server** is also configured:
@@ -82,7 +82,7 @@ NEVER trust TypeScript types over prod.sql
 ALWAYS verify schema before ANY database work
 ```
 
-**Note**: The prod.sql file must be generated using `npm run db:schema` command
+**⚠️ WARNING**: If `prod.sql` is empty (0 bytes), you MUST run `npm run db:schema` first to generate the schema from the production database. Without this file, database operations cannot be properly validated.
 
 ## High-Level Architecture
 
@@ -415,14 +415,15 @@ TenderHUB/
 
 ## Common Troubleshooting
 
+- **Empty prod.sql (Critical)**: Run `npm run db:schema` immediately to generate schema file - this is required for all database operations
 - **Port Already in Use**: Dev server auto-assigns new port if 5173 is busy
 - **React 19 Warnings**: Expected due to Ant Design compatibility patch
 - **Type Errors**: Run `npm run build` to check all TypeScript errors
 - **Database Schema Mismatch**: Always sync with `supabase/schemas/prod.sql`
 - **MCP Not Working**: Restart Claude Code completely (see MCP_SETUP.md)
-- **Empty prod.sql**: Run `npm run db:schema` to generate schema file
 - **ESLint Import Error**: If ESLint fails with import errors, ensure all packages are installed with `npm install`
 - **Vite HMR Issues**: HMR timeout set to 5s, overlay disabled in vite.config.ts
+- **Build Failures**: Check `.tsbuildinfo` cache in `node_modules/.tmp/` - delete if corrupt
 
 ## Additional Resources
 

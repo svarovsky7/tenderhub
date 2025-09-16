@@ -13,7 +13,7 @@ const TenderStats: React.FC<TenderStatsProps> = ({ stats, loading = false }) => 
 
   return (
     <Row gutter={16}>
-      <Col span={6}>
+      <Col span={8}>
         <Card size="small" loading={loading}>
           <Statistic
             title="Всего тендеров"
@@ -22,7 +22,7 @@ const TenderStats: React.FC<TenderStatsProps> = ({ stats, loading = false }) => 
           />
         </Card>
       </Col>
-      <Col span={6}>
+      <Col span={8}>
         <Card size="small" loading={loading}>
           <Statistic
             title="Активных"
@@ -32,25 +32,13 @@ const TenderStats: React.FC<TenderStatsProps> = ({ stats, loading = false }) => 
           />
         </Card>
       </Col>
-      <Col span={6}>
+      <Col span={8}>
         <Card size="small" loading={loading}>
           <Statistic
             title="Выиграно"
             value={stats.won}
             prefix={<TrophyOutlined />}
             valueStyle={{ color: '#52c41a' }}
-          />
-        </Card>
-      </Col>
-      <Col span={6}>
-        <Card size="small" loading={loading}>
-          <Statistic
-            title="Общая стоимость"
-            value={stats.totalValue / 1000000}
-            precision={1}
-            suffix="М ₽"
-            prefix={<DollarOutlined />}
-            valueStyle={{ color: '#722ed1' }}
           />
         </Card>
       </Col>

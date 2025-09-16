@@ -14,6 +14,8 @@ import {
   Spin,
   Select,
   Input,
+  message,
+  AutoComplete,
 } from 'antd';
 import {
   PlusOutlined,
@@ -26,8 +28,11 @@ import {
   EyeOutlined,
   EditOutlined,
   DashboardOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import DeadlineStatusBar from '../components/tender/DeadlineStatusBar';
+import dayjs from 'dayjs';
 // Removed auth imports - no authentication needed
 // TenderStatus import removed - status field no longer exists in schema
 import { supabase } from '../lib/supabase/client';
@@ -60,8 +65,9 @@ const Dashboard: React.FC = () => {
     winRate: 0,
   });
   const [searchText, setSearchText] = useState('');
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
   // Status filter removed - status field no longer exists in schema
-  
+
   // No authentication needed - all features are available
   const navigate = useNavigate();
 
@@ -70,23 +76,21 @@ const Dashboard: React.FC = () => {
       try {
         setLoading(true);
         
-        // Load recent tenders
-        const tendersResponse = await tendersApi.getAll({}, {
-          limit: 10
-        });
+        // Load all tenders - no limit
+        const tendersResponse = await tendersApi.getAll({});
 
         if (tendersResponse.data) {
           // Load BOQ totals and area_sp for each tender
           const tendersWithBOQ = await Promise.all(
             tendersResponse.data.map(async (tender) => {
-              // Get total cost from client_positions
-              const { data: positionsData } = await supabase
-                .from('client_positions')
-                .select('total_materials_cost, total_works_cost')
+              // Get total cost from boq_items (same as in BOQ page)
+              const { data: boqItems } = await supabase
+                .from('boq_items')
+                .select('total_amount')
                 .eq('tender_id', tender.id);
 
-              const boqTotal = positionsData?.reduce((sum, pos) => 
-                sum + (pos.total_materials_cost || 0) + (pos.total_works_cost || 0), 0
+              const boqTotal = boqItems?.reduce((sum, item) =>
+                sum + (item.total_amount || 0), 0
               ) || 0;
 
               return {
@@ -101,8 +105,12 @@ const Dashboard: React.FC = () => {
 
           // Calculate stats including BOQ totals
           const totalTenders = tendersWithBOQ.length;
-          const activeTenders = 0; // Status field removed from schema
-          const submittedTenders = 0; // Status field removed from schema  
+          // Count active tenders as those with submission_deadline not yet expired
+          const now = new Date();
+          const activeTenders = tendersWithBOQ.filter(t =>
+            t.submission_deadline && new Date(t.submission_deadline) > now
+          ).length;
+          const submittedTenders = 0; // Status field removed from schema
           const wonTenders = 0; // Status field removed from schema
           const totalValue = tendersWithBOQ.reduce((sum, t) => sum + (t.boq_total_value || 0), 0);
           const winRate = totalTenders > 0 ? (wonTenders / totalTenders) * 100 : 0;
@@ -144,6 +152,31 @@ const Dashboard: React.FC = () => {
     return matchesSearch;
   });
 
+  // Debug: Check if any tenders have active deadlines
+  const activeTenders = filteredTenders.filter(t =>
+    t.submission_deadline && dayjs(t.submission_deadline).isAfter(dayjs())
+  );
+  console.log('Active tenders with deadlines:', activeTenders.length, activeTenders);
+
+  // Helper function for Russian day declension
+  const getDayWord = (days: number): string => {
+    const lastDigit = days % 10;
+    const lastTwoDigits = days % 100;
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 14) return 'дней';
+    if (lastDigit === 1) return 'день';
+    if (lastDigit >= 2 && lastDigit <= 4) return 'дня';
+    return 'дней';
+  };
+
+  const getHourWord = (hours: number): string => {
+    const lastDigit = hours % 10;
+    const lastTwoDigits = hours % 100;
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 14) return 'часов';
+    if (lastDigit === 1) return 'час';
+    if (lastDigit >= 2 && lastDigit <= 4) return 'часа';
+    return 'часов';
+  };
+
   const columns = [
     {
       title: 'Номер тендера',
@@ -161,73 +194,193 @@ const Dashboard: React.FC = () => {
       dataIndex: 'title',
       key: 'title',
       ellipsis: true,
+      render: (text: string, record: any) => (
+        <span>
+          {text} {record.client_name && <span style={{ color: '#888' }}>| {record.client_name}</span>}
+        </span>
+      ),
     },
     {
-      title: 'Заказчик',
-      dataIndex: 'client_name',
-      key: 'client_name',
-      width: 200,
-      ellipsis: true,
+      title: <div style={{ textAlign: 'center' }}>Статус дедлайна</div>,
+      key: 'deadline_status',
+      width: 280,
+      render: (_, record: any) => {
+        if (!record.submission_deadline) return null;
+
+        const deadline = dayjs(record.submission_deadline);
+        const now = dayjs();
+        const daysLeft = deadline.diff(now, 'day');
+        const hoursLeft = deadline.diff(now, 'hour');
+        const isExpired = deadline.isBefore(now);
+
+        if (isExpired) {
+          return (
+            <div style={{
+              padding: '4px 12px',
+              borderRadius: '4px',
+              background: 'rgba(52, 211, 153, 0.1)',
+              color: '#059669',
+              fontWeight: 500,
+              textAlign: 'center'
+            }}>
+              ✅ Завершен
+            </div>
+          );
+        }
+
+        const totalDays = 30;
+        const progress = Math.max(0, Math.min(100, ((totalDays - daysLeft) / totalDays) * 100));
+
+        let bgColor = 'rgba(52, 211, 153, 0.2)';
+        let borderColor = '#34d399';
+        let textColor = '#059669';
+        let timeText = '';
+
+        if (daysLeft <= 0) {
+          bgColor = 'rgba(239, 68, 68, 0.2)';
+          borderColor = '#ef4444';
+          textColor = '#dc2626';
+          timeText = hoursLeft > 0 ? `${hoursLeft} ${getHourWord(hoursLeft)}` : 'Сегодня';
+        } else if (daysLeft <= 3) {
+          bgColor = 'rgba(239, 68, 68, 0.2)';
+          borderColor = '#ef4444';
+          textColor = '#dc2626';
+          timeText = `${daysLeft} ${getDayWord(daysLeft)}`;
+        } else if (daysLeft <= 7) {
+          bgColor = 'rgba(251, 191, 36, 0.2)';
+          borderColor = '#fbbf24';
+          textColor = '#d97706';
+          timeText = `${daysLeft} ${getDayWord(daysLeft)}`;
+        } else {
+          timeText = `${daysLeft} ${getDayWord(daysLeft)}`;
+        }
+
+        return (
+          <div style={{
+            position: 'relative',
+            height: '24px',
+            background: 'rgba(0,0,0,0.02)',
+            borderRadius: '4px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: `${progress}%`,
+              background: bgColor,
+              borderLeft: `2px solid ${borderColor}`,
+              transition: 'width 0.5s ease'
+            }} />
+            <div style={{
+              position: 'relative',
+              zIndex: 1,
+              textAlign: 'center',
+              lineHeight: '24px',
+              fontWeight: 600,
+              fontSize: '12px',
+              color: textColor
+            }}>
+              ⏱️ Осталось {timeText}
+            </div>
+          </div>
+        );
+      },
     },
     // Status column removed - status field no longer exists in schema
     {
-      title: 'BOQ стоимость',
+      title: <div style={{ textAlign: 'center' }}>Площадь СП</div>,
+      dataIndex: 'area_sp',
+      key: 'area_sp',
+      width: 100,
+      align: 'center' as const,
+      render: (value: number | null) => value ? `${Math.round(value).toLocaleString('ru-RU')} м²` : '-',
+    },
+    {
+      title: <div style={{ textAlign: 'center' }}>BOQ стоимость</div>,
       dataIndex: 'boq_total_value',
       key: 'boq_total_value',
       width: 150,
+      align: 'center' as const,
       render: (value: number | null) => value ? formatCurrency(value) : '-',
     },
     {
-      title: 'Стоимость за м²',
+      title: <div style={{ textAlign: 'center' }}>Стоимость за м²</div>,
       key: 'cost_per_sqm',
       width: 140,
+      align: 'center' as const,
       render: (_, record: any) => {
         if (record.boq_total_value && record.area_sp && record.area_sp > 0) {
           const costPerSqm = record.boq_total_value / record.area_sp;
-          return formatCurrency(costPerSqm);
+          return `${Math.round(costPerSqm).toLocaleString('ru-RU')} ₽/м²`;
         }
         return '-';
       },
     },
     {
-      title: 'Крайний срок',
+      title: <div style={{ textAlign: 'center' }}>Крайний срок</div>,
       dataIndex: 'submission_deadline',
       key: 'submission_deadline',
       width: 120,
+      align: 'center' as const,
       render: (date: string) => new Date(date).toLocaleDateString('ru-RU'),
     },
     {
-      title: 'Действия',
-      key: 'actions',
-      width: 120,
+      title: <div style={{ textAlign: 'center' }}>Обновить расчет</div>,
+      key: 'refresh',
+      width: 140,
+      align: 'center' as const,
       render: (_: any, record: any) => (
-        <Space size="small">
-          <Button
-            type="text"
-            icon={<EyeOutlined />}
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/tenders/${record.id}`);
-            }}
-            title="Просмотр"
-          />
-          {(
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/tenders/${record.id}/edit`);
-              }}
-              title="Редактировать"
-            />
-          )}
-        </Space>
+        <Button
+          type="text"
+          icon={<ReloadOutlined style={{ color: '#52c41a' }} />}
+          size="small"
+          loading={refreshingId === record.id}
+          onClick={(e) => {
+            e.stopPropagation();
+            refreshBOQCost(record.id);
+          }}
+          title="Обновить стоимость BOQ"
+        />
       ),
     },
   ];
+
+  // Function to refresh BOQ cost for a specific tender
+  const refreshBOQCost = async (tenderId: string) => {
+    setRefreshingId(tenderId);
+    try {
+      // Get updated total cost from boq_items (same as in BOQ page)
+      const { data: boqItems } = await supabase
+        .from('boq_items')
+        .select('total_amount')
+        .eq('tender_id', tenderId);
+
+      const boqTotal = boqItems?.reduce((sum, item) =>
+        sum + (item.total_amount || 0), 0
+      ) || 0;
+
+      // Update the tender in state
+      setTenders(prev => prev.map(t =>
+        t.id === tenderId ? { ...t, boq_total_value: boqTotal } : t
+      ));
+
+      // Also update total stats
+      const updatedTenders = tenders.map(t =>
+        t.id === tenderId ? { ...t, boq_total_value: boqTotal } : t
+      );
+      const totalValue = updatedTenders.reduce((sum, t) => sum + (t.boq_total_value || 0), 0);
+      setStats(prev => ({ ...prev, totalValue }));
+
+      message.success('BOQ стоимость обновлена');
+    } catch (error) {
+      console.error('Error refreshing BOQ cost:', error);
+      message.error('Ошибка обновления стоимости');
+    } finally {
+      setRefreshingId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -284,9 +437,9 @@ const Dashboard: React.FC = () => {
             margin-top: 24px;
           }
           .dashboard-stats-container .ant-card {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.75);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
           }
@@ -296,6 +449,18 @@ const Dashboard: React.FC = () => {
           }
           .dashboard-stats-container .ant-statistic-content {
             color: rgba(0, 0, 0, 0.85);
+          }
+
+          /* Expired tender - light green background */
+          .tender-row-expired {
+            background: rgba(52, 211, 153, 0.08) !important;
+          }
+          .tender-row-expired td {
+            background: transparent !important;
+            color: rgba(0, 0, 0, 0.65);
+          }
+          .tender-row-expired:hover {
+            background: rgba(52, 211, 153, 0.12) !important;
           }
         `}
       </style>
@@ -319,22 +484,6 @@ const Dashboard: React.FC = () => {
                     Обзор ваших тендеров и основных показателей
                   </Text>
                 </div>
-              </div>
-              <div className="dashboard-action-buttons">
-                <Button
-                  className="dashboard-action-btn"
-                  style={{ 
-                    background: 'rgba(255, 255, 255, 0.95)',
-                    color: '#1890ff',
-                    borderColor: 'rgba(255, 255, 255, 0.3)',
-                    fontWeight: 600
-                  }}
-                  size="large"
-                  icon={<PlusOutlined />}
-                  onClick={() => navigate('/tenders/new')}
-                >
-                  Новый тендер
-                </Button>
               </div>
             </div>
 
@@ -390,37 +539,40 @@ const Dashboard: React.FC = () => {
 
         {/* Main Content */}
         <div className="max-w-none px-6">
-          {/* Recent Tenders */}
-          <Card
-            title="Последние тендеры"
-            extra={
-              <Space>
-                {(
-                  <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => navigate('/tenders/new')}
-                  >
-                    Создать тендер
-                  </Button>
-                )}
-                <Button onClick={() => navigate('/tenders')}>
-                  Все тендеры
-                </Button>
-              </Space>
-            }
-          >
+          {/* All Tenders */}
+          <Card>
         {/* Filters */}
-        <div className="mb-4 flex flex-wrap gap-4">
-          <Input
-            placeholder="Поиск по названию, клиенту или номеру..."
-            prefix={<SearchOutlined />}
+        <div className="mb-4">
+          <AutoComplete
+            placeholder="Поиск по названию тендера или заказчику..."
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 300 }}
+            onChange={(value) => setSearchText(value)}
+            style={{ width: '100%', maxWidth: 600 }}
             allowClear
-          />
-          {/* Status filter removed - status field no longer exists in schema */}
+            options={searchText.length > 0 ? filteredTenders.slice(0, 10).map(tender => ({
+              value: tender.title,
+              label: (
+                <div
+                  style={{ padding: '4px 0', cursor: 'pointer' }}
+                  onClick={() => {
+                    setSearchText('');
+                    navigate(`/boq?tender=${tender.id}`);
+                  }}
+                >
+                  <div style={{ fontWeight: 500 }}>{tender.title}</div>
+                  <div style={{ fontSize: '12px', color: '#888' }}>
+                    {tender.client_name} • {tender.tender_number}
+                  </div>
+                </div>
+              ),
+            })) : []}
+            filterOption={false}
+          >
+            <Input
+              prefix={<SearchOutlined />}
+              size="large"
+            />
+          </AutoComplete>
         </div>
 
         <Table
@@ -429,21 +581,28 @@ const Dashboard: React.FC = () => {
           rowKey="id"
           onRow={(record) => ({
             onClick: () => navigate(`/boq?tender=${record.id}`),
-            style: { cursor: 'pointer' },
+            style: {
+              cursor: 'pointer',
+              position: 'relative' as const
+            },
             onMouseEnter: (e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = '#fafafa';
+              if (!record.submission_deadline || dayjs(record.submission_deadline).isBefore(dayjs())) {
+                (e.currentTarget as HTMLElement).style.backgroundColor = '#fafafa';
+              }
             },
             onMouseLeave: (e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = '';
+              if (!record.submission_deadline || dayjs(record.submission_deadline).isBefore(dayjs())) {
+                (e.currentTarget as HTMLElement).style.backgroundColor = '';
+              }
             },
           })}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) =>
-              `${range[0]}-${range[1]} из ${total} тендеров`,
+          rowClassName={(record) => {
+            if (record.submission_deadline && dayjs(record.submission_deadline).isBefore(dayjs())) {
+              return 'tender-row-expired';
+            }
+            return '';
           }}
+          pagination={false}
           scroll={{ x: 1200 }}
           locale={{
             emptyText: (

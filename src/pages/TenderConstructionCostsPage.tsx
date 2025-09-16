@@ -234,23 +234,29 @@ const TenderConstructionCostsPage: React.FC = () => {
   }, [selectedTenderId, navigate]);
 
   // Refresh data
-  const handleRefresh = useCallback(async () => {
+  const handleRefresh = useCallback(() => {
+    if (!selectedTenderId) {
+      console.log('❌ No tender selected for refresh');
+      message.info('Выберите тендер для обновления');
+      return;
+    }
+
+    console.log('🔄 Starting refresh for tender:', selectedTenderId);
     setLoading(true);
     message.loading('Обновление данных...', 0.5);
-    
-    // Hide content with animation
+
     setIsContentVisible(false);
-    
-    // Reload after animation
-    setTimeout(async () => {
-      await loadTenders();
-      await loadCostCategories();
-      if (selectedTenderId) {
-        await loadTenderVolumes();
-        await calculateCosts();
-      }
-      setLoading(false);
-      setTimeout(() => setIsContentVisible(true), 100);
+
+    setTimeout(() => {
+      const currentId = selectedTenderId;
+      setSelectedTenderId(null);
+
+      setTimeout(() => {
+        setSelectedTenderId(currentId);
+        setIsContentVisible(true);
+        setLoading(false);
+        message.success('Данные обновлены');
+      }, 100);
     }, 300);
   }, [selectedTenderId]);
 
@@ -1219,27 +1225,20 @@ const TenderConstructionCostsPage: React.FC = () => {
           : (record.actual_materials + record.actual_works + record.actual_submaterials + record.actual_subworks);
         
         const unitTotal = volume > 0 ? total / volume : 0;
-        
-        // Подсказка в зависимости от режима
-        const tooltipText = showCommercialCosts 
-          ? 'Коммерческая стоимость за единицу'
-          : 'Прямые затраты за единицу';
-        
+
         return (
-          <Tooltip title={tooltipText}>
-            <div style={{ textAlign: 'right' }}>
-              <Text 
-                className="money-value"
-                style={{ 
-                  color: unitTotal > 0 ? (showCommercialCosts ? 'var(--color-success-700)' : 'var(--color-primary-700)') : 'var(--color-neutral-400)',
-                  fontWeight: 'var(--font-weight-semibold)',
-                  fontSize: 'var(--font-size-sm)'
-                }}
-              >
-                {unitTotal > 0 ? `${Math.round(unitTotal).toLocaleString('ru-RU')} ₽/${record.unit || 'ед.'}` : '-'}
-              </Text>
-            </div>
-          </Tooltip>
+          <div style={{ textAlign: 'right' }}>
+            <Text
+              className="money-value"
+              style={{
+                color: unitTotal > 0 ? (showCommercialCosts ? 'var(--color-success-700)' : 'var(--color-primary-700)') : 'var(--color-neutral-400)',
+                fontWeight: 'var(--font-weight-semibold)',
+                fontSize: 'var(--font-size-sm)'
+              }}
+            >
+              {unitTotal > 0 ? `${Math.round(unitTotal).toLocaleString('ru-RU')} ₽/${record.unit || 'ед.'}` : '-'}
+            </Text>
+          </div>
         );
       },
       sorter: (a, b) => {
