@@ -29,6 +29,7 @@ interface TemplateListProps {
 
 interface TemplateItem {
   id: string;
+  template_item_id?: string;  // Реальный ID записи из БД для удаления
   template_name: string;
   template_description?: string;
 
@@ -102,7 +103,7 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
     }
   });
 
-  // Update collapsed state when showContent changes or templates load
+  // Update collapsed state when showContent changes
   useEffect(() => {
     if (!templates || templates.length === 0) return;
 
@@ -113,7 +114,7 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
       // Hide content - collapse all templates
       setCollapsedTemplates(new Set(templates.map((t: TemplateGroup) => t.template_name)));
     }
-  }, [showContent, templates]);
+  }, [showContent]); // Убираем templates из зависимостей, чтобы не сворачивать при обновлении данных
 
   // Load library data
   useEffect(() => {
@@ -123,6 +124,10 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
           materialsApi.getAll(),
           worksApi.getAll()
         ]);
+        console.log('📚 Library data loaded:', {
+          materials: materialsResult.data?.slice(0, 2),
+          works: worksResult.data?.slice(0, 2)
+        });
         setLibraryData({
           materials: materialsResult.data || [],
           works: worksResult.data || []
@@ -168,45 +173,167 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
 
       // Process items to create proper hierarchy
       const processedMaterialIds = new Set<string>();
+      const processedWorkIds = new Set<string>();
 
-      // Add each work with its linked materials immediately after
-      works.forEach((work: any) => {
-        // Add the work
-        const workItemId = `${template.template_name}-work-${work.id}`;
-        items.push({
-          id: workItemId,
-          template_name: template.template_name,
-          template_description: template.template_description,
-          work_id: work.id,
-          work_library_id: work.work_library_id,
-          sub_work_library_id: work.sub_work_library_id,
-          work_name: work.name,
-          work_type: work.type,
-          work_unit: work.unit,
-          work_unit_rate: work.unit_rate,
-          work_currency_type: work.currency_type,
-          work_category: work.category,
-          item_type: work.type,
-          conversion_coefficient: 1,
-          is_linked_to_work: false,
-          display_order: items.length + 1,  // Dynamic order based on position
-          indent: false
-        });
+      // First, process combined records (work+material in one DB record)
+      materials.forEach((material: any) => {
+        if (material.is_combined_record && material.linked_work_id) {
+          // This material record contains both work and material info
+          const workId = material.linked_work_id;
 
-        // Immediately add materials linked to this work
-        const linkedToThisWork = materials.filter(m => {
-          const isLinked = m.linked_work_id === work.id;
-          if (isLinked) {
-            console.log(`    ✅ Material "${m.name}" is linked to work "${work.name}"`);
+          // Add the work part if not already added
+          if (!processedWorkIds.has(workId)) {
+            const workItemId = `${template.template_name}-work-${workId}`;
+            console.log('🔨 Adding work from combined record:', {
+              workItemId,
+              template_item_id: material.template_item_id,
+              work_name: material.linked_work_name,
+              work_type: material.linked_work_type
+            });
+
+            // Debug linked work unit
+            if (!material.linked_work_unit) {
+              console.warn('⚠️ Material linked work without unit:', {
+                work_name: material.linked_work_name,
+                material_name: material.name,
+                raw_material: material
+              });
+            }
+
+            items.push({
+              id: workItemId,
+              template_item_id: material.template_item_id,  // Same DB record ID
+              template_name: template.template_name,
+              template_description: template.template_description,
+              work_id: workId,
+              work_library_id: material.work_library_id,
+              sub_work_library_id: material.sub_work_library_id,
+              work_name: material.linked_work_name,
+              work_type: material.linked_work_type || 'work',
+              work_unit: material.linked_work_unit,  // Use the unit from linked work
+              work_unit_rate: material.work_library?.unit_rate || material.sub_work_library?.unit_rate,
+              work_currency_type: material.work_library?.currency_type || material.sub_work_library?.currency_type || 'RUB',
+              item_type: material.linked_work_type || 'work',
+              is_from_combined: true,  // Flag to know this work is from a combined record
+              indent: false
+            });
+
+            processedWorkIds.add(workId);
           }
-          return isLinked;
-        });
-        console.log(`  🔗 Work "${work.name}" (${work.id}) has ${linkedToThisWork.length} linked materials`);
 
-        linkedToThisWork.forEach((material: any) => {
+          // Add the material part (linked to the work)
           const materialItemId = `${template.template_name}-material-${material.id}`;
+          console.log('📦 Adding material from combined record:', {
+            materialItemId,
+            template_item_id: material.template_item_id,
+            material_name: material.name,
+            linked_work_id: material.linked_work_id
+          });
+
           items.push({
             id: materialItemId,
+            template_item_id: material.template_item_id,  // Same DB record ID
+            template_name: template.template_name,
+            template_description: template.template_description,
+            material_id: material.id,
+            material_library_id: material.material_library_id,
+            sub_material_library_id: material.sub_material_library_id,
+            material_name: material.name,
+            material_type: material.material_type,
+            material_material_type: material.material_type,  // Добавляем тип материала (основной/вспомогательный)
+            material_unit: material.unit,
+            material_consumption_coefficient: material.consumption_coefficient || 1,
+            material_unit_rate: material.unit_rate,
+            material_currency_type: material.currency_type || 'RUB',
+            material_delivery_price_type: material.delivery_price_type,
+            material_delivery_amount: material.delivery_amount,
+            material_quote_link: material.quote_link,
+            conversion_coefficient: material.conversion_coefficient || 1,
+            is_linked_to_work: true,
+            linked_work_id: material.linked_work_id,
+            linked_work_name: material.linked_work_name,
+            item_type: material.type,
+            is_from_combined: true,  // Flag to know this material is from a combined record
+            indent: true
+          });
+
+          processedMaterialIds.add(material.id);
+        }
+      });
+
+      // Then add standalone works (not part of combined records)
+      works.forEach((work: any) => {
+        if (!processedWorkIds.has(work.id)) {
+          // Add the work
+          const workItemId = `${template.template_name}-work-${work.work_library_id || work.sub_work_library_id}`;
+          console.log('🔨 Adding standalone work to items:', {
+            workItemId,
+            template_item_id: work.template_item_id,
+            work_name: work.name,
+            work_type: work.type
+          });
+          const workItem = {
+            id: workItemId,
+            template_item_id: work.template_item_id,  // Реальный ID записи из БД (приходит из API)
+            template_name: template.template_name,
+            template_description: template.template_description,
+            work_id: work.work_library_id || work.sub_work_library_id,
+            work_library_id: work.work_library_id,
+            sub_work_library_id: work.sub_work_library_id,
+            work_name: work.name,
+            work_type: work.type,
+            work_unit: work.unit,
+            work_unit_rate: work.unit_rate,
+            work_currency_type: work.currency_type,
+            work_category: work.category,
+            item_type: work.type,
+            conversion_coefficient: 1,
+            is_linked_to_work: false,
+            display_order: items.length + 1,  // Dynamic order based on position
+            indent: false
+          };
+
+          // Debug log for work unit
+          if (!work.unit) {
+            console.warn('⚠️ Work without unit:', {
+              name: work.name,
+              type: work.type,
+              raw: work
+            });
+          } else {
+            console.log('✅ Work with unit:', {
+              name: work.name,
+              unit: work.unit,
+              type: work.type
+            });
+          }
+
+          items.push(workItem);
+
+          processedWorkIds.add(work.id);
+
+          // Immediately add materials linked to this work (skip already processed)
+          const linkedToThisWork = materials.filter(m => {
+            if (processedMaterialIds.has(m.id)) return false;
+            const isLinked = m.linked_work_id === work.id;
+            if (isLinked) {
+              console.log(`    ✅ Material "${m.name}" is linked to work "${work.name}"`);
+            }
+            return isLinked;
+          });
+          console.log(`  🔗 Work "${work.name}" (${work.id}) has ${linkedToThisWork.length} linked materials`);
+
+          linkedToThisWork.forEach((material: any) => {
+          const materialItemId = `${template.template_name}-material-${material.material_library_id || material.sub_material_library_id}`;
+          console.log('📦 Adding linked material to items:', {
+            materialItemId,
+            template_item_id: material.template_item_id,
+            material_name: material.name,
+            linked_work_id: material.linked_work_id
+          });
+          items.push({
+            id: materialItemId,
+            template_item_id: material.template_item_id,  // Реальный ID записи из БД (приходит из API)
             template_name: template.template_name,
             template_description: template.template_description,
             material_id: material.id,
@@ -233,6 +360,7 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
           });
           processedMaterialIds.add(material.id);
         });
+        }  // Close the if (!processedWorkIds.has(work.id))
       });
 
       // Add unlinked materials at the end
@@ -240,9 +368,15 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
       console.log(`  📦 ${unlinkedMaterials.length} unlinked materials`);
 
       unlinkedMaterials.forEach((material: any) => {
-        const materialItemId = `${template.template_name}-unlinked-material-${material.id}`;
+        const materialItemId = `${template.template_name}-unlinked-material-${material.material_library_id || material.sub_material_library_id}`;
+        console.log('📦 Adding unlinked material to items:', {
+          materialItemId,
+          template_item_id: material.template_item_id,
+          material_name: material.name
+        });
         items.push({
           id: materialItemId,
+          template_item_id: material.template_item_id,  // Реальный ID записи из БД (приходит из API)
           template_name: template.template_name,
           template_description: template.template_description,
           material_id: material.id,
@@ -447,8 +581,100 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
         return;
       }
 
-      // Если тип элемента или наименование изменились, нужно обновить ссылки в шаблоне
-      if (values.item_type !== itemToEdit.item_type || values.description !== (itemToEdit.work_name || itemToEdit.material_name)) {
+      // Проверяем, есть ли template_item_id для обновления
+      if (!itemToEdit.template_item_id) {
+        console.error('❌ No template_item_id for update');
+        message.error('Не удается обновить элемент: отсутствует идентификатор');
+        return;
+      }
+
+      // Подготавливаем данные для обновления в БД (объявляем снаружи всех условных блоков)
+      const updateData: any = {};
+
+      // Обрабатываем изменение типа элемента отдельно от изменения наименования
+      const typeChanged = values.item_type !== itemToEdit.item_type;
+      const nameChanged = values.description !== (itemToEdit.work_name || itemToEdit.material_name);
+
+      // Если изменился тип элемента
+      if (typeChanged && !nameChanged) {
+        console.log('🔄 Type changed without name change:', {
+          oldType: itemToEdit.item_type,
+          newType: values.item_type,
+          name: values.description
+        });
+
+        // При изменении типа используем существующий элемент из библиотеки
+        // Важно: элемент остается тот же, меняется только какое поле ID используется
+        const oldIsWork = itemToEdit.item_type === 'work' || itemToEdit.item_type === 'sub_work';
+        const newIsWork = values.item_type === 'work' || values.item_type === 'sub_work';
+
+        // Если меняем между work/sub_work или между material/sub_material
+        if (oldIsWork === newIsWork) {
+          // Меняем только тип в рамках одной категории (work<->sub_work или material<->sub_material)
+          // Используем существующий ID элемента
+          const existingId = oldIsWork
+            ? (itemToEdit.work_library_id || itemToEdit.sub_work_library_id || itemToEdit.work_id)
+            : (itemToEdit.material_library_id || itemToEdit.sub_material_library_id || itemToEdit.material_id);
+
+          if (existingId) {
+            if (values.item_type === 'work') {
+              updateData.work_library_id = existingId;
+              updateData.sub_work_library_id = null;
+            } else if (values.item_type === 'sub_work') {
+              updateData.sub_work_library_id = existingId;
+              updateData.work_library_id = null;
+            } else if (values.item_type === 'material') {
+              updateData.material_library_id = existingId;
+              updateData.sub_material_library_id = null;
+            } else if (values.item_type === 'sub_material') {
+              updateData.sub_material_library_id = existingId;
+              updateData.material_library_id = null;
+            }
+          }
+        } else {
+          // Переход между категориями (work/sub_work <-> material/sub_material)
+          // Нужно найти элемент с таким же именем в новой категории
+          let newLibraryItem;
+          if (newIsWork) {
+            // Переход на работу - ищем работу с таким именем
+            newLibraryItem = libraryData.works.find(w => w.name === values.description);
+            if (newLibraryItem) {
+              if (values.item_type === 'work') {
+                updateData.work_library_id = newLibraryItem.id;
+                updateData.sub_work_library_id = null;
+              } else {
+                updateData.sub_work_library_id = newLibraryItem.id;
+                updateData.work_library_id = null;
+              }
+              // Очищаем ссылки на материал
+              updateData.material_library_id = null;
+              updateData.sub_material_library_id = null;
+            }
+          } else {
+            // Переход на материал - ищем материал с таким именем
+            newLibraryItem = libraryData.materials.find(m => m.name === values.description);
+            if (newLibraryItem) {
+              if (values.item_type === 'material') {
+                updateData.material_library_id = newLibraryItem.id;
+                updateData.sub_material_library_id = null;
+              } else {
+                updateData.sub_material_library_id = newLibraryItem.id;
+                updateData.material_library_id = null;
+              }
+              // Очищаем ссылки на работу
+              updateData.work_library_id = null;
+              updateData.sub_work_library_id = null;
+            }
+          }
+
+          if (!newLibraryItem) {
+            message.error('Элемент с таким именем не найден в новой категории');
+            return;
+          }
+        }
+      }
+      // Если изменилось наименование (с или без изменения типа)
+      else if (nameChanged) {
         console.log('🔄 Type or name changed:', {
           oldType: itemToEdit.item_type,
           newType: values.item_type,
@@ -460,92 +686,42 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
         let newLibraryItem;
         if (values.item_type === 'work' || values.item_type === 'sub_work') {
           newLibraryItem = libraryData.works.find(w => w.name === values.description && w.item_type === values.item_type);
+          if (newLibraryItem) {
+            // Обновляем ссылки на работу
+            if (values.item_type === 'work') {
+              updateData.work_library_id = newLibraryItem.id;
+              updateData.sub_work_library_id = null;
+            } else {
+              updateData.sub_work_library_id = newLibraryItem.id;
+              updateData.work_library_id = null;
+            }
+            // Очищаем ссылки на материал, если был материал
+            if (itemToEdit.item_type === 'material' || itemToEdit.item_type === 'sub_material') {
+              updateData.material_library_id = null;
+              updateData.sub_material_library_id = null;
+            }
+          }
         } else {
           newLibraryItem = libraryData.materials.find(m => m.name === values.description && m.item_type === values.item_type);
+          if (newLibraryItem) {
+            // Обновляем ссылки на материал
+            if (values.item_type === 'material') {
+              updateData.material_library_id = newLibraryItem.id;
+              updateData.sub_material_library_id = null;
+            } else {
+              updateData.sub_material_library_id = newLibraryItem.id;
+              updateData.material_library_id = null;
+            }
+            // Очищаем ссылки на работу, если была работа
+            if (itemToEdit.item_type === 'work' || itemToEdit.item_type === 'sub_work') {
+              updateData.work_library_id = null;
+              updateData.sub_work_library_id = null;
+            }
+          }
         }
 
         if (!newLibraryItem) {
           message.error('Элемент не найден в библиотеке');
-          return;
-        }
-
-        // Извлекаем информацию о текущем шаблоне и UUID из ID
-        // Формат ID: "template_name-work-uuid" или "template_name-material-uuid" или "template_name-unlinked-material-uuid"
-        const idParts = itemToEdit.id.split('-');
-
-        // UUID всегда последние 5 частей (формат: 8-4-4-4-12)
-        const uuidParts = idParts.slice(-5);
-        const oldIdPart = uuidParts.join('-');
-
-        // Извлекаем имя шаблона (все части до типа и UUID)
-        let templateName: string;
-        if (itemToEdit.id.includes('-unlinked-material-')) {
-          // Для unlinked материалов
-          const idx = itemToEdit.id.indexOf('-unlinked-material-');
-          templateName = itemToEdit.id.substring(0, idx);
-        } else if (itemToEdit.id.includes('-material-')) {
-          // Для обычных материалов
-          const idx = itemToEdit.id.indexOf('-material-');
-          templateName = itemToEdit.id.substring(0, idx);
-        } else if (itemToEdit.id.includes('-work-')) {
-          // Для работ
-          const idx = itemToEdit.id.indexOf('-work-');
-          templateName = itemToEdit.id.substring(0, idx);
-        } else {
-          console.error('❌ Unknown ID format:', itemToEdit.id);
-          message.error('Неверный формат идентификатора');
-          return;
-        }
-
-        console.log('📋 Parsed ID:', {
-          originalId: itemToEdit.id,
-          templateName,
-          oldUuid: oldIdPart
-        })
-
-        // Определяем старые поля для WHERE условий
-        const whereConditions: any = {
-          template_name: templateName
-        };
-
-        // Добавляем условие для старого элемента
-        if (itemToEdit.item_type === 'work') {
-          whereConditions.work_library_id = oldIdPart;
-        } else if (itemToEdit.item_type === 'sub_work') {
-          whereConditions.sub_work_library_id = oldIdPart;
-        } else if (itemToEdit.item_type === 'material') {
-          whereConditions.material_library_id = oldIdPart;
-        } else {
-          whereConditions.sub_material_library_id = oldIdPart;
-        }
-
-        // Подготавливаем новые данные для обновления
-        const updateData: any = {
-          work_library_id: null,
-          sub_work_library_id: null,
-          material_library_id: null,
-          sub_material_library_id: null
-        };
-
-        // Устанавливаем новые ссылки
-        if (values.item_type === 'work') {
-          updateData.work_library_id = newLibraryItem.id;
-        } else if (values.item_type === 'sub_work') {
-          updateData.sub_work_library_id = newLibraryItem.id;
-        } else if (values.item_type === 'material') {
-          updateData.material_library_id = newLibraryItem.id;
-        } else {
-          updateData.sub_material_library_id = newLibraryItem.id;
-        }
-
-        // Обновляем запись в work_material_templates
-        const { error } = await supabase
-          .from('work_material_templates')
-          .update(updateData)
-          .match(whereConditions);
-
-        if (error) {
-          message.error(`Ошибка изменения: ${error.message}`);
           return;
         }
       }
@@ -598,81 +774,146 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
 
         // Обновляем привязку к работе в work_material_templates
         if (values.is_linked_to_work !== itemToEdit.is_linked_to_work || values.linked_work_id !== itemToEdit.linked_work_id) {
-          // Извлекаем UUID из ID элемента шаблона
-          // Формат ID: "template_name-material-uuid" или "template_name-unlinked-material-uuid"
-          const idParts = itemToEdit.id.split('-');
+          console.log('🔄 Updating material link status:', {
+            was_linked: itemToEdit.is_linked_to_work,
+            now_linked: values.is_linked_to_work,
+            template_item_id: itemToEdit.template_item_id,
+            is_from_combined: itemToEdit.is_from_combined
+          });
 
-          // UUID всегда последние 5 частей (формат: 8-4-4-4-12)
-          const uuidParts = idParts.slice(-5);
-          const materialIdPart = uuidParts.join('-');
+          // Если есть template_item_id, обновляем существующую запись
+          if (itemToEdit.template_item_id) {
+            // Проверяем, была ли запись привязана к работе до редактирования
+            // Используем itemToEdit, который содержит состояние ДО редактирования
+            const wasLinkedToWork = itemToEdit.is_linked_to_work &&
+              (itemToEdit.work_library_id || itemToEdit.sub_work_library_id || itemToEdit.linked_work_id);
 
-          let templateName: string;
-          if (itemToEdit.id.includes('-unlinked-material-')) {
-            const idx = itemToEdit.id.indexOf('-unlinked-material-');
-            templateName = itemToEdit.id.substring(0, idx);
-          } else if (itemToEdit.id.includes('-material-')) {
-            const idx = itemToEdit.id.indexOf('-material-');
-            templateName = itemToEdit.id.substring(0, idx);
-          } else {
-            console.error('❌ Unexpected ID format for material:', itemToEdit.id);
-            message.error('Неверный формат идентификатора материала');
-            return;
-          }
+            // Если отвязываем материал от работы (был привязан, теперь не привязан)
+            if (wasLinkedToWork && !values.is_linked_to_work) {
+              console.log('🔓 Unlinking material from work (splitting record)');
+              console.log('📊 Item before unlinking:', {
+                template_item_id: itemToEdit.template_item_id,
+                was_linked: wasLinkedToWork,
+                work_id: itemToEdit.work_library_id || itemToEdit.sub_work_library_id,
+                material_id: itemToEdit.material_library_id || itemToEdit.sub_material_library_id
+              });
 
-          console.log('📋 Parsed material ID:', {
-            originalId: itemToEdit.id,
-            templateName,
-            materialUuid: materialIdPart
-          })
+              const unlinkResult = await workMaterialTemplatesApi.unlinkMaterialFromWork(
+                itemToEdit.template_item_id
+              );
 
-          const templateUpdateData: any = {
-            template_name: templateName,
-            is_linked_to_work: values.is_linked_to_work || false
-          };
-
-          // Добавляем правильное поле для материала
-          if (itemToEdit.item_type === 'material') {
-            templateUpdateData.material_library_id = materialIdPart;
-            templateUpdateData.sub_material_library_id = null;
-          } else {
-            templateUpdateData.sub_material_library_id = materialIdPart;
-            templateUpdateData.material_library_id = null;
-          }
-
-          // Если материал привязан к работе, обновляем ссылку на работу
-          if (values.is_linked_to_work && values.linked_work_id) {
-            // Определяем тип работы по ID
-            const linkedWork = libraryData.works.find(w => w.id === values.linked_work_id);
-            if (linkedWork) {
-              if (linkedWork.item_type === 'work') {
-                templateUpdateData.work_library_id = values.linked_work_id;
-                templateUpdateData.sub_work_library_id = null;
-              } else {
-                templateUpdateData.sub_work_library_id = values.linked_work_id;
-                templateUpdateData.work_library_id = null;
+              if (unlinkResult.error) {
+                message.error(`Ошибка отвязки материала: ${unlinkResult.error}`);
+                return;
               }
+
+              console.log('✅ Material unlinked successfully');
+            }
+            // Иначе просто обновляем запись
+            else {
+              // Используем внешнюю updateData, а не создаем новую локальную
+              updateData.is_linked_to_work = values.is_linked_to_work || false;
+
+              // При отвязке материала от работы - убираем ссылки на работу
+              if (!values.is_linked_to_work) {
+                updateData.work_library_id = null;
+                updateData.sub_work_library_id = null;
+              }
+              // При привязке материала к работе - добавляем ссылку на работу
+              else if (values.linked_work_id) {
+                const linkedWork = libraryData.works.find(w => w.id === values.linked_work_id);
+                if (linkedWork) {
+                  if (linkedWork.item_type === 'work') {
+                    updateData.work_library_id = values.linked_work_id;
+                    updateData.sub_work_library_id = null;
+                  } else {
+                    updateData.sub_work_library_id = values.linked_work_id;
+                    updateData.work_library_id = null;
+                  }
+
+                  // Находим и удаляем отдельную запись работы, если она существует
+                  console.log('🔍 Looking for standalone work record to delete:', values.linked_work_id);
+                  const workItem = flattenedTemplates.find(item =>
+                    (item.work_library_id === values.linked_work_id || item.sub_work_library_id === values.linked_work_id) &&
+                    !item.material_library_id && !item.sub_material_library_id &&
+                    item.template_name === itemToEdit.template_name
+                  );
+
+                  if (workItem && workItem.template_item_id) {
+                    console.log('🗑️ Deleting standalone work record:', workItem.template_item_id);
+                    const deleteResult = await workMaterialTemplatesApi.deleteTemplateItem(workItem.template_item_id);
+                    if (deleteResult.error) {
+                      console.error('❌ Failed to delete standalone work record:', deleteResult.error);
+                    } else {
+                      console.log('✅ Standalone work record deleted');
+                    }
+                  }
+                }
+              }
+
+              // Обновляем запись в БД (все изменения будут внесены позже через общий вызов)
+              // Убираем этот вызов, так как все изменения будут внесены через общий updateData
+
+              console.log('🔄 Material link will be updated via updateData');
             }
           } else {
-            // Если привязка убрана, очищаем ссылки на работы
-            templateUpdateData.work_library_id = null;
-            templateUpdateData.sub_work_library_id = null;
-          }
+            // Если нет template_item_id, нужно создать новую запись (это не должно происходить в нормальной ситуации)
+            console.warn('⚠️ No template_item_id found, creating new record');
 
-          // Используем правильный метод для обновления
-          const { error } = await supabase
-            .from('work_material_templates')
-            .update({
-              is_linked_to_work: templateUpdateData.is_linked_to_work,
-              work_library_id: templateUpdateData.work_library_id,
-              sub_work_library_id: templateUpdateData.sub_work_library_id
-            })
-            .eq('template_name', templateName)
-            .eq(itemToEdit.item_type === 'material' ? 'material_library_id' : 'sub_material_library_id', materialIdPart);
+            const templateName = itemToEdit.template_name;
+            // Извлекаем материал ID из itemToEdit
+            const materialId = itemToEdit.material_library_id || itemToEdit.sub_material_library_id || itemToEdit.material_id;
 
-          if (error) {
-            message.error(`Ошибка обновления привязки: ${error.message}`);
-            return;
-          }
+            // Создаем новую запись в шаблоне
+            updateData.template_name = templateName;
+            updateData.template_description = itemToEdit.template_description;
+            updateData.is_linked_to_work = values.is_linked_to_work || false;
+
+            // Добавляем правильное поле для материала
+            if (itemToEdit.item_type === 'material') {
+              updateData.material_library_id = materialId;
+              updateData.sub_material_library_id = null;
+            } else {
+              updateData.sub_material_library_id = materialId;
+              updateData.material_library_id = null;
+            }
+
+            // Если материал привязан к работе, обновляем ссылку на работу
+            if (values.is_linked_to_work && values.linked_work_id) {
+              // Определяем тип работы по ID
+              const linkedWork = libraryData.works.find(w => w.id === values.linked_work_id);
+              if (linkedWork) {
+                if (linkedWork.item_type === 'work') {
+                  updateData.work_library_id = values.linked_work_id;
+                  updateData.sub_work_library_id = null;
+                } else {
+                  updateData.sub_work_library_id = values.linked_work_id;
+                  updateData.work_library_id = null;
+                }
+              }
+            } else {
+              // Если привязка убрана, очищаем ссылки на работы
+              updateData.work_library_id = null;
+              updateData.sub_work_library_id = null;
+            }
+
+          // Убираем создание новой записи, так как все изменения должны быть в updateData
+          console.log('📦 Template changes will be handled via updateData');
+        }
+      }  // Close link status change if
+    }  // Close materials section else-if
+
+      // Если есть изменения в полях шаблона, обновляем запись в БД
+      if (Object.keys(updateData).length > 0) {
+        console.log('📝 Updating template item with data:', updateData);
+        const updateResult = await workMaterialTemplatesApi.updateTemplateItem(
+          itemToEdit.template_item_id,
+          updateData
+        );
+
+        if (updateResult.error) {
+          message.error(`Ошибка обновления шаблона: ${updateResult.error}`);
+          return;
         }
       }
 
@@ -680,9 +921,13 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
       const preservedCollapsedState = new Set(collapsedTemplates);
 
       // Обновляем данные в шаблоне (ссылки на работы/материалы остаются те же)
-      await queryClient.invalidateQueries({ queryKey: ['work-material-templates'] });
-      await queryClient.invalidateQueries({ queryKey: ['works-library'] });
+      // Важно: сначала инвалидируем библиотеки, потом шаблоны, чтобы шаблоны получили свежие данные
       await queryClient.invalidateQueries({ queryKey: ['materials-library'] });
+      await queryClient.invalidateQueries({ queryKey: ['works-library'] });
+      await queryClient.invalidateQueries({ queryKey: ['work-material-templates'] });
+
+      // Принудительно обновляем данные шаблонов для отображения изменений material_type
+      await queryClient.refetchQueries({ queryKey: ['work-material-templates'] });
 
       // Восстанавливаем состояние развернутых шаблонов
       setCollapsedTemplates(preservedCollapsedState);
@@ -694,18 +939,39 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
       console.error('❌ Error saving edit:', error);
       message.error('Ошибка сохранения');
     }
-  }, [editForm, flattenedTemplates, queryClient]);
+  }, [editForm, flattenedTemplates, queryClient, libraryData, collapsedTemplates]);
 
   const handleCancelEdit = useCallback(() => {
     setEditingItemId(null);
     editForm.resetFields();
   }, [editForm]);
 
-  const handleDeleteItem = useCallback((itemId: string) => {
+  const handleDeleteItem = useCallback((item: TemplateItem) => {
+    console.log('🗑️ handleDeleteItem called with item:', {
+      id: item.id,
+      template_item_id: item.template_item_id,
+      template_name: item.template_name,
+      item_type: item.item_type,
+      work_name: item.work_name,
+      material_name: item.material_name
+    });
+
+    if (!item.template_item_id) {
+      console.error('❌ No template_item_id found in item:', item);
+      message.error('Не удалось получить ID элемента для удаления');
+      return;
+    }
+
     Modal.confirm({
       title: 'Удалить элемент?',
       content: 'Вы уверены, что хотите удалить этот элемент шаблона?',
-      onOk: () => deleteItemMutation.mutate(itemId),
+      onOk: () => {
+        console.log('✅ User confirmed deletion, calling mutation with ID:', item.template_item_id);
+        deleteItemMutation.mutate(item.template_item_id!);
+      },
+      onCancel: () => {
+        console.log('❌ User cancelled deletion');
+      }
     });
   }, [deleteItemMutation]);
 
@@ -857,16 +1123,11 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
               </Form.Item>
 
               <Form.Item name="unit" label={<div style={{ textAlign: 'center', width: '100%' }}>Единица</div>} style={{ marginBottom: 0 }}>
-                <Select style={{ width: 100 }} disabled>
-                  <Select.Option value="м²">м²</Select.Option>
-                  <Select.Option value="м³">м³</Select.Option>
-                  <Select.Option value="м">м</Select.Option>
-                  <Select.Option value="шт">шт</Select.Option>
-                  <Select.Option value="кг">кг</Select.Option>
-                  <Select.Option value="т">т</Select.Option>
-                  <Select.Option value="л">л</Select.Option>
-                  <Select.Option value="компл">компл</Select.Option>
-                </Select>
+                <Input
+                  style={{ width: 100 }}
+                  disabled
+                  placeholder="-"
+                />
               </Form.Item>
 
               <Form.Item name="item_type" label={<div style={{ textAlign: 'center', width: '100%' }}>Тип</div>} style={{ marginBottom: 0 }}>
@@ -1131,6 +1392,18 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
       }
     },
     {
+      title: 'Ед.изм',
+      key: 'unit',
+      width: 80,
+      align: 'center',
+      render: (item: TemplateItem) => {
+        const unit = item.item_type === 'work' || item.item_type === 'sub_work'
+          ? item.work_unit
+          : item.material_unit;
+        return unit || '-';
+      }
+    },
+    {
       title: 'Цена',
       key: 'price',
       width: 100,
@@ -1196,7 +1469,7 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
             size="small"
             danger
             icon={<DeleteOutlined />}
-            onClick={() => handleDeleteItem(item.id)}
+            onClick={() => handleDeleteItem(item)}
           />
         </Space>
       )
@@ -1229,6 +1502,21 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
     const [quickAddForm] = Form.useForm();
     const [quickAddType, setQuickAddType] = useState<'work' | 'material' | 'sub_work' | 'sub_material'>('work');
     const [isLinkedToWork, setIsLinkedToWork] = useState<boolean>(true);
+
+    // Получаем текущий шаблон и список работ в нем
+    const currentTemplate = templates.find(t => t.template_name === templateName);
+    const templateWorkIds = new Set<string>();
+
+    // Собираем ID всех работ в текущем шаблоне
+    if (currentTemplate) {
+      currentTemplate.materials?.forEach(item => {
+        if (item.type === 'work' && item.work_library_id) {
+          templateWorkIds.add(item.work_library_id);
+        } else if (item.type === 'sub_work' && item.sub_work_library_id) {
+          templateWorkIds.add(item.sub_work_library_id);
+        }
+      });
+    }
 
     const handleQuickAdd = async (values: any) => {
       console.log('🚀 Quick adding template item:', values);
@@ -1330,7 +1618,11 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
           marginBottom: '16px'
         }}
       >
-        <Form.Item name="item_type" initialValue={quickAddType}>
+        <Form.Item
+          name="item_type"
+          initialValue={quickAddType}
+          label="Тип элемента"
+        >
           <Select
             style={{ width: 120 }}
             onChange={(value) => {
@@ -1357,6 +1649,7 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
         {(quickAddType === 'work' || quickAddType === 'sub_work') ? (
           <Form.Item
             name="work_id"
+            label="Наименование"
             rules={[{ required: true, message: 'Выберите работу' }]}
           >
             <Select
@@ -1373,6 +1666,7 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
           <>
             <Form.Item
               name="material_id"
+              label="Наименование"
               rules={[{ required: true, message: 'Выберите материал' }]}
             >
               <Select
@@ -1386,17 +1680,9 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
               />
             </Form.Item>
 
-            <Form.Item name="conversion_coefficient" initialValue={1.0}>
-              <DecimalInput
-                min={0.0001}
-                precision={4}
-                placeholder="Коэф. перевода"
-                style={{ width: 120 }}
-              />
-            </Form.Item>
-
             <Form.Item
               name="is_linked_to_work"
+              label="Привязка к работе"
               initialValue={true}
             >
               <Select
@@ -1405,6 +1691,7 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
                   setIsLinkedToWork(value);
                   if (!value) {
                     quickAddForm.setFieldValue('linked_work_id', undefined);
+                    quickAddForm.setFieldValue('conversion_coefficient', 1.0);
                   }
                 }}
               >
@@ -1414,21 +1701,37 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
             </Form.Item>
 
             {isLinkedToWork && (
-              <Form.Item
-                name="linked_work_id"
-                rules={[{ required: true, message: 'Выберите работу для привязки' }]}
-              >
-                <Select
-                  showSearch
-                  placeholder="Выберите работу"
-                  style={{ width: 200 }}
-                  options={[...libraryData.works]
-                    .map(w => ({ value: w.id, label: `${w.name} (${w.item_type === 'work' ? 'Работа' : 'Суб-работа'})` }))}
-                  filterOption={(input, option) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
-                />
-              </Form.Item>
+              <>
+                <Form.Item
+                  name="linked_work_id"
+                  label="Работа"
+                  rules={[{ required: true, message: 'Выберите работу для привязки' }]}
+                >
+                  <Select
+                    showSearch
+                    placeholder="Выберите работу"
+                    style={{ width: 200 }}
+                    options={[...libraryData.works]
+                      .filter(w => templateWorkIds.has(w.id))  // Фильтруем только работы из текущего шаблона
+                      .map(w => ({ value: w.id, label: `${w.name} (${w.item_type === 'work' ? 'Работа' : 'Суб-работа'})` }))}
+                    filterOption={(input, option) =>
+                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                    }
+                  />
+                </Form.Item>
+
+                <Form.Item
+                  name="conversion_coefficient"
+                  label="Коэф. перевода"
+                  initialValue={1.0}>
+                  <DecimalInput
+                    min={0.0001}
+                    precision={4}
+                    placeholder="Коэф."
+                    style={{ width: 100 }}
+                  />
+                </Form.Item>
+              </>
             )}
           </>
         )}

@@ -102,25 +102,18 @@ export const worksWithNamesApi = {
         };
       }
 
-      if (!newWork) {
-        console.error('❌ Work created but no data returned');
-        return {
-          error: 'Не удалось получить данные созданной работы',
-        };
-      }
-
       // Get the complete work with name
       const { data: completeWork, error: fetchError } = await supabase
         .from('works_library_with_names')
         .select('*')
-        .eq('id', newWork.id)
+        .eq('id', newWork!.id)
         .maybeSingle();
 
       if (fetchError) {
         console.warn('⚠️ Warning: Could not fetch created work details:', fetchError);
         // Return basic data if view is not ready - this is NOT an error
         return {
-          data: { ...newWork, name, unit } as Work,
+          data: { ...newWork!, name, unit } as Work,
           message: 'Работа успешно создана',
         };
       }
@@ -129,7 +122,7 @@ export const worksWithNamesApi = {
         // View might not be updated yet, return basic data - this is NOT an error
         console.warn('⚠️ View not updated yet, returning basic data');
         return {
-          data: { ...newWork, name, unit } as Work,
+          data: { ...newWork!, name, unit } as Work,
           message: 'Работа успешно создана',
         };
       }

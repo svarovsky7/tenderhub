@@ -53,28 +53,49 @@ const AddTemplateToBOQModal: React.FC<AddTemplateToBOQModalProps> = ({
   const addTemplateMutation = useMutation({
     mutationFn: async ({ tenderId, clientPositionId }: { tenderId: string; clientPositionId?: string }) => {
       console.log('🚀 Adding template to BOQ:', { templateName, tenderId, clientPositionId });
+      console.log('📍 AddTemplateToBOQModal: Starting template conversion');
 
       // Конвертируем шаблон в BOQ элементы
+      console.log('📍 AddTemplateToBOQModal: Calling convertTemplateToBOQItems');
       const convertResult = await workMaterialTemplatesApi.convertTemplateToBOQItems(
         templateName,
         tenderId,
         clientPositionId
       );
+      console.log('📍 AddTemplateToBOQModal: Convert result:', convertResult);
 
       if (convertResult.error) {
         throw new Error(convertResult.error);
       }
 
-      if (!convertResult.data || convertResult.data.length === 0) {
+      if (!convertResult.data) {
+        throw new Error('Нет элементов для добавления в BOQ');
+      }
+
+      // Проверяем формат ответа - новый (с items и links) или старый (массив)
+      const dataToInsert = convertResult.data.items ? convertResult.data : convertResult.data;
+      const hasItems = Array.isArray(dataToInsert) ? dataToInsert.length > 0 : dataToInsert.items?.length > 0;
+
+      if (!hasItems) {
         throw new Error('Нет элементов для добавления в BOQ');
       }
 
       // Добавляем элементы в BOQ через bulk API
+      console.log('📍 AddTemplateToBOQModal: Calling bulk API with data:', {
+        clientPositionId,
+        dataType: Array.isArray(dataToInsert) ? 'array' : 'object with items and links',
+        itemsCount: Array.isArray(dataToInsert) ? dataToInsert.length : dataToInsert.items?.length,
+        linksCount: !Array.isArray(dataToInsert) ? dataToInsert.links?.length : 0
+      });
+
       let bulkResult;
       if (clientPositionId) {
-        bulkResult = await boqBulkApi.bulkCreateInPosition(clientPositionId, convertResult.data);
+        console.log('📍 AddTemplateToBOQModal: Calling bulkCreateInPosition');
+        bulkResult = await boqBulkApi.bulkCreateInPosition(clientPositionId, dataToInsert);
       } else {
-        bulkResult = await boqBulkApi.bulkCreate(tenderId, convertResult.data);
+        // Для обычного bulkCreate передаем только items если это новый формат
+        const itemsToInsert = Array.isArray(dataToInsert) ? dataToInsert : dataToInsert.items;
+        bulkResult = await boqBulkApi.bulkCreate(tenderId, itemsToInsert);
       }
 
       if (bulkResult.error) {

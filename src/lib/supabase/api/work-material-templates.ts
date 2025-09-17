@@ -79,10 +79,13 @@ export const workMaterialTemplatesApi = {
    * Создать элемент шаблона
    */
   async createTemplateItem(template: WorkMaterialTemplate) {
-    console.log('🚀 Creating template item:', {
+    console.log('🚀 Creating template item - full data:', template);
+    console.log('🚀 Creating template item - summary:', {
       template_name: template.template_name,
-      work_id: template.work_library_id || template.sub_work_library_id,
-      material_id: template.material_library_id || template.sub_material_library_id,
+      work_library_id: template.work_library_id,
+      sub_work_library_id: template.sub_work_library_id,
+      material_library_id: template.material_library_id,
+      sub_material_library_id: template.sub_material_library_id,
       is_linked_to_work: template.is_linked_to_work
     });
 
@@ -107,6 +110,9 @@ export const workMaterialTemplatesApi = {
       return { error: 'Для привязанного материала необходимо указать работу' };
     }
 
+    // ВАЖНО: is_linked_to_work должен быть true ТОЛЬКО если есть И работа И материал
+    const actualIsLinkedToWork = hasWork && hasMaterial;
+
     console.log('✅ Validation passed:', {
       hasWork,
       hasMaterial,
@@ -114,6 +120,85 @@ export const workMaterialTemplatesApi = {
     });
 
     try {
+      // Если добавляется материал, привязанный к работе, проверяем существующие записи
+      if (hasMaterial && template.is_linked_to_work && hasWork) {
+        console.log('🔍 Checking for existing work record to update...');
+
+        // Проверяем, существует ли уже запись с этой работой в этом шаблоне
+        let query = supabase
+          .from('work_material_templates')
+          .select('*')
+          .eq('template_name', template.template_name);
+
+        // Добавляем условие для проверки работы - ищем записи с этой работой
+        if (template.work_library_id) {
+          query = query.eq('work_library_id', template.work_library_id);
+        } else if (template.sub_work_library_id) {
+          query = query.eq('sub_work_library_id', template.sub_work_library_id);
+        }
+
+        const { data: existingRecords, error: checkError } = await query;
+
+        if (checkError) {
+          console.error('❌ Failed to check existing records:', checkError);
+          return { error: checkError.message };
+        }
+
+        console.log('🔍 Existing records for template:', {
+          template_name: template.template_name,
+          work_library_id: template.work_library_id,
+          sub_work_library_id: template.sub_work_library_id,
+          material_library_id: template.material_library_id,
+          sub_material_library_id: template.sub_material_library_id,
+          records: existingRecords?.map(r => ({
+            id: r.id,
+            work_library_id: r.work_library_id,
+            sub_work_library_id: r.sub_work_library_id,
+            material_library_id: r.material_library_id,
+            sub_material_library_id: r.sub_material_library_id
+          }))
+        });
+
+        // Ищем запись с той же работой но без материала
+        const recordToUpdate = existingRecords?.find(r => {
+          const sameWork = (template.work_library_id && r.work_library_id === template.work_library_id) ||
+                          (template.sub_work_library_id && r.sub_work_library_id === template.sub_work_library_id);
+          const noMaterial = !r.material_library_id && !r.sub_material_library_id;
+
+          console.log('🔍 Checking record for update:', {
+            record_id: r.id,
+            sameWork,
+            noMaterial,
+            shouldUpdate: sameWork && noMaterial
+          });
+
+          return sameWork && noMaterial;
+        });
+
+        console.log('📝 Record to update found:', recordToUpdate ? `Yes, ID: ${recordToUpdate.id}` : 'No, will create new');
+
+        if (recordToUpdate) {
+          // Удаляем старую запись только с работой
+          console.log('🗑️ Deleting old work-only record:', recordToUpdate.id);
+
+          const { error: deleteError } = await supabase
+            .from('work_material_templates')
+            .delete()
+            .eq('id', recordToUpdate.id);
+
+          if (deleteError) {
+            console.error('❌ Failed to delete old record:', deleteError);
+            return { error: deleteError.message };
+          }
+
+          console.log('✅ Old work-only record deleted');
+
+          // Теперь создаем новую запись с работой и материалом
+          // (продолжение ниже, выполнится стандартная логика создания)
+        }
+      }
+
+      // Если не нашли запись для обновления или добавляется не привязанный материал или работа - создаём новую запись
       const { data, error } = await supabase
         .from('work_material_templates')
         .insert({
@@ -123,7 +208,7 @@ export const workMaterialTemplatesApi = {
           sub_work_library_id: template.sub_work_library_id || null,
           material_library_id: template.material_library_id || null,
           sub_material_library_id: template.sub_material_library_id || null,
-          is_linked_to_work: template.is_linked_to_work !== false,
+          is_linked_to_work: actualIsLinkedToWork,  // Используем правильное значение
           notes: template.notes?.trim() || null
         })
         .select()
@@ -302,52 +387,17 @@ export const workMaterialTemplatesApi = {
           materialName: materialData?.name
         });
 
-        // Если есть работа и материал - это связка
+        // Если есть работа и материал - это связка (одна запись в БД!)
         if (workData && materialData) {
-          // Сначала добавляем работу как отдельный элемент, если ее еще нет в списке
-          const workType = item.sub_work_library ? 'sub_work' : 'work';
-          const workAlreadyExists = group.materials.some(m =>
-            m.id === workData.id && (m.type === 'work' || m.type === 'sub_work')
-          );
+          // НЕ добавляем работу отдельно - это будет дублированием
+          // Вся информация о связке хранится в одной записи
 
-          console.log(`    🔍 Work "${workData.name}" (${workData.id}) already exists: ${workAlreadyExists}`);
-
-          if (!workAlreadyExists) {
-            console.log(`    ➕ Adding work "${workData.name}" to materials list`);
-            // Добавляем работу как отдельный элемент
-            group.materials.push({
-              id: workData.id,
-              name: workData.name,
-              description: undefined,
-              unit: workData.unit,
-              type: workType as any,
-              category: undefined,
-              material_type: undefined,
-              consumption_coefficient: 1,
-              unit_rate: workData.unit_rate,
-              currency_type: workData.currency_type,
-              delivery_price_type: undefined,
-              delivery_amount: undefined,
-              quote_link: undefined,
-              conversion_coefficient: 1,
-              is_linked_to_work: false,
-              notes: undefined,
-              template_item_id: item.id,
-              template_name: item.template_name,
-              template_description: item.template_description,
-              work_library_id: item.work_library_id,
-              sub_work_library_id: item.sub_work_library_id,
-              material_library_id: undefined,
-              sub_material_library_id: undefined,
-              work_library: item.work_library,
-              sub_work_library: item.sub_work_library,
-              material_library: undefined,
-              sub_material_library: undefined
-            });
-          }
-
-          // Добавляем материал привязанный к работе
+          // Эта запись представляет и работу и материал одновременно
+          // UI должен правильно отображать эту связку
           const materialType = item.sub_material_library ? 'sub_material' : 'material';
+          const workType = item.sub_work_library ? 'sub_work' : 'work';
+
+          // Добавляем комбинированную запись с полной информацией
           group.materials.push({
             id: materialData.id,
             name: materialData.name,
@@ -365,7 +415,7 @@ export const workMaterialTemplatesApi = {
             conversion_coefficient: materialData?.conversion_coefficient || 1,
             is_linked_to_work: item.is_linked_to_work,
             notes: item.notes,
-            template_item_id: item.id,
+            template_item_id: item.id,  // Это ID записи в БД для удаления
             template_name: item.template_name,
             template_description: item.template_description,
             work_library_id: item.work_library_id,
@@ -378,7 +428,12 @@ export const workMaterialTemplatesApi = {
             sub_material_library: item.sub_material_library,
             // Добавляем ссылку на работу для правильной группировки
             linked_work_id: workData.id,
-            linked_work_name: workData.name
+            linked_work_name: workData.name,
+            linked_work_unit: workData.unit,  // Add work unit for display
+            // Добавляем информацию о типе работы для корректного отображения в UI
+            linked_work_type: workType,
+            // Флаг, что эта запись содержит и работу и материал
+            is_combined_record: true
           });
 
           // Также сохраняем работу если ее еще нет
@@ -594,6 +649,92 @@ export const workMaterialTemplatesApi = {
       return { data };
     } catch (error) {
       console.error('💥 Exception in getTemplateByName:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  /**
+   * Разделить связанную запись на отдельные работу и материал
+   */
+  async unlinkMaterialFromWork(itemId: string) {
+    console.log('🚀 Unlinking material from work:', itemId);
+
+    try {
+      // Получаем текущую запись
+      const { data: currentItems, error: fetchError } = await supabase
+        .from('work_material_templates')
+        .select('*')
+        .eq('id', itemId);
+
+      if (fetchError || !currentItems || currentItems.length === 0) {
+        console.error('❌ Failed to fetch item:', fetchError);
+        return { error: fetchError?.message || 'Запись не найдена' };
+      }
+
+      // Берем первый элемент из массива
+      const currentItem = currentItems[0];
+      console.log('📋 Current item data:', currentItem);
+
+      // Проверяем что это действительно связанная запись
+      const hasWork = currentItem.work_library_id || currentItem.sub_work_library_id;
+      const hasMaterial = currentItem.material_library_id || currentItem.sub_material_library_id;
+
+      console.log('🔍 Checking if linked:', { hasWork, hasMaterial, work_id: currentItem.work_library_id, sub_work_id: currentItem.sub_work_library_id });
+
+      if (!hasWork || !hasMaterial) {
+        console.error('❌ Item is not a linked work-material pair:', {
+          hasWork,
+          hasMaterial,
+          currentItem
+        });
+        return { error: 'Запись не является связанной парой работа-материал' };
+      }
+
+      // Обновляем существующую запись - оставляем только материал
+      const { error: updateError } = await supabase
+        .from('work_material_templates')
+        .update({
+          work_library_id: null,
+          sub_work_library_id: null,
+          is_linked_to_work: false
+        })
+        .eq('id', itemId);
+
+      if (updateError) {
+        console.error('❌ Failed to update material record:', updateError);
+        return { error: updateError.message };
+      }
+
+      // Создаем новую запись для работы
+      const newWorkRecord = {
+        template_name: currentItem.template_name,
+        template_description: currentItem.template_description,
+        work_library_id: currentItem.work_library_id,
+        sub_work_library_id: currentItem.sub_work_library_id,
+        material_library_id: null,
+        sub_material_library_id: null,
+        is_linked_to_work: false,
+        notes: null
+      };
+
+      console.log('📝 Creating new work record:', newWorkRecord);
+
+      const { data: insertData, error: insertError } = await supabase
+        .from('work_material_templates')
+        .insert(newWorkRecord)
+        .select();
+
+      if (insertError) {
+        console.error('❌ Failed to create work record:', insertError);
+        return { error: insertError.message };
+      }
+
+      console.log('✅ New work record created:', insertData);
+
+      console.log('✅ Successfully unlinked material from work');
+      return { data: null };
+    } catch (error) {
+      console.error('💥 Exception in unlinkMaterialFromWork:', error);
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   },
@@ -893,6 +1034,103 @@ export const workMaterialTemplatesApi = {
   },
 
   /**
+   * Очистить дубликаты работ в шаблонах
+   * Удаляет записи только с работой, если есть такая же работа с материалом
+   */
+  async cleanupDuplicateWorks() {
+    console.log('🧹 Starting cleanup of duplicate works in templates');
+
+    try {
+      // Получаем все записи из шаблонов
+      const { data: allRecords, error: fetchError } = await supabase
+        .from('work_material_templates')
+        .select('*')
+        .order('template_name, created_at');
+
+      if (fetchError) {
+        console.error('❌ Failed to fetch templates:', fetchError);
+        return { error: fetchError.message };
+      }
+
+      if (!allRecords || allRecords.length === 0) {
+        console.log('✅ No records to clean');
+        return { data: { deleted: 0 } };
+      }
+
+      // Группируем по шаблонам
+      const templateGroups = new Map<string, any[]>();
+      allRecords.forEach(record => {
+        const templateName = record.template_name;
+        if (!templateGroups.has(templateName)) {
+          templateGroups.set(templateName, []);
+        }
+        templateGroups.get(templateName)!.push(record);
+      });
+
+      const toDelete: string[] = [];
+
+      // Проверяем каждый шаблон на дубликаты
+      templateGroups.forEach((records, templateName) => {
+        console.log(`📋 Checking template "${templateName}" with ${records.length} records`);
+
+        // Находим все записи только с работой (без материала)
+        const workOnlyRecords = records.filter(r =>
+          (r.work_library_id || r.sub_work_library_id) &&
+          !r.material_library_id &&
+          !r.sub_material_library_id
+        );
+
+        // Находим все записи с работой и материалом
+        const workWithMaterialRecords = records.filter(r =>
+          (r.work_library_id || r.sub_work_library_id) &&
+          (r.material_library_id || r.sub_material_library_id)
+        );
+
+        // Для каждой записи только с работой проверяем, есть ли такая же работа с материалом
+        workOnlyRecords.forEach(workOnly => {
+          const workId = workOnly.work_library_id || workOnly.sub_work_library_id;
+          const hasDuplicate = workWithMaterialRecords.some(wm =>
+            (wm.work_library_id === workOnly.work_library_id && workOnly.work_library_id) ||
+            (wm.sub_work_library_id === workOnly.sub_work_library_id && workOnly.sub_work_library_id)
+          );
+
+          if (hasDuplicate) {
+            console.log(`  🗑️ Found duplicate work to delete: ${workOnly.id} (work: ${workId})`);
+            toDelete.push(workOnly.id);
+          }
+        });
+      });
+
+      // Удаляем найденные дубликаты
+      if (toDelete.length > 0) {
+        console.log(`🗑️ Deleting ${toDelete.length} duplicate records...`);
+
+        for (const id of toDelete) {
+          const { error } = await supabase
+            .from('work_material_templates')
+            .delete()
+            .eq('id', id);
+
+          if (error) {
+            console.error(`❌ Failed to delete ${id}:`, error);
+          } else {
+            console.log(`  ✅ Deleted ${id}`);
+          }
+        }
+
+        console.log(`✅ Cleanup complete! Deleted ${toDelete.length} duplicate records`);
+        return { data: { deleted: toDelete.length } };
+      }
+
+      console.log('✅ No duplicates found');
+      return { data: { deleted: 0 } };
+    } catch (error) {
+      console.error('💥 Exception in cleanupDuplicateWorks:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  /**
    * Конвертировать шаблон в BOQ элементы
    */
   async convertTemplateToBOQItems(templateName: string, tenderId: string, clientPositionId?: string) {
@@ -911,11 +1149,38 @@ export const workMaterialTemplatesApi = {
       }
 
       console.log('📋 Template items loaded:', templateItems.length);
+      console.log('🔍 Template items details:', templateItems.map(item => ({
+        id: item.id,
+        has_work: !!(item.work_library_id || item.sub_work_library_id),
+        has_material: !!(item.material_library_id || item.sub_material_library_id),
+        is_linked_to_work: item.is_linked_to_work,
+        work_name: item.work_name?.name || item.sub_work_name?.name,
+        material_name: item.material_name?.name || item.sub_material_name?.name,
+        linked_work_name: item.linked_work_name
+      })));
 
       // Конвертируем элементы шаблона в BOQ элементы
       const boqItems = [];
+      const links = []; // Информация о связях между элементами
 
-      for (const templateItem of templateItems) {
+      // Сначала сортируем элементы, чтобы связанные пары шли вместе
+      const sortedItems = [...templateItems].sort((a, b) => {
+        // Сначала связанные пары
+        const aIsLinked = a.is_linked_to_work && a.material_library_id || a.sub_material_library_id;
+        const bIsLinked = b.is_linked_to_work && b.material_library_id || b.sub_material_library_id;
+        if (aIsLinked && !bIsLinked) return -1;
+        if (!aIsLinked && bIsLinked) return 1;
+
+        // Затем отдельные работы
+        const aIsWork = (a.work_library_id || a.sub_work_library_id) && !a.material_library_id && !a.sub_material_library_id;
+        const bIsWork = (b.work_library_id || b.sub_work_library_id) && !b.material_library_id && !b.sub_material_library_id;
+        if (aIsWork && !bIsWork) return -1;
+        if (!aIsWork && bIsWork) return 1;
+
+        return 0;
+      });
+
+      for (const templateItem of sortedItems) {
         // Определяем работу
         const workLibrary = templateItem.work_library || templateItem.sub_work_library;
         const workNameData = templateItem.work_name || templateItem.sub_work_name;
@@ -928,55 +1193,179 @@ export const workMaterialTemplatesApi = {
         const materialData = materialLibrary ? { ...materialLibrary, name: materialNameData?.name, unit: materialNameData?.unit } : null;
         const materialType = templateItem.material_library ? 'material' : 'sub_material';
 
-        if (!workData || !materialData) {
-          console.warn('⚠️ Skipping template item with missing work or material:', templateItem.id);
+        // Пропускаем только полностью пустые записи
+        if (!workData && !materialData) {
+          console.warn('⚠️ Skipping empty template item:', templateItem.id);
           continue;
         }
 
-        // Создаем BOQ элемент для работы
-        const workItem = {
-          tender_id: tenderId,
-          client_position_id: clientPositionId || null,
-          item_type: workType as 'work' | 'sub_work',
-          description: workData.name,
-          unit: workData.unit,
-          quantity: 1, // Базовое количество работ
-          unit_rate: 0, // Будет заполнено пользователем
-          work_id: workData.id,
-          material_id: null,
-          notes: templateItem.template_description || null,
-          delivery_price_type: 'included' as const,
-          currency_type: 'RUB' as const
-        };
+        // Если это связанная пара (работа + материал в одной записи)
+        if (workData && materialData && templateItem.is_linked_to_work) {
+          console.log('🔗 Found linked pair:', {
+            work: workData.name,
+            material: materialData.name,
+            is_linked: templateItem.is_linked_to_work,
+            templateItemId: templateItem.id,
+            workId: workData.id,
+            materialId: materialData.id
+          });
 
-        // Создаем BOQ элемент для материала
-        const materialItem = {
-          tender_id: tenderId,
-          client_position_id: clientPositionId || null,
-          item_type: materialType as 'material' | 'sub_material',
-          description: materialData.name,
-          unit: materialData.unit,
-          quantity: 1, // Базовое количество
-          unit_rate: 0, // Будет заполнено пользователем
-          work_id: templateItem.is_linked_to_work ? workData.id : null,
-          material_id: materialData.id,
-          // conversion_coefficient comes from material library now
-          consumption_coefficient: materialData.consumption_coefficient || 1.0,
-          notes: templateItem.notes || null,
-          delivery_price_type: 'included' as const,
-          currency_type: 'RUB' as const
-        };
+          const workIndex = boqItems.length; // Индекс работы
 
-        // Если материал привязан к работе, используем base_quantity
-        if (!templateItem.is_linked_to_work) {
-          materialItem.base_quantity = 1;
+          // Сначала добавляем работу
+          const workItem = {
+            tender_id: tenderId,
+            client_position_id: clientPositionId || null,
+            item_type: workType as 'work' | 'sub_work',
+            description: workData.name,
+            unit: workData.unit,
+            quantity: 1,
+            unit_rate: workData.unit_rate || 0,
+            work_id: workData.id,
+            material_id: null,
+            delivery_price_type: 'included' as const,
+            currency_type: workData.currency_type || 'RUB' as const
+          };
+          boqItems.push(workItem);
+
+          const materialIndex = boqItems.length; // Индекс материала
+
+          // Сразу после работы добавляем связанный материал
+          const materialItem = {
+            tender_id: tenderId,
+            client_position_id: clientPositionId || null,
+            item_type: materialType as 'material' | 'sub_material',
+            description: materialData.name,
+            unit: materialData.unit,
+            quantity: 1,
+            unit_rate: materialData.unit_rate || 0,
+            work_id: null, // Не связываем через work_id
+            material_id: materialData.id,
+            consumption_coefficient: materialData.consumption_coefficient || 1.0,
+            conversion_coefficient: materialData.conversion_coefficient || 1.0,
+            delivery_price_type: materialData.delivery_price_type || 'included' as const,
+            delivery_amount: materialData.delivery_amount || 0,
+            currency_type: materialData.currency_type || 'RUB' as const,
+            material_type: materialData.material_type || 'main' as const
+          };
+          boqItems.push(materialItem);
+
+          // Сохраняем информацию о связи
+          const linkInfo = {
+            workIndex,
+            materialIndex,
+            workType: workType as 'work' | 'sub_work',
+            materialType: materialType as 'material' | 'sub_material',
+            workName: workData.name,
+            materialName: materialData.name,
+            consumption_coefficient: materialData.consumption_coefficient || 1.0,
+            conversion_coefficient: materialData.conversion_coefficient || 1.0
+          };
+
+          console.log('📎 Saving link info:', {
+            ...linkInfo,
+            totalBoqItemsSoFar: boqItems.length + 2 // После добавления работы и материала
+          });
+          links.push(linkInfo);
         }
+        // Иначе обрабатываем отдельные элементы
+        else {
+          // Если есть только работа
+          if (workData) {
+            const workItem = {
+              tender_id: tenderId,
+              client_position_id: clientPositionId || null,
+              item_type: workType as 'work' | 'sub_work',
+              description: workData.name,
+              unit: workData.unit,
+              quantity: 1,
+              unit_rate: workData.unit_rate || 0,
+              work_id: workData.id,
+              material_id: null,
+              delivery_price_type: 'included' as const,
+              currency_type: workData.currency_type || 'RUB' as const
+            };
+            boqItems.push(workItem);
+          }
 
-        boqItems.push(workItem, materialItem);
+          // Если есть только материал (не связанный)
+          if (materialData) {
+            const materialItem = {
+              tender_id: tenderId,
+              client_position_id: clientPositionId || null,
+              item_type: materialType as 'material' | 'sub_material',
+              description: materialData.name,
+              unit: materialData.unit,
+              quantity: 1,
+              unit_rate: materialData.unit_rate || 0,
+              work_id: null, // Не связан с работой
+              material_id: materialData.id,
+              consumption_coefficient: materialData.consumption_coefficient || 1.0,
+              conversion_coefficient: materialData.conversion_coefficient || 1.0,
+              delivery_price_type: materialData.delivery_price_type || 'included' as const,
+              delivery_amount: materialData.delivery_amount || 0,
+              currency_type: materialData.currency_type || 'RUB' as const,
+              material_type: materialData.material_type || 'main' as const,
+              base_quantity: 1 // Для несвязанных материалов
+            };
+            boqItems.push(materialItem);
+          }
+        }
       }
 
-      console.log('✅ Template converted to BOQ items:', boqItems.length);
-      return { data: boqItems };
+      // Альтернативный метод поиска связей: проверяем отдельные работы и материалы
+      if (links.length === 0) {
+        console.log('🔍 Checking for links using alternative method...');
+
+        // Создаем карты для быстрого поиска
+        const workItemsMap = new Map<string, number>();
+        const materialItemsMap = new Map<string, number>();
+
+        boqItems.forEach((item, index) => {
+          if (item.item_type === 'work' || item.item_type === 'sub_work') {
+            workItemsMap.set(item.description, index);
+          } else if (item.item_type === 'material' || item.item_type === 'sub_material') {
+            materialItemsMap.set(item.description, index);
+          }
+        });
+
+        // Проверяем каждый материал из исходных данных шаблона
+        for (const templateItem of templateItems) {
+          if (templateItem.linked_work_name && (templateItem.material_name || templateItem.sub_material_name)) {
+            const materialName = templateItem.material_name?.name || templateItem.sub_material_name?.name;
+            const workName = templateItem.linked_work_name;
+
+            const workIndex = workItemsMap.get(workName);
+            const materialIndex = materialItemsMap.get(materialName);
+
+            if (workIndex !== undefined && materialIndex !== undefined) {
+              const linkInfo = {
+                workIndex,
+                materialIndex,
+                workType: boqItems[workIndex].item_type as 'work' | 'sub_work',
+                materialType: boqItems[materialIndex].item_type as 'material' | 'sub_material',
+                workName,
+                materialName,
+                consumption_coefficient: templateItem.material_library?.consumption_coefficient ||
+                                       templateItem.sub_material_library?.consumption_coefficient || 1.0,
+                conversion_coefficient: templateItem.material_library?.conversion_coefficient ||
+                                      templateItem.sub_material_library?.conversion_coefficient || 1.0
+              };
+
+              console.log('🔗 Found link via alternative method:', linkInfo);
+              links.push(linkInfo);
+            }
+          }
+        }
+      }
+
+      console.log('✅ Template converted to BOQ items:', {
+        itemsCount: boqItems.length,
+        linksCount: links.length,
+        links: links.length > 0 ? links : 'No links found'
+      });
+
+      return { data: { items: boqItems, links } };
     } catch (error) {
       console.error('💥 Exception in convertTemplateToBOQItems:', error);
       return { error: error instanceof Error ? error.message : 'Unknown error' };

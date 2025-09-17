@@ -17,7 +17,8 @@ import {
   Row,
   Col,
   InputNumber,
-  ConfigProvider
+  ConfigProvider,
+  AutoComplete
 } from 'antd';
 import {
   FolderOpenOutlined,
@@ -37,7 +38,7 @@ import {
   QuestionCircleOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { boqApi, clientPositionsApi } from '../../lib/supabase/api';
+import { boqApi, clientPositionsApi, workMaterialTemplatesApi } from '../../lib/supabase/api';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import { getActiveTenderMarkup } from '../../lib/supabase/api/tender-markup';
 import MaterialLinkingModal from './MaterialLinkingModal';
@@ -192,6 +193,11 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const [tempUnit, setTempUnit] = useState<string>(position.unit ?? '');
   const [tenderMarkup, setTenderMarkup] = useState<any>(null);
   const [showAdditionalWorkModal, setShowAdditionalWorkModal] = useState(false);
+  const [templateAddMode, setTemplateAddMode] = useState(false);
+  const [templateOptions, setTemplateOptions] = useState<{ value: string; label: string }[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
+  const [templateAddForm] = Form.useForm();
   
   // Position hierarchy properties
   const positionType: ClientPositionType = position.position_type || 'executable';
@@ -783,12 +789,96 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     };
   }, []);
 
+  // Load templates for autocomplete
+  const loadTemplates = useCallback(async (searchValue: string) => {
+    if (searchValue.length < 2) {
+      setTemplateOptions([]);
+      return;
+    }
+
+    setLoadingTemplates(true);
+    try {
+      console.log('🔍 Searching templates:', searchValue);
+      const result = await workMaterialTemplatesApi.getTemplates();
+      if (result.data) {
+        const uniqueNames = [...new Set(result.data.map(t => t.template_name))]
+          .filter(name => name.toLowerCase().includes(searchValue.toLowerCase()));
+        setTemplateOptions(uniqueNames.map(name => ({
+          value: name,
+          label: name
+        })));
+        console.log('✅ Found templates:', uniqueNames.length);
+      }
+    } catch (error) {
+      console.error('❌ Error loading templates:', error);
+      message.error('Ошибка загрузки шаблонов');
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }, []);
+
+  // Handle template addition to position
+  const handleTemplateAdd = useCallback(async () => {
+    if (!selectedTemplateName) {
+      message.warning('Выберите шаблон');
+      return;
+    }
+
+    console.log('🚀 Adding template to position:', {
+      templateName: selectedTemplateName,
+      tenderId,
+      positionId: position.id
+    });
+
+    setLoading(true);
+    try {
+      // Convert template to BOQ items with links
+      const convertResult = await workMaterialTemplatesApi.convertTemplateToBOQItems(
+        selectedTemplateName,
+        tenderId,
+        position.id // Pass client position ID for proper insertion
+      );
+
+      if (convertResult.error) {
+        throw new Error(convertResult.error);
+      }
+
+      if (!convertResult.data) {
+        throw new Error('Нет элементов для добавления');
+      }
+
+      // Insert items using bulk API
+      const { boqBulkApi } = await import('../../lib/supabase/api/boq/bulk');
+      const bulkResult = await boqBulkApi.bulkCreateInPosition(position.id, convertResult.data);
+
+      if (bulkResult.error) {
+        throw new Error(bulkResult.error);
+      }
+
+      message.success(`Шаблон "${selectedTemplateName}" добавлен (${bulkResult.data} элементов)`);
+
+      // Reset form and close inline mode
+      templateAddForm.resetFields();
+      setSelectedTemplateName('');
+      setTemplateAddMode(false);
+      setTemplateOptions([]);
+
+      // Refresh the position data
+      onUpdate();
+    } catch (error: any) {
+      console.error('❌ Error adding template:', error);
+      message.error(`Ошибка добавления шаблона: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedTemplateName, tenderId, position.id, templateAddForm, onUpdate]);
+
   const handleManualNoteChange = useCallback(async (value: string) => {
     console.log('✏️ handleManualNoteChange called:', { positionId: position.id, value });
-    
+
     try {
       const result = await clientPositionsApi.update(position.id, { manual_note: value || null });
-      
+
       if (result.error) {
         console.error('❌ Manual note update failed:', result.error);
         message.error('Ошибка сохранения примечания ГП');
@@ -4573,22 +4663,39 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
             {/* View Mode Toggle and Quick Add Button */}
             <div className="mb-4 flex justify-between items-center gap-4">
               <div className="flex gap-2 flex-1">
-                {!quickAddMode ? (
+                {!quickAddMode && !templateAddMode ? (
                   <>
                     {canAddItems ? (
-                      <Button
-                        type="dashed"
-                        icon={<PlusOutlined />}
-                        onClick={() => setQuickAddMode(true)}
-                        className="flex-1 h-10 border-2 border-dashed border-blue-300 text-blue-600 hover:border-blue-400 hover:text-blue-700 transition-colors duration-200"
-                        style={{ 
-                          borderStyle: 'dashed',
-                          fontSize: '14px',
-                          fontWeight: '500'
-                        }}
-                      >
-                        Добавить работу или материал
-                      </Button>
+                      <>
+                        <Button
+                          type="dashed"
+                          icon={<PlusOutlined />}
+                          onClick={() => setQuickAddMode(true)}
+                          className="h-10 border-2 border-dashed border-blue-300 text-blue-600 hover:border-blue-400 hover:text-blue-700 transition-colors duration-200"
+                          style={{
+                            borderStyle: 'dashed',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            flex: 1
+                          }}
+                        >
+                          Добавить работу или материал
+                        </Button>
+                        <Button
+                          type="dashed"
+                          icon={<FormOutlined />}
+                          onClick={() => setTemplateAddMode(true)}
+                          className="h-10 border-2 border-dashed border-green-300 text-green-600 hover:border-green-400 hover:text-green-700 transition-colors duration-200"
+                          style={{
+                            borderStyle: 'dashed',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            flex: 1
+                          }}
+                        >
+                          Добавить по шаблону
+                        </Button>
+                      </>
                     ) : (
                       <div className="flex-1 h-10 flex items-center justify-center bg-gray-100 rounded-lg border-2 border-dashed border-gray-300">
                         <Text className="text-gray-500 flex items-center gap-2">
@@ -4608,6 +4715,58 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
             {/* Quick Add Form */}
             {quickAddMode && <QuickAddRow />}
+
+            {/* Template Add Form */}
+            {templateAddMode && (
+              <div className="mb-4 p-3 bg-white rounded-lg border border-green-300">
+                <Form
+                  form={templateAddForm}
+                  layout="horizontal"
+                  onFinish={handleTemplateAdd}
+                  className="flex items-end gap-3"
+                >
+                  <Form.Item
+                    name="template_name"
+                    label="Выберите шаблон"
+                    className="mb-0 flex-1"
+                    rules={[{ required: true, message: 'Выберите шаблон' }]}
+                  >
+                    <AutoComplete
+                      placeholder="Начните вводить название шаблона..."
+                      options={templateOptions}
+                      onSearch={loadTemplates}
+                      onSelect={(value: string) => setSelectedTemplateName(value)}
+                      loading={loadingTemplates}
+                      allowClear
+                      size="middle"
+                      notFoundContent={loadingTemplates ? 'Загрузка...' : 'Введите минимум 2 символа для поиска'}
+                    />
+                  </Form.Item>
+
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    icon={<CheckOutlined />}
+                    loading={loading}
+                    disabled={!selectedTemplateName}
+                  >
+                    Вставить
+                  </Button>
+
+                  <Button
+                    onClick={() => {
+                      setTemplateAddMode(false);
+                      templateAddForm.resetFields();
+                      setSelectedTemplateName('');
+                      setTemplateOptions([]);
+                    }}
+                    icon={<CloseOutlined />}
+                  >
+                    Отмена
+                  </Button>
+                </Form>
+              </div>
+            )}
 
             {/* Table Header with Clear All button */}
             {totalItems > 0 && (

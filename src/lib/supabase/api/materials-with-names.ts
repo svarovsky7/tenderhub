@@ -102,25 +102,18 @@ export const materialsWithNamesApi = {
         };
       }
 
-      if (!newMaterial) {
-        console.error('❌ Material created but no data returned');
-        return {
-          error: 'Не удалось получить данные созданного материала',
-        };
-      }
-
       // Get the complete material with name
       const { data: completeMaterial, error: fetchError } = await supabase
         .from('materials_library_with_names')
         .select('*')
-        .eq('id', newMaterial.id)
+        .eq('id', newMaterial!.id)
         .maybeSingle();
 
       if (fetchError) {
         console.warn('⚠️ Warning: Could not fetch created material details:', fetchError);
         // Return basic data if view is not ready - this is NOT an error
         return {
-          data: { ...newMaterial, name, unit } as Material,
+          data: { ...newMaterial!, name, unit } as Material,
           message: 'Материал успешно создан',
         };
       }
@@ -129,7 +122,7 @@ export const materialsWithNamesApi = {
         // View might not be updated yet, return basic data - this is NOT an error
         console.warn('⚠️ View not updated yet, returning basic data');
         return {
-          data: { ...newMaterial, name, unit } as Material,
+          data: { ...newMaterial!, name, unit } as Material,
           message: 'Материал успешно создан',
         };
       }
