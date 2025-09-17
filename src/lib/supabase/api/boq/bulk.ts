@@ -10,6 +10,7 @@ import { workMaterialLinksApi } from '../work-material-links';
  * BOQ Bulk Operations
  * Optimized operations for handling large datasets, especially Excel imports
  */
+// Updated to fix silent insert failure issue
 export const boqBulkApi = {
   /**
    * Bulk create BOQ items (for Excel imports)
@@ -109,15 +110,18 @@ export const boqBulkApi = {
     items: BOQItemInsert[] | { items: BOQItemInsert[], links: any[] }
   ): Promise<ApiResponse<number>> {
     // Проверяем, что передано - массив или объект с items и links
-    const isStructuredData = !Array.isArray(items) && items.items && items.links;
+    const isStructuredData = !Array.isArray(items) && !!(items as any).items;
     const boqItems = isStructuredData ? (items as any).items : items as BOQItemInsert[];
-    const linkInfo = isStructuredData ? (items as any).links : [];
+    const linkInfo = isStructuredData && (items as any).links ? (items as any).links : [];
 
     console.log('🚀 boqBulkApi.bulkCreateInPosition called with:', {
       clientPositionId,
       itemsCount: boqItems.length,
       linksCount: linkInfo.length,
-      isStructuredData
+      isStructuredData,
+      actualDataType: Array.isArray(items) ? 'array' : 'object',
+      hasItems: !!(items as any).items,
+      hasLinks: !!(items as any).links
     });
 
     if (linkInfo.length > 0) {
@@ -169,6 +173,8 @@ export const boqBulkApi = {
 
       // Подготавливаем элементы для вставки
       console.log('📦 Preparing items for insert...');
+      console.log('🔍 BOQ items before preparation:', boqItems);
+
       const preparedItems = boqItems.map((item, index) => {
         const currentSubNumber = nextSubNumber + index;
 
@@ -190,6 +196,14 @@ export const boqBulkApi = {
           console.error('❌ No tender_id available for item:', finalItem);
         }
 
+        console.log(`📋 Prepared item ${index}:`, {
+          type: finalItem.item_type,
+          description: finalItem.description,
+          tender_id: finalItem.tender_id,
+          client_position_id: finalItem.client_position_id,
+          item_number: finalItem.item_number
+        });
+
         return finalItem;
       });
 
@@ -197,18 +211,62 @@ export const boqBulkApi = {
 
       // Вставляем элементы
       console.log('💾 Inserting items...');
-      const { data, error } = await supabase
+      console.log('📝 Items to insert:', preparedItems);
+
+      // Проверяем структуру данных перед вставкой
+      console.log('🔍 Checking prepared items structure:');
+      preparedItems.forEach((item, idx) => {
+        console.log(`  Item ${idx}:`, JSON.stringify(item, null, 2));
+      });
+
+      let { data, error } = await supabase
         .from('boq_items')
         .insert(preparedItems)
         .select();
 
-      console.log('📦 Bulk position insert response:', { count: data?.length, error });
+      console.log('📦 Bulk position insert response:', {
+        count: data?.length,
+        error,
+        data: data?.slice(0, 3), // First 3 items for debugging
+        rawData: data,
+        dataType: typeof data,
+        isArray: Array.isArray(data)
+      });
 
       if (error) {
         console.error('❌ Bulk position insert failed:', error);
         return {
           error: handleSupabaseError(error, 'Bulk create BOQ items in position'),
         };
+      }
+
+      // Проверяем, что данные действительно вернулись
+      if (!data || (Array.isArray(data) && data.length === 0)) {
+        console.error('❌ Insert succeeded but no data returned');
+        console.log('🔍 Attempting to fetch inserted items by client_position_id...');
+
+        // Попробуем получить вставленные элементы по client_position_id
+        const { data: fetchedData, error: fetchError } = await supabase
+          .from('boq_items')
+          .select('*')
+          .eq('client_position_id', clientPositionId)
+          .order('created_at', { ascending: false })
+          .limit(preparedItems.length);
+
+        console.log('📊 Fetched items:', {
+          count: fetchedData?.length,
+          error: fetchError,
+          items: fetchedData?.slice(0, 3)
+        });
+
+        if (fetchedData && fetchedData.length > 0) {
+          // Используем полученные данные
+          data = fetchedData;
+        } else {
+          return {
+            error: 'Failed to retrieve inserted BOQ items',
+          };
+        }
       }
 
       const insertedCount = data?.length || 0;

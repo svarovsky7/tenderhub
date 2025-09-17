@@ -10,26 +10,24 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import TemplateList from '../components/template/TemplateList';
-import AddTemplateToBOQModal from '../components/template/AddTemplateToBOQModal';
+import InlineAddTemplateToBOQ from '../components/template/InlineAddTemplateToBOQ';
 import EnhancedInlineTemplateForm from '../components/template/EnhancedInlineTemplateForm';
 
 const { Title, Text } = Typography;
 
 const WorkMaterialsPage: React.FC = () => {
-  console.log('🚀 WorkMaterialsPage загружена (с расширенной формой)');
+  console.log('🚀 WorkMaterialsPage загружена (с inline формой вместо модального окна)');
 
   const navigate = useNavigate();
   const [showCreateTemplateForm, setShowCreateTemplateForm] = useState(false);
   const [showTemplatesContent, setShowTemplatesContent] = useState(false);
-  const [showAddToBOQModal, setShowAddToBOQModal] = useState(false);
-  const [selectedTemplateForBOQ, setSelectedTemplateForBOQ] = useState<string>('');
+  const [selectedTemplateForBOQ, setSelectedTemplateForBOQ] = useState<{ name: string; note?: string } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const handleAddToTemplate = (templateName: string) => {
-    console.log('🚀 Adding template to BOQ:', templateName);
-    setSelectedTemplateForBOQ(templateName);
-    setShowAddToBOQModal(true);
+  const handleAddToTemplate = (templateName: string, templateNote?: string) => {
+    console.log('🚀 Adding template to BOQ:', templateName, 'Note:', templateNote);
+    setSelectedTemplateForBOQ({ name: templateName, note: templateNote });
   };
 
   const handleTemplateCreated = () => {
@@ -201,21 +199,24 @@ const WorkMaterialsPage: React.FC = () => {
               />
             )}
 
+            {/* Inline форма добавления шаблона в BOQ */}
+            {selectedTemplateForBOQ && (
+              <InlineAddTemplateToBOQ
+                templateName={selectedTemplateForBOQ.name}
+                templateNote={selectedTemplateForBOQ.note}
+                onSuccess={() => {
+                  setSelectedTemplateForBOQ(null);
+                  message.success('Шаблон успешно добавлен в BOQ');
+                }}
+                onCancel={() => setSelectedTemplateForBOQ(null)}
+              />
+            )}
+
             {/* Список шаблонов */}
             <TemplateList
               key={refreshKey}
               onAddToTemplate={handleAddToTemplate}
               showContent={showTemplatesContent}
-            />
-
-            {/* Модальное окно добавления шаблона в BOQ */}
-            <AddTemplateToBOQModal
-              open={showAddToBOQModal}
-              onClose={() => {
-                setShowAddToBOQModal(false);
-                setSelectedTemplateForBOQ('');
-              }}
-              templateName={selectedTemplateForBOQ}
             />
           </div>
         </div>

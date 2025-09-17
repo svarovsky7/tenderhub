@@ -847,6 +847,14 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         throw new Error('Нет элементов для добавления');
       }
 
+      console.log('📌 Convert result structure:', {
+        hasItems: !!convertResult.data.items,
+        itemsCount: convertResult.data.items?.length,
+        hasLinks: !!convertResult.data.links,
+        linksCount: convertResult.data.links?.length,
+        links: convertResult.data.links
+      });
+
       // Insert items using bulk API
       const { boqBulkApi } = await import('../../lib/supabase/api/boq/bulk');
       const bulkResult = await boqBulkApi.bulkCreateInPosition(position.id, convertResult.data);

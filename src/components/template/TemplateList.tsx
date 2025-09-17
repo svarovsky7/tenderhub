@@ -23,7 +23,7 @@ import { supabase } from '../../lib/supabase/client';
 import type { ColumnsType } from 'antd/es/table';
 
 interface TemplateListProps {
-  onAddToTemplate?: (templateName: string) => void;
+  onAddToTemplate?: (templateName: string, templateNote?: string) => void;
   showContent?: boolean;
 }
 
@@ -1361,7 +1361,7 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
       }
     },
     {
-      title: 'Ед.',
+      title: 'Ед. изм.',
       key: 'unit',
       width: 60,
       align: 'center',
@@ -1389,18 +1389,6 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
           return item.conversion_coefficient?.toFixed(4) || '1.0000';
         }
         return '-';
-      }
-    },
-    {
-      title: 'Ед.изм',
-      key: 'unit',
-      width: 80,
-      align: 'center',
-      render: (item: TemplateItem) => {
-        const unit = item.item_type === 'work' || item.item_type === 'sub_work'
-          ? item.work_unit
-          : item.material_unit;
-        return unit || '-';
       }
     },
     {
@@ -1950,7 +1938,7 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
                       />
                     </Space>
                   ) : (
-                    <>
+                    <div className="flex items-center gap-2">
                       <span className="template-name">{template.template_name}</span>
                       <Tooltip title="Редактировать название">
                         <Button
@@ -1964,9 +1952,9 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
                         />
                       </Tooltip>
                       {template.template_description && (
-                        <span className="text-sm text-gray-500 ml-2">{template.template_description}</span>
+                        <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">📝 {template.template_description}</span>
                       )}
-                    </>
+                    </div>
                   )}
                 </div>
                 <Space>
@@ -1974,9 +1962,10 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
                     <Button
                       type="primary"
                       size="small"
-                      onClick={() => onAddToTemplate(template.template_name)}
+                      onClick={() => onAddToTemplate(template.template_name, template.template_description)}
+                      style={{ minWidth: 200 }}
                     >
-                      В BOQ
+                      Добавить шаблон в строку
                     </Button>
                   )}
                   <Tooltip title="Добавить элемент">

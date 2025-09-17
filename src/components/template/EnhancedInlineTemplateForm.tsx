@@ -85,9 +85,16 @@ const EnhancedInlineTemplateForm: React.FC<EnhancedInlineTemplateFormProps> = ({
             sub_work_library_id: linkedWork?.type === 'sub_work' ? linkedWork.id : undefined,
             material_library_id: material.type === 'material' ? material.id : undefined,
             sub_material_library_id: material.type === 'sub_material' ? material.id : undefined,
-            conversion_coefficient: material.conversion_coefficient || 1.0,
             is_linked_to_work: true
           };
+          console.log('🔗 Creating linked material template:', {
+            ...templateData,
+            actualTypes: {
+              work_library_id: typeof templateData.work_library_id,
+              material_library_id: typeof templateData.material_library_id,
+              is_linked_to_work: typeof templateData.is_linked_to_work
+            }
+          });
           promises.push(workMaterialTemplatesApi.createTemplateItem(templateData));
         } else {
           // Standalone material
@@ -100,7 +107,6 @@ const EnhancedInlineTemplateForm: React.FC<EnhancedInlineTemplateFormProps> = ({
             sub_work_library_id: undefined,
             material_library_id: material.type === 'material' ? material.id : undefined,
             sub_material_library_id: material.type === 'sub_material' ? material.id : undefined,
-            conversion_coefficient: material.conversion_coefficient || 1.0,
             is_linked_to_work: false
           };
           promises.push(workMaterialTemplatesApi.createTemplateItem(templateData));
@@ -123,7 +129,6 @@ const EnhancedInlineTemplateForm: React.FC<EnhancedInlineTemplateFormProps> = ({
             sub_work_library_id: work.type === 'sub_work' ? work.id : undefined,
             material_library_id: undefined,
             sub_material_library_id: undefined,
-            conversion_coefficient: 1.0,
             is_linked_to_work: false
           };
           promises.push(workMaterialTemplatesApi.createTemplateItem(templateData));

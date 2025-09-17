@@ -111,7 +111,7 @@ export const workMaterialTemplatesApi = {
     }
 
     // ВАЖНО: is_linked_to_work должен быть true ТОЛЬКО если есть И работа И материал
-    const actualIsLinkedToWork = hasWork && hasMaterial;
+    const actualIsLinkedToWork = !!(hasWork && hasMaterial);
 
     console.log('✅ Validation passed:', {
       hasWork,
@@ -199,18 +199,26 @@ export const workMaterialTemplatesApi = {
       }
 
       // Если не нашли запись для обновления или добавляется не привязанный материал или работа - создаём новую запись
+      const insertData = {
+        template_name: template.template_name.trim(),
+        template_description: template.template_description?.trim() || null,
+        work_library_id: template.work_library_id || null,
+        sub_work_library_id: template.sub_work_library_id || null,
+        material_library_id: template.material_library_id || null,
+        sub_material_library_id: template.sub_material_library_id || null,
+        is_linked_to_work: actualIsLinkedToWork,  // Используем правильное значение
+        notes: template.notes?.trim() || null
+      };
+
+      console.log('📝 Data to insert into DB:', JSON.stringify(insertData, null, 2));
+      console.log('🔍 Type check - is_linked_to_work:', {
+        value: insertData.is_linked_to_work,
+        type: typeof insertData.is_linked_to_work
+      });
+
       const { data, error } = await supabase
         .from('work_material_templates')
-        .insert({
-          template_name: template.template_name.trim(),
-          template_description: template.template_description?.trim() || null,
-          work_library_id: template.work_library_id || null,
-          sub_work_library_id: template.sub_work_library_id || null,
-          material_library_id: template.material_library_id || null,
-          sub_material_library_id: template.sub_material_library_id || null,
-          is_linked_to_work: actualIsLinkedToWork,  // Используем правильное значение
-          notes: template.notes?.trim() || null
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -594,6 +602,15 @@ export const workMaterialTemplatesApi = {
         return { error: templatesError.message };
       }
 
+      console.log('📝 Raw template data:', templatesData?.map(item => ({
+        id: item.id,
+        is_linked_to_work: item.is_linked_to_work,
+        work_library_id: item.work_library_id,
+        sub_work_library_id: item.sub_work_library_id,
+        material_library_id: item.material_library_id,
+        sub_material_library_id: item.sub_material_library_id
+      })));
+
       // Now get all name_ids to fetch names
       const workNameIds = new Set<string>();
       const materialNameIds = new Set<string>();
@@ -635,6 +652,20 @@ export const workMaterialTemplatesApi = {
         material_name: item.material_library?.name_id ? materialNamesMap.get(item.material_library.name_id) : null,
         sub_material_name: item.sub_material_library?.name_id ? materialNamesMap.get(item.sub_material_library.name_id) : null
       }));
+
+      // Логирование для отладки
+      console.log('📊 Template data enriched:', data?.map(item => ({
+        id: item.id,
+        is_linked_to_work: item.is_linked_to_work,
+        work_library_id: item.work_library_id,
+        sub_work_library_id: item.sub_work_library_id,
+        material_library_id: item.material_library_id,
+        sub_material_library_id: item.sub_material_library_id,
+        work_name: item.work_name,
+        sub_work_name: item.sub_work_name,
+        material_name: item.material_name,
+        sub_material_name: item.sub_material_name
+      })));
 
       const error = null;
 
@@ -1165,9 +1196,9 @@ export const workMaterialTemplatesApi = {
 
       // Сначала сортируем элементы, чтобы связанные пары шли вместе
       const sortedItems = [...templateItems].sort((a, b) => {
-        // Сначала связанные пары
-        const aIsLinked = a.is_linked_to_work && a.material_library_id || a.sub_material_library_id;
-        const bIsLinked = b.is_linked_to_work && b.material_library_id || b.sub_material_library_id;
+        // Сначала связанные пары (с is_linked_to_work = true)
+        const aIsLinked = a.is_linked_to_work && (a.material_library_id || a.sub_material_library_id) && (a.work_library_id || a.sub_work_library_id);
+        const bIsLinked = b.is_linked_to_work && (b.material_library_id || b.sub_material_library_id) && (b.work_library_id || b.sub_work_library_id);
         if (aIsLinked && !bIsLinked) return -1;
         if (!aIsLinked && bIsLinked) return 1;
 
@@ -1180,18 +1211,36 @@ export const workMaterialTemplatesApi = {
         return 0;
       });
 
+      console.log('🔄 Sorted template items:', sortedItems.map(item => ({
+        id: item.id,
+        is_linked: item.is_linked_to_work,
+        hasWork: !!(item.work_library_id || item.sub_work_library_id),
+        hasMaterial: !!(item.material_library_id || item.sub_material_library_id)
+      })));
+
       for (const templateItem of sortedItems) {
         // Определяем работу
         const workLibrary = templateItem.work_library || templateItem.sub_work_library;
         const workNameData = templateItem.work_name || templateItem.sub_work_name;
-        const workData = workLibrary ? { ...workLibrary, name: workNameData?.name, unit: workNameData?.unit } : null;
+        const workData = workLibrary && workNameData ? { ...workLibrary, name: workNameData.name, unit: workNameData.unit } : null;
         const workType = templateItem.work_library ? 'work' : 'sub_work';
 
         // Определяем материал
         const materialLibrary = templateItem.material_library || templateItem.sub_material_library;
         const materialNameData = templateItem.material_name || templateItem.sub_material_name;
-        const materialData = materialLibrary ? { ...materialLibrary, name: materialNameData?.name, unit: materialNameData?.unit } : null;
+        const materialData = materialLibrary && materialNameData ? { ...materialLibrary, name: materialNameData.name, unit: materialNameData.unit } : null;
         const materialType = templateItem.material_library ? 'material' : 'sub_material';
+
+        console.log('📍 Processing template item:', {
+          id: templateItem.id,
+          hasWorkLibrary: !!workLibrary,
+          hasWorkName: !!workNameData,
+          hasMaterialLibrary: !!materialLibrary,
+          hasMaterialName: !!materialNameData,
+          is_linked_to_work: templateItem.is_linked_to_work,
+          workData: workData ? { name: workData.name, id: workData.id } : null,
+          materialData: materialData ? { name: materialData.name, id: materialData.id } : null
+        });
 
         // Пропускаем только полностью пустые записи
         if (!workData && !materialData) {
@@ -1362,8 +1411,26 @@ export const workMaterialTemplatesApi = {
       console.log('✅ Template converted to BOQ items:', {
         itemsCount: boqItems.length,
         linksCount: links.length,
-        links: links.length > 0 ? links : 'No links found'
+        links: links.length > 0 ? links : 'No links found',
+        boqItemsDetails: boqItems.map((item, i) => ({
+          index: i,
+          type: item.item_type,
+          description: item.description
+        }))
       });
+
+      // Дополнительная проверка для отладки
+      if (links.length === 0 && templateName === 'Кладка стен ГСБ 50 мм') {
+        console.warn('⚠️ WARNING: No links created for "Кладка стен ГСБ 50 мм" template!');
+        console.warn('Template items analysis:', templateItems.map(item => ({
+          id: item.id,
+          is_linked_to_work: item.is_linked_to_work,
+          hasWork: !!(item.work_library || item.sub_work_library),
+          hasMaterial: !!(item.material_library || item.sub_material_library),
+          hasWorkName: !!(item.work_name || item.sub_work_name),
+          hasMaterialName: !!(item.material_name || item.sub_material_name)
+        })));
+      }
 
       return { data: { items: boqItems, links } };
     } catch (error) {
