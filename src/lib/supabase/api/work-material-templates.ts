@@ -1313,7 +1313,7 @@ export const workMaterialTemplatesApi = {
 
           console.log('📎 Saving link info:', {
             ...linkInfo,
-            totalBoqItemsSoFar: boqItems.length + 2 // После добавления работы и материала
+            totalBoqItemsSoFar: boqItems.length // Текущее количество элементов
           });
           links.push(linkInfo);
         }
@@ -1362,9 +1362,11 @@ export const workMaterialTemplatesApi = {
         }
       }
 
-      // Альтернативный метод поиска связей: проверяем отдельные работы и материалы
-      if (links.length === 0) {
-        console.log('🔍 Checking for links using alternative method...');
+      // Дополнительный метод поиска связей: проверяем элементы, которые могли быть добавлены отдельно
+      // Этот метод нужен для случаев, когда в шаблоне есть и связанные пары, и отдельные элементы
+      if (true) { // Всегда проверяем, даже если уже есть связи
+        console.log('🔍 Checking for additional links using alternative method...');
+        console.log('📋 Existing links count:', links.length);
 
         // Создаем карты для быстрого поиска
         const workItemsMap = new Map<string, number>();
@@ -1378,6 +1380,9 @@ export const workMaterialTemplatesApi = {
           }
         });
 
+        // Создаем Set для проверки уже существующих связей
+        const existingLinks = new Set(links.map(l => `${l.workIndex}-${l.materialIndex}`));
+
         // Проверяем каждый материал из исходных данных шаблона
         for (const templateItem of templateItems) {
           if (templateItem.linked_work_name && (templateItem.material_name || templateItem.sub_material_name)) {
@@ -1388,6 +1393,13 @@ export const workMaterialTemplatesApi = {
             const materialIndex = materialItemsMap.get(materialName);
 
             if (workIndex !== undefined && materialIndex !== undefined) {
+              // Проверяем, не существует ли уже такая связь
+              const linkKey = `${workIndex}-${materialIndex}`;
+              if (existingLinks.has(linkKey)) {
+                console.log('⚠️ Link already exists, skipping:', linkKey);
+                continue;
+              }
+
               const linkInfo = {
                 workIndex,
                 materialIndex,
@@ -1401,8 +1413,9 @@ export const workMaterialTemplatesApi = {
                                       templateItem.sub_material_library?.conversion_coefficient || 1.0
               };
 
-              console.log('🔗 Found link via alternative method:', linkInfo);
+              console.log('🔗 Found additional link via alternative method:', linkInfo);
               links.push(linkInfo);
+              existingLinks.add(linkKey);
             }
           }
         }

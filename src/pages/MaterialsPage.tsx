@@ -869,7 +869,7 @@ const MaterialsPage: React.FC = () => {
                               </Row>
 
                               <Row gutter={[8, 8]}>
-                                <Col span={6}>
+                                <Col span={20}>
                                   <Form.Item
                                     name="quote_link"
                                     label="Ссылка на КП"
@@ -877,7 +877,7 @@ const MaterialsPage: React.FC = () => {
                                     <Input placeholder="https://..." />
                                   </Form.Item>
                                 </Col>
-                                <Col span={18}>
+                                <Col span={4}>
                                   <Form.Item label=" ">
                                     <Space style={{ float: 'right' }}>
                                       <Button onClick={handleCancelInlineEdit}>

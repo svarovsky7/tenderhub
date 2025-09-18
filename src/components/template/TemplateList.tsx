@@ -86,6 +86,8 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
   const [collapsedTemplates, setCollapsedTemplates] = useState<Set<string>>(new Set());
   const [editingTemplateName, setEditingTemplateName] = useState<string | null>(null);
   const [newTemplateName, setNewTemplateName] = useState<string>('');
+  const [editingTemplateDescription, setEditingTemplateDescription] = useState<string | null>(null);
+  const [newTemplateDescription, setNewTemplateDescription] = useState<string>('');
 
   const queryClient = useQueryClient();
 
@@ -999,6 +1001,30 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
     setNewTemplateName('');
   };
 
+  const handleUpdateTemplateDescription = async (templateName: string, newDescription: string) => {
+    try {
+      console.log('🚀 Updating template description:', { templateName, newDescription });
+
+      // Update all items for this template
+      const { error } = await supabase
+        .from('work_material_templates')
+        .update({ template_description: newDescription || null })
+        .eq('template_name', templateName);
+
+      if (error) {
+        throw error;
+      }
+
+      message.success('Описание шаблона обновлено');
+      queryClient.invalidateQueries({ queryKey: ['work-material-templates'] });
+      setEditingTemplateDescription(null);
+      setNewTemplateDescription('');
+    } catch (error: any) {
+      console.error('❌ Error updating template description:', error);
+      message.error(`Ошибка обновления описания: ${error.message}`);
+    }
+  };
+
   // Inline edit row component
   const EditRow = ({ item }: { item: TemplateItem }) => {
     const [selectedFromList, setSelectedFromList] = useState(true);
@@ -1274,7 +1300,7 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
                   )}
 
                   <Form.Item name="quote_link" label={<div style={{ textAlign: 'center', width: '100%' }}>Ссылка на КП</div>} style={{ marginBottom: 0, textAlign: 'center' }}>
-                    <Input style={{ width: 250 }} placeholder="URL" />
+                    <Input style={{ width: 350 }} placeholder="URL" />
                   </Form.Item>
                 </>
               )}
@@ -1951,8 +1977,51 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
                           }}
                         />
                       </Tooltip>
-                      {template.template_description && (
-                        <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">📝 {template.template_description}</span>
+                      {editingTemplateDescription === template.template_name ? (
+                        <Space>
+                          <Input
+                            value={newTemplateDescription}
+                            onChange={(e) => setNewTemplateDescription(e.target.value)}
+                            onPressEnter={() => handleUpdateTemplateDescription(template.template_name, newTemplateDescription)}
+                            placeholder="Описание шаблона"
+                            style={{ width: 300 }}
+                            autoFocus
+                          />
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={<CheckOutlined />}
+                            onClick={() => handleUpdateTemplateDescription(template.template_name, newTemplateDescription)}
+                          />
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={<CloseOutlined />}
+                            onClick={() => {
+                              setEditingTemplateDescription(null);
+                              setNewTemplateDescription('');
+                            }}
+                          />
+                        </Space>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          {template.template_description ? (
+                            <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">📝 {template.template_description}</span>
+                          ) : (
+                            <span className="text-sm text-gray-400 italic">Без описания</span>
+                          )}
+                          <Tooltip title="Редактировать описание">
+                            <Button
+                              size="small"
+                              type="text"
+                              icon={<EditOutlined />}
+                              onClick={() => {
+                                setEditingTemplateDescription(template.template_name);
+                                setNewTemplateDescription(template.template_description || '');
+                              }}
+                            />
+                          </Tooltip>
+                        </div>
                       )}
                     </div>
                   )}

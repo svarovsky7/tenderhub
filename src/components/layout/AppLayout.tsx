@@ -151,7 +151,7 @@ const AppLayout: React.FC = () => {
         {
           key: 'work-materials',
           icon: null,
-          label: <Link to="/libraries/work-materials">Работы и Материалы</Link>,
+          label: <Link to="/libraries/work-materials">Шаблоны</Link>,
           path: '/libraries/work-materials',
         },
       ],

@@ -2481,10 +2481,10 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       }
     },
     {
-      title: 'Ед.',
+      title: 'Ед. изм.',
       dataIndex: 'unit',
       key: 'unit',
-      width: 50,
+      width: 90,
       align: 'center',
       render: (text) => (
         <div className="text-center py-1 text-sm">{text}</div>
@@ -2780,7 +2780,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
       title: 'Примечание',
       dataIndex: 'note',
       key: 'note',
-      width: 200,
+      width: 160,
       align: 'center',
       render: (value) => {
         if (!value) return <div className="text-center">-</div>;
@@ -2991,7 +2991,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               name="unit"
               label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600 }}>Ед. изм.</span>}
               className="mb-0"
-              style={{ width: '80px' }}
+              style={{ width: '110px' }}
               rules={[{ required: true, message: 'Ед.' }]}
             >
               <Input placeholder="шт" size="small" />
@@ -3406,7 +3406,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
               name="unit"
               label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Ед. изм.</span>}
               className="mb-0"
-              style={{ width: '80px' }}
+              style={{ width: '110px' }}
               rules={[{ required: true, message: 'Ед.' }]}
             >
               <Input placeholder="шт" size="small" style={{ textAlign: 'center' }} />
@@ -3881,7 +3881,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 name="unit"
                 label={<span style={{ fontSize: '12px', color: '#333', fontWeight: 600, display: 'block', textAlign: 'center' }}>Ед. изм.</span>}
                 className="mb-0"
-                style={{ width: '60px' }}
+                style={{ width: '110px' }}
                 rules={[{ required: true, message: 'Ед.' }]}
               >
                 <Input placeholder="шт" size="small" style={{ textAlign: 'center' }} />
@@ -4408,17 +4408,28 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                   ))
                 )}
                 
-                {/* Third row - Client Quantity - only for non-ДОП positions */}
-                {!position.is_additional && position.volume && (
+                {/* Third row - Client Quantity/Unit - for all non-ДОП positions */}
+                {!position.is_additional && (position.volume || position.unit) && (
                   <div className="flex items-center gap-1">
-                    <Text className="text-sm text-gray-500 font-semibold">Кол-во Заказчика:</Text>
-                    <Text className="text-sm text-gray-600">
-                      <strong>{position.volume}</strong>
-                    </Text>
-                    {position.unit && (
-                      <Text className="text-sm text-gray-600 ml-1">
-                        <strong>{position.unit}</strong>
-                      </Text>
+                    {position.volume ? (
+                      <>
+                        <Text className="text-sm text-gray-500 font-semibold">Кол-во Заказчика:</Text>
+                        <Text className="text-sm text-gray-600">
+                          <strong>{position.volume}</strong>
+                        </Text>
+                        {position.unit && (
+                          <Text className="text-sm text-gray-600 ml-1">
+                            <strong>{position.unit}</strong>
+                          </Text>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <Text className="text-sm text-gray-500 font-semibold">Ед. изм. Заказчика:</Text>
+                        <Text className="text-sm text-gray-600">
+                          <strong>{position.unit}</strong>
+                        </Text>
+                      </>
                     )}
                   </div>
                 )}

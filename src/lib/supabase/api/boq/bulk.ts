@@ -246,12 +246,17 @@ export const boqBulkApi = {
         console.log('🔍 Attempting to fetch inserted items by client_position_id...');
 
         // Попробуем получить вставленные элементы по client_position_id
+        // Получаем последние добавленные элементы в порядке их sub_number
+        const minSubNumber = nextSubNumber;
+        const maxSubNumber = nextSubNumber + preparedItems.length - 1;
+
         const { data: fetchedData, error: fetchError } = await supabase
           .from('boq_items')
           .select('*')
           .eq('client_position_id', clientPositionId)
-          .order('created_at', { ascending: false })
-          .limit(preparedItems.length);
+          .gte('sub_number', minSubNumber)
+          .lte('sub_number', maxSubNumber)
+          .order('sub_number', { ascending: true });
 
         console.log('📊 Fetched items:', {
           count: fetchedData?.length,
@@ -289,13 +294,12 @@ export const boqBulkApi = {
             workIndex: link.workIndex,
             materialIndex: link.materialIndex,
             workName: link.workName,
-            materialName: link.materialName,
-            validWorkIndex: link.workIndex >= 0 && link.workIndex < data.length,
-            validMaterialIndex: link.materialIndex >= 0 && link.materialIndex < data.length
+            materialName: link.materialName
           });
 
-          const workItem = data[link.workIndex];
-          const materialItem = data[link.materialIndex];
+          // Ищем элементы по описанию, а не по индексу, так как порядок может измениться после вставки
+          const workItem = data.find(item => item.description === link.workName);
+          const materialItem = data.find(item => item.description === link.materialName);
 
           if (workItem && materialItem) {
             console.log('🔗 Found items to link:', {
