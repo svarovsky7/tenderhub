@@ -198,14 +198,16 @@ export const boqQueryApi = {
         console.log('🔍 Batch loading cost categories for', categoryIds.length, 'unique IDs');
         
         try {
+          // Remove !inner syntax that causes 400 errors
           const { data: categories } = await supabase
             .from('detail_cost_categories')
-            .select('id, name, cost_categories!inner(name), location!inner(name)')
+            .select('id, name, cost_category_id, location_id')
             .in('id', categoryIds);
           
           if (categories) {
+            // Categories don't have nested data anymore, so just store ID for later lookup
             categoryDisplayMap = categories.reduce((acc: any, cat: any) => {
-              acc[cat.id] = `${cat.cost_categories.name} → ${cat.name} → ${cat.location.name}`;
+              acc[cat.id] = cat.id; // Will be loaded by display component
               return acc;
             }, {});
           }
@@ -271,14 +273,16 @@ export const boqQueryApi = {
         console.log('🔍 Batch loading cost categories for', categoryIds.length, 'unique IDs');
         
         try {
+          // Remove !inner syntax that causes 400 errors
           const { data: categories } = await supabase
             .from('detail_cost_categories')
-            .select('id, name, cost_categories!inner(name), location!inner(name)')
+            .select('id, name, cost_category_id, location_id')
             .in('id', categoryIds);
           
           if (categories) {
+            // Categories don't have nested data anymore, so just store ID for later lookup
             categoryDisplayMap = categories.reduce((acc: any, cat: any) => {
-              acc[cat.id] = `${cat.cost_categories.name} → ${cat.name} → ${cat.location.name}`;
+              acc[cat.id] = cat.id; // Will be loaded by display component
               return acc;
             }, {});
           }
@@ -339,14 +343,16 @@ export const boqQueryApi = {
         console.log('🔍 Batch loading cost categories for', categoryIds.length, 'unique IDs');
         
         try {
+          // Remove !inner syntax that causes 400 errors
           const { data: categories } = await supabase
             .from('detail_cost_categories')
-            .select('id, name, cost_categories!inner(name), location!inner(name)')
+            .select('id, name, cost_category_id, location_id')
             .in('id', categoryIds);
           
           if (categories) {
+            // Categories don't have nested data anymore, so just store ID for later lookup
             categoryDisplayMap = categories.reduce((acc: any, cat: any) => {
-              acc[cat.id] = `${cat.cost_categories.name} → ${cat.name} → ${cat.location.name}`;
+              acc[cat.id] = cat.id; // Will be loaded by display component
               return acc;
             }, {});
           }

@@ -13,19 +13,25 @@ const CostCategoryDisplay: React.FC<CostCategoryDisplayProps> = ({ detailCategor
     queryKey: ['costCategoryDisplay', detailCategoryId],
     queryFn: async () => {
       if (!detailCategoryId) return '';
-      
-      const { data, error } = await getDetailCategoryDisplay(detailCategoryId);
-      if (error) {
-        console.error('❌ Failed to load cost category display:', error);
+
+      try {
+        const { data, error } = await getDetailCategoryDisplay(detailCategoryId);
+        if (error) {
+          console.error('❌ Failed to load cost category display:', error);
+          return '';
+        }
+        return data || '';
+      } catch (err) {
+        console.error('❌ Error in cost category display query:', err);
         return '';
       }
-      return data || '';
     },
     enabled: !!detailCategoryId,
     staleTime: 30 * 60 * 1000, // Cache for 30 minutes
     gcTime: 60 * 60 * 1000, // Keep in cache for 1 hour
     refetchOnWindowFocus: false,
-    refetchOnMount: false
+    refetchOnMount: false,
+    retry: 1 // Reduce retries to avoid spamming failed requests
   });
 
   if (!detailCategoryId) {

@@ -363,63 +363,122 @@ export async function searchDetailCategories(searchTerm: string, limit: number =
 // Получить отображаемое значение для detail_cost_category_id
 export async function getDetailCategoryDisplay(detailCategoryId: string) {
   console.log('🚀 [getDetailCategoryDisplay] Loading for:', detailCategoryId);
-  
+
+  // Validate ID format first
+  if (!detailCategoryId || typeof detailCategoryId !== 'string') {
+    console.error('❌ [getDetailCategoryDisplay] Invalid ID:', detailCategoryId);
+    return { data: null, error: { message: 'Invalid detail category ID' } };
+  }
+
   try {
-    // Сначала получаем основную запись
-    const { data: detailDataArray, error: detailError } = await supabase
+    // Сначала получаем основную запись - use simple fields only
+    const { data: detailData, error: detailError } = await supabase
       .from('detail_cost_categories')
-      .select('*')
-      .eq('id', detailCategoryId);
-      
+      .select('id, cost_category_id, location_id, name, unit_cost')
+      .eq('id', detailCategoryId)
+      .single();
+
     if (detailError) {
       console.error('❌ [getDetailCategoryDisplay] Error loading detail:', detailError);
       return { data: null, error: detailError };
     }
-    
-    if (!detailDataArray || detailDataArray.length === 0) {
+
+    if (!detailData) {
       console.log('⚠️ [getDetailCategoryDisplay] No data found for ID:', detailCategoryId);
       return { data: null, error: { message: 'Detail category not found' } };
     }
-    
-    const detailData = detailDataArray[0];
+
     console.log('📦 [getDetailCategoryDisplay] Detail data:', detailData);
-    
-    // Получаем название категории отдельным запросом
-    let categoryName = 'Категория не указана';
-    if (detailData.cost_category_id) {
-      const { data: categoryDataArray } = await supabase
+    console.log('📦 [getDetailCategoryDisplay] Detail data type:', typeof detailData);
+    console.log('📦 [getDetailCategoryDisplay] Is array?:', Array.isArray(detailData));
+    console.log('📦 [getDetailCategoryDisplay] Detail data stringified:', JSON.stringify(detailData));
+
+    // If it's an array for some reason, take the first element
+    const actualData = Array.isArray(detailData) ? detailData[0] : detailData;
+
+    console.log('🔍 [getDetailCategoryDisplay] Actual data fields:', {
+      id: actualData?.id,
+      name: actualData?.name,
+      cost_category_id: actualData?.cost_category_id,
+      location_id: actualData?.location_id,
+      unit_cost: actualData?.unit_cost
+    });
+
+    // Get category name if ID exists
+    let categoryName = '';
+    if (actualData?.cost_category_id) {
+      console.log('📊 [getDetailCategoryDisplay] Fetching category for ID:', actualData.cost_category_id);
+      const { data: categoryData, error: catError } = await supabase
         .from('cost_categories')
         .select('name')
-        .eq('id', detailData.cost_category_id);
-      
-      if (categoryDataArray && categoryDataArray.length > 0) {
-        categoryName = categoryDataArray[0].name;
+        .eq('id', actualData.cost_category_id)
+        .single();
+
+      if (!catError && categoryData) {
+        // Handle if categoryData is an array
+        const actualCategoryData = Array.isArray(categoryData) ? categoryData[0] : categoryData;
+        categoryName = actualCategoryData?.name || '';
+        console.log('✅ [getDetailCategoryDisplay] Category data:', categoryData);
+        console.log('✅ [getDetailCategoryDisplay] Category name:', categoryName);
+      } else {
+        console.log('❌ [getDetailCategoryDisplay] Failed to get category:', catError);
       }
+    } else {
+      console.log('⚠️ [getDetailCategoryDisplay] No cost_category_id in detail data');
     }
-    
-    // Получаем локацию отдельным запросом
-    let locationName = 'Локация не указана';
-    if (detailData.location_id) {
-      const { data: locationDataArray } = await supabase
+
+    // Get location name if ID exists
+    let locationName = '';
+    if (actualData?.location_id) {
+      console.log('📊 [getDetailCategoryDisplay] Fetching location for ID:', actualData.location_id);
+      const { data: locationData, error: locError } = await supabase
         .from('location')
         .select('city, region, country')
-        .eq('id', detailData.location_id);
-      
-      if (locationDataArray && locationDataArray.length > 0) {
-        const locationData = locationDataArray[0];
+        .eq('id', actualData.location_id)
+        .single();
+
+      if (!locError && locationData) {
+        // Handle if locationData is an array
+        const actualLocationData = Array.isArray(locationData) ? locationData[0] : locationData;
         const locationParts = [];
-        if (locationData.city) locationParts.push(locationData.city);
-        if (locationData.region) locationParts.push(locationData.region);
-        if (locationData.country) locationParts.push(locationData.country);
-        locationName = locationParts.length > 0 ? locationParts.join(', ') : 'Локация не указана';
+        if (actualLocationData?.city) locationParts.push(actualLocationData.city);
+        if (actualLocationData?.region) locationParts.push(actualLocationData.region);
+        if (actualLocationData?.country) locationParts.push(actualLocationData.country);
+        locationName = locationParts.join(', ');
+        console.log('✅ [getDetailCategoryDisplay] Location data:', locationData);
+        console.log('✅ [getDetailCategoryDisplay] Location name:', locationName);
+      } else {
+        console.log('❌ [getDetailCategoryDisplay] Failed to get location:', locError);
       }
+    } else {
+      console.log('⚠️ [getDetailCategoryDisplay] No location_id in detail data');
     }
-    
+
     // Get detail name - this is the main name field
-    const detailName = detailData.name || 'Детализация не указана';
-    
-    const displayName = `${categoryName} → ${detailName} → ${locationName}`;
-    
+    const detailName = actualData?.name || '';
+    console.log('📊 [getDetailCategoryDisplay] Detail name from data:', detailName);
+
+    console.log('🔍 [getDetailCategoryDisplay] Building display:', {
+      categoryName,
+      detailName,
+      locationName,
+      detailCategoryId
+    });
+
+    // If all fields are empty, return empty string instead of message
+    if (!categoryName && !detailName && !locationName) {
+      console.log('⚠️ [getDetailCategoryDisplay] No valid category data - all fields empty');
+      return { data: '', error: null };
+    }
+
+    // Build display with available parts
+    const parts = [];
+    if (categoryName) parts.push(categoryName);
+    if (detailName) parts.push(detailName);
+    if (locationName) parts.push(locationName);
+
+    const displayName = parts.join(' → ');
+
     console.log('✅ [getDetailCategoryDisplay] Display:', displayName);
     return { data: displayName, error: null };
   } catch (err: any) {
