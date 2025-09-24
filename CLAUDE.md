@@ -46,6 +46,7 @@ npm run dev
 - Available after Claude Code restart
 - Check connection: `/mcp list`
 - Provides tools: `mcp__supabase__*` for CRUD operations (query, insert, update, delete, rpc, schema)
+- **Important**: MCP tools provide direct database access - always validate against `supabase/schemas/prod.sql`
 
 **GitHub MCP Server** is also configured:
 - Provides tools: `mcp__github__*` for repository operations
@@ -270,6 +271,7 @@ try {
   - Return object with handler functions and state
 
 ### 5. Critical Bug Fixes Pattern (from Recent Refactoring)
+**IMPORTANT**: These patterns emerged from real refactoring sessions and prevent common bugs.
 When extracting business logic to hooks, watch for:
 - **Import Path Issues**: When moving components deeper in folder structure, verify all import paths:
   ```typescript
@@ -572,9 +574,26 @@ TenderHUB/
 - **409 Foreign Key Errors**: Exclude `work_id` and `material_id` from BOQ item updates
 - **String Interpolation in Tooltips**: Use `${variable}` not `{variable}` in template strings
 
+## Performance Targets
+
+- **Excel Import**: 5000 rows should complete in ≤30 seconds
+- **Page Load**: Initial render under 2 seconds
+- **Virtual Scrolling**: Smooth scrolling for lists with 10,000+ items
+- **Build Time**: Full production build under 1 minute
+
+## Database Schema Export
+
+The `prod.sql` file is critical and must be kept up to date:
+```bash
+npm run db:schema  # Exports current production schema
+```
+Generated file location: `supabase/schemas/prod.sql`
+File includes: tables, views, functions, triggers, indexes, ENUMs, comments
+
 ## Additional Resources
 
 - **Database Schema**: Always regenerate `supabase/schemas/prod.sql` after database changes
 - **Type Generation**: TypeScript types in `src/lib/supabase/types/` should match prod.sql
+- **Supabase Dashboard**: Direct database access at https://lkmgbizyyaaacetllbzr.supabase.co
 
 Remember: This is a simplified dev environment. Production will require authentication, RLS, and security features.

@@ -1,14 +1,15 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 
 // Import extracted components
-import { WorkEditRow } from './ClientPositionStreamlined/components/EditRows/WorkEditRow';
-import { MaterialEditRow } from './ClientPositionStreamlined/components/EditRows/MaterialEditRow';
 import { QuickAddRow } from './ClientPositionStreamlined/components/QuickAdd/QuickAddRow';
 import { TemplateAddForm } from './ClientPositionStreamlined/components/Template/TemplateAddForm';
 import { ActionButtons } from './ClientPositionStreamlined/components/ActionButtons';
 import { PositionSummary } from './ClientPositionStreamlined/components/PositionSummary';
+import { EmptyState } from './ClientPositionStreamlined/components/EmptyState';
+import { BOQItemsTable } from './ClientPositionStreamlined/components/BOQItemsTable';
 
 // Import extracted hooks
+import { useLocalState } from './ClientPositionStreamlined/hooks/useLocalState';
 import { usePositionActions } from './ClientPositionStreamlined/hooks/usePositionActions';
 import { useDeleteHandlers } from './ClientPositionStreamlined/hooks/useDeleteHandlers';
 import { useMaterialEdit } from './ClientPositionStreamlined/hooks/useMaterialEdit';
@@ -18,6 +19,7 @@ import { useQuickAdd } from './ClientPositionStreamlined/hooks/useQuickAdd';
 import { useMediaQueryFix } from './ClientPositionStreamlined/hooks/useMediaQueryFix';
 import { useSortedBOQItems } from './ClientPositionStreamlined/hooks/useSortedBOQItems';
 import { useCommercialCost } from './ClientPositionStreamlined/hooks/useCommercialCost';
+import { useTenderMarkup } from './ClientPositionStreamlined/hooks/useTenderMarkup';
 import { getTableColumns } from './ClientPositionStreamlined/components/Table/BOQTableColumns';
 import { PositionTableStyles, getPositionCardStyles } from './ClientPositionStreamlined/styles/PositionStyles';
 import {
@@ -31,8 +33,6 @@ import {
   Select,
   message,
   Space,
-  Empty,
-  Table,
   Tooltip,
   Popconfirm,
   Row,
@@ -44,7 +44,6 @@ import {
 import {
   FolderOpenOutlined,
   FolderOutlined,
-  PlusOutlined,
   EditOutlined,
   DeleteOutlined,
   SaveOutlined,
@@ -59,8 +58,7 @@ import {
   QuestionCircleOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { getActiveTenderMarkup } from '../../lib/supabase/api/tender-markup';
-import { boqApi } from '../../lib/supabase/api';
+import { boqApi, clientPositionsApi } from '../../lib/supabase/api';
 import MaterialLinkingModal from './MaterialLinkingModal';
 import AdditionalWorkModal from './AdditionalWorkModal';
 import { DecimalInput } from '../common';
@@ -163,27 +161,44 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const [workEditForm] = Form.useForm();
   const [templateAddForm] = Form.useForm();
 
-  // Local state
-  const [loading, setLoading] = useState(false);
-  const [editingItem, setEditingItem] = useState<string | null>(null);
-  const [linkingMaterialId, setLinkingMaterialId] = useState<string | null>(null);
-  const [linkMaterialModalVisible, setLinkMaterialModalVisible] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [localWorks, setLocalWorks] = useState<BOQItemWithLibrary[]>([]);
-  const [localBOQItems, setLocalBOQItems] = useState<any[]>(position.boq_items || []);
-  const [tempManualVolume, setTempManualVolume] = useState<number | null>(position.manual_volume ?? null);
-  const [tempManualNote, setTempManualNote] = useState<string>(position.manual_note ?? '');
-  const [editSelectedCurrency, setEditSelectedCurrency] = useState<'RUB' | 'USD' | 'EUR' | 'CNY'>('RUB');
-  const [tempWorkName, setTempWorkName] = useState<string>(position.work_name ?? '');
-  const [tempUnit, setTempUnit] = useState<string>(position.unit ?? '');
-  const [tenderMarkup, setTenderMarkup] = useState<any>(null);
-  const [showAdditionalWorkModal, setShowAdditionalWorkModal] = useState(false);
+  // Use local state hook
+  const {
+    loading,
+    setLoading,
+    editingItem,
+    setEditingItem,
+    linkingMaterialId,
+    setLinkingMaterialId,
+    linkMaterialModalVisible,
+    setLinkMaterialModalVisible,
+    refreshKey,
+    setRefreshKey,
+    localWorks,
+    setLocalWorks,
+    localBOQItems,
+    setLocalBOQItems,
+    tempManualVolume,
+    setTempManualVolume,
+    tempManualNote,
+    setTempManualNote,
+    editSelectedCurrency,
+    setEditSelectedCurrency,
+    tempWorkName,
+    setTempWorkName,
+    tempUnit,
+    setTempUnit,
+    showAdditionalWorkModal,
+    setShowAdditionalWorkModal,
+    totalItems,
+    materialsCount,
+    worksCount,
+    totalCost,
+    positionItemsKey,
+    works
+  } = useLocalState({ position });
 
-  // Computed properties
-  const totalItems = position.boq_items?.length || 0;
-  const materialsCount = position.boq_items?.filter(item => item.item_type === 'material' || item.item_type === 'sub_material').length || 0;
-  const worksCount = position.boq_items?.filter(item => item.item_type === 'work' || item.item_type === 'sub_work').length || 0;
-  const totalCost = position.total_position_cost || 0;
+  // Load tender markup
+  const { tenderMarkup, loadingMarkup } = useTenderMarkup({ tenderId });
 
   // Custom hooks for extracted functionality
   const { handleManualVolumeChange, handleManualNoteChange } = usePositionActions({
@@ -288,15 +303,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   const positionIcon = POSITION_ICONS[positionType];
   const positionLabel = POSITION_LABELS[positionType];
   
-  // Sync state when position changes
-  useEffect(() => {
-    setTempWorkName(position.work_name ?? '');
-    setTempManualVolume(position.manual_volume ?? null);
-    setTempManualNote(position.manual_note ?? '');
-    setTempUnit(position.unit ?? '');
-    setLocalBOQItems(position.boq_items || []);
-  }, [position.work_name, position.manual_volume, position.manual_note, position.unit, position.boq_items]);
-  
   // Debug logging (commented to reduce console spam)
   // console.log('🔍 Position click check:', {
   //   id: position.id,
@@ -362,83 +368,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     Promise.allSettled(savePromises);
   }, [position.boq_items, tenderMarkup, calculateCommercialCost, saveCommercialFields]);
   // Commercial costs are already calculated by useCommercialCost hook
-  
-  
-  // Create stable dependency for position items
-  const positionItemsKey = useMemo(() => {
-    if (!position.boq_items) return '';
-    return position.boq_items.map(item => `${item.id}-${item.item_type}`).sort().join(',');
-  }, [position.boq_items]);
-  
-  // Update local works when position changes (include both work and sub_work)
-  useEffect(() => {
-    if (!position.boq_items) {
-      setLocalWorks([]);
-      return;
-    }
-    
-    const updatedWorks = position.boq_items.filter(item => 
-      item.item_type === 'work' || item.item_type === 'sub_work'
-    ) || [];
-    
-    // Debug for ДОП работы
-    if (position.is_additional) {
-      console.log('🔧 ДОП: Updating available works:', {
-        position_name: position.work_name,
-        total_items: position.boq_items.length,
-        works_found: updatedWorks.length,
-        works: updatedWorks.map(w => ({ id: w.id, type: w.item_type, desc: w.description }))
-      });
-    }
-    
-    // Use functional update to prevent infinite loops
-    setLocalWorks(prevWorks => {
-      // Only update if the works list actually changed
-      const prevIds = prevWorks.map(w => w.id).sort().join(',');
-      const newIds = updatedWorks.map(w => w.id).sort().join(',');
-      
-      if (prevIds !== newIds) {
-        // console.log('🔧 Updated available works for linking:', updatedWorks.length, updatedWorks.map(w => ({ id: w.id, desc: w.description })));
-        return updatedWorks;
-      }
-      return prevWorks;
-    });
-  }, [positionItemsKey, position.is_additional, position.work_name, position.boq_items]);
-  
-  // Update temp manual volume when position changes
-  useEffect(() => {
-    setTempManualVolume(position.manual_volume ?? null);
-  }, [position.manual_volume]);
-  
-  // Update temp manual note when position changes
-  useEffect(() => {
-    setTempManualNote(position.manual_note ?? '');
-  }, [position.manual_note]);
-  
-  // Load tender markup on component mount
-  useEffect(() => {
-    const loadMarkup = async () => {
-      try {
-        const markup = await getActiveTenderMarkup(tenderId);
-        console.log('📊 Raw markup response:', markup);
-        
-        // Handle both array and object responses
-        const markupData = Array.isArray(markup) ? markup[0] : markup;
-        
-        if (markupData) {
-          setTenderMarkup(markupData);
-          console.log('📊 Loaded tender markup:', markupData);
-        }
-      } catch (error) {
-        console.error('❌ Failed to load tender markup:', error);
-      }
-    };
-    
-    loadMarkup();
-  }, [tenderId]);
-  
-  const works = localWorks;
-  // console.log('🔧 Current works for linking:', works.length, works.map(w => ({ id: w.id, desc: w.description })));
 
   // Используем хук для сортировки элементов BOQ
   const sortedBOQItems = useSortedBOQItems({
@@ -1046,179 +975,33 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
             {/* Items Display - Table */}
             {totalItems > 0 ? (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" style={{ width: '100%', minWidth: '1200px' }}>
-                  <Table
-                  key={refreshKey}
-                  columns={columns}
-                  dataSource={sortedBOQItems}
-                  rowKey="id"
-                  pagination={false}
-                  size="small"
-                  scroll={{ x: 1200, y: 400 }}
-                  className="custom-table boq-items-table"
-                  rowClassName={(record) => {
-                    switch(record.item_type) {
-                      case 'work':
-                        return 'bg-orange-100/90 hover:bg-orange-100 font-medium transition-colors';
-                      case 'sub_work':
-                        return 'bg-purple-100 hover:bg-purple-200 font-medium transition-colors';
-                      case 'material':
-                        return record.work_link ? 'bg-blue-100 hover:bg-blue-200 transition-colors' : 'bg-blue-100/60 hover:bg-blue-200/80 transition-colors';
-                      case 'sub_material':
-                        return 'bg-green-100/80 hover:bg-green-200 transition-colors';
-                      default:
-                        return '';
-                    }
-                  }}
-                components={{
-                  body: {
-                    row: ({ children, ...props }: any) => {
-                      const record = props['data-row-key'] ? 
-                        sortedBOQItems.find(item => item.id === props['data-row-key']) : 
-                        null;
-                      
-                      // If this is the material or sub-material being edited, show the edit form
-                      if (record && editingMaterialId === record.id && (record.item_type === 'material' || record.item_type === 'sub_material')) {
-                        return (
-                          <MaterialEditRow
-                            item={record}
-                            editForm={editForm}
-                            handleSaveInlineEdit={handleSaveInlineEdit}
-                            handleCancelInlineEdit={handleCancelInlineEdit}
-                            handleWorkSelectionChange={handleWorkSelectionChange}
-                            handleCoefficientChange={handleCoefficientChange}
-                            tenderMarkup={tenderMarkup}
-                            tender={tender}
-                            works={works}
-                            loading={loading}
-                          />
-                        );
-                      }
-
-                      // If this is the work or sub-work being edited, show the edit form
-                      if (record && editingWorkId === record.id && (record.item_type === 'work' || record.item_type === 'sub_work')) {
-                        return (
-                          <WorkEditRow
-                            item={record}
-                            workEditForm={workEditForm}
-                            handleSaveWorkEdit={handleSaveWorkEdit}
-                            handleCancelWorkEdit={handleCancelWorkEdit}
-                            tenderMarkup={tenderMarkup}
-                            tender={tender}
-                          />
-                        );
-                      }
-                      
-                      // Otherwise show normal row
-                      return <tr {...props}>{children}</tr>;
-                    }
-                  }
-                }}
-                onRow={(record) => ({
-                  'data-row-key': record.id,
-                })}
-                summary={(pageData) => {
-                  const total = pageData.reduce((sum, item) => {
-                    let quantity = item.quantity || 0;
-                    const unitRate = item.unit_rate || 0;
-                    
-                    // For linked materials, calculate quantity based on work volume and coefficients
-                    if ((item.item_type === 'material' || item.item_type === 'sub_material') && item.work_link) {
-                      // Find the linked work
-                      const work = position.boq_items?.find(boqItem => {
-                        if (item.work_link.work_boq_item_id && 
-                            boqItem.id === item.work_link.work_boq_item_id && 
-                            boqItem.item_type === 'work') {
-                          return true;
-                        }
-                        if (item.work_link.sub_work_boq_item_id && 
-                            boqItem.id === item.work_link.sub_work_boq_item_id && 
-                            boqItem.item_type === 'sub_work') {
-                          return true;
-                        }
-                        return false;
-                      });
-                      
-                      if (work) {
-                        // Get coefficients from BOQ item first, then from work_link
-                        const consumptionCoef = item.consumption_coefficient || 
-                                               item.work_link.material_quantity_per_work || 1;
-                        const conversionCoef = item.conversion_coefficient || 
-                                              item.work_link.usage_coefficient || 1;
-                        const workQuantity = work.quantity || 0;
-                        quantity = workQuantity * consumptionCoef * conversionCoef;
-                      }
-                    }
-                    
-                    // Apply currency conversion if needed
-                    const currencyMultiplier = item.currency_type && item.currency_type !== 'RUB' && item.currency_rate 
-                      ? item.currency_rate 
-                      : 1;
-                    let itemTotal = quantity * unitRate * currencyMultiplier;
-                    
-                    // Add delivery cost for materials
-                    if (item.item_type === 'material' || item.item_type === 'sub_material') {
-                      const deliveryType = item.delivery_price_type;
-                      const deliveryAmount = item.delivery_amount || 0;
-                      
-                      if (deliveryType === 'amount') {
-                        // Fixed amount per unit (already in RUB)
-                        itemTotal += deliveryAmount * quantity;
-                      } else if (deliveryType === 'not_included') {
-                        // 3% of base cost
-                        itemTotal += itemTotal * 0.03;
-                      }
-                    }
-                    
-                    return sum + itemTotal;
-                  }, 0);
-                  
-                  return (
-                    <Table.Summary fixed>
-                      <Table.Summary.Row style={{ backgroundColor: '#f8f9fa' }}>
-                        <Table.Summary.Cell index={0} colSpan={8} align="right">
-                        </Table.Summary.Cell>
-                        <Table.Summary.Cell index={8} align="right">
-                          <div className="whitespace-nowrap">
-                            <Text strong className="text-lg text-green-700">
-                              {Math.round(total).toLocaleString('ru-RU')} ₽
-                            </Text>
-                          </div>
-                        </Table.Summary.Cell>
-                        <Table.Summary.Cell index={9} />
-                        <Table.Summary.Cell index={10} />
-                        <Table.Summary.Cell index={11} />
-                        <Table.Summary.Cell index={12} />
-                      </Table.Summary.Row>
-                    </Table.Summary>
-                  );
-                }}
-                  />
-                </div>
+              <BOQItemsTable
+                refreshKey={refreshKey}
+                columns={columns}
+                sortedBOQItems={sortedBOQItems}
+                position={position}
+                editingMaterialId={editingMaterialId}
+                editingWorkId={editingWorkId}
+                editForm={editForm}
+                workEditForm={workEditForm}
+                handleSaveInlineEdit={handleSaveInlineEdit}
+                handleCancelInlineEdit={handleCancelInlineEdit}
+                handleWorkSelectionChange={handleWorkSelectionChange}
+                handleCoefficientChange={handleCoefficientChange}
+                handleSaveWorkEdit={handleSaveWorkEdit}
+                handleCancelWorkEdit={handleCancelWorkEdit}
+                tenderMarkup={tenderMarkup}
+                tender={tender}
+                works={works}
+                loading={loading}
+              />
             ) : (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-                <Empty
-                  description={canAddItems ? "Нет добавленных элементов" : (
-                    <span className="flex items-center justify-center gap-2">
-                      <Tooltip title={positionLabel}>
-                        <span className="text-lg cursor-help">{positionIcon}</span>
-                      </Tooltip>
-                      Структурный элемент не содержит элементов
-                    </span>
-                  )}
-                  className="py-4"
-                >
-                  {canAddItems && (
-                    <Button
-                      type="dashed"
-                      icon={<PlusOutlined />}
-                      onClick={() => setQuickAddMode(true)}
-                    >
-                      Добавить первый элемент
-                    </Button>
-                  )}
-                </Empty>
-              </div>
+              <EmptyState
+                canAddItems={canAddItems}
+                positionIcon={positionIcon}
+                positionLabel={positionLabel}
+                onAddFirstItem={() => setQuickAddMode(true)}
+              />
             )}
           </div>
         </div>
