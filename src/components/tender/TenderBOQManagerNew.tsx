@@ -28,10 +28,17 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
   // State
   const [positions, setPositions] = useState<PositionWithItems[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<PositionWithItems | null>(null);
   const [allWorkLinks, setAllWorkLinks] = useState<Record<string, any[]>>({});
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [editingLinkData, setEditingLinkData] = useState<any>({});
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0);
+  const [hasMorePositions, setHasMorePositions] = useState(false);
+  const [totalPositionsCount, setTotalPositionsCount] = useState(0);
+  const POSITIONS_PER_PAGE = 20;
   
   // Move material modal state
   const [moveModal, setMoveModal] = useState<{
@@ -236,96 +243,72 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
     return total;
   };
 
-  // Load positions from database
-  const loadPositions = useCallback(async () => {
-    console.log('📡 Loading positions for tender:', tenderId);
-    setLoading(true);
-    
+  // Load positions from database - OPTIMIZED WITH BATCH LOADING
+  const loadPositions = useCallback(async (append: boolean = false) => {
+    console.log('🚀 [OPTIMIZED] Loading positions for tender:', tenderId, { append, currentPage });
+
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      setCurrentPage(0);
+    }
+
+    const startTime = performance.now();
+    const offset = append ? currentPage * POSITIONS_PER_PAGE : 0;
+
     try {
-      const result = await clientPositionsApi.getByTenderId(tenderId, {}, { limit: 1000 });
-      console.log('📦 Positions API response:', result);
-      
+      // Use new batch API for optimized loading
+      const result = await boqApi.getPositionsWithItemsBatch(tenderId, POSITIONS_PER_PAGE, offset);
+
       if (result.error) {
         console.error('❌ Failed to load positions:', result.error);
         throw new Error(result.error);
       }
 
-      // Handle paginated response
-      const positions = result.data || [];
-      console.log('📋 Raw positions data:', positions);
-      console.log('🔍 First position details:', positions[0] ? {
-        id: positions[0].id,
-        position_number: positions[0].position_number,
-        item_no: positions[0].item_no,
-        work_name: positions[0].work_name
-      } : 'No positions');
-      
-      // Load BOQ items for each position
-      const positionsWithItems = await Promise.all(
-        positions.map(async (position) => {
-          console.log(`📋 Processing position ${position.id}:`, {
-            position_number: position.position_number,
-            item_no: position.item_no
-          });
-          
-          // Use hierarchical API to get items with linked materials
-          const boqResult = await boqApi.getHierarchicalByPosition(position.id);
-          const boqItems = boqResult.error ? [] : (boqResult.data || []);
-          
-          // Get work-material links for this position
-          const linksResult = await workMaterialLinksApi.getLinksByPosition(position.id);
-          const positionWorkLinks: Record<string, any[]> = {};
-          
-          if (!linksResult.error && linksResult.data) {
-            // Group links by work ID
-            linksResult.data.forEach((link: any) => {
-              if (!positionWorkLinks[link.work_boq_item_id]) {
-                positionWorkLinks[link.work_boq_item_id] = [];
-              }
-              
-              // Calculate material volume and cost
-              const workItem = boqItems.find(item => item.id === link.work_boq_item_id);
-              const workVolume = workItem?.quantity || 0;
-              
-              const materialVolume = calculateMaterialVolume(
-                workVolume,
-                link.material_consumption_coefficient || 1,
-                link.material_conversion_coefficient || 1
-              );
-              
-              positionWorkLinks[link.work_boq_item_id].push({
-                ...link,
-                calculated_material_volume: materialVolume,
-                calculated_total: materialVolume * (link.material_unit_rate || 0)
-              });
-            });
-          }
-          
-          // Calculate total using only works and their linked materials
-          const totalCost = calculatePositionTotalCost(
-            boqItems.filter(item => !(item as any).is_linked_material), // Only non-linked items
-            positionWorkLinks
-          );
-          
-          console.log(`💰 Position ${position.position_number} total: ${totalCost}`);
-          
-          return {
-            ...position,
-            boq_items: boqItems,
-            total_position_cost: totalCost
-          };
-        })
-      );
+      const { positions: positionsWithData, totalCount, hasMore } = result.data;
 
-      console.log('✅ Positions with BOQ items loaded:', positionsWithItems.length);
-      setPositions(positionsWithItems);
+      const loadTime = performance.now() - startTime;
+      console.log(`✅ [OPTIMIZED] Loaded ${positionsWithData.length} positions in ${loadTime.toFixed(0)}ms`);
+      console.log(`📊 Total positions available: ${totalCount}, has more: ${hasMore}`);
+
+      // Transform data to match existing structure
+      const transformedPositions = positionsWithData.map(position => ({
+        ...position,
+        boq_items: position.boq_items || [],
+        total_position_cost: position.total_position_cost || 0
+      }));
+
+      if (append) {
+        setPositions(prev => [...prev, ...transformedPositions]);
+        setCurrentPage(prev => prev + 1);
+      } else {
+        setPositions(transformedPositions);
+        setCurrentPage(1);
+      }
+
+      setHasMorePositions(hasMore);
+      setTotalPositionsCount(totalCount);
+
+      // Store work links globally for other operations
+      const allLinks = append ? { ...allWorkLinks } : {};
+      positionsWithData.forEach(position => {
+        if (position.work_links) {
+          Object.assign(allLinks, position.work_links);
+        }
+      });
+      setAllWorkLinks(allLinks);
+
     } catch (error) {
       console.error('💥 Error loading positions:', error);
       message.error('Ошибка загрузки позиций');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+      const totalTime = performance.now() - startTime;
+      console.log(`⏱️ Total load time: ${totalTime.toFixed(0)}ms`);
     }
-  }, [tenderId]);
+  }, [tenderId, currentPage, allWorkLinks]);
 
   // Library data is now handled by AutoCompleteSearch component
 
@@ -2652,6 +2635,21 @@ const TenderBOQManagerNew: React.FC<TenderBOQManagerNewProps> = ({ tenderId }) =
           </div>
         </div>
       </Modal>
+
+      {/* Load More Button */}
+      {hasMorePositions && !loading && (
+        <div className="mt-4 text-center">
+          <Button
+            type="primary"
+            size="large"
+            loading={loadingMore}
+            onClick={() => loadPositions(true)}
+            className="px-8"
+          >
+            {loadingMore ? 'Загружается...' : `Загрузить еще (показано ${positions.length} из ${totalPositionsCount})`}
+          </Button>
+        </div>
+      )}
 
     </div>
   );
