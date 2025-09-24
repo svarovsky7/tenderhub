@@ -1,4 +1,5 @@
 import React from 'react';
+import type { ColumnsType } from 'antd/es/table';
 import { Tag, Tooltip, Button, Space, Popconfirm, Typography } from 'antd';
 import {
   BuildOutlined,
@@ -7,27 +8,26 @@ import {
   FormOutlined,
   DeleteOutlined
 } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
-import type { BOQItemWithLibrary } from '../../../../lib/supabase/types';
+import type { BOQItemWithLibrary } from '../../../../../lib/supabase/types';
+import type { ClientPosition } from '../../../../../lib/supabase/api';
 import CostCategoryDisplay from '../../../CostCategoryDisplay';
 
 const { Text } = Typography;
 
-interface BOQTableColumnsProps {
-  position: any;
-  handleEditMaterial: (record: BOQItemWithLibrary) => void;
-  handleEditWork: (record: BOQItemWithLibrary) => void;
-  handleDeleteItem: (itemId: string) => void;
+interface GetColumnsProps {
+  position: ClientPosition;
+  handleEditMaterial: (item: BOQItemWithLibrary) => void;
+  handleEditWork: (item: BOQItemWithLibrary) => void;
+  handleDeleteItem: (id: string) => void;
 }
 
-export const useBOQTableColumns = ({
+export const getTableColumns = ({
   position,
   handleEditMaterial,
   handleEditWork,
   handleDeleteItem
-}: BOQTableColumnsProps): ColumnsType<BOQItemWithLibrary> => {
+}: GetColumnsProps): ColumnsType<BOQItemWithLibrary> => {
   return [
-    // Removed № column as requested
     {
       title: 'Тип',
       dataIndex: 'item_type',
@@ -48,9 +48,7 @@ export const useBOQTableColumns = ({
               </div>
             );
           case 'material':
-            // Check material type from material_type field (default to main if not specified)
             const isMainMaterial = record.material_type !== 'auxiliary';
-
             return (
               <div className="flex flex-col gap-0.5 items-center">
                 <Tag icon={<ToolOutlined />} color="blue" className="text-xs">Материал</Tag>
@@ -59,18 +57,12 @@ export const useBOQTableColumns = ({
                   className="text-xs"
                   style={{ fontSize: '10px', padding: '0 4px', height: '18px', lineHeight: '18px' }}
                 >
-                  {isMainMaterial ? (
-                    <>📦 Основной</>
-                  ) : (
-                    <>🔧 Вспомог.</>
-                  )}
+                  {isMainMaterial ? <>📦 Основной</> : <>🔧 Вспомог.</>}
                 </Tag>
               </div>
             );
           case 'sub_material':
-            // Check sub-material type from material_type field (default to main if not specified)
             const isMainSubMaterial = record.material_type !== 'auxiliary';
-
             return (
               <div className="flex flex-col gap-0.5 items-center">
                 <Tag icon={<ToolOutlined />} color="green" className="text-xs">Суб-мат</Tag>
@@ -79,11 +71,7 @@ export const useBOQTableColumns = ({
                   className="text-xs"
                   style={{ fontSize: '10px', padding: '0 4px', height: '18px', lineHeight: '18px' }}
                 >
-                  {isMainSubMaterial ? (
-                    <>📦 Основной</>
-                  ) : (
-                    <>🔧 Вспомог.</>
-                  )}
+                  {isMainSubMaterial ? <>📦 Основной</> : <>🔧 Вспомог.</>}
                 </Tag>
               </div>
             );
@@ -99,10 +87,8 @@ export const useBOQTableColumns = ({
       width: 240,
       ellipsis: { showTitle: false },
       render: (text, record) => {
-        // Find if material/sub-material is linked to a work
         let linkedWork = null;
         if ((record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link) {
-          // Check both work_boq_item_id and sub_work_boq_item_id
           linkedWork = position.boq_items?.find(item => {
             if (record.work_link.work_boq_item_id && item.id === record.work_link.work_boq_item_id && item.item_type === 'work') {
               return true;
@@ -113,7 +99,6 @@ export const useBOQTableColumns = ({
             return false;
           });
 
-          // Debug for additional works
           if (position.is_additional && !linkedWork && record.work_link) {
             console.log('⚠️ Material has work_link but work not found in ДОП:', {
               material: record.description,
@@ -123,7 +108,6 @@ export const useBOQTableColumns = ({
           }
         }
 
-        // Add visual indentation for linked materials and sub-materials
         const isLinkedMaterial = (record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link;
 
         return (
@@ -152,7 +136,6 @@ export const useBOQTableColumns = ({
       align: 'center',
       render: (_, record) => {
         if (record.item_type === 'material' || record.item_type === 'sub_material') {
-          // Get coefficient from BOQ item first, then from work_link
           const coef = record.conversion_coefficient ||
                       record.work_link?.usage_coefficient || 1;
           return (
@@ -175,7 +158,6 @@ export const useBOQTableColumns = ({
       align: 'center',
       render: (_, record) => {
         if (record.item_type === 'material' || record.item_type === 'sub_material') {
-          // Get coefficient from BOQ item first, then from work_link
           const coef = record.consumption_coefficient ||
                       record.work_link?.material_quantity_per_work || 1;
           return (
@@ -194,10 +176,7 @@ export const useBOQTableColumns = ({
       width: 85,
       align: 'center',
       render: (value, record) => {
-        // For materials linked to works (including sub-materials linked to sub-works)
         if ((record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link) {
-          // For regular materials, check work_boq_item_id
-          // For sub-materials, check sub_work_boq_item_id
           const work = position.boq_items?.find(item => {
             if (record.work_link.work_boq_item_id &&
                 item.id === record.work_link.work_boq_item_id &&
@@ -213,7 +192,6 @@ export const useBOQTableColumns = ({
           });
 
           if (work) {
-            // Get coefficients from BOQ item first, then from work_link
             const consumptionCoef = record.consumption_coefficient ||
                                    record.work_link.material_quantity_per_work || 1;
             const conversionCoef = record.conversion_coefficient ||
@@ -236,15 +214,11 @@ export const useBOQTableColumns = ({
           }
         }
 
-        // For unlinked materials and sub-materials, show tooltip with calculation formula
         if ((record.item_type === 'material' || record.item_type === 'sub_material') && !record.work_link) {
           const consumptionCoef = record.consumption_coefficient || 1;
-
-          // Check if coefficients are applied (consumption > 1, conversion is always 1 for unlinked)
           const hasCoefficients = consumptionCoef > 1;
 
           if (hasCoefficients && record.base_quantity !== null && record.base_quantity !== undefined) {
-            // Show base quantity and coefficient in tooltip
             return (
               <Tooltip title={`Базовое: ${record.base_quantity.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} × Коэф: ${consumptionCoef} = ${value.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 3 })}`}>
                 <div className="text-center py-1">
@@ -294,7 +268,6 @@ export const useBOQTableColumns = ({
           'CNY': '¥'
         };
 
-        // Определяем какой символ валюты показывать
         const displayCurrency = record.currency_type || 'RUB';
         const displaySymbol = currencySymbols[displayCurrency] || displayCurrency;
 
@@ -307,7 +280,6 @@ export const useBOQTableColumns = ({
           </div>
         );
 
-        // Показываем подсказку только для элементов с валютной ценой
         if (record.currency_type && record.currency_type !== 'RUB' && record.currency_rate) {
           const currencySymbol = currencySymbols[record.currency_type] || record.currency_type;
           const priceInRubles = value * record.currency_rate;
@@ -335,7 +307,6 @@ export const useBOQTableColumns = ({
       width: 100,
       align: 'center',
       render: (_, record) => {
-        // Показываем доставку только для материалов и субматериалов
         if (record.item_type === 'material' || record.item_type === 'sub_material') {
           const deliveryType = record.delivery_price_type || 'included';
           const deliveryAmount = record.delivery_amount || 0;
@@ -348,7 +319,7 @@ export const useBOQTableColumns = ({
             );
           } else if (deliveryType === 'not_included') {
             const unitRate = record.unit_rate || 0;
-            const deliveryPerUnit = deliveryAmount; // Используем значение из БД
+            const deliveryPerUnit = deliveryAmount;
             return (
               <Tooltip title={`Доставка: ${deliveryPerUnit.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽ за единицу (3% от цены ${unitRate.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽)`}>
                 <Tag color="orange" className="text-xs">
@@ -378,13 +349,10 @@ export const useBOQTableColumns = ({
       width: 110,
       align: 'center',
       render: (_, record) => {
-        // Получаем дополнительные данные для расчета
         let quantity = record.quantity || 0;
         const unitRate = record.unit_rate || 0;
 
-        // For linked materials, calculate quantity based on work volume and coefficients
         if ((record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link) {
-          // Find the linked work (could be work or sub_work)
           const work = position.boq_items?.find(item => {
             if (record.work_link.work_boq_item_id &&
                 item.id === record.work_link.work_boq_item_id &&
@@ -400,7 +368,6 @@ export const useBOQTableColumns = ({
           });
 
           if (work) {
-            // Get coefficients from BOQ item first, then from work_link
             const consumptionCoef = record.consumption_coefficient ||
                                    record.work_link.material_quantity_per_work || 1;
             const conversionCoef = record.conversion_coefficient ||
@@ -410,32 +377,25 @@ export const useBOQTableColumns = ({
           }
         }
 
-        // Calculate total based on current quantity and unit rate
-        // Include currency conversion if not RUB
         const currencyMultiplier = record.currency_type && record.currency_type !== 'RUB' && record.currency_rate
           ? record.currency_rate
           : 1;
         const baseTotal = quantity * unitRate * currencyMultiplier;
         let total = baseTotal;
 
-        // Add delivery costs for materials
         if ((record.item_type === 'material' || record.item_type === 'sub_material')) {
           const deliveryType = record.delivery_price_type || 'included';
           const deliveryAmount = record.delivery_amount || 0;
 
           if (deliveryType === 'amount') {
-            // Fixed amount per unit (already in RUB)
             total = baseTotal + (deliveryAmount * quantity);
           } else if (deliveryType === 'not_included') {
-            // 3% of base cost
             total = baseTotal + (baseTotal * 0.03);
           }
         }
 
-        // Create tooltip content for all items
         let tooltipContent = null;
 
-        // Get currency symbol
         const currencySymbols = {
           'RUB': '₽',
           'USD': '$',
@@ -444,13 +404,9 @@ export const useBOQTableColumns = ({
         };
         const currencySymbol = currencySymbols[record.currency_type || 'RUB'] || record.currency_type || '₽';
 
-        // Build calculation formula parts
         const formulaParts = [];
-
-        // Get unit of measurement
         const unit = record.unit || '';
 
-        // Basic formula: quantity × unit_rate
         formulaParts.push(`${quantity.toLocaleString('ru-RU', {
           minimumFractionDigits: 0,
           maximumFractionDigits: 3
@@ -459,19 +415,16 @@ export const useBOQTableColumns = ({
           maximumFractionDigits: 2
         })} ${currencySymbol}`);
 
-        // Add currency conversion if not RUB
         if (record.currency_type && record.currency_type !== 'RUB' && record.currency_rate) {
           formulaParts.push(`× ${record.currency_rate}`);
         }
 
-        // Calculate base total for display
         const baseFormula = formulaParts.join(' ');
         const baseTotalForDisplay = `${baseTotal.toLocaleString('ru-RU', {
           minimumFractionDigits: 0,
           maximumFractionDigits: 2
         })} ₽`;
 
-        // For materials with delivery, create detailed tooltip
         if ((record.item_type === 'material' || record.item_type === 'sub_material')) {
           const deliveryType = record.delivery_price_type || 'included';
           const deliveryAmount = record.delivery_amount || 0;
@@ -499,11 +452,9 @@ export const useBOQTableColumns = ({
               </div>
             );
           } else {
-            // Included delivery or no delivery - show simple formula
             tooltipContent = `${baseFormula} = ${baseTotalForDisplay}`;
           }
         } else {
-          // For works and sub-works - show simple formula
           tooltipContent = `${baseFormula} = ${baseTotalForDisplay}`;
         }
 
@@ -540,7 +491,6 @@ export const useBOQTableColumns = ({
       align: 'center',
       render: (value) => {
         if (!value) return <div className="text-center">-</div>;
-        // Если ссылка начинается с http, делаем её кликабельной
         if (value.startsWith('http')) {
           return (
             <div className="text-center">
@@ -556,12 +506,9 @@ export const useBOQTableColumns = ({
             </div>
           );
         }
-        // Иначе просто показываем текст полностью
         return (
           <div className="text-center">
-            <span className="text-xs">
-              {value}
-            </span>
+            <span className="text-xs">{value}</span>
           </div>
         );
       }
@@ -574,12 +521,9 @@ export const useBOQTableColumns = ({
       align: 'center',
       render: (value) => {
         if (!value) return <div className="text-center">-</div>;
-        // Показываем текст полностью, с переносом строк если нужно
         return (
           <div className="text-center">
-            <span className="text-xs whitespace-pre-wrap">
-              {value}
-            </span>
+            <span className="text-xs whitespace-pre-wrap">{value}</span>
           </div>
         );
       }
