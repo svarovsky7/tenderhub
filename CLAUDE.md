@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TenderHub is a construction tender management portal built with React 19, TypeScript 5.8, and Vite 7. The application manages hierarchical Bill of Quantities (BOQ), materials/works libraries, and tender workflows for construction project bidding. Currently operates without authentication for simplified development.
 
-**Language**: Russian UI throughout the application  
+**Language**: Russian UI throughout the application
 **React 19 Note**: Using compatibility patch for Ant Design (`@ant-design/v5-patch-for-react-19`)
 
 ## Development Commands
@@ -46,15 +46,10 @@ npm run dev
 - Available after Claude Code restart
 - Check connection: `/mcp list`
 - Provides tools: `mcp__supabase__*` for CRUD operations (query, insert, update, delete, rpc, schema)
-- See `MCP_SETUP.md` for troubleshooting
 
 **GitHub MCP Server** is also configured:
 - Provides tools: `mcp__github__*` for repository operations
 - Package: `@modelcontextprotocol/server-github` (devDependency)
-
-**Playwright MCP Server** (if configured):
-- Package: `@playwright/mcp` (globally installed)
-- Provides browser automation capabilities
 
 ## Tech Stack
 
@@ -128,13 +123,48 @@ Key modules (33 files total):
 ```
 src/components/tender/     # Core BOQ components (46 components)
   TenderBOQManagerNew.tsx  # Main BOQ interface
-  ClientPositionCardStreamlined.tsx # Position card with inline editing and template support
-  BOQItemList/            # Virtual scrolling with drag-drop
-  LibrarySelector/        # Material/work selection with cart
+  ClientPositionCardStreamlined.tsx # Position card with inline editing (2412 lines, reduced from 5020)
+  ClientPositionStreamlined/  # Modular architecture for position card (27 files)
+    hooks/               # 17 specialized hooks extracted for maintainability
+      useMaterialEdit.ts         # Material editing operations (582 lines)
+      useWorkEdit.ts             # Work editing operations (315 lines)
+      useQuickAdd.ts             # Quick add functionality (364 lines)
+      useMaterialHandlers.ts      # Material CRUD handlers
+      useWorkHandlers.ts          # Work CRUD handlers
+      useQuickAddHandlers.ts      # Quick add logic
+      useTemplateHandlers.ts      # Template operations
+      useItemOperations.ts        # Delete/update operations
+      useCurrencyHandlers.ts      # Currency conversion logic
+      useCoefficientHandlers.ts   # Coefficient calculations
+      usePositionHandlers.ts      # Position-level operations
+      usePositionState.ts         # Position state management
+      usePositionActions.ts       # Position actions
+      useDeleteHandlers.ts        # Delete operations
+      useLinkingHandlers.ts       # Work-material linking
+      useCommercialCalculations.ts # Commercial cost calculations
+      useBOQSorting.ts            # BOQ item sorting logic
+    components/          # Extracted UI components
+      EditRows/                   # Inline editing components
+        WorkEditRow.tsx           # Work item inline editor
+        MaterialEditRow.tsx       # Material item inline editor
+      QuickAdd/
+        QuickAddRow.tsx          # Quick add form component
+      Template/
+        TemplateAddForm.tsx      # Template insertion form
+      Table/
+        BOQTableColumns.tsx      # Table column definitions
+      getTableColumns.tsx        # Column configuration
+      PositionTable.tsx          # Main table component
+      PositionTableColumns.tsx   # Column specifications
+    styles/             # Separated style definitions
+      PositionStyles.tsx         # Styled components
+  BOQItemList/          # Virtual scrolling with drag-drop
+  LibrarySelector/      # Material/work selection with cart
 
 src/components/template/   # Template management components
   TemplateList.tsx       # Template list with work-material hierarchy display
-  AddTemplateToBOQModal.tsx # Modal for adding templates to BOQ
+  InlineAddTemplateToBOQ.tsx # Inline template insertion with autocomplete
+  EnhancedInlineTemplateForm.tsx # Template creation with work-material links
 
 src/components/common/     # Shared components (7 components)
   CostDetailCascadeSelector.tsx # Combined cascade/search selector with caching
@@ -158,7 +188,7 @@ src/components/financial/  # Financial components
 - `/boq-classic` - Classic BOQ interface
 - `/libraries/materials` - Materials library management
 - `/libraries/works` - Works library management
-- `/libraries/work-materials` - Work-Material linking interface
+- `/libraries/work-materials` - Template management (renamed from "Работы и Материалы" to "Шаблоны")
 - `/construction-costs` - Global construction costs management
 - `/financial-indicators` - Financial indicators dashboard
 - `/admin/users` - User management (placeholder)
@@ -174,6 +204,9 @@ src/components/financial/  # Financial components
 - `materialCalculations.ts` - Material quantity calculations
 - `clientPositionHierarchy.ts` - Position hierarchy management
 - `formatters.ts` - Number and date formatters
+- `performanceMetrics.ts` - Performance monitoring utilities
+- `lazyLoading.tsx` - Enhanced lazy loading components
+- `debounce.ts` - Debounce utility functions
 
 ## Critical Implementation Patterns
 
@@ -186,6 +219,7 @@ src/components/financial/  # Financial components
 - **Base Quantity**: `base_quantity` field stores user input for unlinked materials
 - **Total Amount**: Calculated as `(unit_rate + delivery_amount) × quantity` via database trigger
 - **Currency Fields**: BOQ items support multi-currency (original_currency, original_amount, currency_rate)
+- **Foreign Key Fields**: `work_id` and `material_id` reference library tables, not BOQ items
 
 ### 2. Logging Pattern (Required)
 ```typescript
@@ -209,17 +243,42 @@ try {
   });
 }
 ```
-- **Centralized Handler**: `handleSupabaseError()` in `src/lib/supabase/api/utils.ts`
-- **Error Translation**: PostgreSQL errors translated to Russian
-- **UUID Validation**: Special handling for UUID format errors
-- **Error Codes**: Mapped messages for 23505, 23503, 42501, etc.
 
-### 4. File Size Limits
-- **Maximum 600 lines per file**
+### 4. File Size Limits & Modular Architecture
+- **Maximum 600 lines per file** (target for new code)
+- **Recent Refactoring Success**: ClientPositionCardStreamlined reduced from 5020 to 2412 lines (-52%)
 - Extract hooks to separate files
 - Use barrel exports for organization
+- **Hook Extraction Pattern**:
+  - One hook per domain concern (materials, works, templates, etc.)
+  - Consistent naming: `use{Domain}Handlers.ts` or `use{Domain}.ts`
+  - Pass all dependencies via props interface
+  - Return object with handler functions and state
 
-### 5. Optimistic Updates Pattern
+### 5. Critical Bug Fixes Pattern (from Recent Refactoring)
+When extracting business logic to hooks, watch for:
+- **Spread Operator Field Conflicts**:
+  ```typescript
+  // WRONG - fields from values override explicit settings
+  const updateData = {
+    ...values,
+    detail_cost_category_id: validatedId  // gets overridden by undefined from values
+  };
+
+  // CORRECT - exclude conflicting fields first
+  const { detail_cost_category_id: ignored, ...cleanValues } = values;
+  const updateData = {
+    ...cleanValues,
+    detail_cost_category_id: validatedId  // now properly set
+  };
+  ```
+- **Foreign Key Exclusions**: Always exclude `work_id` and `material_id` from BOQ item updates
+- **Array Response Handling**: Supabase may return arrays even with `.single()`:
+  ```typescript
+  const actualData = Array.isArray(data) ? data[0] : data;
+  ```
+
+### 6. Optimistic Updates Pattern
 - Use React Query's optimistic updates with temporary IDs (`temp-${Date.now()}`)
 - Maintain local state maps (`optimisticItems`) merged with server data
 - Rollback on failure with proper error recovery
@@ -232,12 +291,6 @@ try {
 - **Optimistic Updates**: Consistent pattern across all mutations
 - **Selection State**: Set-based storage for multi-select operations
 - **No Redux/Zustand** - React Query handles all server state
-- **React Query Configuration**:
-  - `staleTime`: 5 minutes (300000ms)
-  - `cacheTime`: 30 minutes persistence
-  - `refetchOnWindowFocus`: disabled
-  - `refetchOnMount`: disabled when cache exists
-  - Retry: 1 for queries, 0 for mutations
 
 ### BOQ Quantity Calculations
 - **Unlinked Materials**: `quantity = base_quantity * consumption_coefficient`
@@ -258,6 +311,7 @@ try {
 - **Dynamic Display Loading**: Loaded on-demand via `CostCategoryDisplay.tsx`
 - **Combined Selector**: Cascade and search modes (min 2 chars)
 - **Caching**: 30-minute staleTime for displays
+- **Batch Loading**: `batchLoadCostCategories()` in helpers.ts to avoid N+1 queries
 
 ### Commercial Cost Calculation (`utils/calculateCommercialCost.ts`)
 Complex formula-based calculations with step-by-step logging:
@@ -272,11 +326,18 @@ Complex formula-based calculations with step-by-step logging:
 9. Прибыль = ОФЗ × (1 + % прибыли)
 10. Итого = Прибыль + Гарантийный период
 
-### Currency System (New)
+### Currency System
 - **Multi-Currency Support**: BOQ items can store original currency and amounts
 - **Exchange Rates**: Stored at tender level (usd_rate, eur_rate, cny_rate)
-- **Fields**: `original_currency`, `original_amount`, `currency_rate` in boq_items
+- **Fields**: `currency_type`, `currency_rate` in boq_items
 - **Converter Utility**: `utils/currencyConverter.ts` for conversions
+- **Rate Calculation**: Always fetch from tender, never trust form values
+
+### Position Hierarchy System
+- **Position Types**: `executable`, `section`, `subsection`, `not_executable`, etc.
+- **Structural Positions**: Cannot contain BOQ items (checked via `canContainBOQItems`)
+- **Client Data Display**: Volume, unit, and notes shown for structural positions
+- **ДОП (Additional) Positions**: Special handling with restricted editing when collapsed
 
 ### Drag-and-Drop Architecture
 - **@dnd-kit Integration**: Modern drag-and-drop with virtual scrolling support
@@ -290,18 +351,12 @@ Complex formula-based calculations with step-by-step logging:
 - **Progress Modals**: Real-time feedback via `UploadProgressModal.tsx`
 - **Error Reporting**: Detailed per-row error messages
 
-### Template System
-- **Work-Material Templates**: Pre-configured combinations of works and materials
-- **Template API**: `workMaterialTemplatesApi` for CRUD operations
-- **Template Components**:
-  - `TemplateList.tsx` - Display and manage templates
-  - `AddTemplateToBOQModal.tsx` - Add templates to BOQ
-  - Inline template insertion in `ClientPositionCardStreamlined.tsx`
-- **Features**:
-  - Linked work-material relationships preserved on insertion
-  - Automatic coefficient application (consumption, conversion)
-  - Support for combined records (work+material in single DB record)
-  - Autocomplete search with minimum 2 character requirement
+### Template System for Work-Material Links
+- **Template Structure**: Can contain linked pairs and/or standalone elements
+- **Link Preservation**: Alternative link search always runs to handle combined templates
+- **Duplicate Prevention**: Set-based checking for existing links
+- **Order Independence**: Items matched by description, not index after DB insertion
+- **Bulk Operations**: Efficient batch insertion with relationship preservation
 
 ### Performance Optimizations
 - Code splitting with React.lazy() for all routes
@@ -311,41 +366,16 @@ Complex formula-based calculations with step-by-step logging:
 - Batch API operations for Excel import
 - React Query caching for static data
 - Debounced search (300ms default)
-
-### Advanced Lazy Loading System
-- **Enhanced Utilities** (`src/utils/lazyLoading.tsx`):
-  - `createLazyComponent()` - Enhanced wrapper with loading states
-  - `createPreloadableLazyComponent()` - Components with preloading capability
-  - `LazyErrorBoundary` - Error boundaries for lazy components
-  - `withLazyErrorBoundary()` - HOC for error boundary wrapping
-- **Preloading Strategy**: Critical components can be preloaded before navigation
-
-### Performance Monitoring (`src/utils/performanceMetrics.ts`)
-- **Built-in Profiler**: Comprehensive performance tracking system
-  - Operation timing with data volume tracking
-  - Automatic bottleneck identification (>500ms warnings)
-  - Categorized analysis (network, processing, rendering)
-  - Cache hit/miss monitoring
-  - React render time measurement utilities
-- **Conditional Logging**: Toggle via `ENABLE_DETAILED_LOGGING` constant
-
-### Connection Monitoring System
-- **Real-time Status** (`src/lib/supabase/connection-status.ts`):
-  - Status states: `connected`, `disconnected`, `reconnecting`, `error`
-  - Automatic reconnection every 30 seconds
-  - Browser online/offline event handling
-  - `ConnectionStatus` UI component with retry functionality
-- **Health Checks**: Periodic connection validation
+- Performance monitoring via `performanceMetrics.ts`
 
 ## UI/UX Standards
-- **Language**: Russian UI throughout (Ant Design `ruRU` locale)
+- **Language**: Russian UI throughout
 - **Components**: Ant Design with Tailwind utilities
 - **Modals**: All create/edit operations
 - **Virtual Scrolling**: Required for large lists (>100 items)
 - **Inline Editing**: Consistent edit-in-place pattern
 - **Hover Effects**: Row highlighting with type-specific colors
-- **Memoization**: 350+ useMemo/useCallback occurrences, 10+ React.memo components
-- **Hook Architecture**: Domain-specific custom hooks (e.g., `useBOQItems`)
+- **Column Widths**: Optimized for readability (e.g., "Ед. изм." 90px for "Комплект")
 
 ## Environment Setup
 
@@ -360,14 +390,9 @@ VITE_APP_VERSION=0.0.0   # Optional: Version display
 ## Configuration Files
 
 ### Vite Configuration
-- Dev server: port 5173, host enabled, auto-assigns if busy
+- Dev server: port 5173, host enabled
 - HMR: overlay disabled, 5s timeout
 - lucide-react excluded from optimization
-- **Build Optimization**:
-  - Strategic code splitting by domain
-  - Vendor libraries chunked by size
-  - XLSX isolated in separate chunk (425KB)
-  - Source maps disabled in production
 
 ### TypeScript Configuration
 - **Project References**: Root tsconfig.json references tsconfig.app.json and tsconfig.node.json
@@ -393,11 +418,12 @@ VITE_APP_VERSION=0.0.0   # Optional: Version display
 - Delivery cost auto-calculation (3% for "not included")
 - Base quantity tracking for unlinked materials
 - Tender markup management with templates
-- Inline editing for BOQ items
+- Inline editing for BOQ items and templates
 - ДОП (additional) positions with restricted editing when collapsed
 - Multi-currency support with exchange rates
 - Financial indicators dashboard
-- Template insertion directly in BOQ interface with autocomplete
+- Template description editing
+- Client data display for structural positions
 
 ### ⚠️ Disabled
 - Authentication (no login)
@@ -422,8 +448,7 @@ VITE_APP_VERSION=0.0.0   # Optional: Version display
 - **Error Translation**: `handleSupabaseError` provides user-friendly error messages
 - **UUID Validation**: Special handling for UUID format errors
 - **BOQ Additional Fields**: Support for quote_link, note, and is_additional (ДОП positions)
-- **Template System**: Direct template insertion in BOQ with "Добавить по шаблону" button
-- **Work-Material Links**: Automatically created when inserting templates with `is_linked_to_work` flag
+- **Template Link Fix**: Always runs alternative link search for combined templates
 
 ## Development Workflow
 
@@ -445,6 +470,8 @@ TenderHUB/
 ├── src/
 │   ├── components/         # UI components
 │   │   ├── tender/        # BOQ-specific (46 components)
+│   │   │   └── ClientPositionStreamlined/ # Modular refactoring (27 files)
+│   │   ├── template/      # Template management
 │   │   ├── common/        # Shared components
 │   │   ├── admin/         # Admin interfaces
 │   │   └── financial/     # Financial components
@@ -456,7 +483,7 @@ TenderHUB/
 │   │   ├── TendersPage/  # Tender list with components
 │   │   └── admin/        # Admin pages
 │   ├── hooks/            # Custom React hooks
-│   └── utils/            # Utilities (7 modules)
+│   └── utils/            # Utilities (9+ modules)
 ├── supabase/
 │   └── schemas/
 │       └── prod.sql      # 🚨 SOURCE OF TRUTH for DB schema
@@ -479,6 +506,7 @@ TenderHUB/
   - 🚀 Performance improvements
   - 🐛 Bug fixes
   - 🎨 UI/UX improvements
+  - 🔧 Refactoring
   - 💥 Breaking changes
 
 ## Common Troubleshooting
@@ -488,14 +516,16 @@ TenderHUB/
 - **React 19 Warnings**: Expected due to Ant Design compatibility patch
 - **Type Errors**: Run `npm run build` to check all TypeScript errors
 - **Database Schema Mismatch**: Always sync with `supabase/schemas/prod.sql`
-- **MCP Not Working**: Restart Claude Code completely (see MCP_SETUP.md)
+- **MCP Not Working**: Restart Claude Code completely
 - **ESLint Import Error**: If ESLint fails with import errors, ensure all packages are installed with `npm install`
 - **Vite HMR Issues**: HMR timeout set to 5s, overlay disabled in vite.config.ts
 - **Build Failures**: Check `.tsbuildinfo` cache in `node_modules/.tmp/` - delete if corrupt
+- **Template Links Breaking**: Check that alternative link search is running in `convertTemplateToBOQItems`
+- **Category Not Saving**: Check for spread operator conflicts when extracting to hooks
+- **409 Foreign Key Errors**: Exclude `work_id` and `material_id` from BOQ item updates
 
 ## Additional Resources
 
-- **MCP Setup**: See `MCP_SETUP.md` for MCP server configuration details
 - **Database Schema**: Always regenerate `supabase/schemas/prod.sql` after database changes
 - **Type Generation**: TypeScript types in `src/lib/supabase/types/` should match prod.sql
 
