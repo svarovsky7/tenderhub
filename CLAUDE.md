@@ -46,7 +46,6 @@ npm run dev
 - Available after Claude Code restart
 - Check connection: `/mcp list`
 - Provides tools: `mcp__supabase__*` for CRUD operations (query, insert, update, delete, rpc, schema)
-- **Important**: MCP tools provide direct database access - always validate against `supabase/schemas/prod.sql`
 
 **GitHub MCP Server** is also configured:
 - Provides tools: `mcp__github__*` for repository operations
@@ -100,12 +99,12 @@ ALWAYS verify schema before ANY database work
 ### API Layer Architecture (`src/lib/supabase/api/`)
 **Modular Domain-Specific Pattern** (all modules < 600 lines):
 - Each domain has its own API module with consistent `{domain}Api` export
-- Complex domains split into sub-modules (e.g., BOQ: crud, hierarchy, bulk, analytics, queries)
+- Complex domains split into sub-modules (e.g., BOQ: crud, hierarchy, bulk, analytics, queries, batch)
 - Barrel exports (`index.ts`) for clean imports and backward compatibility
 - Legacy compatibility maintained (e.g., `boqItemsApi` alongside `boqApi`)
 
 Key modules (33 files total):
-- `boq/` - BOQ operations split into specialized modules (crud, hierarchy, bulk, analytics, queries)
+- `boq/` - BOQ operations split into specialized modules (crud, hierarchy, bulk, analytics, queries, batch)
 - `tenders.ts` - Tender lifecycle management
 - `materials.ts` & `works.ts` - Library management
 - `work-material-links.ts` - Work-Material relationships
@@ -124,9 +123,9 @@ Key modules (33 files total):
 ```
 src/components/tender/     # Core BOQ components (46 components)
   TenderBOQManagerNew.tsx  # Main BOQ interface
-  ClientPositionCardStreamlined.tsx # Position card with inline editing (1414 lines, reduced from 5020)
+  ClientPositionCardStreamlined.tsx # Position card with inline editing (576 lines, reduced from 5020)
   ClientPositionStreamlined/  # Modular architecture for position card (28 files)
-    hooks/               # 18 specialized hooks extracted for maintainability
+    hooks/               # 22 specialized hooks extracted for maintainability
       useMaterialEdit.ts         # Material editing operations (582 lines)
       useWorkEdit.ts             # Work editing operations (315 lines)
       useQuickAdd.ts             # Quick add functionality (364 lines)
@@ -146,6 +145,8 @@ src/components/tender/     # Core BOQ components (46 components)
       useBOQSorting.ts            # BOQ item sorting logic
       useMediaQueryFix.ts         # MediaQuery listener fix
       useSortedBOQItems.ts        # Sorted BOQ items with work-material relationships
+      useTenderMarkup.ts          # Tender markup loading (42 lines)
+      useLocalState.ts            # Local state management (126 lines)
     components/          # Extracted UI components
       EditRows/                   # Inline editing components
         WorkEditRow.tsx           # Work item inline editor
@@ -159,6 +160,9 @@ src/components/tender/     # Core BOQ components (46 components)
       getTableColumns.tsx        # Column configuration
       PositionTable.tsx          # Main table component
       PositionTableColumns.tsx   # Column specifications
+      EmptyState.tsx            # Empty state display (25 lines)
+      PositionHeader.tsx        # Position header component (540 lines)
+      BOQItemsTable.tsx         # BOQ items table (203 lines)
     styles/             # Separated style definitions
       PositionStyles.tsx         # Styled components
   BOQItemList/          # Virtual scrolling with drag-drop
@@ -248,30 +252,121 @@ try {
 ```
 
 ### 4. File Size Limits & Modular Architecture
-- **Maximum 600 lines per file** (target for new code)
-- **Recent Refactoring Success**: ClientPositionCardStreamlined reduced from 5020 to 1414 lines (-72%)
-- Extract hooks to separate files
-- Extract table columns and configurations to separate modules
-- Use barrel exports for organization
-- **Component Extraction Pattern**:
-  ```
-  ClientPositionStreamlined/
-  ├── hooks/               # Business logic hooks
-  │   ├── use{Domain}.ts   # Single responsibility hooks
-  │   └── use{Domain}Handlers.ts
-  ├── components/          # UI components
-  │   └── Table/          # Table-related components
-  │       └── BOQTableColumns.tsx
-  └── styles/             # Styled components
-  ```
-- **Hook Extraction Pattern**:
-  - One hook per domain concern (materials, works, templates, etc.)
-  - Consistent naming: `use{Domain}Handlers.ts` or `use{Domain}.ts`
-  - Pass all dependencies via props interface
-  - Return object with handler functions and state
+
+#### 🚨 STRICT RULE: Maximum 600 Lines Per File 🚨
+```
+ALL files MUST be ≤ 600 lines
+NO EXCEPTIONS
+
+If a file needs >600 lines:
+1. STOP and refactor immediately
+2. Split into modular components
+3. Follow the extraction patterns below
+```
+
+#### Why 600 Lines?
+- **Maintainability**: Easier to understand and modify
+- **Performance**: Faster parsing and compilation
+- **Testing**: Simpler to test isolated components
+- **Code Review**: More manageable PRs
+- **Recent Success**: ClientPositionCardStreamlined reduced from 5020 to 576 lines (-89%)
+
+#### Mandatory Extraction Strategy for Large Components
+When approaching 600 lines, extract in this order:
+
+1. **Types & Interfaces** → `types/index.ts`
+2. **Constants & Config** → `constants.ts` or `config.ts`
+3. **Utility Functions** → `utils/helpers.ts`
+4. **Custom Hooks** → `hooks/use{Feature}.ts`
+5. **Sub-components** → `components/{Component}.tsx`
+6. **Styles** → `styles/{Component}.styles.ts`
+7. **API Calls** → `api/{domain}.ts`
+
+#### Component Structure Pattern
+```
+ComponentFolder/
+├── index.tsx              # Main component (<300 lines)
+├── types.ts               # TypeScript interfaces
+├── constants.ts           # Constants and config
+├── hooks/                 # Custom hooks (<200 lines each)
+│   ├── useData.ts        # Data fetching logic
+│   ├── useHandlers.ts    # Event handlers
+│   └── useState.ts       # Local state management
+├── components/           # Sub-components (<150 lines each)
+│   ├── Header.tsx
+│   ├── Body.tsx
+│   └── Footer.tsx
+├── utils/                # Helper functions
+│   └── calculations.ts
+└── styles/              # Styled components or CSS
+    └── styles.ts
+```
+
+#### Real Example: ClientPositionStreamlined
+```
+ClientPositionStreamlined/           # Main folder
+├── ClientPositionCardStreamlined.tsx # 576 lines (was 5020)
+├── hooks/                           # 22 specialized hooks
+│   ├── useMaterialEdit.ts          # 582 lines (close to limit)
+│   ├── useWorkEdit.ts              # 315 lines
+│   ├── useQuickAdd.ts              # 364 lines
+│   ├── useTenderMarkup.ts          # 42 lines
+│   ├── useLocalState.ts            # 126 lines
+│   └── ... (17 more hooks)
+├── components/                      # UI components
+│   ├── EmptyState.tsx              # 25 lines
+│   ├── PositionHeader.tsx         # 540 lines
+│   ├── BOQItemsTable.tsx          # 203 lines
+│   └── EditRows/
+│       ├── WorkEditRow.tsx
+│       └── MaterialEditRow.tsx
+└── styles/
+    └── PositionStyles.tsx
+```
+
+#### Hook Extraction Pattern
+```typescript
+// GOOD: Single responsibility hook under 200 lines
+// hooks/useDataFetching.ts
+export const useDataFetching = (props: Props) => {
+  const [data, setData] = useState();
+  const [loading, setLoading] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    // ... logic
+  }, []);
+
+  return { data, loading, fetchData };
+};
+```
+
+#### Component Extraction Pattern
+```typescript
+// GOOD: Main component delegates to sub-components
+// MainComponent.tsx (< 300 lines)
+import { Header } from './components/Header';
+import { Body } from './components/Body';
+import { useDataHandling } from './hooks/useDataHandling';
+
+export const MainComponent = () => {
+  const { data, handlers } = useDataHandling();
+
+  return (
+    <div>
+      <Header {...data} />
+      <Body {...data} {...handlers} />
+    </div>
+  );
+};
+```
+
+#### Files Violating 600-Line Rule (Need Refactoring)
+Current violations that must be fixed:
+- `TenderBOQManagerNew.tsx` - 2600+ lines → Split into 5+ files
+- `ClientPositionCard.tsx` - 1800+ lines → Use ClientPositionStreamlined pattern
+- Any other file >600 lines must be refactored immediately
 
 ### 5. Critical Bug Fixes Pattern (from Recent Refactoring)
-**IMPORTANT**: These patterns emerged from real refactoring sessions and prevent common bugs.
 When extracting business logic to hooks, watch for:
 - **Import Path Issues**: When moving components deeper in folder structure, verify all import paths:
   ```typescript
@@ -315,6 +410,35 @@ When extracting business logic to hooks, watch for:
 - Maintain local state maps (`optimisticItems`) merged with server data
 - Rollback on failure with proper error recovery
 
+### 7. Performance Optimization Pattern (N+1 Query Fix)
+**Problem**: Loading positions one by one causes N+1 queries
+```typescript
+// BAD - causes N+1 queries
+for (const position of positions) {
+  const items = await loadItems(position.id);
+  const links = await loadLinks(items);
+}
+```
+
+**Solution**: Batch loading with single queries
+```typescript
+// GOOD - 3 queries total
+const positions = await loadPositions(limit, offset);
+const positionIds = positions.map(p => p.id);
+const items = await loadAllItems(positionIds);
+const links = await loadAllLinks(itemIds);
+```
+
+**Implementation**: See `src/lib/supabase/api/boq/batch.ts` for:
+- `getAllByTenderId()` - Load all BOQ items with library data
+- `getAllWorkLinksByTenderId()` - Load all work-material links
+- `getPositionsWithItemsBatch()` - Optimized batch loading with pagination
+
+**Performance Gains**:
+- From 60+ queries to 3 queries
+- From 4792ms to <1000ms load time (4-5x improvement)
+- Supports pagination (20 items default)
+
 ## Key Domain-Specific Patterns
 
 ### State Management Architecture
@@ -331,11 +455,11 @@ When extracting business logic to hooks, watch for:
 - **Total Amount Formula**: `total_amount = (unit_rate + delivery_amount) × quantity`
 
 ### Delivery Cost System
-- **Delivery Types**: 
+- **Delivery Types**:
   - `included` - Delivery included in unit_rate (delivery_amount = 0)
   - `not_included` - Auto-calculated 3% of unit_rate
   - `amount` - Fixed delivery amount per unit
-- **Database Calculation**: Handled by trigger `calculate_boq_amounts_trigger()` 
+- **Database Calculation**: Handled by trigger `calculate_boq_amounts_trigger()`
 - **Visual Rounding**: Whole numbers in UI, precise decimals in database
 
 ### Cost Categories Architecture
@@ -399,6 +523,8 @@ Complex formula-based calculations with step-by-step logging:
 - React Query caching for static data
 - Debounced search (300ms default)
 - Performance monitoring via `performanceMetrics.ts`
+- **Batch loading** to eliminate N+1 queries (see batch.ts)
+- **Pagination** for large datasets (20 items default)
 
 ## UI/UX Standards
 - **Language**: Russian UI throughout
@@ -456,6 +582,8 @@ VITE_APP_VERSION=0.0.0   # Optional: Version display
 - Financial indicators dashboard
 - Template description editing
 - Client data display for structural positions
+- **Batch loading** with pagination for performance
+- **Modular component architecture** (files < 600 lines)
 
 ### ⚠️ Disabled
 - Authentication (no login)
@@ -502,14 +630,14 @@ TenderHUB/
 ├── src/
 │   ├── components/         # UI components
 │   │   ├── tender/        # BOQ-specific (46 components)
-│   │   │   └── ClientPositionStreamlined/ # Modular refactoring (27 files)
+│   │   │   └── ClientPositionStreamlined/ # Modular refactoring (28 files)
 │   │   ├── template/      # Template management
 │   │   ├── common/        # Shared components
 │   │   ├── admin/         # Admin interfaces
 │   │   └── financial/     # Financial components
 │   ├── lib/supabase/      # Database layer
 │   │   ├── api/          # API modules (<600 lines each)
-│   │   │   └── boq/      # BOQ sub-modules (crud, hierarchy, bulk, analytics, queries)
+│   │   │   └── boq/      # BOQ sub-modules (crud, hierarchy, bulk, analytics, queries, batch)
 │   │   └── types/        # TypeScript types (modular)
 │   ├── pages/            # Route components (lazy-loaded)
 │   │   ├── TendersPage/  # Tender list with components
@@ -535,10 +663,10 @@ TenderHUB/
   - ✨ New features
   - 💰 Financial/cost features
   - 💱 Currency-related features
-  - 🚀 Performance improvements
+  - 🚀 Performance improvements (N+1 fixes, batch loading)
   - 🐛 Bug fixes
   - 🎨 UI/UX improvements
-  - 🔧 Refactoring
+  - 🔧 Refactoring (component extraction, modularization)
   - 💥 Breaking changes
 
 ## Refactoring Guidelines
@@ -557,6 +685,15 @@ TenderHUB/
 4. **UI components with props drilling** (higher risk)
 5. **State management logic** (highest risk)
 
+### Recent Refactoring Example
+**ClientPositionCardStreamlined.tsx** - Reduced from 5020 to 576 lines:
+1. **Step 1**: EmptyState component (25 lines) - zero risk
+2. **Step 2**: useTenderMarkup hook (42 lines) - low risk
+3. **Step 3**: useLocalState hook (126 lines) - medium risk
+4. **Step 4**: BOQItemsTable component (203 lines) - medium risk
+5. **Step 5**: PositionHeader component (540 lines) - higher risk
+Result: **89% reduction** in file size, improved maintainability
+
 ## Common Troubleshooting
 
 - **Empty prod.sql (Critical)**: Run `npm run db:schema` immediately to generate schema file - this is required for all database operations
@@ -573,27 +710,22 @@ TenderHUB/
 - **Category Not Saving**: Check for spread operator conflicts when extracting to hooks
 - **409 Foreign Key Errors**: Exclude `work_id` and `material_id` from BOQ item updates
 - **String Interpolation in Tooltips**: Use `${variable}` not `{variable}` in template strings
+- **Slow Loading Performance**: Check for N+1 queries, implement batch loading (see batch.ts)
+- **Import Errors in Extracted Components**: Use `Typography.Text` not `Text` from antd
 
 ## Performance Targets
 
-- **Excel Import**: 5000 rows should complete in ≤30 seconds
-- **Page Load**: Initial render under 2 seconds
-- **Virtual Scrolling**: Smooth scrolling for lists with 10,000+ items
-- **Build Time**: Full production build under 1 minute
-
-## Database Schema Export
-
-The `prod.sql` file is critical and must be kept up to date:
-```bash
-npm run db:schema  # Exports current production schema
-```
-Generated file location: `supabase/schemas/prod.sql`
-File includes: tables, views, functions, triggers, indexes, ENUMs, comments
+- **Initial Page Load**: < 1000ms (achieved with batch loading)
+- **Position Card Expand**: < 500ms
+- **Inline Edit Save**: < 300ms
+- **Search/Filter**: < 100ms (with debounce)
+- **Excel Import**: 5000 rows in ≤ 30s
+- **Query Reduction**: From N+1 to 3-5 batch queries
 
 ## Additional Resources
 
 - **Database Schema**: Always regenerate `supabase/schemas/prod.sql` after database changes
 - **Type Generation**: TypeScript types in `src/lib/supabase/types/` should match prod.sql
-- **Supabase Dashboard**: Direct database access at https://lkmgbizyyaaacetllbzr.supabase.co
+- **Performance Monitoring**: Use browser DevTools Performance tab and `performance.now()` for measurements
 
 Remember: This is a simplified dev environment. Production will require authentication, RLS, and security features.

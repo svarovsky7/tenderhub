@@ -6,7 +6,6 @@ export { default as LibrarySelector } from './LibrarySelector';
 export { default as ClientPositionForm } from './ClientPositionForm';
 export { default as BOQItemForm } from './BOQItemForm';
 export { default as TenderBOQManager } from './TenderBOQManager';
-export { default as TenderBOQManagerNew } from './TenderBOQManagerNew';
 
 // Export types for external use
 export type {

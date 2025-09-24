@@ -10,7 +10,6 @@ import './App.css';
 // Lazy load pages for better performance
 const TendersPage = React.lazy(() => import('./pages/TendersPage'));
 const TenderBoq = React.lazy(() => import('./pages/TenderBoq'));
-const BOQPage = React.lazy(() => import('./pages/BOQPage'));
 const BOQPageSimplified = React.lazy(() => import('./pages/BOQPageSimplified'));
 const MaterialsPage = React.lazy(() => import('./pages/MaterialsPage'));
 const WorksPage = React.lazy(() => import('./pages/WorksPage'));
@@ -63,14 +62,6 @@ function App() {
               element={
                 <React.Suspense fallback={<div>Загрузка...</div>}>
                   <BOQPageSimplified />
-                </React.Suspense>
-              } 
-            />
-            <Route 
-              path="boq-classic" 
-              element={
-                <React.Suspense fallback={<div>Загрузка...</div>}>
-                  <BOQPage />
                 </React.Suspense>
               } 
             />
