@@ -34,7 +34,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
   // Если можно добавлять элементы, показываем кнопки
   if (canAddItems) {
     return (
-      <>
+      <div className="flex gap-2 w-full">
         <Button
           type="dashed"
           icon={<PlusOutlined />}
@@ -44,7 +44,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
             borderStyle: 'dashed',
             fontSize: '14px',
             fontWeight: '500',
-            flex: 1
+            flex: '1 1 50%'
           }}
         >
           Добавить работу или материал
@@ -58,12 +58,12 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
             borderStyle: 'dashed',
             fontSize: '14px',
             fontWeight: '500',
-            flex: 1
+            flex: '1 1 50%'
           }}
         >
           Добавить по шаблону
         </Button>
-      </>
+      </div>
     );
   }
 

@@ -73,6 +73,7 @@ interface ClientPositionCardStreamlinedProps {
     eur_rate?: number | null;
     cny_rate?: number | null;
   } | null;
+  isLoading?: boolean;  // Add loading state for lazy loading
 }
 
 
@@ -82,53 +83,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   onToggle,
   onUpdate,
   tenderId,
-  tender
+  tender,
+  isLoading = false  // Default to false
 }) => {
-  // Log tender prop when component renders
-  console.log('🎯 RAW TENDER PROP:', tender);
-  console.log('🔍 [ClientPositionCardStreamlined] Tender prop received:', {
-    tender,
-    tender_type: typeof tender,
-    is_null: tender === null,
-    is_undefined: tender === undefined,
-    usd_rate: tender?.usd_rate,
-    usd_rate_type: typeof tender?.usd_rate,
-    eur_rate: tender?.eur_rate,
-    eur_rate_type: typeof tender?.eur_rate,
-    cny_rate: tender?.cny_rate,
-    cny_rate_type: typeof tender?.cny_rate,
-    tender_keys: tender ? Object.keys(tender) : null,
-    tender_entries: tender ? Object.entries(tender) : null,
-    position_id: position.id,
-    raw_tender: JSON.stringify(tender)
-  });
-  console.log('🎯 [ClientPositionCardStreamlined] Render with tender:', {
-    positionId: position.id,
-    positionNumber: position.position_number,
-    tenderExists: !!tender,
-    tender: tender,
-    tenderId: tenderId
-  });
-  console.log('📦 Position props received:', {
-    id: position.id,
-    manual_volume: position.manual_volume,
-    manual_note: position.manual_note,
-    work_name: position.work_name?.substring(0, 30),
-    is_additional: position.is_additional,
-    position_type: position.position_type,
-    boq_items_count: position.boq_items?.length || 0,
-    has_linked_materials: position.boq_items?.some(item => item.work_link) || false
-  });
-  
-  // Debug tender currency data
-  console.log('💱 Tender currency data:', {
-    tenderId,
-    tender,
-    hasRates: tender ? !!(tender.usd_rate || tender.eur_rate || tender.cny_rate) : false,
-    usd_rate: tender?.usd_rate,
-    eur_rate: tender?.eur_rate,
-    cny_rate: tender?.cny_rate
-  });
   
   // Forms
   const [form] = Form.useForm();
@@ -151,8 +108,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     setRefreshKey,
     localWorks,
     setLocalWorks,
-    localBOQItems,
-    setLocalBOQItems,
     tempManualVolume,
     setTempManualVolume,
     tempManualNote,
@@ -171,7 +126,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     totalCost,
     positionItemsKey,
     works
-  } = useLocalState({ position });
+  } = useLocalState({ position, isExpanded });
 
   // Load tender markup
   const { tenderMarkup, loadingMarkup } = useTenderMarkup({ tenderId });
@@ -199,8 +154,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     position,
     localWorks,
     setLocalWorks,
-    localBOQItems,
-    setLocalBOQItems,
     editForm,
     setRefreshKey,
     onUpdate,
@@ -215,8 +168,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     workEditLoading
   } = useWorkEdit({
     position,
-    localBOQItems,
-    setLocalBOQItems,
     workEditForm,
     setRefreshKey,
     onUpdate,
@@ -347,7 +298,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 
   // Используем хук для сортировки элементов BOQ
   const sortedBOQItems = useSortedBOQItems({
-    localBOQItems,
+    boqItems: position.boq_items || [],
     position
   });
 
@@ -416,12 +367,22 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         />
 
         {/* Expandable Content with Animation */}
-        <div 
+        <div
           className={`overflow-hidden transition-[max-height,opacity] duration-500 ease-in-out ${
             isExpanded ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'
           }`}
         >
           <div className="p-4 bg-gray-50 min-h-0">
+            {/* Show loading state if items are being loaded */}
+            {isLoading && !position.boq_items ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="text-center">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
+                  <div className="text-gray-500">Загрузка элементов позиции...</div>
+                </div>
+              </div>
+            ) : (
+              <>
             {/* View Mode Toggle and Quick Add Button */}
             <div className="mb-4 flex justify-between items-center gap-4">
               <div className="flex gap-2 flex-1">
@@ -526,6 +487,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
                 onAddFirstItem={() => setQuickAddMode(true)}
               />
             )}
+              </>
+            )}
           </div>
         </div>
       </Card>
@@ -563,10 +526,19 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
 };
 
 export default React.memo(ClientPositionCardStreamlined, (prevProps, nextProps) => {
-  // Custom comparison to prevent unnecessary re-renders
+  // Helper function to calculate checksum of BOQ items for deep comparison
+  const calculateBOQChecksum = (items: any[] | undefined) => {
+    if (!items || items.length === 0) return '';
+    // Include key fields that might change: id, quantity, unit_rate, total_amount, description, updated_at
+    return items.map(item =>
+      `${item.id}-${item.quantity}-${item.unit_rate}-${item.total_amount}-${item.description}-${item.updated_at}`
+    ).join('|');
+  };
+
+  // Custom comparison to prevent unnecessary re-renders but allow updates when content changes
   return (
     prevProps.position.id === nextProps.position.id &&
-    prevProps.position.boq_items?.length === nextProps.position.boq_items?.length &&
+    calculateBOQChecksum(prevProps.position.boq_items) === calculateBOQChecksum(nextProps.position.boq_items) && // Deep comparison of BOQ items
     prevProps.position.manual_volume === nextProps.position.manual_volume && // Check manual_volume
     prevProps.position.manual_note === nextProps.position.manual_note && // Check manual_note
     prevProps.works?.length === nextProps.works?.length &&

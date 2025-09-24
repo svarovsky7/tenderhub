@@ -90,7 +90,7 @@ ALWAYS verify schema before ANY database work
 - `client_positions` - Customer position groupings
 - `tenders` - Main tender records (includes currency rates: usd_rate, eur_rate, cny_rate)
 - `materials_library` & `works_library` - Resource libraries
-- `work_material_links` - M2M relationships between works and materials
+- `work_material_links` - M2M relationships between works and materials (NO tender_id column)
 - `work_material_templates` - Templates for work-material combinations
 - `cost_categories` & `detail_cost_categories` - Cost categorization system
 - `location` - Geographic locations for costs
@@ -122,7 +122,7 @@ Key modules (33 files total):
 ### Component Organization
 ```
 src/components/tender/     # Core BOQ components (46 components)
-  TenderBOQManagerNew.tsx  # Main BOQ interface
+  TenderBOQManagerSimplified.tsx  # Simplified BOQ interface
   ClientPositionCardStreamlined.tsx # Position card with inline editing (576 lines, reduced from 5020)
   ClientPositionStreamlined/  # Modular architecture for position card (28 files)
     hooks/               # 22 specialized hooks extracted for maintainability
@@ -163,6 +163,8 @@ src/components/tender/     # Core BOQ components (46 components)
       EmptyState.tsx            # Empty state display (25 lines)
       PositionHeader.tsx        # Position header component (540 lines)
       BOQItemsTable.tsx         # BOQ items table (203 lines)
+      ActionButtons.tsx         # Action buttons component (132 lines)
+      PositionSummary.tsx       # Position summary display (83 lines)
     styles/             # Separated style definitions
       PositionStyles.tsx         # Styled components
   BOQItemList/          # Virtual scrolling with drag-drop
@@ -227,6 +229,7 @@ src/components/financial/  # Financial components
 - **Total Amount**: Calculated as `(unit_rate + delivery_amount) × quantity` via database trigger
 - **Currency Fields**: BOQ items support multi-currency (original_currency, original_amount, currency_rate)
 - **Foreign Key Fields**: `work_id` and `material_id` reference library tables, not BOQ items
+- **work_material_links**: Has NO tender_id column - filter by client_position_id instead
 
 ### 2. Logging Pattern (Required)
 ```typescript
@@ -317,6 +320,8 @@ ClientPositionStreamlined/           # Main folder
 │   ├── EmptyState.tsx              # 25 lines
 │   ├── PositionHeader.tsx         # 540 lines
 │   ├── BOQItemsTable.tsx          # 203 lines
+│   ├── ActionButtons.tsx          # 132 lines
+│   ├── PositionSummary.tsx        # 83 lines
 │   └── EditRows/
 │       ├── WorkEditRow.tsx
 │       └── MaterialEditRow.tsx
@@ -359,12 +364,6 @@ export const MainComponent = () => {
   );
 };
 ```
-
-#### Files Violating 600-Line Rule (Need Refactoring)
-Current violations that must be fixed:
-- `TenderBOQManagerNew.tsx` - 2600+ lines → Split into 5+ files
-- `ClientPositionCard.tsx` - 1800+ lines → Use ClientPositionStreamlined pattern
-- Any other file >600 lines must be refactored immediately
 
 ### 5. Critical Bug Fixes Pattern (from Recent Refactoring)
 When extracting business logic to hooks, watch for:
@@ -596,6 +595,7 @@ VITE_APP_VERSION=0.0.0   # Optional: Version display
 - Large Excel imports (>10K rows) may timeout
 - Drag-drop slow with many items
 - Some Ant Design React 19 warnings (patches applied)
+- INP (Interaction to Next Paint) can exceed 900ms on complex BOQ pages
 
 ## Important Implementation Notes
 
@@ -667,6 +667,7 @@ TenderHUB/
   - 🐛 Bug fixes
   - 🎨 UI/UX improvements
   - 🔧 Refactoring (component extraction, modularization)
+  - 🧹 Code cleanup and removal of unused files
   - 💥 Breaking changes
 
 ## Refactoring Guidelines
@@ -692,6 +693,8 @@ TenderHUB/
 3. **Step 3**: useLocalState hook (126 lines) - medium risk
 4. **Step 4**: BOQItemsTable component (203 lines) - medium risk
 5. **Step 5**: PositionHeader component (540 lines) - higher risk
+6. **Step 6**: ActionButtons component (132 lines) - medium risk
+7. **Step 7**: PositionSummary component (83 lines) - low risk
 Result: **89% reduction** in file size, improved maintainability
 
 ## Common Troubleshooting
@@ -712,6 +715,7 @@ Result: **89% reduction** in file size, improved maintainability
 - **String Interpolation in Tooltips**: Use `${variable}` not `{variable}` in template strings
 - **Slow Loading Performance**: Check for N+1 queries, implement batch loading (see batch.ts)
 - **Import Errors in Extracted Components**: Use `Typography.Text` not `Text` from antd
+- **work_material_links Query Error**: Remember this table has NO tender_id column - filter by client_position_id
 
 ## Performance Targets
 
@@ -721,6 +725,7 @@ Result: **89% reduction** in file size, improved maintainability
 - **Search/Filter**: < 100ms (with debounce)
 - **Excel Import**: 5000 rows in ≤ 30s
 - **Query Reduction**: From N+1 to 3-5 batch queries
+- **INP (Interaction to Next Paint)**: < 200ms (current issue: can exceed 900ms)
 
 ## Additional Resources
 

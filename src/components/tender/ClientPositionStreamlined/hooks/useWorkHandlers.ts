@@ -16,8 +16,6 @@ interface UseWorkHandlersProps {
   editingWorkId: string | null;
   setEditingWorkId: (id: string | null) => void;
   setLoading: (loading: boolean) => void;
-  setLocalBOQItems: (items: any) => void;
-  localBOQItems: any[];
   setRefreshKey: (fn: (prev: number) => number) => void;
   onUpdate: () => void;
   tender?: {
@@ -33,8 +31,6 @@ export const useWorkHandlers = ({
   editingWorkId,
   setEditingWorkId,
   setLoading,
-  setLocalBOQItems,
-  localBOQItems,
   setRefreshKey,
   onUpdate,
   tender
@@ -301,18 +297,8 @@ export const useWorkHandlers = ({
 
       console.log('✅ Work updated successfully');
 
-      // Update local data with the fresh data from API
-      if (result.data) {
-        const updatedItem = result.data;
-        const itemIndex = localBOQItems.findIndex((item: any) => item.id === editingWorkId);
-        if (itemIndex !== -1) {
-          // Create a new array with updated item to trigger re-render
-          const updatedItems = [...localBOQItems];
-          updatedItems[itemIndex] = { ...updatedItems[itemIndex], ...updatedItem };
-          setLocalBOQItems(updatedItems);
-          console.log('📝 Updated local work data:', updatedItems[itemIndex]);
-        }
-      }
+      // Just call onUpdate to refresh the position data
+      // The parent component will reload the data from server
 
       message.success('Работа обновлена');
       setEditingWorkId(null);
@@ -326,7 +312,7 @@ export const useWorkHandlers = ({
       setLoading(false);
     }
   }, [editingWorkId, workEditForm, onUpdate, position.boq_items, position.id, tender,
-      setLoading, localBOQItems, setLocalBOQItems, setEditingWorkId, setRefreshKey]);
+      setLoading, setEditingWorkId, setRefreshKey]);
 
   // Cancel work inline edit
   const handleCancelWorkEdit = useCallback(() => {

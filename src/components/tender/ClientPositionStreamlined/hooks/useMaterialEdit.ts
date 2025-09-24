@@ -9,8 +9,6 @@ interface UseMaterialEditProps {
   position: any;
   localWorks: BOQItemWithLibrary[];
   setLocalWorks: React.Dispatch<React.SetStateAction<BOQItemWithLibrary[]>>;
-  localBOQItems: any[];
-  setLocalBOQItems: React.Dispatch<React.SetStateAction<any[]>>;
   editForm: FormInstance;
   setRefreshKey: React.Dispatch<React.SetStateAction<number>>;
   onUpdate: () => void;
@@ -21,8 +19,6 @@ export const useMaterialEdit = ({
   position,
   localWorks,
   setLocalWorks,
-  localBOQItems,
-  setLocalBOQItems,
   editForm,
   setRefreshKey,
   onUpdate,
@@ -532,7 +528,7 @@ export const useMaterialEdit = ({
     } finally {
       setLoading(false);
     }
-  }, [editingMaterialId, position, works, editForm, onUpdate, tender, localBOQItems, setLocalBOQItems, setRefreshKey]);
+  }, [editingMaterialId, position, works, editForm, onUpdate, tender, setRefreshKey]);
 
   const handleCancelInlineEdit = useCallback(() => {
     console.log('❌ Cancelling inline edit');

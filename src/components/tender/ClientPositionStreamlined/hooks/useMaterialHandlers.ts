@@ -17,8 +17,6 @@ interface UseMaterialHandlersProps {
   setEditingMaterialId: (id: string | null) => void;
   setEditingItem: (item: any) => void;
   setLoading: (loading: boolean) => void;
-  setLocalBOQItems: (items: any) => void;
-  localBOQItems: any[];
   setRefreshKey: (fn: (prev: number) => number) => void;
   onUpdate: () => void;
   tender?: {
@@ -36,8 +34,6 @@ export const useMaterialHandlers = ({
   setEditingMaterialId,
   setEditingItem,
   setLoading,
-  setLocalBOQItems,
-  localBOQItems,
   setRefreshKey,
   onUpdate,
   tender
@@ -113,7 +109,7 @@ export const useMaterialHandlers = ({
     setLoading(true);
     try {
       // Get current item data
-      const editingItem = localBOQItems.find((item: any) => item.id === editingMaterialId);
+      const editingItem = position.boq_items?.find((item: any) => item.id === editingMaterialId);
       if (!editingItem) {
         throw new Error('Item not found');
       }
@@ -183,16 +179,8 @@ export const useMaterialHandlers = ({
         );
       }
 
-      // Update local data
-      if (result.data) {
-        const updatedItem = result.data;
-        const itemIndex = localBOQItems.findIndex((item: any) => item.id === editingMaterialId);
-        if (itemIndex !== -1) {
-          const updatedItems = [...localBOQItems];
-          updatedItems[itemIndex] = { ...updatedItems[itemIndex], ...updatedItem };
-          setLocalBOQItems(updatedItems);
-        }
-      }
+      // Just call onUpdate to refresh the position data
+      // The parent component will reload the data from server
 
       message.success('Материал обновлен и коэффициенты сохранены');
       setEditingMaterialId(null);
@@ -205,8 +193,8 @@ export const useMaterialHandlers = ({
     } finally {
       setLoading(false);
     }
-  }, [editingMaterialId, position.id, works, editForm, onUpdate, tender, localBOQItems,
-      setLoading, setLocalBOQItems, setEditingMaterialId, setRefreshKey]);
+  }, [editingMaterialId, position.id, position.boq_items, works, editForm, onUpdate, tender,
+      setLoading, setEditingMaterialId, setRefreshKey]);
 
   // Cancel inline edit
   const handleCancelInlineEdit = useCallback(() => {

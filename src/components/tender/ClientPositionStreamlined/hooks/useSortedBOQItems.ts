@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { BOQItemWithLibrary } from '../../../../lib/supabase/types';
 
 interface UseSortedBOQItemsProps {
-  localBOQItems: BOQItemWithLibrary[];
+  boqItems: BOQItemWithLibrary[];
   position: {
     is_additional?: boolean;
     work_name?: string;
@@ -17,16 +17,16 @@ interface UseSortedBOQItemsProps {
  * 2. После каждой работы идут связанные с ней материалы
  * 3. В конце списка идут несвязанные материалы
  *
- * @param localBOQItems - массив элементов BOQ
+ * @param boqItems - массив элементов BOQ
  * @param position - данные позиции для отладочного вывода
  * @returns отсортированный массив элементов BOQ
  */
 export const useSortedBOQItems = ({
-  localBOQItems,
+  boqItems,
   position
 }: UseSortedBOQItemsProps): BOQItemWithLibrary[] => {
   return useMemo(() => {
-    if (!localBOQItems || localBOQItems.length === 0) {
+    if (!boqItems || boqItems.length === 0) {
       return [];
     }
 
@@ -34,14 +34,14 @@ export const useSortedBOQItems = ({
     if (position.is_additional) {
       console.log('🔄 Sorting BOQ items for ДОП работа:', {
         work_name: position.work_name,
-        total_items: localBOQItems.length,
-        works: localBOQItems.filter(i => i.item_type === 'work').length,
-        materials: localBOQItems.filter(i => i.item_type === 'material').length,
-        linked_materials: localBOQItems.filter(i => i.work_link).length
+        total_items: boqItems.length,
+        works: boqItems.filter(i => i.item_type === 'work').length,
+        materials: boqItems.filter(i => i.item_type === 'material').length,
+        linked_materials: boqItems.filter(i => i.work_link).length
       });
     }
 
-    const items = [...localBOQItems];
+    const items = [...boqItems];
     const sortedItems: BOQItemWithLibrary[] = [];
 
     // Get all works and sub-works sorted by sub_number
@@ -103,5 +103,5 @@ export const useSortedBOQItems = ({
     }
 
     return sortedItems;
-  }, [localBOQItems, position.is_additional, position.work_name]);
+  }, [boqItems, position.is_additional, position.work_name]);
 };

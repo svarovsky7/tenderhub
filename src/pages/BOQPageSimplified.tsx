@@ -22,7 +22,7 @@ import {
   DashboardOutlined
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import TenderBOQManagerSimplified from '../components/tender/TenderBOQManagerSimplified';
+import TenderBOQManagerLazy from '../components/tender/TenderBOQManagerLazy';
 import DeadlineStatusBar from '../components/tender/DeadlineStatusBar';
 import QuickTenderSelector from '../components/common/QuickTenderSelector';
 import { tendersApi } from '../lib/supabase/api';
@@ -530,8 +530,8 @@ const BOQPageSimplified: React.FC = () => {
             className={`p-4 lg:p-6 transition-all duration-1000 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}
           >
             <div className={`w-full transition-all duration-1000 transform ${isContentVisible ? 'translate-y-0' : 'translate-y-10'}`}>
-              <TenderBOQManagerSimplified 
-                tenderId={selectedTenderId} 
+              <TenderBOQManagerLazy
+                tenderId={selectedTenderId}
                 key={selectedTenderId}
                 onStatsUpdate={handleUpdateStats}
               />

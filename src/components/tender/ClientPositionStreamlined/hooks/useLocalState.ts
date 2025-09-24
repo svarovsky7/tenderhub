@@ -3,12 +3,13 @@ import type { BOQItemWithLibrary } from '../../../../lib/supabase/types';
 
 interface UseLocalStateProps {
   position: any;
+  isExpanded?: boolean;
 }
 
 /**
  * Хук для управления локальным состоянием компонента ClientPositionCardStreamlined
  */
-export const useLocalState = ({ position }: UseLocalStateProps) => {
+export const useLocalState = ({ position, isExpanded = false }: UseLocalStateProps) => {
   // Local state
   const [loading, setLoading] = useState(false);
   const [editingItem, setEditingItem] = useState<string | null>(null);
@@ -16,7 +17,6 @@ export const useLocalState = ({ position }: UseLocalStateProps) => {
   const [linkMaterialModalVisible, setLinkMaterialModalVisible] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [localWorks, setLocalWorks] = useState<BOQItemWithLibrary[]>([]);
-  const [localBOQItems, setLocalBOQItems] = useState<any[]>(position.boq_items || []);
   const [tempManualVolume, setTempManualVolume] = useState<number | null>(position.manual_volume ?? null);
   const [tempManualNote, setTempManualNote] = useState<string>(position.manual_note ?? '');
   const [editSelectedCurrency, setEditSelectedCurrency] = useState<'RUB' | 'USD' | 'EUR' | 'CNY'>('RUB');
@@ -32,7 +32,26 @@ export const useLocalState = ({ position }: UseLocalStateProps) => {
   const worksCount = position.boq_items?.filter(
     item => item.item_type === 'work' || item.item_type === 'sub_work'
   ).length || 0;
-  const totalCost = position.total_position_cost || 0;
+
+  // Dynamic total cost calculation
+  const totalCost = useMemo(() => {
+    // If position is expanded and has boq_items - calculate dynamically
+    if (isExpanded && position.boq_items?.length > 0) {
+      const dynamicTotal = position.boq_items.reduce((sum: number, item: any) => {
+        const itemTotal = parseFloat(item.total_amount || '0') || 0;
+        return sum + itemTotal;
+      }, 0);
+      console.log('💰 Dynamic total calculation for expanded position:', {
+        position_name: position.work_name,
+        items_count: position.boq_items.length,
+        dynamic_total: dynamicTotal,
+        db_total: position.total_position_cost
+      });
+      return dynamicTotal;
+    }
+    // Otherwise use value from DB
+    return position.total_position_cost || 0;
+  }, [isExpanded, position.boq_items, position.total_position_cost, position.work_name]);
 
   // Sync state when position changes
   useEffect(() => {
@@ -40,8 +59,7 @@ export const useLocalState = ({ position }: UseLocalStateProps) => {
     setTempManualVolume(position.manual_volume ?? null);
     setTempManualNote(position.manual_note ?? '');
     setTempUnit(position.unit ?? '');
-    setLocalBOQItems(position.boq_items || []);
-  }, [position.work_name, position.manual_volume, position.manual_note, position.unit, position.boq_items]);
+  }, [position.work_name, position.manual_volume, position.manual_note, position.unit]);
 
   // Create stable dependency for position items
   const positionItemsKey = useMemo(() => {
@@ -107,8 +125,6 @@ export const useLocalState = ({ position }: UseLocalStateProps) => {
     setRefreshKey,
     localWorks,
     setLocalWorks,
-    localBOQItems,
-    setLocalBOQItems,
     tempManualVolume,
     setTempManualVolume,
     tempManualNote,
