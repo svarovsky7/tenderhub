@@ -37,7 +37,6 @@ npm run dev
 - TypeScript compilation first (`tsc -b`) using project references
 - Then Vite bundling if TypeScript succeeds
 - Build will fail on any TypeScript errors
-- `.tsbuildinfo` cached in `node_modules/.tmp/`
 
 ## MCP (Model Context Protocol) Integration
 
@@ -46,6 +45,7 @@ npm run dev
 - Available after Claude Code restart
 - Check connection: `/mcp list`
 - Provides tools: `mcp__supabase__*` for CRUD operations (query, insert, update, delete, rpc, schema)
+
 
 **GitHub MCP Server** is also configured:
 - Provides tools: `mcp__github__*` for repository operations
@@ -91,7 +91,7 @@ ALWAYS verify schema before ANY database work
 - `tenders` - Main tender records (includes currency rates: usd_rate, eur_rate, cny_rate)
 - `materials_library` & `works_library` - Resource libraries
 - `work_material_links` - M2M relationships between works and materials
-- `work_material_templates` - Templates for work-material combinations
+- `work_material_templates` - Template system for work-material combinations
 - `cost_categories` & `detail_cost_categories` - Cost categorization system
 - `location` - Geographic locations for costs
 - `tender_markup` & `markup_templates` - Tender markup configuration
@@ -108,7 +108,7 @@ Key modules (33 files total):
 - `tenders.ts` - Tender lifecycle management
 - `materials.ts` & `works.ts` - Library management
 - `work-material-links.ts` - Work-Material relationships
-- `work-material-templates.ts` - Template management for work-material combinations
+- `work-material-templates.ts` - Template system for combined work-material structures
 - `client-works.ts` & `client-positions.ts` - Excel import (target: 5000 rows in ≤30s)
 - Cost management modules (construction-costs, cost-categories, cost-structure, etc.)
 - `tender-markup.ts` & `markup-templates.ts` - Markup management
@@ -123,50 +123,14 @@ Key modules (33 files total):
 ```
 src/components/tender/     # Core BOQ components (46 components)
   TenderBOQManagerNew.tsx  # Main BOQ interface
-  ClientPositionCardStreamlined.tsx # Position card with inline editing (1414 lines, reduced from 5020)
-  ClientPositionStreamlined/  # Modular architecture for position card (28 files)
-    hooks/               # 18 specialized hooks extracted for maintainability
-      useMaterialEdit.ts         # Material editing operations (582 lines)
-      useWorkEdit.ts             # Work editing operations (315 lines)
-      useQuickAdd.ts             # Quick add functionality (364 lines)
-      useMaterialHandlers.ts      # Material CRUD handlers
-      useWorkHandlers.ts          # Work CRUD handlers
-      useQuickAddHandlers.ts      # Quick add logic
-      useTemplateHandlers.ts      # Template operations
-      useItemOperations.ts        # Delete/update operations
-      useCurrencyHandlers.ts      # Currency conversion logic
-      useCoefficientHandlers.ts   # Coefficient calculations
-      usePositionHandlers.ts      # Position-level operations
-      usePositionState.ts         # Position state management
-      usePositionActions.ts       # Position actions
-      useDeleteHandlers.ts        # Delete operations
-      useLinkingHandlers.ts       # Work-material linking
-      useCommercialCost.ts        # Commercial cost calculations (reusable)
-      useBOQSorting.ts            # BOQ item sorting logic
-      useMediaQueryFix.ts         # MediaQuery listener fix
-      useSortedBOQItems.ts        # Sorted BOQ items with work-material relationships
-    components/          # Extracted UI components
-      EditRows/                   # Inline editing components
-        WorkEditRow.tsx           # Work item inline editor
-        MaterialEditRow.tsx       # Material item inline editor
-      QuickAdd/
-        QuickAddRow.tsx          # Quick add form component
-      Template/
-        TemplateAddForm.tsx      # Template insertion form
-      Table/
-        BOQTableColumns.tsx      # Table column definitions (578 lines)
-      getTableColumns.tsx        # Column configuration
-      PositionTable.tsx          # Main table component
-      PositionTableColumns.tsx   # Column specifications
-    styles/             # Separated style definitions
-      PositionStyles.tsx         # Styled components
-  BOQItemList/          # Virtual scrolling with drag-drop
-  LibrarySelector/      # Material/work selection with cart
+  ClientPositionCardStreamlined.tsx # Position card with inline editing
+  BOQItemList/            # Virtual scrolling with drag-drop
+  LibrarySelector/        # Material/work selection with cart
 
-src/components/template/   # Template management components
-  TemplateList.tsx       # Template list with work-material hierarchy display
-  InlineAddTemplateToBOQ.tsx # Inline template insertion with autocomplete
-  EnhancedInlineTemplateForm.tsx # Template creation with work-material links
+src/components/template/   # Template management
+  TemplateList.tsx        # Template list with inline editing
+  InlineAddTemplateToBOQ.tsx # Direct template insertion
+  EnhancedInlineTemplateForm.tsx # Template creation
 
 src/components/common/     # Shared components (7 components)
   CostDetailCascadeSelector.tsx # Combined cascade/search selector with caching
@@ -208,7 +172,6 @@ src/components/financial/  # Financial components
 - `formatters.ts` - Number and date formatters
 - `performanceMetrics.ts` - Performance monitoring utilities
 - `lazyLoading.tsx` - Enhanced lazy loading components
-- `debounce.ts` - Debounce utility functions
 
 ## Critical Implementation Patterns
 
@@ -221,7 +184,6 @@ src/components/financial/  # Financial components
 - **Base Quantity**: `base_quantity` field stores user input for unlinked materials
 - **Total Amount**: Calculated as `(unit_rate + delivery_amount) × quantity` via database trigger
 - **Currency Fields**: BOQ items support multi-currency (original_currency, original_amount, currency_rate)
-- **Foreign Key Fields**: `work_id` and `material_id` reference library tables, not BOQ items
 
 ### 2. Logging Pattern (Required)
 ```typescript
@@ -246,69 +208,12 @@ try {
 }
 ```
 
-### 4. File Size Limits & Modular Architecture
-- **Maximum 600 lines per file** (target for new code)
-- **Recent Refactoring Success**: ClientPositionCardStreamlined reduced from 5020 to 1414 lines (-72%)
+### 4. File Size Limits
+- **Maximum 600 lines per file**
 - Extract hooks to separate files
-- Extract table columns and configurations to separate modules
 - Use barrel exports for organization
-- **Component Extraction Pattern**:
-  ```
-  ClientPositionStreamlined/
-  ├── hooks/               # Business logic hooks
-  │   ├── use{Domain}.ts   # Single responsibility hooks
-  │   └── use{Domain}Handlers.ts
-  ├── components/          # UI components
-  │   └── Table/          # Table-related components
-  │       └── BOQTableColumns.tsx
-  └── styles/             # Styled components
-  ```
-- **Hook Extraction Pattern**:
-  - One hook per domain concern (materials, works, templates, etc.)
-  - Consistent naming: `use{Domain}Handlers.ts` or `use{Domain}.ts`
-  - Pass all dependencies via props interface
-  - Return object with handler functions and state
 
-### 5. Critical Bug Fixes Pattern (from Recent Refactoring)
-When extracting business logic to hooks, watch for:
-- **Import Path Issues**: When moving components deeper in folder structure, verify all import paths:
-  ```typescript
-  // WRONG - assuming common folder exists
-  import CostCategoryDisplay from '../../../../common/CostCategoryDisplay';
-
-  // CORRECT - use actual relative path
-  import CostCategoryDisplay from '../../../CostCategoryDisplay';
-  ```
-- **TypeScript Type Imports**: Always use `type` keyword for type-only imports:
-  ```typescript
-  // WRONG - runtime import for type
-  import { ColumnsType } from 'antd/es/table';
-
-  // CORRECT - type-only import
-  import type { ColumnsType } from 'antd/es/table';
-  ```
-- **Spread Operator Field Conflicts**:
-  ```typescript
-  // WRONG - fields from values override explicit settings
-  const updateData = {
-    ...values,
-    detail_cost_category_id: validatedId  // gets overridden by undefined from values
-  };
-
-  // CORRECT - exclude conflicting fields first
-  const { detail_cost_category_id: ignored, ...cleanValues } = values;
-  const updateData = {
-    ...cleanValues,
-    detail_cost_category_id: validatedId  // now properly set
-  };
-  ```
-- **Foreign Key Exclusions**: Always exclude `work_id` and `material_id` from BOQ item updates
-- **Array Response Handling**: Supabase may return arrays even with `.single()`:
-  ```typescript
-  const actualData = Array.isArray(data) ? data[0] : data;
-  ```
-
-### 6. Optimistic Updates Pattern
+### 5. Optimistic Updates Pattern
 - Use React Query's optimistic updates with temporary IDs (`temp-${Date.now()}`)
 - Maintain local state maps (`optimisticItems`) merged with server data
 - Rollback on failure with proper error recovery
@@ -328,12 +233,19 @@ When extracting business logic to hooks, watch for:
 - **Base Quantity**: Stored only for unlinked materials, NULL for linked
 - **Total Amount Formula**: `total_amount = (unit_rate + delivery_amount) × quantity`
 
+### Template System for Work-Material Links
+- **Template Structure**: Can contain linked pairs and/or standalone elements
+- **Link Preservation**: Alternative link search always runs to handle combined templates
+- **Duplicate Prevention**: Set-based checking for existing links
+- **Order Independence**: Items matched by description, not index after DB insertion
+- **Bulk Operations**: Efficient batch insertion with relationship preservation
+
 ### Delivery Cost System
-- **Delivery Types**: 
+- **Delivery Types**:
   - `included` - Delivery included in unit_rate (delivery_amount = 0)
   - `not_included` - Auto-calculated 3% of unit_rate
   - `amount` - Fixed delivery amount per unit
-- **Database Calculation**: Handled by trigger `calculate_boq_amounts_trigger()` 
+- **Database Calculation**: Handled by trigger `calculate_boq_amounts_trigger()`
 - **Visual Rounding**: Whole numbers in UI, precise decimals in database
 
 ### Cost Categories Architecture
@@ -341,7 +253,6 @@ When extracting business logic to hooks, watch for:
 - **Dynamic Display Loading**: Loaded on-demand via `CostCategoryDisplay.tsx`
 - **Combined Selector**: Cascade and search modes (min 2 chars)
 - **Caching**: 30-minute staleTime for displays
-- **Batch Loading**: `batchLoadCostCategories()` in helpers.ts to avoid N+1 queries
 
 ### Commercial Cost Calculation (`utils/calculateCommercialCost.ts`)
 Complex formula-based calculations with step-by-step logging:
@@ -356,12 +267,11 @@ Complex formula-based calculations with step-by-step logging:
 9. Прибыль = ОФЗ × (1 + % прибыли)
 10. Итого = Прибыль + Гарантийный период
 
-### Currency System
+### Currency System (New)
 - **Multi-Currency Support**: BOQ items can store original currency and amounts
 - **Exchange Rates**: Stored at tender level (usd_rate, eur_rate, cny_rate)
-- **Fields**: `currency_type`, `currency_rate` in boq_items
+- **Fields**: `original_currency`, `original_amount`, `currency_rate` in boq_items
 - **Converter Utility**: `utils/currencyConverter.ts` for conversions
-- **Rate Calculation**: Always fetch from tender, never trust form values
 
 ### Position Hierarchy System
 - **Position Types**: `executable`, `section`, `subsection`, `not_executable`, etc.
@@ -380,13 +290,6 @@ Complex formula-based calculations with step-by-step logging:
 - **Batch Processing**: 5000+ rows with progress tracking
 - **Progress Modals**: Real-time feedback via `UploadProgressModal.tsx`
 - **Error Reporting**: Detailed per-row error messages
-
-### Template System for Work-Material Links
-- **Template Structure**: Can contain linked pairs and/or standalone elements
-- **Link Preservation**: Alternative link search always runs to handle combined templates
-- **Duplicate Prevention**: Set-based checking for existing links
-- **Order Independence**: Items matched by description, not index after DB insertion
-- **Bulk Operations**: Efficient batch insertion with relationship preservation
 
 ### Performance Optimizations
 - Code splitting with React.lazy() for all routes
@@ -471,7 +374,7 @@ VITE_APP_VERSION=0.0.0   # Optional: Version display
 
 - **Material Linking**: Uses `MaterialLinkModal.tsx`, not drag-drop
 - **Connection Monitoring**: Built-in Supabase status tracking via ConnectionStatus component
-- **Excel Import**: Batch operations via `client-works.ts` and `client-positions.ts`
+- **Excel Import**: Batch operations via `client-works.ts` and `client_positions.ts`
 - **BOQ Pages**: Two interfaces - standard (`/tender/:id/boq`) and simplified (`/boq`)
 - **Fetch Interceptor**: Custom retry logic with exponential backoff
 - **Component Count**: 46 BOQ components, 7 shared components, 33 API modules
@@ -500,7 +403,6 @@ TenderHUB/
 ├── src/
 │   ├── components/         # UI components
 │   │   ├── tender/        # BOQ-specific (46 components)
-│   │   │   └── ClientPositionStreamlined/ # Modular refactoring (27 files)
 │   │   ├── template/      # Template management
 │   │   ├── common/        # Shared components
 │   │   ├── admin/         # Admin interfaces
@@ -513,7 +415,7 @@ TenderHUB/
 │   │   ├── TendersPage/  # Tender list with components
 │   │   └── admin/        # Admin pages
 │   ├── hooks/            # Custom React hooks
-│   └── utils/            # Utilities (9+ modules)
+│   └── utils/            # Utilities (7+ modules)
 ├── supabase/
 │   └── schemas/
 │       └── prod.sql      # 🚨 SOURCE OF TRUTH for DB schema
@@ -536,24 +438,7 @@ TenderHUB/
   - 🚀 Performance improvements
   - 🐛 Bug fixes
   - 🎨 UI/UX improvements
-  - 🔧 Refactoring
   - 💥 Breaking changes
-
-## Refactoring Guidelines
-
-### When Refactoring Large Components (>1000 lines)
-1. **Start with pure utilities**: Extract functions that don't use hooks first
-2. **Extract custom hooks**: Move business logic to `hooks/` folder
-3. **Extract sub-components**: Move UI components to `components/` folder
-4. **Extract configurations**: Move table columns, form configs to separate files
-5. **Test after each extraction**: Run `npm run dev` and test the page
-
-### Extraction Priority (from least to most risky)
-1. **Constants and configurations** (zero risk)
-2. **Pure utility functions** (low risk)
-3. **Custom hooks with clear dependencies** (medium risk)
-4. **UI components with props drilling** (higher risk)
-5. **State management logic** (highest risk)
 
 ## Common Troubleshooting
 
@@ -562,18 +447,15 @@ TenderHUB/
 - **React 19 Warnings**: Expected due to Ant Design compatibility patch
 - **Type Errors**: Run `npm run build` to check all TypeScript errors
 - **Database Schema Mismatch**: Always sync with `supabase/schemas/prod.sql`
-- **MCP Not Working**: Restart Claude Code completely
+- **MCP Not Working**: Restart Claude Code completely (see MCP_SETUP.md)
 - **ESLint Import Error**: If ESLint fails with import errors, ensure all packages are installed with `npm install`
 - **Vite HMR Issues**: HMR timeout set to 5s, overlay disabled in vite.config.ts
 - **Build Failures**: Check `.tsbuildinfo` cache in `node_modules/.tmp/` - delete if corrupt
-- **Import Path Errors After Refactoring**: Double-check relative paths when moving files deeper in folder structure
 - **Template Links Breaking**: Check that alternative link search is running in `convertTemplateToBOQItems`
-- **Category Not Saving**: Check for spread operator conflicts when extracting to hooks
-- **409 Foreign Key Errors**: Exclude `work_id` and `material_id` from BOQ item updates
-- **String Interpolation in Tooltips**: Use `${variable}` not `{variable}` in template strings
 
 ## Additional Resources
 
+- **MCP Setup**: See `MCP_SETUP.md` for MCP server configuration details
 - **Database Schema**: Always regenerate `supabase/schemas/prod.sql` after database changes
 - **Type Generation**: TypeScript types in `src/lib/supabase/types/` should match prod.sql
 
