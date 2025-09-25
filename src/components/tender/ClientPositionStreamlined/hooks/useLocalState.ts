@@ -27,16 +27,40 @@ export const useLocalState = ({ position, isExpanded = false }: UseLocalStatePro
 
   // Computed properties
   const totalItems = position.boq_items?.length || 0;
-  const materialsCount = position.boq_items?.filter(
-    item => item.item_type === 'material' || item.item_type === 'sub_material'
-  ).length || 0;
-  const worksCount = position.boq_items?.filter(
-    item => item.item_type === 'work' || item.item_type === 'sub_work'
-  ).length || 0;
+
+  // Use cached counts from position data when available (for collapsed state)
+  // Fall back to counting from boq_items when expanded and items are loaded
+  const materialsCount = useMemo(() => {
+    // If position is expanded and has items, count dynamically for real-time accuracy
+    if (isExpanded && position.boq_items) {
+      return position.boq_items.filter(
+        item => item.item_type === 'material' || item.item_type === 'sub_material'
+      ).length;
+    }
+    // For collapsed positions, use cached count from server if available
+    if (position.materials_count !== undefined && position.materials_count !== null) {
+      return position.materials_count;
+    }
+    return 0;
+  }, [isExpanded, position.materials_count, position.boq_items]);
+
+  const worksCount = useMemo(() => {
+    // If position is expanded and has items, count dynamically for real-time accuracy
+    if (isExpanded && position.boq_items) {
+      return position.boq_items.filter(
+        item => item.item_type === 'work' || item.item_type === 'sub_work'
+      ).length;
+    }
+    // For collapsed positions, use cached count from server if available
+    if (position.works_count !== undefined && position.works_count !== null) {
+      return position.works_count;
+    }
+    return 0;
+  }, [isExpanded, position.works_count, position.boq_items]);
 
   // Dynamic total cost calculation using shared function
   const totalCost = useMemo(() => {
-    // If position is expanded and has boq_items - calculate dynamically
+    // If position is expanded and has BOQ items - always calculate dynamically for real-time updates
     if (isExpanded && position.boq_items?.length > 0) {
       // Use the shared calculation function that matches table footer logic
       const dynamicTotal = calculateBOQItemsTotal(position.boq_items, position.boq_items);
@@ -45,12 +69,23 @@ export const useLocalState = ({ position, isExpanded = false }: UseLocalStatePro
         items_count: position.boq_items.length,
         dynamic_total: dynamicTotal,
         db_total: position.total_position_cost,
-        difference: dynamicTotal - (position.total_position_cost || 0)
+        using: 'dynamic'
       });
       return dynamicTotal;
     }
-    // Otherwise use value from DB
-    return position.total_position_cost || 0;
+
+    // For collapsed positions or positions without items, use DB value if available
+    if (position.total_position_cost !== undefined && position.total_position_cost !== null) {
+      console.log('💰 Using DB total for collapsed/empty position:', {
+        position_name: position.work_name,
+        db_total: position.total_position_cost,
+        using: 'database'
+      });
+      return position.total_position_cost;
+    }
+
+    // Fallback to 0
+    return 0;
   }, [isExpanded, position.boq_items, position.total_position_cost, position.work_name]);
 
   // Sync state when position changes

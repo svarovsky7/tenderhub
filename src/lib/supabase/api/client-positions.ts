@@ -631,12 +631,12 @@ export const clientPositionsApi = {
    * Update commercial costs for a client position
    */
   async updateCommercialCosts(
-    id: string, 
-    materialsCost: number, 
+    id: string,
+    materialsCost: number,
     worksCost: number
   ): Promise<ApiResponse<ClientPosition>> {
     console.log('🚀 clientPositionsApi.updateCommercialCosts called with:', { id, materialsCost, worksCost });
-    
+
     try {
       console.log('📡 Updating commercial costs in database...');
       const { data, error } = await supabase
@@ -667,6 +667,67 @@ export const clientPositionsApi = {
       console.error('💥 Exception in updateCommercialCosts:', error);
       return {
         error: handleSupabaseError(error, 'Update commercial costs'),
+      };
+    }
+  },
+
+  /**
+   * Get position statistics (works and materials count)
+   * Returns count of works and materials for each position
+   */
+  async getPositionStatistics(positionIds: string[]): Promise<ApiResponse<Record<string, { works_count: number; materials_count: number }>>> {
+    console.log('🚀 clientPositionsApi.getPositionStatistics called with:', { positionIds: positionIds.length });
+
+    try {
+      if (!positionIds.length) {
+        return { data: {} };
+      }
+
+      // Get BOQ items for all positions
+      const { data: boqItems, error } = await supabase
+        .from('boq_items')
+        .select('client_position_id, item_type')
+        .in('client_position_id', positionIds);
+
+      if (error) {
+        console.error('❌ Error fetching BOQ items for statistics:', error);
+        return {
+          error: handleSupabaseError(error, 'Get position statistics'),
+        };
+      }
+
+      // Calculate statistics for each position
+      const statistics: Record<string, { works_count: number; materials_count: number }> = {};
+
+      // Initialize all positions with zero counts
+      positionIds.forEach(id => {
+        statistics[id] = { works_count: 0, materials_count: 0 };
+      });
+
+      // Count items for each position
+      if (boqItems) {
+        boqItems.forEach(item => {
+          const posId = item.client_position_id;
+          if (!statistics[posId]) {
+            statistics[posId] = { works_count: 0, materials_count: 0 };
+          }
+
+          if (item.item_type === 'work' || item.item_type === 'sub_work') {
+            statistics[posId].works_count++;
+          } else if (item.item_type === 'material' || item.item_type === 'sub_material') {
+            statistics[posId].materials_count++;
+          }
+        });
+      }
+
+      console.log('✅ Position statistics calculated:', statistics);
+      return {
+        data: statistics,
+      };
+    } catch (error) {
+      console.error('💥 Exception in getPositionStatistics:', error);
+      return {
+        error: handleSupabaseError(error, 'Get position statistics'),
       };
     }
   },

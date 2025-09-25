@@ -119,7 +119,8 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
 
   // Load ONLY positions without BOQ items
   const loadPositions = useCallback(async () => {
-    console.log('📡 Loading positions (without BOQ items) for tender:', tenderId);
+    console.log('📡 [TenderBOQManagerLazy] Loading positions (without BOQ items) for tender:', tenderId);
+    console.log('🔍 [TenderBOQManagerLazy] Tender ID type:', typeof tenderId);
     setLoading(true);
 
     try {
@@ -151,12 +152,34 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
       }
 
       console.log(`✅ Loaded ${positionsData.length} positions (headers only)`);
+      console.log('📊 [TenderBOQManagerLazy] First 3 positions:', positionsData.slice(0, 3).map(p => ({
+        id: p.id,
+        name: p.work_name,
+        materials_cost: p.total_materials_cost,
+        works_cost: p.total_works_cost
+      })));
 
-      // Set positions WITHOUT loading BOQ items
-      setPositions(positionsData);
+      // Get statistics for all positions
+      const allPositionIds = [];
+      positionsData.forEach(position => {
+        allPositionIds.push(position.id);
+        // Include additional works IDs
+        if (position.additional_works && Array.isArray(position.additional_works)) {
+          position.additional_works.forEach(add => {
+            allPositionIds.push(add.id);
+          });
+        }
+      });
 
-      // Calculate total from all positions (including additional works)
+      // Load statistics (works and materials counts)
+      const statsResult = await clientPositionsApi.getPositionStatistics(allPositionIds);
+      const statistics = statsResult.data || {};
+
+      // Calculate total from all positions and apply statistics
       let totalCost = 0;
+      let totalWorks = 0;
+      let totalMaterials = 0;
+
       positionsData.forEach(position => {
         // Parse to numbers to ensure correct calculation
         const materialsCost = parseFloat(position.total_materials_cost) || 0;
@@ -168,7 +191,14 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
         // Also set total_position_cost for display
         position.total_position_cost = posCost;
 
-        console.log(`Position ${position.work_name}: Materials=${materialsCost}, Works=${worksCost}, Total=${posCost}, Raw: mat=${position.total_materials_cost}, work=${position.total_works_cost}`);
+        // Apply statistics from database
+        const posStats = statistics[position.id] || { works_count: 0, materials_count: 0 };
+        position.works_count = posStats.works_count;
+        position.materials_count = posStats.materials_count;
+        totalWorks += posStats.works_count;
+        totalMaterials += posStats.materials_count;
+
+        console.log(`Position ${position.work_name}: Materials=${materialsCost}, Works=${worksCost}, Total=${posCost}, WorksCount=${posStats.works_count}, MaterialsCount=${posStats.materials_count}`);
 
         // Include additional works in the total
         if (position.additional_works && Array.isArray(position.additional_works)) {
@@ -182,21 +212,32 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
             // Also set total_position_cost for display
             add.total_position_cost = addCost;
 
-            console.log(`  Additional ${add.work_name}: Materials=${addMaterialsCost}, Works=${addWorksCost}, Total=${addCost}`);
+            // Apply statistics for additional work
+            const addStats = statistics[add.id] || { works_count: 0, materials_count: 0 };
+            add.works_count = addStats.works_count;
+            add.materials_count = addStats.materials_count;
+            totalWorks += addStats.works_count;
+            totalMaterials += addStats.materials_count;
+
+            console.log(`  Additional ${add.work_name}: Materials=${addMaterialsCost}, Works=${addWorksCost}, Total=${addCost}, WorksCount=${addStats.works_count}, MaterialsCount=${addStats.materials_count}`);
           });
         }
       });
 
       console.log('📊 Total cost calculated:', totalCost);
+      console.log('📊 Total works:', totalWorks, 'Total materials:', totalMaterials);
+
+      // Set positions WITH statistics
+      setPositions(positionsData);
 
       // Save initial total cost to prevent reset on position expand
       setInitialTotalCost(totalCost);
 
-      // Update stats with position count and total
+      // Update stats with position count, works/materials count and total
       onStatsUpdate?.({
         positions: positionsData.length,
-        works: 0,
-        materials: 0,
+        works: totalWorks,
+        materials: totalMaterials,
         total: totalCost
       });
 
@@ -501,6 +542,11 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
 
       // Then reload position header data to get updated totals
       const { data: updatedPosition } = await clientPositionsApi.getById(positionId);
+
+      // Get fresh statistics for this position
+      const statsResult = await clientPositionsApi.getPositionStatistics([positionId]);
+      const positionStats = statsResult.data?.[positionId] || { works_count: 0, materials_count: 0 };
+
       if (updatedPosition) {
         // Calculate total_position_cost from components
         const updatedMaterialsCost = parseFloat(updatedPosition.total_materials_cost) || 0;
@@ -508,6 +554,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
         const updatedTotalCost = updatedMaterialsCost + updatedWorksCost;
 
         console.log(`📊 Updated position costs: Materials=${updatedMaterialsCost}, Works=${updatedWorksCost}, Total=${updatedTotalCost}`);
+        console.log(`📊 Updated position stats: WorksCount=${positionStats.works_count}, MaterialsCount=${positionStats.materials_count}`);
 
         setPositions(prevPositions =>
           prevPositions.map(pos => {
@@ -517,8 +564,8 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
                 total_position_cost: updatedTotalCost,
                 total_materials_cost: updatedMaterialsCost,
                 total_works_cost: updatedWorksCost,
-                materials_count: updatedPosition.materials_count || 0,
-                works_count: updatedPosition.works_count || 0,
+                materials_count: positionStats.materials_count,
+                works_count: positionStats.works_count,
                 boq_items: newItems !== undefined ? newItems : pos.boq_items
               };
             }
@@ -531,8 +578,8 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
                     total_position_cost: updatedTotalCost,
                     total_materials_cost: updatedMaterialsCost,
                     total_works_cost: updatedWorksCost,
-                    materials_count: updatedPosition.materials_count || 0,
-                    works_count: updatedPosition.works_count || 0,
+                    materials_count: positionStats.materials_count,
+                    works_count: positionStats.works_count,
                     boq_items: newItems !== undefined ? newItems : add.boq_items
                   };
                 }
@@ -554,37 +601,56 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
         positions.forEach(pos => {
           if (pos.id === positionId) {
             totalCost += updatedTotalCost;
+            // Use fresh stats for updated position
+            totalWorks += positionStats.works_count;
+            totalMaterials += positionStats.materials_count;
           } else {
             const posMaterialsCost = parseFloat(pos.total_materials_cost) || 0;
             const posWorksCost = parseFloat(pos.total_works_cost) || 0;
             totalCost += posMaterialsCost + posWorksCost;
-          }
 
-          const posItems = loadedPositionItems.get(pos.id) || [];
-          totalWorks += posItems.filter(item =>
-            item.item_type === 'work' || item.item_type === 'sub_work'
-          ).length;
-          totalMaterials += posItems.filter(item =>
-            item.item_type === 'material' || item.item_type === 'sub_material'
-          ).length;
+            // Use cached counts if available, otherwise from position object
+            if (pos.works_count !== undefined && pos.materials_count !== undefined) {
+              totalWorks += pos.works_count;
+              totalMaterials += pos.materials_count;
+            } else {
+              // Fallback to counting from loaded items
+              const posItems = loadedPositionItems.get(pos.id) || [];
+              totalWorks += posItems.filter(item =>
+                item.item_type === 'work' || item.item_type === 'sub_work'
+              ).length;
+              totalMaterials += posItems.filter(item =>
+                item.item_type === 'material' || item.item_type === 'sub_material'
+              ).length;
+            }
+          }
 
           if (pos.additional_works) {
             pos.additional_works.forEach(add => {
               if (add.id === positionId) {
                 totalCost += updatedTotalCost;
+                // Use fresh stats for updated position (don't double count)
+                // Stats already counted above for the main position check
               } else {
                 const addMaterialsCost = parseFloat(add.total_materials_cost) || 0;
                 const addWorksCost = parseFloat(add.total_works_cost) || 0;
                 totalCost += addMaterialsCost + addWorksCost;
-              }
 
-              const addItems = loadedPositionItems.get(add.id) || [];
-              totalWorks += addItems.filter(item =>
-                item.item_type === 'work' || item.item_type === 'sub_work'
-              ).length;
-              totalMaterials += addItems.filter(item =>
-                item.item_type === 'material' || item.item_type === 'sub_material'
-              ).length;
+                // Use cached counts if available
+                if (add.works_count !== undefined && add.materials_count !== undefined) {
+                  totalWorks += add.works_count;
+                  totalMaterials += add.materials_count;
+                } else {
+                  // Fallback to counting from loaded items
+                  const addItems = loadedPositionItems.get(add.id) || [];
+                  totalWorks += addItems.filter(item =>
+                    item.item_type === 'work' || item.item_type === 'sub_work'
+                  ).length;
+                  totalMaterials += addItems.filter(item =>
+                    item.item_type === 'material' || item.item_type === 'sub_material'
+                  ).length;
+                }
+              }
             });
           }
         });
@@ -639,7 +705,26 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
         const updatedWorksCost = parseFloat(updatedPosition.total_works_cost) || 0;
         const updatedTotalCost = updatedMaterialsCost + updatedWorksCost;
 
+        // Calculate counts from loaded items if available
+        let worksCount = 0;
+        let materialsCount = 0;
+        if (newItems) {
+          worksCount = newItems.filter(item =>
+            item.item_type === 'work' || item.item_type === 'sub_work'
+          ).length;
+          materialsCount = newItems.filter(item =>
+            item.item_type === 'material' || item.item_type === 'sub_material'
+          ).length;
+          console.log(`📊 Calculated counts from ${newItems.length} loaded items: Works=${worksCount}, Materials=${materialsCount}`);
+        } else {
+          // Fall back to counts from position data
+          worksCount = updatedPosition.works_count || 0;
+          materialsCount = updatedPosition.materials_count || 0;
+          console.log(`📊 Using counts from position data: Works=${worksCount}, Materials=${materialsCount}`);
+        }
+
         console.log(`📊 Updated position costs: Materials=${updatedMaterialsCost}, Works=${updatedWorksCost}, Total=${updatedTotalCost}`);
+        console.log(`📊 Setting position state with: Total=${updatedTotalCost}, Works=${worksCount}, Materials=${materialsCount}`);
 
         setPositions(prevPositions =>
           prevPositions.map(pos => {
@@ -649,8 +734,8 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
                 total_position_cost: updatedTotalCost,
                 total_materials_cost: updatedMaterialsCost,
                 total_works_cost: updatedWorksCost,
-                materials_count: updatedPosition.materials_count || 0,
-                works_count: updatedPosition.works_count || 0,
+                materials_count: materialsCount,
+                works_count: worksCount,
                 // Use newly loaded items if available
                 boq_items: newItems !== undefined ? newItems : pos.boq_items
               };
@@ -664,8 +749,8 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
                     total_position_cost: updatedTotalCost,
                     total_materials_cost: updatedMaterialsCost,
                     total_works_cost: updatedWorksCost,
-                    materials_count: updatedPosition.materials_count || 0,
-                    works_count: updatedPosition.works_count || 0,
+                    materials_count: materialsCount,
+                    works_count: worksCount,
                     // Use newly loaded items if available
                     boq_items: newItems !== undefined ? newItems : add.boq_items
                   };
@@ -688,39 +773,65 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
         positions.forEach(pos => {
           if (pos.id === positionId) {
             totalCost += updatedTotalCost;
+            // Use the newly loaded items for the updated position
+            if (newItems) {
+              totalWorks += newItems.filter(item =>
+                item.item_type === 'work' || item.item_type === 'sub_work'
+              ).length;
+              totalMaterials += newItems.filter(item =>
+                item.item_type === 'material' || item.item_type === 'sub_material'
+              ).length;
+            } else {
+              // If no new items, use cached count from position
+              totalWorks += updatedPosition.works_count || 0;
+              totalMaterials += updatedPosition.materials_count || 0;
+            }
           } else {
             const posMaterialsCost = parseFloat(pos.total_materials_cost) || 0;
             const posWorksCost = parseFloat(pos.total_works_cost) || 0;
             totalCost += posMaterialsCost + posWorksCost;
-          }
 
-          // Count items only if loaded
-          const posItems = loadedPositionItems.get(pos.id) || [];
-          totalWorks += posItems.filter(item =>
-            item.item_type === 'work' || item.item_type === 'sub_work'
-          ).length;
-          totalMaterials += posItems.filter(item =>
-            item.item_type === 'material' || item.item_type === 'sub_material'
-          ).length;
+            // Use cached counts from position if available
+            if (pos.works_count !== undefined && pos.materials_count !== undefined) {
+              totalWorks += pos.works_count;
+              totalMaterials += pos.materials_count;
+            } else {
+              // Otherwise count from loaded items
+              const posItems = loadedPositionItems.get(pos.id) || [];
+              totalWorks += posItems.filter(item =>
+                item.item_type === 'work' || item.item_type === 'sub_work'
+              ).length;
+              totalMaterials += posItems.filter(item =>
+                item.item_type === 'material' || item.item_type === 'sub_material'
+              ).length;
+            }
+          }
 
           // Include additional works
           if (pos.additional_works) {
             pos.additional_works.forEach(add => {
               if (add.id === positionId) {
-                totalCost += updatedTotalCost;
+                // Already counted in main check above, skip to avoid double counting
               } else {
                 const addMaterialsCost = parseFloat(add.total_materials_cost) || 0;
                 const addWorksCost = parseFloat(add.total_works_cost) || 0;
                 totalCost += addMaterialsCost + addWorksCost;
-              }
 
-              const addItems = loadedPositionItems.get(add.id) || [];
-              totalWorks += addItems.filter(item =>
-                item.item_type === 'work' || item.item_type === 'sub_work'
-              ).length;
-              totalMaterials += addItems.filter(item =>
-                item.item_type === 'material' || item.item_type === 'sub_material'
-              ).length;
+                // Use cached counts from additional work if available
+                if (add.works_count !== undefined && add.materials_count !== undefined) {
+                  totalWorks += add.works_count;
+                  totalMaterials += add.materials_count;
+                } else {
+                  // Otherwise count from loaded items
+                  const addItems = loadedPositionItems.get(add.id) || [];
+                  totalWorks += addItems.filter(item =>
+                    item.item_type === 'work' || item.item_type === 'sub_work'
+                  ).length;
+                  totalMaterials += addItems.filter(item =>
+                    item.item_type === 'material' || item.item_type === 'sub_material'
+                  ).length;
+                }
+              }
             });
           }
         });

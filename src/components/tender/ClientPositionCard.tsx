@@ -97,6 +97,20 @@ const ClientPositionCard: React.FC<ClientPositionCardProps> = ({
   const materialsPercent = totalItems > 0 ? Math.round((materialsCount / totalItems) * 100) : 0;
   const worksPercent = totalItems > 0 ? Math.round((worksCount / totalItems) * 100) : 0;
 
+  // Debug logging
+  if (position.work_name === 'Банковская гарантия на авансовые платежи') {
+    console.log('🔍 [ClientPositionCard] Position data:', {
+      name: position.work_name,
+      total_position_cost: position.total_position_cost,
+      materials_count: position.materials_count,
+      works_count: position.works_count,
+      isExpanded,
+      totalCost,
+      materialsCount,
+      worksCount
+    });
+  }
+
   // Handlers
   const handleEdit = useCallback(() => {
     form.setFieldsValue({
