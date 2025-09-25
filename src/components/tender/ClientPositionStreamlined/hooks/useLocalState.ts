@@ -24,6 +24,7 @@ export const useLocalState = ({ position, isExpanded = false }: UseLocalStatePro
   const [tempWorkName, setTempWorkName] = useState<string>(position.work_name ?? '');
   const [tempUnit, setTempUnit] = useState<string>(position.unit ?? '');
   const [showAdditionalWorkModal, setShowAdditionalWorkModal] = useState(false);
+  const [showAdditionalWorkForm, setShowAdditionalWorkForm] = useState(false);
 
   // Computed properties
   const totalItems = position.boq_items?.length || 0;
@@ -172,6 +173,8 @@ export const useLocalState = ({ position, isExpanded = false }: UseLocalStatePro
     setTempUnit,
     showAdditionalWorkModal,
     setShowAdditionalWorkModal,
+    showAdditionalWorkForm,
+    setShowAdditionalWorkForm,
 
     // Computed
     totalItems,

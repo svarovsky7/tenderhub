@@ -36,7 +36,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { boqApi } from '../../lib/supabase/api';
 import MaterialLinkingModal from './MaterialLinkingModal';
-import AdditionalWorkModal from './AdditionalWorkModal';
+import AdditionalWorkInlineForm from './ClientPositionStreamlined/components/AdditionalWorkInlineForm';
 import { DecimalInput } from '../common';
 import CostDetailCascadeSelector from '../common/CostDetailCascadeSelector';
 import CostCategoryDisplay from './CostCategoryDisplay';
@@ -120,6 +120,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     setTempUnit,
     showAdditionalWorkModal,
     setShowAdditionalWorkModal,
+    showAdditionalWorkForm,
+    setShowAdditionalWorkForm,
     totalItems,
     materialsCount,
     worksCount,
@@ -357,6 +359,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           setTempManualNote={setTempManualNote}
           showAdditionalWorkModal={showAdditionalWorkModal}
           setShowAdditionalWorkModal={setShowAdditionalWorkModal}
+          showAdditionalWorkForm={showAdditionalWorkForm}
+          setShowAdditionalWorkForm={setShowAdditionalWorkForm}
           // Computed
           totalCost={totalCost}
           worksCount={worksCount}
@@ -365,6 +369,22 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           handleManualVolumeChange={handleManualVolumeChange}
           handleManualNoteChange={handleManualNoteChange}
         />
+
+        {/* Additional Work Inline Form - показывается даже когда позиция свернута */}
+        {showAdditionalWorkForm && position.id && position.id !== 'undefined' && (
+          <div className="px-4 pb-2">
+            <AdditionalWorkInlineForm
+              parentPositionId={position.id}
+              parentPositionName={position.work_name || 'Позиция'}
+              tenderId={tenderId}
+              onSuccess={() => {
+                setShowAdditionalWorkForm(false);
+                onUpdate(); // Refresh parent component
+              }}
+              onCancel={() => setShowAdditionalWorkForm(false)}
+            />
+          </div>
+        )}
 
         {/* Expandable Content with Animation */}
         <div
@@ -506,20 +526,6 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         />
       )}
 
-      {/* Additional Work Modal */}
-      {showAdditionalWorkModal && position.id && position.id !== 'undefined' && (
-        <AdditionalWorkModal
-          visible={showAdditionalWorkModal}
-          onClose={() => setShowAdditionalWorkModal(false)}
-          parentPositionId={position.id}
-          parentPositionName={position.work_name || 'Позиция'}
-          tenderId={tenderId}
-          onSuccess={() => {
-            setShowAdditionalWorkModal(false);
-            onUpdate(); // Refresh parent component
-          }}
-        />
-      )}
 
     </>
   );

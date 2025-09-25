@@ -48,6 +48,8 @@ interface PositionHeaderProps {
   setTempManualNote: (value: string) => void;
   showAdditionalWorkModal: boolean;
   setShowAdditionalWorkModal: (value: boolean) => void;
+  showAdditionalWorkForm: boolean;
+  setShowAdditionalWorkForm: (value: boolean) => void;
   // Computed
   totalCost: number;
   worksCount: number;
@@ -88,6 +90,8 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
   setTempManualNote,
   showAdditionalWorkModal,
   setShowAdditionalWorkModal,
+  showAdditionalWorkForm,
+  setShowAdditionalWorkForm,
   totalCost,
   worksCount,
   materialsCount,
@@ -519,7 +523,7 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
                     message.error('Ошибка: ID позиции не определен');
                     return;
                   }
-                  setShowAdditionalWorkModal(true);
+                  setShowAdditionalWorkForm(true);
                 }}
                 className="border border-orange-300 text-orange-600 hover:border-orange-400 hover:text-orange-700"
                 style={{

@@ -18,6 +18,10 @@ npm run build        # Production build with TypeScript checking (tsc -b && vite
 npm run preview      # Preview production build
 npm run lint         # Run ESLint checks (flat config)
 npm run db:schema    # Export production schema to supabase/schemas/prod.sql
+
+# Database verification scripts
+node src/scripts/checkPositionTotals.ts    # Verify position totals match calculated values
+node src/scripts/applyPositionTotalsTrigger.ts  # Apply position totals trigger migration
 ```
 
 **Single Component Testing:**
@@ -319,6 +323,19 @@ When extracting business logic to hooks, watch for:
   ```typescript
   const actualData = Array.isArray(data) ? data[0] : data;
   ```
+- **Currency Rate Handling**:
+  ```typescript
+  // CORRECT - null for RUB, calculated from tender for other currencies
+  let calculatedCurrencyRate = null;
+  if (values.currency_type && values.currency_type !== 'RUB') {
+    calculatedCurrencyRate = getCurrencyRate(values.currency_type, tender);
+  }
+  ```
+- **Cache Invalidation for Category Changes**: Invalidate both old and new category IDs:
+  ```typescript
+  if (oldCategoryId) queryClient.invalidateQueries(['costCategoryDisplay', oldCategoryId]);
+  if (newCategoryId) queryClient.invalidateQueries(['costCategoryDisplay', newCategoryId]);
+  ```
 
 ### 6. Optimistic Updates Pattern
 - Use React Query's optimistic updates with temporary IDs (`temp-${Date.now()}`)
@@ -400,6 +417,7 @@ Complex formula-based calculations with step-by-step logging:
 - **Fields**: `currency_type`, `currency_rate` in boq_items
 - **Converter Utility**: `utils/currencyConverter.ts` for conversions
 - **Rate Calculation**: Always fetch from tender, never trust form values
+- **Rate Storage**: `currency_rate` is null for RUB positions, actual tender rate for foreign currencies
 
 ### Position Hierarchy System
 - **Position Types**: `executable`, `section`, `subsection`, `not_executable`, etc.
@@ -539,6 +557,8 @@ VITE_APP_VERSION=0.0.0   # Optional: Version display
 - Drag-drop slow with many items
 - Some Ant Design React 19 warnings (patches applied)
 - Position totals in database may be incorrect without trigger (run migration to fix)
+- Total sum in position header shows zero when collapsed after BOQ item changes (display issue, DB values correct)
+- HTTP 400 "numeric field overflow" may occur with certain BOQ item updates
 
 ## Important Implementation Notes
 
@@ -653,6 +673,8 @@ TenderHUB/
 - **Performance Issues (INP)**: Consider lazy loading pattern for heavy components
 - **Position Totals Wrong**: Apply database trigger migration via SQL Editor
 - **Visual Updates Not Showing**: Check React.memo comparison logic, use checksums
+- **HTTP 400 Numeric Overflow**: Check for Infinity, NaN, or invalid number formats in numeric fields
+- **Cost Category Not Updating**: Ensure cache invalidation for both old and new category IDs
 
 ## Additional Resources
 

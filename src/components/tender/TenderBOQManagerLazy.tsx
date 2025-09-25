@@ -543,9 +543,62 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
       // Then reload position header data to get updated totals
       const { data: updatedPosition } = await clientPositionsApi.getById(positionId);
 
+      // If position no longer exists (was deleted), remove it from state and return
+      if (!updatedPosition) {
+        console.log('🗑️ Position no longer exists, removing from state:', positionId);
+        setPositions(prevPositions => {
+          // Filter out the deleted position from main positions
+          let newPositions = prevPositions.filter(pos => pos.id !== positionId);
+
+          // Also filter out from additional_works arrays
+          newPositions = newPositions.map(pos => {
+            if (pos.additional_works) {
+              const filteredAdditional = pos.additional_works.filter((add: any) => add.id !== positionId);
+              if (filteredAdditional.length !== pos.additional_works.length) {
+                return { ...pos, additional_works: filteredAdditional };
+              }
+            }
+            return pos;
+          });
+
+          return newPositions;
+        });
+
+        // Also remove from caches
+        setLoadedPositionItems(prev => {
+          const next = new Map(prev);
+          next.delete(positionId);
+          return next;
+        });
+        setExpandedPositions(prev => {
+          const next = new Set(prev);
+          next.delete(positionId);
+          return next;
+        });
+
+        return;
+      }
+
       // Get fresh statistics for this position
       const statsResult = await clientPositionsApi.getPositionStatistics([positionId]);
       const positionStats = statsResult.data?.[positionId] || { works_count: 0, materials_count: 0 };
+
+      // Also reload additional works for this position if it's not an additional work itself
+      let additionalWorks = [];
+      if (updatedPosition && !updatedPosition.is_additional) {
+        console.log('🔄 Loading additional works for position:', positionId);
+        // Get all positions for this tender and filter for additional works with this parent
+        const { data: allPositions } = await clientPositionsApi.getByTenderId(
+          updatedPosition.tender_id,
+          { parent_position_id: positionId, is_additional: true },
+          { limit: 100 }
+        );
+
+        if (allPositions && allPositions.length > 0) {
+          additionalWorks = allPositions;
+          console.log(`📊 Found ${additionalWorks.length} additional works for position ${positionId}`);
+        }
+      }
 
       if (updatedPosition) {
         // Calculate total_position_cost from components
@@ -566,7 +619,8 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
                 total_works_cost: updatedWorksCost,
                 materials_count: positionStats.materials_count,
                 works_count: positionStats.works_count,
-                boq_items: newItems !== undefined ? newItems : pos.boq_items
+                boq_items: newItems !== undefined ? newItems : pos.boq_items,
+                additional_works: additionalWorks.length > 0 ? additionalWorks : pos.additional_works
               };
             }
             // Also check additional works
