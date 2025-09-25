@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { BOQItemWithLibrary } from '../../../../lib/supabase/types';
+import { calculateBOQItemsTotal } from '../utils/calculateTotal';
 
 interface UseLocalStateProps {
   position: any;
@@ -33,19 +34,18 @@ export const useLocalState = ({ position, isExpanded = false }: UseLocalStatePro
     item => item.item_type === 'work' || item.item_type === 'sub_work'
   ).length || 0;
 
-  // Dynamic total cost calculation
+  // Dynamic total cost calculation using shared function
   const totalCost = useMemo(() => {
     // If position is expanded and has boq_items - calculate dynamically
     if (isExpanded && position.boq_items?.length > 0) {
-      const dynamicTotal = position.boq_items.reduce((sum: number, item: any) => {
-        const itemTotal = parseFloat(item.total_amount || '0') || 0;
-        return sum + itemTotal;
-      }, 0);
+      // Use the shared calculation function that matches table footer logic
+      const dynamicTotal = calculateBOQItemsTotal(position.boq_items, position.boq_items);
       console.log('💰 Dynamic total calculation for expanded position:', {
         position_name: position.work_name,
         items_count: position.boq_items.length,
         dynamic_total: dynamicTotal,
-        db_total: position.total_position_cost
+        db_total: position.total_position_cost,
+        difference: dynamicTotal - (position.total_position_cost || 0)
       });
       return dynamicTotal;
     }

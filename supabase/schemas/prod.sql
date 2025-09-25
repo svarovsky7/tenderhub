@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-09-24T15:50:46.292477
+-- Generated: 2025-09-25T10:30:05.728097
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -7231,6 +7231,10 @@ $function$
 
 -- Trigger: calculate_boq_amounts_trigger on public.boq_items
 CREATE TRIGGER calculate_boq_amounts_trigger BEFORE INSERT OR UPDATE OF unit_rate, quantity, currency_type, currency_rate, delivery_price_type, delivery_amount ON public.boq_items FOR EACH ROW EXECUTE FUNCTION calculate_boq_amounts()
+
+-- Trigger: recalculate_position_totals_trigger on public.boq_items
+-- Description: Automatically recalculates total_materials_cost and total_works_cost in client_positions table when BOQ items are modified
+CREATE TRIGGER recalculate_position_totals_trigger AFTER INSERT OR DELETE OR UPDATE OF total_amount, quantity, unit_rate, item_type, client_position_id ON public.boq_items FOR EACH ROW EXECUTE FUNCTION recalculate_client_position_totals()
 
 -- Trigger: auto_assign_position_number_trigger on public.client_positions
 CREATE TRIGGER auto_assign_position_number_trigger BEFORE INSERT ON public.client_positions FOR EACH ROW EXECUTE FUNCTION auto_assign_position_number()

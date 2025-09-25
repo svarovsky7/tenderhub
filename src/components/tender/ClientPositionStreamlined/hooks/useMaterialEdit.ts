@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { message } from 'antd';
 import type { FormInstance } from 'antd/es/form';
+import { useQueryClient } from '@tanstack/react-query';
 import { boqApi, workMaterialLinksApi } from '../../../../lib/supabase/api';
 import { getCurrencyRate } from '../../../../utils/currencyConverter';
 import type { BOQItemWithLibrary } from '../../../../lib/supabase/types';
@@ -24,6 +25,7 @@ export const useMaterialEdit = ({
   onUpdate,
   tender
 }: UseMaterialEditProps) => {
+  const queryClient = useQueryClient();
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -269,17 +271,16 @@ export const useMaterialEdit = ({
         });
       }
 
-      // Explicitly exclude fields that should not be in update: currency_rate, detail_cost_category_id, work_id, and material_id
+      // Explicitly exclude fields that should not be in update: currency_rate, work_id, and material_id (but NOT detail_cost_category_id)
       const {
         currency_rate: ignoredRate,
-        detail_cost_category_id: ignoredCategoryId,
         work_id: ignoredWorkId,
         material_id: ignoredMaterialId,
         ...cleanValues
       } = values;
 
       console.log('🔍 [handleSaveInlineEdit] cleanValues after exclusion:', cleanValues);
-      console.log('🔍 [handleSaveInlineEdit] excluded detail_cost_category_id:', ignoredCategoryId);
+      console.log('🔍 [handleSaveInlineEdit] detail_cost_category_id in cleanValues:', cleanValues.detail_cost_category_id);
 
       const updateData = {
         ...cleanValues,
@@ -514,6 +515,14 @@ export const useMaterialEdit = ({
           updatedItems[itemIndex] = { ...updatedItems[itemIndex], ...updatedItem };
           setLocalBOQItems(updatedItems);
           console.log('📝 Updated local item data:', updatedItems[itemIndex]);
+        }
+
+        // Invalidate cost category display cache to refresh the UI
+        if (updatedItem.detail_cost_category_id) {
+          console.log('🔄 Invalidating cost category cache for:', updatedItem.detail_cost_category_id);
+          queryClient.invalidateQueries({
+            queryKey: ['costCategoryDisplay', updatedItem.detail_cost_category_id]
+          });
         }
       }
 

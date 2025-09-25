@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { message } from 'antd';
 import type { FormInstance } from 'antd/es/form';
+import { useQueryClient } from '@tanstack/react-query';
 import { boqApi, workMaterialLinksApi } from '../../../../lib/supabase/api';
 import type { BOQItem, BOQItemInsert } from '../../../../lib/supabase/types';
 import { getCurrencyRate } from '../../../../utils/currencyConverter';
@@ -63,6 +64,7 @@ export const useQuickAddHandlers = ({
   onUpdate,
   tender
 }: UseQuickAddHandlersProps) => {
+  const queryClient = useQueryClient();
 
   const handleQuickAdd = useCallback(async (values: QuickAddRowData) => {
     console.log('🚀 Quick adding item:', values);
@@ -235,6 +237,14 @@ export const useQuickAddHandlers = ({
 
       if (result.error) {
         throw new Error(result.error);
+      }
+
+      // Invalidate cost category display cache to refresh the UI for new item
+      if (result.data?.detail_cost_category_id) {
+        console.log('🔄 Invalidating cost category cache for new item:', result.data.detail_cost_category_id);
+        queryClient.invalidateQueries({
+          queryKey: ['costCategoryDisplay', result.data.detail_cost_category_id]
+        });
       }
 
       // If it's a material/sub-material and a work is selected, create link

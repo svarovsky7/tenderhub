@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { message } from 'antd';
 import type { FormInstance } from 'antd/es/form';
+import { useQueryClient } from '@tanstack/react-query';
 import { boqApi, workMaterialLinksApi } from '../../../../lib/supabase/api';
 import { getCurrencyRate } from '../../../../utils/currencyConverter';
 import type { BOQItemWithLibrary, BOQItemInsert } from '../../../../lib/supabase/types';
@@ -43,6 +44,7 @@ export const useQuickAdd = ({
   onUpdate,
   tender
 }: UseQuickAddProps) => {
+  const queryClient = useQueryClient();
   const [quickAddMode, setQuickAddMode] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState<'RUB' | 'USD' | 'EUR' | 'CNY'>('RUB');
   const [loading, setLoading] = useState(false);
@@ -235,6 +237,14 @@ export const useQuickAdd = ({
 
       if (result.error) {
         throw new Error(result.error);
+      }
+
+      // Invalidate cost category display cache to refresh the UI for new item
+      if (result.data?.detail_cost_category_id) {
+        console.log('🔄 Invalidating cost category cache for new item:', result.data.detail_cost_category_id);
+        queryClient.invalidateQueries({
+          queryKey: ['costCategoryDisplay', result.data.detail_cost_category_id]
+        });
       }
 
       if ((values.type === 'material' || values.type === 'sub_material') && values.work_id && result.data) {

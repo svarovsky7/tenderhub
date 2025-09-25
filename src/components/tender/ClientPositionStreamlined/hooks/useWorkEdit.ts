@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { message } from 'antd';
 import type { FormInstance } from 'antd/es/form';
+import { useQueryClient } from '@tanstack/react-query';
 import { boqApi, workMaterialLinksApi } from '../../../../lib/supabase/api';
 import { getCurrencyRate } from '../../../../utils/currencyConverter';
 import type { BOQItemWithLibrary } from '../../../../lib/supabase/types';
@@ -24,6 +25,7 @@ export const useWorkEdit = ({
   onUpdate,
   tender
 }: UseWorkEditProps) => {
+  const queryClient = useQueryClient();
   const [editingWorkId, setEditingWorkId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -145,17 +147,16 @@ export const useWorkEdit = ({
         });
       }
 
-      // Explicitly exclude fields that should not be in update: currency_rate, detail_cost_category_id, work_id, and material_id
+      // Explicitly exclude fields that should not be in update: currency_rate, work_id, and material_id (but NOT detail_cost_category_id)
       const {
         currency_rate: ignoredRate,
-        detail_cost_category_id: ignoredCategoryId,
         work_id: ignoredWorkId,
         material_id: ignoredMaterialId,
         ...cleanValues
       } = values;
 
       console.log('🔍 [handleSaveWorkEdit] cleanValues after exclusion:', cleanValues);
-      console.log('🔍 [handleSaveWorkEdit] excluded detail_cost_category_id:', ignoredCategoryId);
+      console.log('🔍 [handleSaveWorkEdit] detail_cost_category_id in cleanValues:', cleanValues.detail_cost_category_id);
 
       const updateData = {
         ...cleanValues,
@@ -177,6 +178,14 @@ export const useWorkEdit = ({
       const result = await boqApi.update(editingWorkId, updateData);
       if (result.error) {
         throw new Error(result.error);
+      }
+
+      // Invalidate cost category display cache to refresh the UI
+      if (result.data?.detail_cost_category_id) {
+        console.log('🔄 Invalidating cost category cache for work:', result.data.detail_cost_category_id);
+        queryClient.invalidateQueries({
+          queryKey: ['costCategoryDisplay', result.data.detail_cost_category_id]
+        });
       }
 
       if (oldItemType !== newItemType) {

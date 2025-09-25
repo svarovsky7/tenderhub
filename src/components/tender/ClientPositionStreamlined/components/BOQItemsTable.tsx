@@ -1,6 +1,7 @@
 import React from 'react';
 import { Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { calculateBOQItemsTotal } from '../utils/calculateTotal';
 import { WorkEditRow } from './EditRows/WorkEditRow';
 import { MaterialEditRow } from './EditRows/MaterialEditRow';
 import type { FormInstance } from 'antd/es/form';
@@ -122,60 +123,8 @@ export const BOQItemsTable: React.FC<BOQItemsTableProps> = ({
           'data-row-key': record.id,
         })}
         summary={(pageData) => {
-          const total = pageData.reduce((sum, item) => {
-            let quantity = item.quantity || 0;
-            const unitRate = item.unit_rate || 0;
-
-            // For linked materials, calculate quantity based on work volume and coefficients
-            if ((item.item_type === 'material' || item.item_type === 'sub_material') && item.work_link) {
-              // Find the linked work
-              const work = position.boq_items?.find(boqItem => {
-                if (item.work_link.work_boq_item_id &&
-                    boqItem.id === item.work_link.work_boq_item_id &&
-                    boqItem.item_type === 'work') {
-                  return true;
-                }
-                if (item.work_link.sub_work_boq_item_id &&
-                    boqItem.id === item.work_link.sub_work_boq_item_id &&
-                    boqItem.item_type === 'sub_work') {
-                  return true;
-                }
-                return false;
-              });
-
-              if (work) {
-                // Get coefficients from BOQ item first, then from work_link
-                const consumptionCoef = item.consumption_coefficient ||
-                                       item.work_link.material_quantity_per_work || 1;
-                const conversionCoef = item.conversion_coefficient ||
-                                      item.work_link.usage_coefficient || 1;
-                const workQuantity = work.quantity || 0;
-                quantity = workQuantity * consumptionCoef * conversionCoef;
-              }
-            }
-
-            // Apply currency conversion if needed
-            const currencyMultiplier = item.currency_type && item.currency_type !== 'RUB' && item.currency_rate
-              ? item.currency_rate
-              : 1;
-            let itemTotal = quantity * unitRate * currencyMultiplier;
-
-            // Add delivery cost for materials
-            if (item.item_type === 'material' || item.item_type === 'sub_material') {
-              const deliveryType = item.delivery_price_type;
-              const deliveryAmount = item.delivery_amount || 0;
-
-              if (deliveryType === 'amount') {
-                // Fixed amount per unit (already in RUB)
-                itemTotal += deliveryAmount * quantity;
-              } else if (deliveryType === 'not_included') {
-                // 3% of base cost
-                itemTotal += itemTotal * 0.03;
-              }
-            }
-
-            return sum + itemTotal;
-          }, 0);
+          // Use the shared calculation function with position.boq_items for lookup
+          const total = calculateBOQItemsTotal(pageData, position.boq_items);
 
           return (
             <Table.Summary fixed>
