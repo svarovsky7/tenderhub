@@ -11,12 +11,13 @@ import {
   Typography,
   Card
 } from 'antd';
-import { PlusOutlined, ReloadOutlined, FolderOpenOutlined, BuildOutlined, ToolOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, FolderOpenOutlined, BuildOutlined, ToolOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { clientPositionsApi, boqApi, tendersApi } from '../../lib/supabase/api';
 import { supabase } from '../../lib/supabase/client';
 import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
 import ClientPositionCardStreamlined from './ClientPositionCardStreamlined';
 import type { ClientPositionInsert, ClientPositionType } from '../../lib/supabase/types';
+import { exportBOQToExcel } from '../../utils/excel-templates';
 
 const { Title, Text } = Typography;
 
@@ -69,6 +70,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
   // Loading states
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [exportLoading, setExportLoading] = useState(false);
 
   // Store initial total cost to prevent reset on position expand
   const [initialTotalCost, setInitialTotalCost] = useState<number | null>(null);
@@ -911,6 +913,43 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
     }
   }, [loadPositionItems, positions, loadedPositionItems, onStatsUpdate, expandedPositions, clientPositionsApi]);
 
+  // Export to Excel handler
+  const handleExportToExcel = async () => {
+    setExportLoading(true);
+    try {
+      // Show loading message
+      const loadingMessage = message.loading('Загрузка данных для экспорта...', 0);
+
+      // Load all BOQ items for all positions
+      const allBOQItems = new Map<string, any[]>();
+
+      for (const position of positions) {
+        let items = loadedPositionItems.get(position.id);
+        if (!items) {
+          const { data, error } = await boqApi.getByClientPositionId(position.id);
+          if (error) {
+            console.error(`❌ Error loading items for position ${position.id}:`, error);
+            items = [];
+          } else {
+            items = data || [];
+          }
+        }
+        allBOQItems.set(position.id, items);
+      }
+
+      loadingMessage();
+
+      // Export to Excel
+      await exportBOQToExcel(positions, allBOQItems, tender?.title || 'BOQ');
+      message.success('Данные успешно экспортированы в Excel');
+    } catch (error) {
+      console.error('❌ Export error:', error);
+      message.error('Ошибка при экспорте данных');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   // Handle create position
   const handleCreatePosition = async (values: any) => {
     try {
@@ -969,6 +1008,13 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
               onClick={() => setCreateModalVisible(true)}
             >
               Создать позицию
+            </Button>
+            <Button
+              icon={<FileExcelOutlined />}
+              onClick={handleExportToExcel}
+              loading={exportLoading}
+            >
+              Экспорт в Excel
             </Button>
             <Button
               icon={<ReloadOutlined />}

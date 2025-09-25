@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { getDetailCategoryDisplay } from '../lib/supabase/api/construction-costs';
 
 /**
  * Generate Excel template for construction costs import
@@ -325,4 +326,283 @@ export const exportTendersToExcel = (tenders: any[], fileName = 'all_tenders.xls
   XLSX.writeFile(wb, fileName);
 
   console.log('✅ [exportTendersToExcel] Export completed:', fileName);
+};
+
+/**
+ * Export BOQ positions with items to Excel in hierarchical structure
+ */
+export const exportBOQToExcel = async (
+  positions: any[],
+  boqItemsMap: Map<string, any[]>,
+  tenderName: string
+) => {
+  console.log('🚀 [exportBOQToExcel] Starting export with', positions.length, 'positions');
+
+  const exportData: any[] = [];
+  const rowStyles: any[] = []; // Store styles for each row
+
+  // Helper functions for translation
+  const translateItemType = (type: string): string => {
+    const types: Record<string, string> = {
+      'work': 'Работа',
+      'material': 'Материал',
+      'sub_work': 'Суб-раб',
+      'sub_material': 'Суб-мат'
+    };
+    return types[type] || type || '';
+  };
+
+  const translateMaterialType = (type: string): string => {
+    const types: Record<string, string> = {
+      'main': 'Основной',
+      'auxiliary': 'Вспомогательный',
+      'consumable': 'Расходный',
+      'tool': 'Инструмент',
+      'equipment': 'Оборудование'
+    };
+    return types[type] || type || '';
+  };
+
+  const translateDeliveryType = (type: string): string => {
+    const types: Record<string, string> = {
+      'included': 'В цене',
+      'not_included': 'Не в цене',
+      'amount': 'Фиксированная'
+    };
+    return types[type] || type || '';
+  };
+
+  // Recursive function to add position with its items and additional positions
+  const addPositionWithItems = (position: any, level: number = 0) => {
+    // Add client position row
+    exportData.push({
+      'Номер позиции': position.item_no || '',
+      '№ п/п': position.position_number || '',
+      'Категория затрат': '', // Empty for client positions
+      'Тип элемента': '',
+      'Тип материала': '',
+      'Наименование': position.work_name, // No indentation
+      'Ед. изм.': position.unit || '',
+      'Количество заказчика': position.volume || '',
+      'Коэфф. перевода': '',
+      'Коэфф. расхода': '',
+      'Количество ГП': position.manual_volume || '',
+      'Валюта': '',
+      'Тип доставки': '',
+      'Стоимость доставки': '',
+      'Цена за единицу': '',
+      'Итоговая сумма': Math.round((position.total_materials_cost || 0) + (position.total_works_cost || 0)),
+      'Ссылка на КП': '',
+      'Примечание заказчика': position.client_note || '',
+      'Примечание ГП': position.manual_note || ''
+    });
+
+    // Get and sort BOQ items for this position
+    const items = boqItemsMap.get(position.id) || [];
+    const sortedItems = [...items].sort((a, b) => {
+      if (a.sort_order !== b.sort_order) {
+        return (a.sort_order || 0) - (b.sort_order || 0);
+      }
+      return (a.item_number || '').localeCompare(b.item_number || '');
+    });
+
+    // Add each BOQ item
+    sortedItems.forEach(item => {
+      // For work and sub_work types, material_type should be empty
+      const materialType = (item.item_type === 'work' || item.item_type === 'sub_work')
+        ? ''
+        : translateMaterialType(item.material_type);
+
+      // Track row index and type for styling
+      const rowIndex = exportData.length;
+      rowStyles[rowIndex] = item.item_type;
+
+      exportData.push({
+        'Номер позиции': '',
+        '№ п/п': '',
+        'Категория затрат': '', // Will be filled after export data is complete
+        'Тип элемента': translateItemType(item.item_type),
+        'Тип материала': materialType,
+        'Наименование': item.description, // No indentation
+        'Ед. изм.': item.unit,
+        'Количество заказчика': '', // Empty for BOQ items
+        'Коэфф. перевода': item.conversion_coefficient || '',
+        'Коэфф. расхода': item.consumption_coefficient || '',
+        'Количество ГП': item.quantity,
+        'Валюта': item.currency_type || 'RUB',
+        'Тип доставки': translateDeliveryType(item.delivery_price_type),
+        'Стоимость доставки': Math.round(item.delivery_amount || 0),
+        'Цена за единицу': Math.round(item.unit_rate || 0),
+        'Итоговая сумма': Math.round(item.total_amount || 0),
+        'Ссылка на КП': item.quote_link || '',
+        'Примечание заказчика': '', // Empty for BOQ items
+        'Примечание ГП': item.note || ''
+      });
+    });
+
+    // Add additional positions (ДОП) from the position's additional_works property
+    // This handles ДОП positions for all position types, not just executable
+    if (position.additional_works && Array.isArray(position.additional_works)) {
+      const sortedAdditional = [...position.additional_works].sort((a, b) => a.position_number - b.position_number);
+
+      sortedAdditional.forEach(addPos => {
+        // Mark as ДОП position by modifying the item_no
+        const dopPosition = {
+          ...addPos,
+          item_no: `${position.item_no || ''}.ДОП.${addPos.position_number - position.position_number}`
+        };
+        addPositionWithItems(dopPosition, level + 1);
+      });
+    }
+
+    // Also check for additional positions in the main positions list (for fallback compatibility)
+    // This ensures we don't miss any ДОП positions if data structure is different
+    const additionalPositions = positions.filter(p =>
+      p.parent_position_id === position.id &&
+      p.is_additional === true
+    );
+
+    if (additionalPositions.length > 0) {
+      const sortedAdditional = [...additionalPositions].sort((a, b) => a.position_number - b.position_number);
+
+      sortedAdditional.forEach(addPos => {
+        // Skip if already processed from additional_works
+        if (position.additional_works && position.additional_works.some(aw => aw.id === addPos.id)) {
+          return;
+        }
+
+        // Mark as ДОП position by modifying the item_no
+        const dopPosition = {
+          ...addPos,
+          item_no: `${position.item_no || ''}.ДОП.${addPos.position_number - position.position_number}`
+        };
+        addPositionWithItems(dopPosition, level + 1);
+      });
+    }
+  };
+
+  // Process only main positions (without parent_position_id)
+  const mainPositions = positions
+    .filter(p => !p.parent_position_id)
+    .sort((a, b) => a.position_number - b.position_number);
+
+  console.log('📊 [exportBOQToExcel] Processing', mainPositions.length, 'main positions');
+
+  mainPositions.forEach(position => {
+    addPositionWithItems(position, 0);
+  });
+
+  // Load cost categories for all BOQ items
+  console.log('🔄 [exportBOQToExcel] Loading cost categories...');
+  const categoryPromises: Promise<void>[] = [];
+  const categoryCache = new Map<string, string>();
+
+  exportData.forEach((row, index) => {
+    // Check if this row has a BOQ item with detail_cost_category_id
+    const boqItem = Array.from(boqItemsMap.values())
+      .flat()
+      .find(item => item.description === row['Наименование']?.trim());
+
+    if (boqItem?.detail_cost_category_id) {
+      if (!categoryCache.has(boqItem.detail_cost_category_id)) {
+        categoryPromises.push(
+          getDetailCategoryDisplay(boqItem.detail_cost_category_id).then(result => {
+            if (result.data) {
+              categoryCache.set(boqItem.detail_cost_category_id, result.data);
+            }
+          })
+        );
+      }
+    }
+  });
+
+  await Promise.all(categoryPromises);
+
+  // Update export data with categories
+  exportData.forEach((row, index) => {
+    const boqItem = Array.from(boqItemsMap.values())
+      .flat()
+      .find(item => item.description === row['Наименование']?.trim());
+
+    if (boqItem?.detail_cost_category_id && categoryCache.has(boqItem.detail_cost_category_id)) {
+      row['Категория затрат'] = categoryCache.get(boqItem.detail_cost_category_id) || '';
+    }
+  });
+
+  // Create Excel workbook
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(exportData);
+
+  // Apply color styling based on item type
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+
+  // Define colors for each item type (matching the UI)
+  const itemTypeColors = {
+    'work': { rgb: 'FED7AA' },       // Orange
+    'material': { rgb: 'BFDBFE' },   // Blue
+    'sub_work': { rgb: 'E9D5FF' },   // Purple
+    'sub_material': { rgb: 'BBF7D0' } // Green
+  };
+
+  // Apply styles to rows based on BOQ item type
+  for (let row = 1; row <= range.e.r; row++) { // Skip header row
+    const itemType = rowStyles[row - 1]; // Adjust for header offset
+
+    if (itemType && itemTypeColors[itemType]) {
+      const bgColor = itemTypeColors[itemType];
+
+      // Apply style to all cells in the row
+      for (let col = 0; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+        const cell = ws[cellAddress];
+
+        if (cell) {
+          if (!cell.s) cell.s = {};
+          cell.s.fill = {
+            fgColor: bgColor,
+            patternType: 'solid'
+          };
+        }
+      }
+    }
+  }
+
+  // Set column widths according to new order
+  ws['!cols'] = [
+    { wch: 12 },  // Номер позиции
+    { wch: 8 },   // № п/п
+    { wch: 25 },  // Категория затрат
+    { wch: 15 },  // Тип элемента
+    { wch: 15 },  // Тип материала
+    { wch: 50 },  // Наименование
+    { wch: 10 },  // Ед. изм.
+    { wch: 15 },  // Количество заказчика
+    { wch: 12 },  // Коэфф. перевода
+    { wch: 12 },  // Коэфф. расхода
+    { wch: 15 },  // Количество ГП
+    { wch: 8 },   // Валюта
+    { wch: 15 },  // Тип доставки
+    { wch: 15 },  // Стоимость доставки
+    { wch: 15 },  // Цена за единицу
+    { wch: 15 },  // Итоговая сумма
+    { wch: 30 },  // Ссылка на КП
+    { wch: 25 },  // Примечание заказчика
+    { wch: 25 }   // Примечание ГП
+  ];
+
+  // Freeze header row
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  // Add worksheet to workbook
+  XLSX.utils.book_append_sheet(wb, ws, 'BOQ');
+
+  // Generate filename
+  const safeFileName = tenderName.replace(/[^а-яА-Яa-zA-Z0-9\s]/g, '_').trim();
+  const fileName = `BOQ_${safeFileName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+  // Write file
+  XLSX.writeFile(wb, fileName);
+
+  console.log('✅ [exportBOQToExcel] Export completed:', fileName);
+  console.log('📊 [exportBOQToExcel] Exported', exportData.length, 'rows total');
 };
