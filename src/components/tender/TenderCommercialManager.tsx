@@ -555,6 +555,11 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
     }
   };
 
+  // Helper function to format numbers as integers
+  const formatAsInteger = (value: number): string => {
+    return Math.round(value).toLocaleString('ru-RU');
+  };
+
   // Table columns for commercial positions
   const columns = [
     {
@@ -613,7 +618,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
         return (
           <Text>
             {unitPrice > 0 
-              ? `${formatQuantity(unitPrice, 2)} ₽/${record.unit || 'ед.'}` 
+              ? `${formatAsInteger(unitPrice)} ₽/${record.unit || 'ед.'}`
               : '—'}
           </Text>
         );
@@ -632,7 +637,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
         return (
           <Text>
             {unitPrice > 0 
-              ? `${formatQuantity(unitPrice, 2)} ₽/${record.unit || 'ед.'}` 
+              ? `${formatAsInteger(unitPrice)} ₽/${record.unit || 'ед.'}`
               : '—'}
           </Text>
         );
@@ -652,7 +657,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
         if (!markups) {
           return (
             <Text strong style={{ color: '#1890ff' }}>
-              {`${formatQuantity(record.works_total_cost, 2)} ₽`}
+              {`${formatAsInteger(record.works_total_cost)} ₽`}
             </Text>
           );
         }
@@ -748,7 +753,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
         return (
           <Tooltip title={tooltipContent} placement="topRight">
             <Text strong style={{ color: '#1890ff', cursor: 'help' }}>
-              {`${formatQuantity(record.works_total_cost, 2)} ₽`}
+              {`${formatAsInteger(record.works_total_cost)} ₽`}
             </Text>
           </Tooltip>
         );
@@ -768,7 +773,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
         if (!markups) {
           return (
             <Text strong style={{ color: '#722ed1' }}>
-              {`${formatQuantity(record.materials_total_cost, 2)} ₽`}
+              {`${formatAsInteger(record.materials_total_cost)} ₽`}
             </Text>
           );
         }
@@ -847,7 +852,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
         return (
           <Tooltip title={tooltipContent} placement="topRight">
             <Text strong style={{ color: '#722ed1', cursor: 'help' }}>
-              {`${formatQuantity(record.materials_total_cost, 2)} ₽`}
+              {`${formatAsInteger(record.materials_total_cost)} ₽`}
             </Text>
           </Tooltip>
         );
@@ -861,7 +866,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
       align: 'right' as const,
       render: (record: ClientPositionWithCommercial) => (
         <Text strong>
-          {formatQuantity(record.base_total_cost || 0, 2)} ₽
+          {formatAsInteger(record.base_total_cost || 0)} ₽
         </Text>
       ),
       sorter: (a: ClientPositionWithCommercial, b: ClientPositionWithCommercial) => (a.base_total_cost || 0) - (b.base_total_cost || 0),
@@ -873,7 +878,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
       align: 'right' as const,
       render: (record: ClientPositionWithCommercial) => (
         <Text strong style={{ color: '#52c41a' }}>
-          {formatQuantity(record.commercial_total_cost || 0, 2)} ₽
+          {formatAsInteger(record.commercial_total_cost || 0)} ₽
         </Text>
       ),
       sorter: (a: ClientPositionWithCommercial, b: ClientPositionWithCommercial) => (a.commercial_total_cost || 0) - (b.commercial_total_cost || 0),
@@ -891,7 +896,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
           <div className="text-right">
             <div>
               <Text strong style={{ color: markup >= 0 ? '#52c41a' : '#ff4d4f' }}>
-                {markup >= 0 ? '+' : ''}{formatQuantity(markup, 2)} ₽
+                {markup >= 0 ? '+' : ''}{formatAsInteger(markup)} ₽
               </Text>
             </div>
             <div>

@@ -82,7 +82,9 @@ export const ModernFinancialIndicators: React.FC<ModernFinancialIndicatorsProps>
 
   // Форматирование в миллионы
   const formatMillion = (value: number) => {
-    return (value / 1000000).toFixed(1);
+    const millions = value / 1000000;
+    // Если меньше 10 млн, показываем с 1 знаком после запятой, иначе округляем
+    return millions < 10 ? millions.toFixed(1) : Math.round(millions).toString();
   };
 
   return (

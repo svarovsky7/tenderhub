@@ -621,10 +621,8 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
           
           const costPerSqm = baseCost / tenderData.area_sp;
           
-          // Для очень маленьких значений показываем больше знаков или в копейках
-          const displayValue = costPerSqm < 0.01 && costPerSqm > 0 
-            ? (costPerSqm * 100).toFixed(4) + ' коп/м²'
-            : costPerSqm.toFixed(2) + ' ₽/м²';
+          // Округляем значение
+          const displayValue = Math.round(costPerSqm).toLocaleString('ru-RU') + ' ₽/м²';
             
           return (
             <Text style={{ 
@@ -644,10 +642,8 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
         
         const costPerSqm = record.calculatedCost / tenderData.area_sp;
         
-        // Для очень маленьких значений показываем больше знаков или в копейках
-        const displayValue = costPerSqm < 0.01 && costPerSqm > 0 
-          ? (costPerSqm * 100).toFixed(4) + ' коп/м²'
-          : costPerSqm.toFixed(2) + ' ₽/м²';
+        // Округляем значение
+        const displayValue = Math.round(costPerSqm).toLocaleString('ru-RU') + ' ₽/м²';
         
         return (
           <Text style={{ 
@@ -690,14 +686,14 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
               color: '#1890ff',
               fontWeight: 600
             }}>
-              {baseCost.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
+              {Math.round(baseCost).toLocaleString('ru-RU')} ₽
             </Text>
           );
         }
         
         return (
           <Text strong style={{ color: '#1890ff' }}>
-            {cost.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
+            {Math.round(cost).toLocaleString('ru-RU')} ₽
           </Text>
         );
       },
@@ -733,7 +729,7 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
           marginBottom: 8 
         }}>
           <Text type="secondary">
-            Общая базовая стоимость: <Text strong>{totalCost.toFixed(2).replace('.', ',')} ₽</Text>
+            Общая базовая стоимость: <Text strong>{Math.round(totalCost).toLocaleString('ru-RU')} ₽</Text>
           </Text>
           
           {tenderData && (
@@ -753,7 +749,7 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
               {(tenderData.area_sp || tenderData.area_client) && totalCost > 0 && (
                 <Text type="secondary">
                   Базовая стоимость за м²: <Text strong>
-                    {(totalCost / (tenderData.area_sp || tenderData.area_client || 1)).toLocaleString('ru-RU')} ₽/м²
+                    {Math.round(totalCost / (tenderData.area_sp || tenderData.area_client || 1)).toLocaleString('ru-RU')} ₽/м²
                   </Text>
                 </Text>
               )}
@@ -794,12 +790,12 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
               </Table.Summary.Cell>
               <Table.Summary.Cell index={2} align="center">
                 <Text strong style={{ fontSize: 14, color: '#1890ff' }}>
-                  {totalCostPerSqm > 0 ? totalCostPerSqm.toLocaleString('ru-RU') : '-'}
+                  {totalCostPerSqm > 0 ? Math.round(totalCostPerSqm).toLocaleString('ru-RU') : '-'}
                 </Text>
               </Table.Summary.Cell>
               <Table.Summary.Cell index={3}>
                 <Text strong style={{ fontSize: 14, color: '#1890ff' }}>
-                  {totalCalculatedCosts.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
+                  {Math.round(totalCalculatedCosts).toLocaleString('ru-RU')} ₽
                 </Text>
               </Table.Summary.Cell>
             </Table.Summary.Row>

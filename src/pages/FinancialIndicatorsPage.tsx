@@ -606,7 +606,7 @@ const FinancialIndicatorsPage: React.FC = () => {
               <div className={`flex flex-col justify-center items-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
                 <div className="text-center">
                   <div className="text-3xl font-bold text-green-700" style={{ cursor: 'default' }}>
-                    {commercialTotal.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
+                    {Math.round(commercialTotal).toLocaleString('ru-RU')} ₽
                   </div>
                   {/* Цена за м² */}
                   {selectedTender?.area_sp && (
@@ -696,7 +696,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                 <Col xs={12} sm={6}>
                   <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
                     <div className="text-xl font-bold text-green-600 mb-2">
-                      {stats.actualTotalMaterials.toFixed(2).replace('.', ',')} ₽
+                      {Math.round(stats.actualTotalMaterials).toLocaleString('ru-RU')} ₽
                     </div>
                     <div className="text-sm text-gray-600">Материалы</div>
                   </div>
@@ -704,7 +704,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                 <Col xs={12} sm={6}>
                   <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg">
                     <div className="text-xl font-bold text-blue-600 mb-2">
-                      {stats.actualTotalWorks.toFixed(2).replace('.', ',')} ₽
+                      {Math.round(stats.actualTotalWorks).toLocaleString('ru-RU')} ₽
                     </div>
                     <div className="text-sm text-gray-600">Работы</div>
                   </div>
@@ -712,7 +712,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                 <Col xs={12} sm={6}>
                   <div className="text-center p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg">
                     <div className="text-xl font-bold text-orange-600 mb-2">
-                      {stats.actualTotalSubmaterials.toFixed(2).replace('.', ',')} ₽
+                      {Math.round(stats.actualTotalSubmaterials).toLocaleString('ru-RU')} ₽
                     </div>
                     <div className="text-sm text-gray-600">Субматериалы</div>
                   </div>
@@ -720,7 +720,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                 <Col xs={12} sm={6}>
                   <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg">
                     <div className="text-xl font-bold text-purple-600 mb-2">
-                      {stats.actualTotalSubworks.toFixed(2).replace('.', ',')} ₽
+                      {Math.round(stats.actualTotalSubworks).toLocaleString('ru-RU')} ₽
                     </div>
                     <div className="text-sm text-gray-600">Субработы</div>
                   </div>
@@ -729,7 +729,7 @@ const FinancialIndicatorsPage: React.FC = () => {
               <div className="text-center mt-6 p-4 bg-gray-50 rounded-lg">
                 <div className="text-sm text-gray-600 mb-2">Итого прямые затраты:</div>
                 <div className="text-2xl font-bold text-gray-800">
-                  {(stats.actualTotalCost / 1000).toFixed(1).replace('.', ',')} тыс. ₽
+                  {Math.round(stats.actualTotalCost).toLocaleString('ru-RU')} ₽
                 </div>
               </div>
             </Card>

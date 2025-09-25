@@ -428,7 +428,7 @@ const CommercialCostsPage: React.FC = () => {
                         <div className="text-center">
                           <Text className="text-xs text-gray-600 block" style={{ cursor: 'default' }}>Базовая стоимость</Text>
                           <div className="text-lg font-bold text-blue-600" style={{ cursor: 'default' }}>
-                            {commercialStats.totalBaseCost.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽
+                            {Math.round(commercialStats.totalBaseCost).toLocaleString('ru-RU')} ₽
                           </div>
                         </div>
                       </Col>
@@ -436,7 +436,7 @@ const CommercialCostsPage: React.FC = () => {
                         <div className="text-center">
                           <Text className="text-xs text-gray-600 block" style={{ cursor: 'default' }}>Коммерческая</Text>
                           <div className="text-lg font-bold text-green-600" style={{ cursor: 'default' }}>
-                            {commercialStats.totalCommercialCost.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽
+                            {Math.round(commercialStats.totalCommercialCost).toLocaleString('ru-RU')} ₽
                           </div>
                         </div>
                       </Col>
@@ -444,7 +444,7 @@ const CommercialCostsPage: React.FC = () => {
                         <div className="text-center">
                           <Text className="text-xs text-gray-600 block" style={{ cursor: 'default' }}>Наценка</Text>
                           <div className="text-lg font-bold text-orange-600" style={{ cursor: 'default' }}>
-                            +{commercialStats.totalMarkup.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽
+                            +{Math.round(commercialStats.totalMarkup).toLocaleString('ru-RU')} ₽
                           </div>
                           <div className="text-xs text-gray-500" style={{ cursor: 'default' }}>
                             +{commercialStats.markupPercentage.toFixed(1)}%
