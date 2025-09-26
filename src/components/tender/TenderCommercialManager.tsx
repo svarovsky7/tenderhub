@@ -498,7 +498,9 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
             // Данные из позиции заказчика (не из тендера)
             client_quantity: pos.volume || 0,        // Кол-во Заказчика из Excel
             gp_quantity: pos.manual_volume || 0,     // Кол-во ГП (объем, заданный вручную ГП)
-            manual_volume: pos.manual_volume || 0    // Дублируем для совместимости
+            manual_volume: pos.manual_volume || 0,   // Дублируем для совместимости
+            manual_note: pos.manual_note || '',      // Примечание ГП из поля manual_note
+            client_note: pos.client_note || ''       // Примечание заказчика из поля client_note
           };
         })
       );

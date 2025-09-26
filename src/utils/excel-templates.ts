@@ -129,43 +129,157 @@ export const generateConstructionCostsTemplate = () => {
 export const exportCommercialCostsToExcel = (positions: any[], tenderName = '', fileName = 'commercial_costs.xlsx') => {
   console.log('🚀 [exportCommercialCostsToExcel] Exporting positions:', positions.length);
 
+  // Helper function to translate position types
+  const translatePositionType = (type: string): string => {
+    const translations: Record<string, string> = {
+      'executable': 'Исполняемая',
+      'section': 'Раздел',
+      'subsection': 'Подраздел',
+      'not_executable': 'Неисполняемая',
+      'with_materials': 'С материалами',
+      'materials_only': 'Только материалы',
+      'works_only': 'Только работы',
+      'header': 'Заголовок',
+      'subheader': 'Подзаголовок'
+    };
+    return translations[type] || type;
+  };
+
+  // Helper function to format numbers with thousand separators
+  const formatNumber = (value: number | undefined, decimals: number = 2): string => {
+    if (!value && value !== 0) return '';
+    return value.toLocaleString('ru-RU', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
+  };
+
   const exportData = positions.map(position => ({
+    'Номер раздела': position.item_no || '',
     '№ п/п': position.position_number || '',
-    'Тип позиции': position.position_type || 'executable',
+    'Тип позиции': translatePositionType(position.position_type || 'executable'),
     'Наименование работ': position.work_name || '',
     'Ед. изм.': position.unit || '',
     'Кол-во Заказчика': position.client_quantity || position.volume || '',
     'Кол-во ГП': position.gp_quantity || position.manual_volume || '',
-    'Примечание заказчика': position.client_note || '',
-    'Базовая стоимость, ₽': position.base_total_cost ? Math.round(position.base_total_cost) : '',
-    'Коммерческая стоимость, ₽': position.commercial_total_cost ? Math.round(position.commercial_total_cost) : '',
-    'Наценка, ₽': position.base_total_cost && position.commercial_total_cost 
-      ? Math.round(position.commercial_total_cost - position.base_total_cost) : '',
-    'Наценка, %': position.markup_percentage ? `${position.markup_percentage.toFixed(1)}%` : '',
-    'Работы (коммерческая), ₽': position.works_total_cost ? Math.round(position.works_total_cost) : '',
-    'Материалы (коммерческая), ₽': position.materials_total_cost ? Math.round(position.materials_total_cost) : '',
+    'Цена материала за единицу': formatNumber(position.materials_unit_price, 2),
+    'Цена работы за единицу': formatNumber(position.works_unit_price, 2),
+    'Итого материал': position.materials_total_cost ? Math.round(position.materials_total_cost) : '',
+    'Итого работа': position.works_total_cost ? Math.round(position.works_total_cost) : '',
+    'Сумма (коммерческая стоимость)': position.commercial_total_cost ? Math.round(position.commercial_total_cost) : '',
+    'Сумма (базовая стоимость)': position.base_total_cost ? Math.round(position.base_total_cost) : '',
+    'Примечание ГП': position.manual_note || '',  // Из поля manual_note таблицы client_positions
+    'Примечание заказчика': position.client_note || '', // Из поля client_note таблицы client_positions
   }));
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(exportData);
 
+  // Get worksheet range
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+
+  // Define styles
+  const borderStyle = {
+    top: { style: "thin", color: { rgb: "000000" } },
+    bottom: { style: "thin", color: { rgb: "000000" } },
+    left: { style: "thin", color: { rgb: "000000" } },
+    right: { style: "thin", color: { rgb: "000000" } }
+  };
+
+  const centerAlignment = {
+    horizontal: "center",
+    vertical: "center",
+    wrapText: true
+  };
+
+  const leftAlignment = {
+    horizontal: "left",
+    vertical: "center",
+    wrapText: true
+  };
+
+  const lightRedColor = 'FFCCCC'; // Light red for zero cost rows
+
+  // Define number formats
+  const integerFormat = '#,##0'; // Format with thousand separators for integers
+  const decimalFormat = '#,##0.00'; // Format with 2 decimal places
+
+  // Updated column indices due to new first column "Номер раздела"
+  const integerColumns = [9, 10, 11, 12]; // Итого материал, Итого работа, Сумма (коммерческая), Сумма (базовая)
+  const decimalColumns = [7, 8]; // Цена материала за единицу, Цена работы за единицу
+
+  // Apply styles to all cells
+  for (let row = 0; row <= range.e.r; row++) {
+    // Check if this row has zero commercial cost AND is executable type (row > 0 to skip header)
+    const position = row > 0 ? positions[row - 1] : null;
+    const hasZeroCost = position &&
+      position.position_type === 'executable' &&
+      (!position.commercial_total_cost || position.commercial_total_cost === 0);
+
+    for (let col = 0; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = ws[cellAddress];
+
+      if (cell) {
+        if (!cell.s) cell.s = {};
+
+        // Add borders to all cells
+        cell.s.border = borderStyle;
+
+        // Add alignment (column 3 is now "Наименование работ")
+        if (col === 3) {
+          cell.s.alignment = leftAlignment;
+        } else {
+          cell.s.alignment = centerAlignment;
+        }
+
+        // Add number format for numeric columns (skip header row)
+        if (row > 0) {
+          if (integerColumns.includes(col)) {
+            cell.s.numFmt = integerFormat;
+          } else if (decimalColumns.includes(col)) {
+            cell.s.numFmt = decimalFormat;
+          }
+        }
+
+        // Add light red background for executable rows with zero cost
+        if (hasZeroCost && row > 0) {
+          cell.s.fill = {
+            patternType: "solid",
+            fgColor: { rgb: lightRedColor }
+          };
+        }
+
+        // Bold header row
+        if (row === 0) {
+          cell.s.font = { bold: true };
+        }
+      }
+    }
+  }
+
   // Set column widths
   const colWidths = [
+    { wch: 15 }, // Номер раздела
     { wch: 8 },  // № п/п
     { wch: 15 }, // Тип позиции
     { wch: 40 }, // Наименование работ
     { wch: 10 }, // Ед. изм.
     { wch: 15 }, // Кол-во Заказчика
     { wch: 12 }, // Кол-во ГП
+    { wch: 20 }, // Цена материала за единицу
+    { wch: 20 }, // Цена работы за единицу
+    { wch: 15 }, // Итого материал
+    { wch: 15 }, // Итого работа
+    { wch: 25 }, // Сумма (коммерческая стоимость)
+    { wch: 25 }, // Сумма (базовая стоимость)
+    { wch: 20 }, // Примечание ГП
     { wch: 30 }, // Примечание заказчика
-    { wch: 18 }, // Базовая стоимость
-    { wch: 20 }, // Коммерческая стоимость
-    { wch: 15 }, // Наценка, ₽
-    { wch: 12 }, // Наценка, %
-    { wch: 20 }, // Работы (коммерческая)
-    { wch: 22 }, // Материалы (коммерческая)
   ];
   ws['!cols'] = colWidths;
+
+  // Freeze the first row (header)
+  ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft" };
 
   // Add title and tender info
   const sheetName = tenderName ? `Коммерческие стоимости - ${tenderName}` : 'Коммерческие стоимости';
