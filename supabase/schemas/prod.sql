@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-09-26T14:11:55.261245
+-- Generated: 2025-09-26T16:37:34.177328
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -638,6 +638,72 @@ COMMENT ON COLUMN public.tender_markup_percentages.mechanization_service IS 'С�
 COMMENT ON COLUMN public.tender_markup_percentages.mbp_gsm IS 'МБП+ГСМ (топливо+масло)';
 COMMENT ON COLUMN public.tender_markup_percentages.warranty_period IS 'Гарантийный период 5 лет';
 
+-- Table: public.tender_version_history
+-- Description: История операций версионирования тендеров
+CREATE TABLE IF NOT EXISTS public.tender_version_history (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    tender_id uuid NOT NULL,
+    version_number integer(32) NOT NULL,
+    action text NOT NULL,
+    details jsonb,
+    positions_added integer(32),
+    positions_removed integer(32),
+    positions_modified integer(32),
+    dop_transferred integer(32),
+    performed_by uuid,
+    performed_at timestamp with time zone DEFAULT now(),
+    ip_address inet,
+    user_agent text,
+    CONSTRAINT tender_version_history_pkey PRIMARY KEY (id),
+    CONSTRAINT tender_version_history_tender_id_fkey FOREIGN KEY (tender_id) REFERENCES None.None(None),
+    CONSTRAINT tender_version_history_tender_id_version_number_key UNIQUE (tender_id),
+    CONSTRAINT tender_version_history_tender_id_version_number_key UNIQUE (version_number)
+);
+COMMENT ON TABLE public.tender_version_history IS 'История операций версионирования тендеров';
+
+-- Table: public.tender_version_mappings
+-- Description: Таблица для хранения сопоставлений позиций между версиями тендеров
+CREATE TABLE IF NOT EXISTS public.tender_version_mappings (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    old_tender_id uuid NOT NULL,
+    new_tender_id uuid NOT NULL,
+    old_position_id uuid,
+    new_position_id uuid,
+    old_position_number text,
+    old_work_name text,
+    new_position_number text,
+    new_work_name text,
+    mapping_type text,
+    confidence_score numeric(3,2),
+    fuzzy_score numeric(3,2),
+    context_score numeric(3,2),
+    hierarchy_score numeric(3,2),
+    mapping_status text DEFAULT 'suggested'::text,
+    action_type text,
+    is_dop boolean DEFAULT false,
+    parent_mapping_id uuid,
+    notes text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    reviewed_by uuid,
+    reviewed_at timestamp with time zone,
+    CONSTRAINT tender_version_mappings_new_position_id_fkey FOREIGN KEY (new_position_id) REFERENCES None.None(None),
+    CONSTRAINT tender_version_mappings_new_tender_id_fkey FOREIGN KEY (new_tender_id) REFERENCES None.None(None),
+    CONSTRAINT tender_version_mappings_new_tender_id_new_position_id_key UNIQUE (new_position_id),
+    CONSTRAINT tender_version_mappings_new_tender_id_new_position_id_key UNIQUE (new_tender_id),
+    CONSTRAINT tender_version_mappings_old_position_id_fkey FOREIGN KEY (old_position_id) REFERENCES None.None(None),
+    CONSTRAINT tender_version_mappings_old_tender_id_fkey FOREIGN KEY (old_tender_id) REFERENCES None.None(None),
+    CONSTRAINT tender_version_mappings_old_tender_id_old_position_id_new_t_key UNIQUE (new_tender_id),
+    CONSTRAINT tender_version_mappings_old_tender_id_old_position_id_new_t_key UNIQUE (old_position_id),
+    CONSTRAINT tender_version_mappings_old_tender_id_old_position_id_new_t_key UNIQUE (old_tender_id),
+    CONSTRAINT tender_version_mappings_parent_mapping_id_fkey FOREIGN KEY (parent_mapping_id) REFERENCES public.tender_version_mappings(id),
+    CONSTRAINT tender_version_mappings_pkey PRIMARY KEY (id)
+);
+COMMENT ON TABLE public.tender_version_mappings IS 'Таблица для хранения сопоставлений позиций между версиями тендеров';
+COMMENT ON COLUMN public.tender_version_mappings.mapping_type IS 'Тип сопоставления: exact - точное совпадение, fuzzy - нечеткое, manual - ручное, dop - ДОП позиция, new - новая позиция, deleted - удаленная';
+COMMENT ON COLUMN public.tender_version_mappings.confidence_score IS 'Уровень уверенности в сопоставлении от 0 до 1';
+COMMENT ON COLUMN public.tender_version_mappings.action_type IS 'Действие при переносе: copy_boq - копировать BOQ, create_new - создать новое, delete - удалить, preserve_dop - сохранить ДОП';
+
 -- Table: public.tenders
 -- Description: Main tender projects with client details
 CREATE TABLE IF NOT EXISTS public.tenders (
@@ -659,11 +725,16 @@ CREATE TABLE IF NOT EXISTS public.tenders (
     bsm_link text,
     tz_clarification_link text,
     qa_form_link text,
+    parent_version_id uuid,
+    version_status text DEFAULT 'draft'::text,
+    version_created_at timestamp with time zone DEFAULT now(),
+    version_created_by uuid,
+    CONSTRAINT tenders_parent_version_id_fkey FOREIGN KEY (parent_version_id) REFERENCES public.tenders(id),
     CONSTRAINT tenders_pkey PRIMARY KEY (id),
     CONSTRAINT tenders_tender_number_key UNIQUE (tender_number)
 );
 COMMENT ON TABLE public.tenders IS 'Main tender projects with client details';
-COMMENT ON COLUMN public.tenders.version IS 'Версия тендера (целое число для отслеживания изменений ВОР)';
+COMMENT ON COLUMN public.tenders.version IS 'Номер версии тендера';
 COMMENT ON COLUMN public.tenders.area_sp IS 'Площадь по СП (м²)';
 COMMENT ON COLUMN public.tenders.area_client IS 'Площадь от Заказчика (м²)';
 COMMENT ON COLUMN public.tenders.usd_rate IS 'USD exchange rate for this tender version';
@@ -673,6 +744,8 @@ COMMENT ON COLUMN public.tenders.upload_folder IS 'Папка для загру�
 COMMENT ON COLUMN public.tenders.bsm_link IS 'Ссылка на БСМ';
 COMMENT ON COLUMN public.tenders.tz_clarification_link IS 'Ссылка на уточнение по ТЗ';
 COMMENT ON COLUMN public.tenders.qa_form_link IS 'Ссылка на форму вопрос-ответ';
+COMMENT ON COLUMN public.tenders.parent_version_id IS 'Ссылка на родительскую версию тендера';
+COMMENT ON COLUMN public.tenders.version_status IS 'Статус версии: current - текущая, draft - черновик, archived - архивная';
 
 -- Table: public.units
 CREATE TABLE IF NOT EXISTS public.units (
@@ -1266,7 +1339,7 @@ $function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
+CREATE OR REPLACE FUNCTION extensions.armor(bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1274,7 +1347,7 @@ AS '$libdir/pgcrypto', $function$pg_armor$function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea)
+CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1314,7 +1387,7 @@ AS '$libdir/pgcrypto', $function$pg_decrypt_iv$function$
 
 
 -- Function: extensions.digest
-CREATE OR REPLACE FUNCTION extensions.digest(text, text)
+CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1322,7 +1395,7 @@ AS '$libdir/pgcrypto', $function$pg_digest$function$
 
 
 -- Function: extensions.digest
-CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.digest(text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1577,7 +1650,7 @@ AS '$libdir/pgcrypto', $function$pgp_key_id_w$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1593,7 +1666,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1625,14 +1698,6 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
- RETURNS bytea
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
-
-
--- Function: extensions.pgp_pub_encrypt
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
  RETURNS bytea
  LANGUAGE c
@@ -1640,8 +1705,16 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
 AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
 
 
+-- Function: extensions.pgp_pub_encrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
+ RETURNS bytea
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
+
+
 -- Function: extensions.pgp_pub_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1649,7 +1722,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1673,14 +1746,6 @@ AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_text$function$
 
 
 -- Function: extensions.pgp_sym_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt_bytea(bytea, text)
- RETURNS bytea
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
-
-
--- Function: extensions.pgp_sym_decrypt_bytea
 CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt_bytea(bytea, text, text)
  RETURNS bytea
  LANGUAGE c
@@ -1688,12 +1753,12 @@ CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt_bytea(bytea, text, text)
 AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
 
 
--- Function: extensions.pgp_sym_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
+-- Function: extensions.pgp_sym_decrypt_bytea
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt_bytea(bytea, text)
  RETURNS bytea
  LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt
@@ -1704,8 +1769,16 @@ CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
 AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
 
 
+-- Function: extensions.pgp_sym_encrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
+ RETURNS bytea
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
+
+
 -- Function: extensions.pgp_sym_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1713,7 +1786,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -2315,6 +2388,110 @@ END;
 $function$
 
 
+-- Function: public.auto_match_positions
+-- Description: Автоматически сопоставляет позиции между версиями используя fuzzy matching
+CREATE OR REPLACE FUNCTION public.auto_match_positions(p_old_tender_id uuid, p_new_tender_id uuid)
+ RETURNS TABLE(old_position_id uuid, new_position_id uuid, confidence_score numeric, mapping_type text)
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_old_position RECORD;
+    v_new_position RECORD;
+    v_best_match RECORD;
+    v_fuzzy_score NUMERIC;
+    v_context_score NUMERIC;
+    v_hierarchy_score NUMERIC;
+    v_total_score NUMERIC;
+    v_threshold NUMERIC := 0.7; -- Порог для автоматического сопоставления
+BEGIN
+    -- Создаем временную таблицу для результатов
+    CREATE TEMP TABLE temp_matches (
+        old_position_id UUID,
+        new_position_id UUID,
+        confidence_score NUMERIC,
+        mapping_type TEXT,
+        fuzzy_score NUMERIC,
+        context_score NUMERIC,
+        hierarchy_score NUMERIC
+    ) ON COMMIT DROP;
+
+    -- Проходим по всем старым позициям
+    FOR v_old_position IN
+        SELECT * FROM client_positions
+        WHERE tender_id = p_old_tender_id
+        ORDER BY position_number
+    LOOP
+        v_best_match := NULL;
+
+        -- Ищем лучшее соответствие среди новых позиций
+        FOR v_new_position IN
+            SELECT * FROM client_positions
+            WHERE tender_id = p_new_tender_id
+            ORDER BY position_number
+        LOOP
+            -- Вычисляем fuzzy score для названия
+            v_fuzzy_score := calculate_fuzzy_score(v_old_position.work_name, v_new_position.work_name);
+
+            -- Вычисляем context score (на основе position_number и type)
+            v_context_score := 0;
+            IF v_old_position.position_number = v_new_position.position_number THEN
+                v_context_score := v_context_score + 0.5;
+            END IF;
+            IF v_old_position.position_type = v_new_position.position_type THEN
+                v_context_score := v_context_score + 0.5;
+            END IF;
+
+            -- Вычисляем hierarchy score (уровень в иерархии)
+            v_hierarchy_score := 0;
+            IF LENGTH(v_old_position.position_number) = LENGTH(v_new_position.position_number) THEN
+                v_hierarchy_score := 1.0;
+            ELSIF ABS(LENGTH(v_old_position.position_number) - LENGTH(v_new_position.position_number)) <= 2 THEN
+                v_hierarchy_score := 0.5;
+            END IF;
+
+            -- Общий score (взвешенная сумма)
+            v_total_score := (v_fuzzy_score * 0.7) + (v_context_score * 0.2) + (v_hierarchy_score * 0.1);
+
+            -- Сохраняем лучшее соответствие
+            IF v_best_match IS NULL OR v_total_score > v_best_match.total_score THEN
+                v_best_match := ROW(
+                    v_new_position.id,
+                    v_total_score,
+                    v_fuzzy_score,
+                    v_context_score,
+                    v_hierarchy_score
+                );
+            END IF;
+        END LOOP;
+
+        -- Если нашли хорошее соответствие, добавляем в результат
+        IF v_best_match IS NOT NULL AND v_best_match.total_score >= v_threshold THEN
+            INSERT INTO temp_matches VALUES (
+                v_old_position.id,
+                v_best_match.id,
+                v_best_match.total_score,
+                CASE
+                    WHEN v_best_match.total_score >= 0.95 THEN 'exact'
+                    ELSE 'fuzzy'
+                END,
+                v_best_match.fuzzy_score,
+                v_best_match.context_score,
+                v_best_match.hierarchy_score
+            );
+        END IF;
+    END LOOP;
+
+    -- Возвращаем результаты
+    RETURN QUERY SELECT
+        tm.old_position_id,
+        tm.new_position_id,
+        tm.confidence_score,
+        tm.mapping_type
+    FROM temp_matches tm;
+END;
+$function$
+
+
 -- Function: public.bulk_upsert_category_location_mappings
 -- Description: Массовая вставка/обновление связей категория-локация
 CREATE OR REPLACE FUNCTION public.bulk_upsert_category_location_mappings(p_mappings jsonb)
@@ -2681,6 +2858,47 @@ END;
 $function$
 
 
+-- Function: public.calculate_fuzzy_score
+CREATE OR REPLACE FUNCTION public.calculate_fuzzy_score(str1 text, str2 text)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+DECLARE
+    v_str1 TEXT;
+    v_str2 TEXT;
+    v_distance INTEGER;
+    v_max_length INTEGER;
+BEGIN
+    -- Нормализация строк
+    v_str1 := LOWER(TRIM(COALESCE(str1, '')));
+    v_str2 := LOWER(TRIM(COALESCE(str2, '')));
+
+    -- Если обе строки пустые
+    IF v_str1 = '' AND v_str2 = '' THEN
+        RETURN 1.0;
+    END IF;
+
+    -- Если одна из строк пустая
+    IF v_str1 = '' OR v_str2 = '' THEN
+        RETURN 0.0;
+    END IF;
+
+    -- Если строки идентичны
+    IF v_str1 = v_str2 THEN
+        RETURN 1.0;
+    END IF;
+
+    -- Вычисляем расстояние Левенштейна
+    v_distance := levenshtein(v_str1, v_str2);
+    v_max_length := GREATEST(LENGTH(v_str1), LENGTH(v_str2));
+
+    -- Возвращаем нормализованный score
+    RETURN GREATEST(0, 1.0 - (v_distance::NUMERIC / v_max_length::NUMERIC));
+END;
+$function$
+
+
 -- Function: public.calculate_tender_costs
 CREATE OR REPLACE FUNCTION public.calculate_tender_costs(p_tender_id uuid)
  RETURNS TABLE(total_base numeric, total_with_markup numeric, total_by_category jsonb, total_by_location jsonb, items_count bigint)
@@ -2945,6 +3163,84 @@ begin
   if tg_op = 'INSERT' then new.created_at := now(); end if;
   return new;
 end $function$
+
+
+-- Function: public.create_tender_version
+-- Description: Создает новую версию тендера на основе существующего
+CREATE OR REPLACE FUNCTION public.create_tender_version(p_parent_tender_id uuid, p_created_by uuid DEFAULT NULL::uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_new_tender_id UUID;
+    v_parent_tender RECORD;
+    v_new_version INTEGER;
+BEGIN
+    -- Получаем информацию о родительском тендере
+    SELECT * INTO v_parent_tender
+    FROM tenders
+    WHERE id = p_parent_tender_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Parent tender not found: %', p_parent_tender_id;
+    END IF;
+
+    -- Вычисляем новый номер версии
+    v_new_version := COALESCE(v_parent_tender.version, 1) + 1;
+
+    -- Создаем новый тендер как версию
+    INSERT INTO tenders (
+        title,
+        description,
+        status,
+        deadline,
+        currency,
+        usd_rate,
+        eur_rate,
+        cny_rate,
+        version,
+        parent_version_id,
+        version_status,
+        version_created_by
+    )
+    SELECT
+        title || ' (Версия ' || v_new_version || ')',
+        description,
+        'draft',
+        deadline,
+        currency,
+        usd_rate,
+        eur_rate,
+        cny_rate,
+        v_new_version,
+        p_parent_tender_id,
+        'draft',
+        p_created_by
+    FROM tenders
+    WHERE id = p_parent_tender_id
+    RETURNING id INTO v_new_tender_id;
+
+    -- Записываем в историю
+    INSERT INTO tender_version_history (
+        tender_id,
+        version_number,
+        action,
+        details,
+        performed_by
+    ) VALUES (
+        v_new_tender_id,
+        v_new_version,
+        'created',
+        jsonb_build_object(
+            'parent_tender_id', p_parent_tender_id,
+            'parent_version', v_parent_tender.version
+        ),
+        p_created_by
+    );
+
+    RETURN v_new_tender_id;
+END;
+$function$
 
 
 -- Function: public.debug_cost_nodes
@@ -4064,7 +4360,7 @@ $function$
 
 
 -- Function: public.index
-CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
  RETURNS integer
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4072,7 +4368,7 @@ AS '$libdir/ltree', $function$ltree_index$function$
 
 
 -- Function: public.index
-CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
  RETURNS integer
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4109,39 +4405,15 @@ AS $function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree[])
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
+AS '$libdir/ltree', $function$_lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4157,7 +4429,7 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4165,11 +4437,35 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree[])
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$_lca$function$
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lquery_in
@@ -5322,6 +5618,175 @@ CREATE OR REPLACE FUNCTION public.text2ltree(text)
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/ltree', $function$text2ltree$function$
+
+
+-- Function: public.transfer_boq_items
+-- Description: Переносит BOQ items и связи между версиями
+CREATE OR REPLACE FUNCTION public.transfer_boq_items(p_mapping_id uuid)
+ RETURNS boolean
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping RECORD;
+    v_boq_item RECORD;
+BEGIN
+    -- Получаем информацию о маппинге
+    SELECT * INTO v_mapping
+    FROM tender_version_mappings
+    WHERE id = p_mapping_id AND mapping_status = 'confirmed';
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'Mapping not found or not confirmed: %', p_mapping_id;
+        RETURN FALSE;
+    END IF;
+
+    -- Переносим BOQ items
+    FOR v_boq_item IN
+        SELECT * FROM boq_items
+        WHERE client_position_id = v_mapping.old_position_id
+    LOOP
+        INSERT INTO boq_items (
+            client_position_id,
+            work_id,
+            material_id,
+            material_name,
+            measurement_unit,
+            consumption_rate,
+            quantity,
+            gross_price,
+            currency,
+            delivery_cost_type,
+            delivery_cost,
+            line_number,
+            level,
+            parent_id
+        )
+        SELECT
+            v_mapping.new_position_id,
+            work_id,
+            material_id,
+            material_name,
+            measurement_unit,
+            consumption_rate,
+            quantity,
+            gross_price,
+            currency,
+            delivery_cost_type,
+            delivery_cost,
+            line_number,
+            level,
+            NULL -- parent_id will be updated separately if needed
+        FROM boq_items
+        WHERE id = v_boq_item.id;
+    END LOOP;
+
+    -- Обновляем статус маппинга
+    UPDATE tender_version_mappings
+    SET mapping_status = 'applied',
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = p_mapping_id;
+
+    RETURN TRUE;
+END;
+$function$
+
+
+-- Function: public.transfer_dop_positions
+-- Description: Обрабатывает перенос ДОП позиций с сохранением всех данных
+CREATE OR REPLACE FUNCTION public.transfer_dop_positions(p_old_tender_id uuid, p_new_tender_id uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_dop_position RECORD;
+    v_parent_mapping RECORD;
+    v_new_position_id UUID;
+    v_count INTEGER := 0;
+BEGIN
+    -- Находим все ДОП позиции в старом тендере
+    FOR v_dop_position IN
+        SELECT * FROM client_positions
+        WHERE tender_id = p_old_tender_id
+        AND position_type = 'dop'
+        ORDER BY position_number
+    LOOP
+        -- Ищем маппинг родительской позиции (если есть)
+        SELECT * INTO v_parent_mapping
+        FROM tender_version_mappings
+        WHERE old_tender_id = p_old_tender_id
+        AND new_tender_id = p_new_tender_id
+        AND old_position_id = v_dop_position.parent_position_id;
+
+        -- Создаем новую ДОП позицию
+        INSERT INTO client_positions (
+            tender_id,
+            position_number,
+            item_no,
+            work_name,
+            position_type,
+            parent_position_id,
+            notes
+        ) VALUES (
+            p_new_tender_id,
+            v_dop_position.position_number,
+            v_dop_position.item_no,
+            v_dop_position.work_name,
+            'dop',
+            v_parent_mapping.new_position_id, -- Может быть NULL если родитель удален
+            COALESCE(v_dop_position.notes, '') ||
+            CASE
+                WHEN v_parent_mapping.new_position_id IS NULL
+                THEN ' (Родительская позиция удалена)'
+                ELSE ''
+            END
+        ) RETURNING id INTO v_new_position_id;
+
+        -- Создаем маппинг для ДОП
+        INSERT INTO tender_version_mappings (
+            old_tender_id,
+            new_tender_id,
+            old_position_id,
+            new_position_id,
+            old_position_number,
+            old_work_name,
+            new_position_number,
+            new_work_name,
+            mapping_type,
+            confidence_score,
+            mapping_status,
+            action_type,
+            is_dop,
+            parent_mapping_id
+        ) VALUES (
+            p_old_tender_id,
+            p_new_tender_id,
+            v_dop_position.id,
+            v_new_position_id,
+            v_dop_position.position_number,
+            v_dop_position.work_name,
+            v_dop_position.position_number,
+            v_dop_position.work_name,
+            'dop',
+            1.0,
+            'confirmed',
+            'preserve_dop',
+            TRUE,
+            v_parent_mapping.id
+        );
+
+        -- Переносим BOQ items для ДОП
+        PERFORM transfer_boq_items(
+            (SELECT id FROM tender_version_mappings
+             WHERE old_position_id = v_dop_position.id
+             AND new_position_id = v_new_position_id)
+        );
+
+        v_count := v_count + 1;
+    END LOOP;
+
+    RETURN v_count;
+END;
+$function$
 
 
 -- Function: public.trigger_update_boq_currency_rates
@@ -7593,14 +8058,53 @@ CREATE INDEX ix_tender_items_tender ON public.tender_items USING btree (tender_i
 -- Index on public.tender_markup_percentages
 CREATE INDEX tender_markup_percentages_tender_id_idx ON public.tender_markup_percentages USING btree (tender_id);
 
+-- Index on public.tender_version_history
+CREATE INDEX idx_version_history_action ON public.tender_version_history USING btree (action);
+
+-- Index on public.tender_version_history
+CREATE INDEX idx_version_history_date ON public.tender_version_history USING btree (performed_at DESC);
+
+-- Index on public.tender_version_history
+CREATE INDEX idx_version_history_tender ON public.tender_version_history USING btree (tender_id);
+
+-- Index on public.tender_version_history
+CREATE UNIQUE INDEX tender_version_history_tender_id_version_number_key ON public.tender_version_history USING btree (tender_id, version_number);
+
+-- Index on public.tender_version_mappings
+CREATE INDEX idx_version_mappings_dop ON public.tender_version_mappings USING btree (is_dop) WHERE (is_dop = true);
+
+-- Index on public.tender_version_mappings
+CREATE INDEX idx_version_mappings_new_tender ON public.tender_version_mappings USING btree (new_tender_id);
+
+-- Index on public.tender_version_mappings
+CREATE INDEX idx_version_mappings_old_tender ON public.tender_version_mappings USING btree (old_tender_id);
+
+-- Index on public.tender_version_mappings
+CREATE INDEX idx_version_mappings_status ON public.tender_version_mappings USING btree (mapping_status);
+
+-- Index on public.tender_version_mappings
+CREATE INDEX idx_version_mappings_type ON public.tender_version_mappings USING btree (mapping_type);
+
+-- Index on public.tender_version_mappings
+CREATE UNIQUE INDEX tender_version_mappings_new_tender_id_new_position_id_key ON public.tender_version_mappings USING btree (new_tender_id, new_position_id);
+
+-- Index on public.tender_version_mappings
+CREATE UNIQUE INDEX tender_version_mappings_old_tender_id_old_position_id_new_t_key ON public.tender_version_mappings USING btree (old_tender_id, old_position_id, new_tender_id);
+
 -- Index on public.tenders
 CREATE INDEX idx_tenders_created_at ON public.tenders USING btree (created_at DESC);
+
+-- Index on public.tenders
+CREATE INDEX idx_tenders_parent_version ON public.tenders USING btree (parent_version_id);
 
 -- Index on public.tenders
 CREATE INDEX idx_tenders_tender_number ON public.tenders USING btree (tender_number);
 
 -- Index on public.tenders
 CREATE INDEX idx_tenders_updated_at ON public.tenders USING btree (updated_at DESC);
+
+-- Index on public.tenders
+CREATE INDEX idx_tenders_version_status ON public.tenders USING btree (version_status);
 
 -- Index on public.tenders
 CREATE UNIQUE INDEX tenders_tender_number_key ON public.tenders USING btree (tender_number);

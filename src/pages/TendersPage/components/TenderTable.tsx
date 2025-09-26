@@ -34,7 +34,9 @@ import {
   FolderOutlined,
   LinkOutlined,
   FileTextOutlined,
-  FormOutlined
+  FormOutlined,
+  CopyOutlined,
+  BranchesOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -52,7 +54,8 @@ const TenderTable: React.FC<TenderTableProps> = ({
   onEditTender,
   onDeleteTender,
   onExcelUpload,
-  onUpdateBOQCurrencyRates
+  onUpdateBOQCurrencyRates,
+  onCreateVersion
 }) => {
   console.log('🚀 TenderTable component rendered');
   console.log('📊 Tenders count:', tenders.length);
@@ -167,6 +170,13 @@ const TenderTable: React.FC<TenderTableProps> = ({
     await onExcelUpload(tenderId, file);
   };
 
+  const handleCreateVersion = (tender: TenderWithSummary) => {
+    console.log('📋 Create version clicked for tender:', tender.id);
+    if (onCreateVersion) {
+      onCreateVersion(tender);
+    }
+  };
+
   // Check if any tender has area_sp data
   const hasAreaSP = tenders.some(tender => tender.area_sp && tender.area_sp > 0);
   
@@ -261,6 +271,11 @@ const TenderTable: React.FC<TenderTableProps> = ({
                 >
                   {record.title}
                 </Text>
+                {record.version && record.version > 1 && (
+                  <Tag color="purple" size="small">
+                    v{record.version}
+                  </Tag>
+                )}
                 <Tag color="blue" size="small">
                   v{record.version || 1}
                 </Tag>
@@ -827,11 +842,20 @@ const TenderTable: React.FC<TenderTableProps> = ({
         const hasCurrencyRates = record.usd_rate || record.eur_rate || record.cny_rate;
         
         return (
-          <Space size="small">
-            <ExcelUpload 
+          <Space size="small" wrap>
+            <ExcelUpload
               tenderId={record.id!}
               onUpload={(file) => handleExcelUpload(record.id!, file)}
             />
+            <Tooltip title="Создать версию">
+              <Button
+                type="text"
+                size="small"
+                icon={<BranchesOutlined />}
+                onClick={() => handleCreateVersion(record)}
+                style={{ color: '#722ed1' }}
+              />
+            </Tooltip>
             <Tooltip title="Открыть">
               <Button
                 type="text"

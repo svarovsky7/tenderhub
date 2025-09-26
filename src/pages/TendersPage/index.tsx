@@ -11,6 +11,7 @@ import {
   CreateTenderModal,
   DeleteTenderModal
 } from './components';
+import { TenderVersionManager } from '../../components/tender/TenderVersionManager';
 
 // Hooks
 import { useTenderFilters, useTenders, useTenderActions } from './hooks';
@@ -19,6 +20,10 @@ const { Title, Text } = Typography;
 
 const TendersPage: React.FC = () => {
   console.log('🚀 TendersPage component rendered');
+
+  // State for version manager
+  const [versionModalVisible, setVersionModalVisible] = React.useState(false);
+  const [tenderForVersion, setTenderForVersion] = React.useState<any>(null);
 
   // Initialize filters hook with callback to reset pagination
   const resetPaginationCallback = () => {
@@ -79,6 +84,21 @@ const TendersPage: React.FC = () => {
   const handleEditTenderFromTable = async (updates: any) => {
     console.log('✏️ Edit tender updates from table:', updates);
     await handleEditTender(updates);
+  };
+
+  // Handle create version
+  const handleCreateVersion = (tender: any) => {
+    console.log('📋 Opening version manager for tender:', tender.id);
+    setTenderForVersion(tender);
+    setVersionModalVisible(true);
+  };
+
+  const handleVersionCreated = (newTenderId: string) => {
+    console.log('✅ New version created:', newTenderId);
+    setVersionModalVisible(false);
+    setTenderForVersion(null);
+    loadTenders(); // Refresh tender list
+    message.success('Новая версия тендера успешно создана');
   };
 
   // Handle export all tenders to Excel
@@ -252,6 +272,7 @@ const TendersPage: React.FC = () => {
             onDeleteTender={handleDeleteTenderFromTable}
             onExcelUpload={handleExcelUpload}
             onUpdateBOQCurrencyRates={handleUpdateBOQCurrencyRates}
+            onCreateVersion={handleCreateVersion}
           />
 
           {/* Modals */}
@@ -269,6 +290,19 @@ const TendersPage: React.FC = () => {
             onCancel={hideDeleteModal}
             onConfirm={handleDeleteTender}
           />
+
+          {/* Version Manager Modal */}
+          {versionModalVisible && tenderForVersion && (
+            <TenderVersionManager
+              parentTenderId={tenderForVersion.id}
+              parentTenderName={tenderForVersion.title || tenderForVersion.name || 'Тендер'}
+              onVersionCreated={handleVersionCreated}
+              onCancel={() => {
+                setVersionModalVisible(false);
+                setTenderForVersion(null);
+              }}
+            />
+          )}
         </div>
       </div>
     </>
