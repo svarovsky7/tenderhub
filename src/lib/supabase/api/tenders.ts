@@ -206,6 +206,10 @@ export const tendersApi = {
     console.log('  USD Rate:', updates.usd_rate);
     console.log('  EUR Rate:', updates.eur_rate);
     console.log('  CNY Rate:', updates.cny_rate);
+    console.log('  Upload Folder:', updates.upload_folder);
+    console.log('  BSM Link:', updates.bsm_link);
+    console.log('  TZ Clarification Link:', updates.tz_clarification_link);
+    console.log('  QA Form Link:', updates.qa_form_link);
     
     try {
       // First perform the update

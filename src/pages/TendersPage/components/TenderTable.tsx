@@ -30,7 +30,11 @@ import {
   ClockCircleOutlined,
   CheckOutlined,
   CloseOutlined,
-  SyncOutlined
+  SyncOutlined,
+  FolderOutlined,
+  LinkOutlined,
+  FileTextOutlined,
+  FormOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -70,7 +74,11 @@ const TenderTable: React.FC<TenderTableProps> = ({
       version: tender.version || 1,
       usd_rate: tender.usd_rate || null,
       eur_rate: tender.eur_rate || null,
-      cny_rate: tender.cny_rate || null
+      cny_rate: tender.cny_rate || null,
+      upload_folder: tender.upload_folder || null,
+      bsm_link: tender.bsm_link || null,
+      tz_clarification_link: tender.tz_clarification_link || null,
+      qa_form_link: tender.qa_form_link || null
     });
   };
 
@@ -100,7 +108,11 @@ const TenderTable: React.FC<TenderTableProps> = ({
       console.log('  USD:', values.usd_rate);
       console.log('  EUR:', values.eur_rate);
       console.log('  CNY:', values.cny_rate);
-      
+      console.log('  Upload Folder:', values.upload_folder);
+      console.log('  BSM Link:', values.bsm_link);
+      console.log('  TZ Clarification:', values.tz_clarification_link);
+      console.log('  QA Form:', values.qa_form_link);
+
       const updates = {
         ...values,
         id: record.id,
@@ -108,10 +120,15 @@ const TenderTable: React.FC<TenderTableProps> = ({
         // Ensure currency fields are included
         usd_rate: values.usd_rate || null,
         eur_rate: values.eur_rate || null,
-        cny_rate: values.cny_rate || null
+        cny_rate: values.cny_rate || null,
+        // Include new link fields
+        upload_folder: values.upload_folder || null,
+        bsm_link: values.bsm_link || null,
+        tz_clarification_link: values.tz_clarification_link || null,
+        qa_form_link: values.qa_form_link || null
       };
-      
-      console.log('📤 Final updates object:', updates);
+
+      console.log('📤 Final updates object:', JSON.stringify(updates, null, 2));
       
       await onEditTender(updates);
       setEditingKey(null);
@@ -628,6 +645,106 @@ const TenderTable: React.FC<TenderTableProps> = ({
         );
       },
       sorter: (a, b) => (a.cny_rate || 0) - (b.cny_rate || 0)
+    },
+    {
+      title: <div className="text-center">Ссылки</div>,
+      key: 'links',
+      width: 180,
+      align: 'center' as const,
+      render: (_, record) => {
+        const isEditing = editingKey === record.id;
+
+        if (isEditing) {
+          return (
+            <div className="space-y-2">
+              <Form.Item
+                name="upload_folder"
+                style={{ margin: 0 }}
+              >
+                <Input
+                  size="small"
+                  placeholder="Папка для загрузки КП"
+                  prefix={<FolderOutlined />}
+                />
+              </Form.Item>
+              <Form.Item
+                name="bsm_link"
+                style={{ margin: 0 }}
+              >
+                <Input
+                  size="small"
+                  placeholder="Ссылка на БСМ"
+                  prefix={<LinkOutlined />}
+                />
+              </Form.Item>
+              <Form.Item
+                name="tz_clarification_link"
+                style={{ margin: 0 }}
+              >
+                <Input
+                  size="small"
+                  placeholder="Ссылка на уточнение ТЗ"
+                  prefix={<FileTextOutlined />}
+                />
+              </Form.Item>
+              <Form.Item
+                name="qa_form_link"
+                style={{ margin: 0 }}
+              >
+                <Input
+                  size="small"
+                  placeholder="Форма вопрос-ответ"
+                  prefix={<FormOutlined />}
+                />
+              </Form.Item>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex flex-wrap gap-1 justify-center">
+            {record.upload_folder && (
+              <Tooltip title="Папка для загрузки КП">
+                <Button
+                  size="small"
+                  icon={<FolderOutlined />}
+                  onClick={() => window.open(record.upload_folder, '_blank')}
+                />
+              </Tooltip>
+            )}
+            {record.bsm_link && (
+              <Tooltip title="БСМ">
+                <Button
+                  size="small"
+                  icon={<LinkOutlined />}
+                  onClick={() => window.open(record.bsm_link, '_blank')}
+                />
+              </Tooltip>
+            )}
+            {record.tz_clarification_link && (
+              <Tooltip title="Уточнение ТЗ">
+                <Button
+                  size="small"
+                  icon={<FileTextOutlined />}
+                  onClick={() => window.open(record.tz_clarification_link, '_blank')}
+                />
+              </Tooltip>
+            )}
+            {record.qa_form_link && (
+              <Tooltip title="Форма вопрос-ответ">
+                <Button
+                  size="small"
+                  icon={<FormOutlined />}
+                  onClick={() => window.open(record.qa_form_link, '_blank')}
+                />
+              </Tooltip>
+            )}
+            {!record.upload_folder && !record.bsm_link && !record.tz_clarification_link && !record.qa_form_link && (
+              <Text type="secondary" className="text-xs">Нет ссылок</Text>
+            )}
+          </div>
+        );
+      }
     },
     {
       title: <div className="text-center">Создан</div>,

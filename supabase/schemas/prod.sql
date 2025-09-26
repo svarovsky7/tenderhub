@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-09-26T09:09:02.007345
+-- Generated: 2025-09-26T14:11:55.261245
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -429,10 +429,10 @@ CREATE TABLE IF NOT EXISTS public.commercial_costs_by_category (
     commercial_submaterials numeric(15,2) DEFAULT 0,
     commercial_subworks numeric(15,2) DEFAULT 0,
     commercial_total numeric(15,2),
-    markup_coefficient_materials numeric(5,3),
-    markup_coefficient_works numeric(5,3),
-    markup_coefficient_submaterials numeric(5,3),
-    markup_coefficient_subworks numeric(5,3),
+    markup_coefficient_materials numeric(10,3),
+    markup_coefficient_works numeric(10,3),
+    markup_coefficient_submaterials numeric(10,3),
+    markup_coefficient_subworks numeric(10,3),
     last_calculation_date timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
@@ -655,6 +655,10 @@ CREATE TABLE IF NOT EXISTS public.tenders (
     usd_rate numeric,
     eur_rate numeric,
     cny_rate numeric,
+    upload_folder text,
+    bsm_link text,
+    tz_clarification_link text,
+    qa_form_link text,
     CONSTRAINT tenders_pkey PRIMARY KEY (id),
     CONSTRAINT tenders_tender_number_key UNIQUE (tender_number)
 );
@@ -665,6 +669,10 @@ COMMENT ON COLUMN public.tenders.area_client IS 'Площадь от Заказ�
 COMMENT ON COLUMN public.tenders.usd_rate IS 'USD exchange rate for this tender version';
 COMMENT ON COLUMN public.tenders.eur_rate IS 'EUR exchange rate for this tender version';
 COMMENT ON COLUMN public.tenders.cny_rate IS 'CNY exchange rate for this tender version';
+COMMENT ON COLUMN public.tenders.upload_folder IS 'Папка для загрузки КП';
+COMMENT ON COLUMN public.tenders.bsm_link IS 'Ссылка на БСМ';
+COMMENT ON COLUMN public.tenders.tz_clarification_link IS 'Ссылка на уточнение по ТЗ';
+COMMENT ON COLUMN public.tenders.qa_form_link IS 'Ссылка на форму вопрос-ответ';
 
 -- Table: public.units
 CREATE TABLE IF NOT EXISTS public.units (
@@ -1258,7 +1266,7 @@ $function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea)
+CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1266,7 +1274,7 @@ AS '$libdir/pgcrypto', $function$pg_armor$function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
+CREATE OR REPLACE FUNCTION extensions.armor(bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1513,7 +1521,7 @@ $function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1521,7 +1529,7 @@ AS '$libdir/pgcrypto', $function$pg_hmac$function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1569,7 +1577,7 @@ AS '$libdir/pgcrypto', $function$pgp_key_id_w$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1577,7 +1585,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1590,6 +1598,14 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
+
+
+-- Function: extensions.pgp_pub_decrypt_bytea
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_decrypt_bytea
@@ -1608,12 +1624,12 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text)
 AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
--- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
+-- Function: extensions.pgp_pub_encrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
  RETURNS bytea
  LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_encrypt
@@ -1624,16 +1640,8 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
 AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
 
 
--- Function: extensions.pgp_pub_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
- RETURNS bytea
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
-
-
 -- Function: extensions.pgp_pub_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1641,7 +1649,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1681,7 +1689,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1689,7 +1697,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
 
 
 -- Function: extensions.pgp_sym_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -4576,27 +4584,11 @@ CREATE OR REPLACE FUNCTION public.recalculate_commercial_costs_by_category(p_ten
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
-DECLARE
-    v_markup_record RECORD;
 BEGIN
-    -- Получаем проценты наценок для тендера
-    SELECT * INTO v_markup_record
-    FROM tender_markup_percentages
-    WHERE tender_id = p_tender_id
-    LIMIT 1;
-    
-    -- Если нет записи о наценках, используем дефолтные значения
-    IF v_markup_record IS NULL THEN
-        -- Создаем запись с дефолтными значениями
-        INSERT INTO tender_markup_percentages (tender_id)
-        VALUES (p_tender_id)
-        RETURNING * INTO v_markup_record;
-    END IF;
-
     -- Удаляем старые записи для этого тендера
     DELETE FROM commercial_costs_by_category WHERE tender_id = p_tender_id;
-    
-    -- Вставляем новые агрегированные данные с правильной логикой
+
+    -- Вставляем новые данные БЕЗ markup_coefficient колонок (они GENERATED)
     INSERT INTO commercial_costs_by_category (
         tender_id,
         detail_cost_category_id,
@@ -4609,96 +4601,34 @@ BEGIN
         commercial_submaterials,
         commercial_subworks
     )
-    WITH boq_data AS (
-        -- Собираем все BOQ items с их типами и информацией о связанности материалов
-        SELECT 
-            bi.detail_cost_category_id,
-            bi.item_type,
-            bi.total_amount as direct_cost,
-            bi.commercial_cost,
-            bi.work_id,
-            bi.material_id,
-            -- Определяем, является ли материал основным (linked) или вспомогательным (unlinked)
-            CASE 
-                WHEN bi.item_type = 'material' AND bi.work_id IS NOT NULL THEN true  -- Основной материал (linked)
-                WHEN bi.item_type = 'material' AND bi.work_id IS NULL THEN false     -- Вспомогательный материал (unlinked)
-                ELSE NULL
-            END as is_linked_material
-        FROM boq_items bi
-        WHERE bi.tender_id = p_tender_id
-            AND bi.detail_cost_category_id IS NOT NULL
-    ),
-    material_transfers AS (
-        -- Рассчитываем переносы из материалов в работы
-        SELECT 
-            detail_cost_category_id,
-            -- Прямые затраты остаются как есть
-            SUM(CASE WHEN item_type = 'material' THEN direct_cost ELSE 0 END) as direct_materials,
-            SUM(CASE WHEN item_type = 'work' THEN direct_cost ELSE 0 END) as direct_works,
-            SUM(CASE WHEN item_type = 'sub_material' THEN direct_cost ELSE 0 END) as direct_submaterials,
-            SUM(CASE WHEN item_type = 'sub_work' THEN direct_cost ELSE 0 END) as direct_subworks,
-            
-            -- Коммерческие материалы (с учетом логики переноса)
-            SUM(CASE 
-                -- Основные материалы (linked): остается только базовая стоимость
-                WHEN item_type = 'material' AND is_linked_material = true THEN direct_cost
-                -- Вспомогательные материалы (unlinked): в материалах ничего не остается
-                WHEN item_type = 'material' AND is_linked_material = false THEN 0
-                ELSE 0
-            END) as commercial_materials_calculated,
-            
-            -- Коммерческие работы (включая переносы из материалов)
-            SUM(CASE 
-                WHEN item_type = 'work' THEN COALESCE(commercial_cost, 0)
-                ELSE 0
-            END) +
-            -- Добавляем наценку от основных материалов
-            SUM(CASE 
-                WHEN item_type = 'material' AND is_linked_material = true 
-                THEN COALESCE(commercial_cost, 0) - direct_cost  -- Наценка = коммерческая - базовая
-                ELSE 0
-            END) +
-            -- Добавляем всю стоимость вспомогательных материалов
-            SUM(CASE 
-                WHEN item_type = 'material' AND is_linked_material = false 
-                THEN COALESCE(commercial_cost, 0)  -- Вся коммерческая стоимость
-                ELSE 0
-            END) as commercial_works_calculated,
-            
-            -- Коммерческие субматериалы: остается базовая стоимость
-            SUM(CASE 
-                WHEN item_type = 'sub_material' THEN direct_cost
-                ELSE 0
-            END) as commercial_submaterials_calculated,
-            
-            -- Коммерческие субработы (включая наценку от субматериалов)
-            SUM(CASE 
-                WHEN item_type = 'sub_work' THEN COALESCE(commercial_cost, 0)
-                ELSE 0
-            END) +
-            -- Добавляем наценку от субматериалов
-            SUM(CASE 
-                WHEN item_type = 'sub_material' 
-                THEN COALESCE(commercial_cost, 0) - direct_cost  -- Наценка от субматериалов
-                ELSE 0
-            END) as commercial_subworks_calculated
-            
-        FROM boq_data
-        GROUP BY detail_cost_category_id
-    )
-    SELECT 
+    SELECT
         p_tender_id,
         detail_cost_category_id,
-        direct_materials,
-        direct_works,
-        direct_submaterials,
-        direct_subworks,
-        commercial_materials_calculated,
-        commercial_works_calculated,
-        commercial_submaterials_calculated,
-        commercial_subworks_calculated
-    FROM material_transfers;
-    
+        -- Прямые затраты (total_amount из BOQ)
+        SUM(CASE WHEN item_type = 'material' THEN total_amount ELSE 0 END) as direct_materials,
+        SUM(CASE WHEN item_type = 'work' THEN total_amount ELSE 0 END) as direct_works,
+        SUM(CASE WHEN item_type = 'sub_material' THEN total_amount ELSE 0 END) as direct_submaterials,
+        SUM(CASE WHEN item_type = 'sub_work' THEN total_amount ELSE 0 END) as direct_subworks,
+
+        -- Коммерческие затраты (commercial_cost из BOQ)
+        SUM(CASE WHEN item_type = 'material' THEN COALESCE(commercial_cost, 0) ELSE 0 END) as commercial_materials,
+        SUM(CASE WHEN item_type = 'work' THEN COALESCE(commercial_cost, 0) ELSE 0 END) as commercial_works,
+        SUM(CASE WHEN item_type = 'sub_material' THEN COALESCE(commercial_cost, 0) ELSE 0 END) as commercial_submaterials,
+        SUM(CASE WHEN item_type = 'sub_work' THEN COALESCE(commercial_cost, 0) ELSE 0 END) as commercial_subworks
+
+    FROM boq_items
+    WHERE tender_id = p_tender_id
+        AND detail_cost_category_id IS NOT NULL
+    GROUP BY detail_cost_category_id;
+
+    -- Обновляем вычисляемые поля (если они не GENERATED)
+    UPDATE commercial_costs_by_category
+    SET
+        direct_total = direct_materials + direct_works + direct_submaterials + direct_subworks,
+        commercial_total = commercial_materials + commercial_works + commercial_submaterials + commercial_subworks,
+        last_calculation_date = NOW()
+    WHERE tender_id = p_tender_id;
+
 END;
 $function$
 
@@ -5319,7 +5249,7 @@ AS '$libdir/ltree', $function$subltree$function$
 
 
 -- Function: public.subpath
-CREATE OR REPLACE FUNCTION public.subpath(ltree, integer, integer)
+CREATE OR REPLACE FUNCTION public.subpath(ltree, integer)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -5327,7 +5257,7 @@ AS '$libdir/ltree', $function$subpath$function$
 
 
 -- Function: public.subpath
-CREATE OR REPLACE FUNCTION public.subpath(ltree, integer)
+CREATE OR REPLACE FUNCTION public.subpath(ltree, integer, integer)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -5435,17 +5365,24 @@ CREATE OR REPLACE FUNCTION public.trigger_update_commercial_costs_by_category()
  RETURNS trigger
  LANGUAGE plpgsql
 AS $function$
-  BEGIN
-      -- При изменении BOQ items пересчитываем коммерческие стоимости для затронутого тендера
-      IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-          PERFORM recalculate_commercial_costs_by_category(NEW.tender_id);
-      ELSIF TG_OP = 'DELETE' THEN
-          PERFORM recalculate_commercial_costs_by_category(OLD.tender_id);
-      END IF;
+DECLARE
+    affected_tender_id UUID;
+BEGIN
+    -- Определяем затронутый тендер
+    IF TG_OP = 'DELETE' THEN
+        affected_tender_id := OLD.tender_id;
+    ELSE
+        affected_tender_id := NEW.tender_id;
+    END IF;
 
-      RETURN NULL;
-  END;
-  $function$
+    -- Пересчитываем если тендер не NULL
+    IF affected_tender_id IS NOT NULL THEN
+        PERFORM recalculate_commercial_costs_by_category(affected_tender_id);
+    END IF;
+
+    RETURN NULL;
+END;
+$function$
 
 
 -- Function: public.update_boq_currency_rates
@@ -7236,6 +7173,9 @@ CREATE TRIGGER calculate_boq_amounts_trigger BEFORE INSERT OR UPDATE OF unit_rat
 -- Description: Automatically recalculates total_materials_cost and total_works_cost in client_positions table when BOQ items are modified
 CREATE TRIGGER recalculate_position_totals_trigger AFTER INSERT OR DELETE OR UPDATE OF total_amount, quantity, unit_rate, item_type, client_position_id ON public.boq_items FOR EACH ROW EXECUTE FUNCTION recalculate_client_position_totals()
 
+-- Trigger: update_commercial_costs_trigger on public.boq_items
+CREATE TRIGGER update_commercial_costs_trigger AFTER INSERT OR DELETE OR UPDATE ON public.boq_items FOR EACH ROW EXECUTE FUNCTION trigger_update_commercial_costs_by_category()
+
 -- Trigger: auto_assign_position_number_trigger on public.client_positions
 CREATE TRIGGER auto_assign_position_number_trigger BEFORE INSERT ON public.client_positions FOR EACH ROW EXECUTE FUNCTION auto_assign_position_number()
 
@@ -7898,6 +7838,7 @@ GRANT supabase_realtime_admin TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_57 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_58 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_59 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_temp_6 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_7 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_8 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_temp_9 TO postgres;
@@ -7957,6 +7898,7 @@ GRANT supabase_realtime_admin TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_57 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_58 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_59 TO postgres;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_6 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_7 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_8 TO postgres;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_9 TO postgres;
@@ -8049,6 +7991,7 @@ CREATE ROLE supabase_admin WITH SUPERUSER CREATEDB CREATEROLE LOGIN REPLICATION 
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_57 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_58 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_59 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_temp_6 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_7 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_8 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_temp_9 TO supabase_admin;
@@ -8108,6 +8051,7 @@ CREATE ROLE supabase_admin WITH SUPERUSER CREATEDB CREATEROLE LOGIN REPLICATION 
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_57 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_58 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_59 TO supabase_admin;
+-- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_6 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_7 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_8 TO supabase_admin;
 -- GRANT CREATE, USAGE ON SCHEMA pg_toast_temp_9 TO supabase_admin;
@@ -8192,6 +8136,7 @@ GRANT pg_read_all_data TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_57 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_58 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_59 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_temp_6 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_7 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_8 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_temp_9 TO supabase_read_only_user;
@@ -8251,6 +8196,7 @@ GRANT pg_read_all_data TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_57 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_58 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_59 TO supabase_read_only_user;
+-- GRANT USAGE ON SCHEMA pg_toast_temp_6 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_7 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_8 TO supabase_read_only_user;
 -- GRANT USAGE ON SCHEMA pg_toast_temp_9 TO supabase_read_only_user;

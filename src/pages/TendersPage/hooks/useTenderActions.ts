@@ -129,7 +129,12 @@ export const useTenderActions = (
 
   const handleEditTender = useCallback(async (values: TenderUpdate & { id?: string }) => {
     console.log('🚀 handleEditTender called with values:', values);
-    
+    console.log('🔍 Link fields check:');
+    console.log('  upload_folder:', values.upload_folder);
+    console.log('  bsm_link:', values.bsm_link);
+    console.log('  tz_clarification_link:', values.tz_clarification_link);
+    console.log('  qa_form_link:', values.qa_form_link);
+
     // Support both modal editing (with editingTender) and inline editing (with id in values)
     const tenderId = values.id || editingTender?.id;
     
@@ -174,7 +179,29 @@ export const useTenderActions = (
         updates.cny_rate = values.cny_rate ?? null;
       }
 
-      console.log('📡 Calling tendersApi.update with updates:', updates);
+      // Handle new link fields
+      if ('upload_folder' in values) {
+        updates.upload_folder = values.upload_folder ?? null;
+      }
+      if ('bsm_link' in values) {
+        updates.bsm_link = values.bsm_link ?? null;
+      }
+      if ('tz_clarification_link' in values) {
+        updates.tz_clarification_link = values.tz_clarification_link ?? null;
+      }
+      if ('qa_form_link' in values) {
+        updates.qa_form_link = values.qa_form_link ?? null;
+      }
+
+      console.log('📡 Calling tendersApi.update with:');
+      console.log('  Tender ID:', tenderId);
+      console.log('  Updates object:', JSON.stringify(updates, null, 2));
+      console.log('  Link fields in updates:');
+      console.log('    upload_folder:', updates.upload_folder);
+      console.log('    bsm_link:', updates.bsm_link);
+      console.log('    tz_clarification_link:', updates.tz_clarification_link);
+      console.log('    qa_form_link:', updates.qa_form_link);
+
       const result = await tendersApi.update(tenderId, updates);
       
       console.log('📦 Update result:', result);

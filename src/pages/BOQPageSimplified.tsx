@@ -14,12 +14,15 @@ import {
   ConfigProvider,
   Alert
 } from 'antd';
-import { 
-  PlusOutlined, 
+import {
+  PlusOutlined,
   FileTextOutlined,
   ReloadOutlined,
   FolderOpenOutlined,
-  DashboardOutlined
+  DashboardOutlined,
+  FolderOutlined,
+  LinkOutlined,
+  FormOutlined
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TenderBOQManagerLazy from '../components/tender/TenderBOQManagerLazy';
@@ -442,6 +445,51 @@ const BOQPageSimplified: React.FC = () => {
                               <strong>Курс CNY:</strong> {selectedTender.cny_rate ? `${Number(selectedTender.cny_rate).toFixed(2)} ₽/¥` : '—'}
                             </span>
                           </div>
+                          {/* Ссылки на дополнительные ресурсы */}
+                          {(selectedTender.upload_folder || selectedTender.bsm_link || selectedTender.tz_clarification_link || selectedTender.qa_form_link) && (
+                            <div className="flex flex-wrap items-center justify-end gap-2 mt-2" style={{ position: 'relative', zIndex: 10 }}>
+                              {selectedTender.upload_folder && (
+                                <Button
+                                  size="small"
+                                  icon={<FolderOutlined />}
+                                  onClick={() => window.open(selectedTender.upload_folder, '_blank')}
+                                  title="Папка для загрузки КП"
+                                >
+                                  Папка КП
+                                </Button>
+                              )}
+                              {selectedTender.bsm_link && (
+                                <Button
+                                  size="small"
+                                  icon={<LinkOutlined />}
+                                  onClick={() => window.open(selectedTender.bsm_link, '_blank')}
+                                  title="Ссылка на БСМ"
+                                >
+                                  БСМ
+                                </Button>
+                              )}
+                              {selectedTender.tz_clarification_link && (
+                                <Button
+                                  size="small"
+                                  icon={<FileTextOutlined />}
+                                  onClick={() => window.open(selectedTender.tz_clarification_link, '_blank')}
+                                  title="Ссылка на уточнение по ТЗ"
+                                >
+                                  Уточнение ТЗ
+                                </Button>
+                              )}
+                              {selectedTender.qa_form_link && (
+                                <Button
+                                  size="small"
+                                  icon={<FormOutlined />}
+                                  onClick={() => window.open(selectedTender.qa_form_link, '_blank')}
+                                  title="Ссылка на форму вопрос-ответ"
+                                >
+                                  Вопросы
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </Col>
                     )}

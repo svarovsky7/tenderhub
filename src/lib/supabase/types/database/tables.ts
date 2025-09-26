@@ -386,6 +386,10 @@ export type DatabaseTables = {
       usd_rate: number | null;
       eur_rate: number | null;
       cny_rate: number | null;
+      upload_folder: string | null;
+      bsm_link: string | null;
+      tz_clarification_link: string | null;
+      qa_form_link: string | null;
     };
     Insert: {
       id?: string;
@@ -402,6 +406,10 @@ export type DatabaseTables = {
       usd_rate?: number | null;
       eur_rate?: number | null;
       cny_rate?: number | null;
+      upload_folder?: string | null;
+      bsm_link?: string | null;
+      tz_clarification_link?: string | null;
+      qa_form_link?: string | null;
     };
     Update: {
       id?: string;
@@ -418,6 +426,10 @@ export type DatabaseTables = {
       usd_rate?: number | null;
       eur_rate?: number | null;
       cny_rate?: number | null;
+      upload_folder?: string | null;
+      bsm_link?: string | null;
+      tz_clarification_link?: string | null;
+      qa_form_link?: string | null;
     };
     Relationships: [
       {

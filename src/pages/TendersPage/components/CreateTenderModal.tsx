@@ -27,7 +27,11 @@ const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
         submission_deadline: values.submission_deadline?.format('YYYY-MM-DD HH:mm:ss'),
         version: values.version ?? 1,
         area_sp: values.area_sp ?? null,
-        area_client: values.area_client ?? null
+        area_client: values.area_client ?? null,
+        upload_folder: values.upload_folder ?? null,
+        bsm_link: values.bsm_link ?? null,
+        tz_clarification_link: values.tz_clarification_link ?? null,
+        qa_form_link: values.qa_form_link ?? null
       };
 
       console.log('🔄 Calling onSubmit with processed data:', tenderData);
@@ -137,7 +141,7 @@ const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
               label="Площадь по СП"
               tooltip="Площадь по строительным правилам"
             >
-              <InputNumber 
+              <InputNumber
                 style={{ width: '100%' }}
                 placeholder="0.00"
                 suffix="м²"
@@ -152,13 +156,57 @@ const CreateTenderModal: React.FC<CreateTenderModalProps> = ({
               label="Площадь от Заказчика"
               tooltip="Площадь, указанная заказчиком"
             >
-              <InputNumber 
+              <InputNumber
                 style={{ width: '100%' }}
                 placeholder="0.00"
                 suffix="м²"
                 precision={2}
                 min={0}
               />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider orientation="left">Ссылки и документы</Divider>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item
+              name="upload_folder"
+              label="Папка для загрузки КП"
+              tooltip="Ссылка на папку для загрузки коммерческого предложения"
+            >
+              <Input placeholder="https://drive.google.com/..." />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item
+              name="bsm_link"
+              label="Ссылка на БСМ"
+              tooltip="Ссылка на базу строительных материалов"
+            >
+              <Input placeholder="https://..." />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item
+              name="tz_clarification_link"
+              label="Ссылка на уточнение по ТЗ"
+              tooltip="Ссылка на документ с уточнениями технического задания"
+            >
+              <Input placeholder="https://..." />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item
+              name="qa_form_link"
+              label="Ссылка на форму вопрос-ответ"
+              tooltip="Ссылка на форму для вопросов и ответов"
+            >
+              <Input placeholder="https://..." />
             </Form.Item>
           </Col>
         </Row>
