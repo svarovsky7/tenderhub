@@ -536,14 +536,14 @@ export const exportBOQToExcel = async (
     if (position.additional_works && Array.isArray(position.additional_works)) {
       const sortedAdditional = [...position.additional_works].sort((a, b) => a.position_number - b.position_number);
 
-      sortedAdditional.forEach(addPos => {
+      for (const addPos of sortedAdditional) {
         // Mark as ДОП position by modifying the item_no
         const dopPosition = {
           ...addPos,
           item_no: `${position.item_no || ''}.ДОП.${addPos.position_number - position.position_number}`
         };
         await addPositionWithItems(dopPosition, level + 1);
-      });
+      }
     }
 
     // Also check for additional positions in the main positions list (for fallback compatibility)
@@ -556,10 +556,10 @@ export const exportBOQToExcel = async (
     if (additionalPositions.length > 0) {
       const sortedAdditional = [...additionalPositions].sort((a, b) => a.position_number - b.position_number);
 
-      sortedAdditional.forEach(addPos => {
+      for (const addPos of sortedAdditional) {
         // Skip if already processed from additional_works
         if (position.additional_works && position.additional_works.some(aw => aw.id === addPos.id)) {
-          return;
+          continue;
         }
 
         // Mark as ДОП position by modifying the item_no
@@ -568,7 +568,7 @@ export const exportBOQToExcel = async (
           item_no: `${position.item_no || ''}.ДОП.${addPos.position_number - position.position_number}`
         };
         await addPositionWithItems(dopPosition, level + 1);
-      });
+      }
     }
   };
 
