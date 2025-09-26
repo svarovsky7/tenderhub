@@ -394,7 +394,7 @@ export const workMaterialLinksApi = {
    */
   async checkLinkExists(workBoqItemId: string, materialBoqItemId: string) {
     console.log('🚀 Checking if link exists:', { workBoqItemId, materialBoqItemId });
-    
+
     try {
       const { data, error } = await supabase
         .from('work_material_links')
@@ -413,6 +413,59 @@ export const workMaterialLinksApi = {
       return { exists: !!data, linkId: data?.id };
     } catch (error) {
       console.error('💥 Exception in checkLinkExists:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  /**
+   * Получить все связи work-material для тендера
+   * Оптимизированный метод для загрузки всех связей одним запросом
+   */
+  async getLinksByTender(tenderId: string) {
+    console.log('🚀 Getting all work-material links for tender:', tenderId);
+
+    try {
+      // Загружаем все связи через JOIN с client_positions
+      const { data, error } = await supabase
+        .from('work_material_links')
+        .select(`
+          *,
+          client_position:client_positions!inner(
+            id,
+            tender_id
+          )
+        `)
+        .eq('client_position.tender_id', tenderId);
+
+      if (error) {
+        console.error('❌ Failed to fetch links for tender:', error);
+        return { error: error.message };
+      }
+
+      // Группируем связи по client_position_id для удобного доступа
+      const linksByPosition = new Map<string, any[]>();
+
+      if (data) {
+        for (const link of data) {
+          const positionId = link.client_position_id;
+          if (!linksByPosition.has(positionId)) {
+            linksByPosition.set(positionId, []);
+          }
+          // Убираем вложенный объект client_position из результата
+          const { client_position, ...linkData } = link;
+          linksByPosition.get(positionId)!.push(linkData);
+        }
+      }
+
+      console.log(`✅ Loaded ${data?.length || 0} links for ${linksByPosition.size} positions`);
+
+      return {
+        data: linksByPosition,
+        totalLinks: data?.length || 0,
+        positionsCount: linksByPosition.size
+      };
+    } catch (error) {
+      console.error('💥 Exception in getLinksByTender:', error);
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }

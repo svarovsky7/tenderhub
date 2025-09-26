@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx-js-style';
-import { getDetailCategoryDisplay } from '../lib/supabase/api/construction-costs';
 import { workMaterialLinksApi } from '../lib/supabase/api/work-material-links';
+import { boqBatchApi } from '../lib/supabase/api/boq/batch';
+import { getAllCategoriesAndLocations } from '../lib/supabase/api/cost-categories';
 
 /**
  * Generate Excel template for construction costs import
@@ -448,15 +449,68 @@ export const exportTendersToExcel = (tenders: any[], fileName = 'all_tenders.xls
  */
 export const exportBOQToExcel = async (
   positions: any[],
-  boqItemsMap: Map<string, any[]>,
-  tenderName: string
+  boqItemsMap: Map<string, any[]> | null,  // Now optional - will load internally if not provided
+  tenderName: string,
+  tenderId?: string
 ) => {
   console.log('🚀 [exportBOQToExcel] Starting export with', positions.length, 'positions');
+  const startTime = performance.now();
 
   const exportData: any[] = [];
   const rowStyles: Map<number, string> = new Map(); // Store styles for each row with proper indexing
   const unpricedExecutableRows: Set<number> = new Set(); // Track unpriced executable positions
-  const workLinksCache = new Map<string, any[]>(); // Cache for work-material links by position
+  let workLinksCache = new Map<string, any[]>(); // Cache for work-material links by position
+  let boqItemsCache = boqItemsMap || new Map<string, any[]>(); // Use provided map or create new
+
+  // Cache for categories and locations
+  let categoriesCache: any = null;
+
+  // Batch load ALL data if tenderId is provided (parallel requests)
+  if (tenderId) {
+    console.log('🔄 [exportBOQToExcel] Starting batch data loading...');
+
+    const [linksResult, boqResult, categoriesResult] = await Promise.all([
+      // 1. Load all work-material links
+      workMaterialLinksApi.getLinksByTender(tenderId),
+      // 2. Load ALL BOQ items if not provided
+      !boqItemsMap ? boqBatchApi.getAllByTenderId(tenderId) : Promise.resolve({ data: null }),
+      // 3. Load all categories and locations
+      getAllCategoriesAndLocations()
+    ]);
+
+    // Process work-material links
+    if (!linksResult.error && linksResult.data) {
+      workLinksCache = linksResult.data;
+      console.log(`✅ [exportBOQToExcel] Loaded links for ${linksResult.data.size} positions`);
+    } else if (linksResult.error) {
+      console.error('❌ [exportBOQToExcel] Failed to load links:', linksResult.error);
+    }
+
+    // Process BOQ items if loaded
+    if (!boqItemsMap && boqResult.data) {
+      // Group BOQ items by client_position_id
+      console.log(`📦 [exportBOQToExcel] Grouping ${boqResult.data.length} BOQ items by position...`);
+      boqItemsCache = new Map();
+      for (const item of boqResult.data) {
+        const posId = item.client_position_id;
+        if (!boqItemsCache.has(posId)) {
+          boqItemsCache.set(posId, []);
+        }
+        const items = boqItemsCache.get(posId);
+        if (items) {
+          items.push(item);
+        }
+      }
+      console.log(`✅ [exportBOQToExcel] Grouped items into ${boqItemsCache.size} positions`);
+    }
+
+    // Store categories cache
+    categoriesCache = categoriesResult;
+    console.log(`✅ [exportBOQToExcel] Loaded categories cache`);
+
+    const loadTime = performance.now() - startTime;
+    console.log(`⚡ [exportBOQToExcel] Batch loading completed in ${loadTime.toFixed(0)}ms`);
+  }
 
   // Helper functions for translation
   const translateItemType = (type: string): string => {
@@ -491,19 +545,11 @@ export const exportBOQToExcel = async (
 
   // Recursive function to add position with its items and additional positions
   const addPositionWithItems = async (position: any, level: number = 0) => {
-    // Get BOQ items for this position
-    let items = boqItemsMap.get(position.id) || [];
+    // Get BOQ items for this position from cache
+    let items = boqItemsCache.get(position.id) || [];
 
-    // Load work-material links for this position if not cached
-    let links: any[] = [];
-    if (!workLinksCache.has(position.id)) {
-      console.log('🔄 [exportBOQToExcel] Loading work-material links for position:', position.id);
-      const { data: linksData } = await workMaterialLinksApi.getLinksByPosition(position.id);
-      links = linksData || [];
-      workLinksCache.set(position.id, links);
-    } else {
-      links = workLinksCache.get(position.id) || [];
-    }
+    // Get work-material links from cache (already loaded for entire tender)
+    const links = workLinksCache.get(position.id) || [];
 
     // Process items with link information (same logic as TenderBOQManagerLazy)
     const processedItems = items.map(item => {
@@ -672,7 +718,7 @@ export const exportBOQToExcel = async (
 
       for (const addPos of sortedAdditional) {
         // Skip if already processed from additional_works
-        if (position.additional_works && position.additional_works.some(aw => aw.id === addPos.id)) {
+        if (position.additional_works && position.additional_works.some((aw: any) => aw.id === addPos.id)) {
           continue;
         }
 
@@ -698,42 +744,42 @@ export const exportBOQToExcel = async (
     await addPositionWithItems(position, 0);
   }
 
-  // Load cost categories for all BOQ items
-  console.log('🔄 [exportBOQToExcel] Loading cost categories...');
-  const categoryPromises: Promise<void>[] = [];
-  const categoryCache = new Map<string, string>();
+  // Update export data with categories using cache
+  console.log('🔄 [exportBOQToExcel] Applying cost categories from cache...');
 
-  exportData.forEach((row, index) => {
-    // Check if this row has a BOQ item with detail_cost_category_id
-    const boqItem = Array.from(boqItemsMap.values())
-      .flat()
-      .find(item => item.description === row['Наименование']?.trim());
+  if (categoriesCache) {
+    exportData.forEach((row) => {
+      // Check if this row has a BOQ item with detail_cost_category_id
+      const boqItem = Array.from(boqItemsCache.values())
+        .flat()
+        .find(item => item.description === row['Наименование']?.trim());
 
-    if (boqItem?.detail_cost_category_id) {
-      if (!categoryCache.has(boqItem.detail_cost_category_id)) {
-        categoryPromises.push(
-          getDetailCategoryDisplay(boqItem.detail_cost_category_id).then(result => {
-            if (result.data) {
-              categoryCache.set(boqItem.detail_cost_category_id, result.data);
-            }
-          })
-        );
+      if (boqItem?.detail_cost_category_id) {
+        // Get category display using cached data
+        const detailCategory = categoriesCache.detailCategoryMap.get(boqItem.detail_cost_category_id);
+        const category = detailCategory?.category_id ?
+          categoriesCache.categoryMap.get(detailCategory.category_id) : null;
+        const location = boqItem.location_id ?
+          categoriesCache.locationMap.get(boqItem.location_id) : null;
+
+        // Build display string (matching getDetailCategoryDisplay format)
+        let display = '';
+        if (category) display += category.name;
+        if (detailCategory) {
+          if (display) display += ' / ';
+          display += detailCategory.name;
+        }
+        if (location) {
+          if (display) display += ' / ';
+          display += location.name;
+        }
+
+        row['Категория затрат'] = display;
       }
-    }
-  });
-
-  await Promise.all(categoryPromises);
-
-  // Update export data with categories
-  exportData.forEach((row, index) => {
-    const boqItem = Array.from(boqItemsMap.values())
-      .flat()
-      .find(item => item.description === row['Наименование']?.trim());
-
-    if (boqItem?.detail_cost_category_id && categoryCache.has(boqItem.detail_cost_category_id)) {
-      row['Категория затрат'] = categoryCache.get(boqItem.detail_cost_category_id) || '';
-    }
-  });
+    });
+  } else {
+    console.log('⚠️ [exportBOQToExcel] No categories cache available, skipping category assignment');
+  }
 
   // Create Excel workbook
   const wb = XLSX.utils.book_new();
@@ -834,8 +880,8 @@ export const exportBOQToExcel = async (
           // Check for BOQ item types
           else {
             const itemType = rowStyles.get(dataRowIndex);
-            if (itemType && itemTypeColors[itemType]) {
-              const bgColor = itemTypeColors[itemType];
+            if (itemType && (itemTypeColors as any)[itemType]) {
+              const bgColor = (itemTypeColors as any)[itemType];
               cell.s.fill = {
                 patternType: 'solid',
                 fgColor: { rgb: bgColor },

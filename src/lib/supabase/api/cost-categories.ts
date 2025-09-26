@@ -19,8 +19,7 @@ export async function getCostCategories() {
   
   const { data, error } = await supabase
     .from('cost_categories')
-    .select('*')
-    .order('sort_order', { ascending: true });
+    .select('*');
 
   if (error) {
     console.error('❌ [getCostCategories] failed:', error);
@@ -44,8 +43,7 @@ export async function getDetailCostCategories(categoryId?: string) {
         name,
         code
       )
-    `)
-    .order('sort_order', { ascending: true });
+    `);
 
   if (categoryId) {
     query = query.eq('category_id', categoryId);
@@ -65,11 +63,10 @@ export async function getDetailCostCategories(categoryId?: string) {
 // Получение локаций
 export async function getLocations(parentId?: string) {
   console.log('🚀 [getLocations] called with:', { parentId });
-  
+
   let query = supabase
     .from('location')
-    .select('*')
-    .order('sort_order', { ascending: true });
+    .select('*');
 
   if (parentId === null) {
     query = query.is('parent_id', null);
@@ -86,6 +83,58 @@ export async function getLocations(parentId?: string) {
 
   console.log('✅ [getLocations] completed:', data?.length, 'locations');
   return data;
+}
+
+// Batch load all categories and locations for Excel export
+export async function getAllCategoriesAndLocations() {
+  console.log('🚀 [getAllCategoriesAndLocations] Starting batch load...');
+  const startTime = performance.now();
+
+  try {
+    // Load all data in parallel
+    const [categories, detailCategories, locations] = await Promise.all([
+      supabase
+        .from('cost_categories')
+        .select('*'),
+      supabase
+        .from('detail_cost_categories')
+        .select('*'),
+      supabase
+        .from('location')
+        .select('*')
+    ]);
+
+    if (categories.error) throw categories.error;
+    if (detailCategories.error) throw detailCategories.error;
+    if (locations.error) throw locations.error;
+
+    // Create Maps for fast access by ID
+    const categoryMap = new Map();
+    const detailCategoryMap = new Map();
+    const locationMap = new Map();
+
+    categories.data?.forEach(cat => categoryMap.set(cat.id, cat));
+    detailCategories.data?.forEach(detail => detailCategoryMap.set(detail.id, detail));
+    locations.data?.forEach(loc => locationMap.set(loc.id, loc));
+
+    const loadTime = performance.now() - startTime;
+    console.log(`✅ [getAllCategoriesAndLocations] Loaded in ${loadTime.toFixed(0)}ms:`,
+      `${categories.data?.length || 0} categories,`,
+      `${detailCategories.data?.length || 0} detail categories,`,
+      `${locations.data?.length || 0} locations`);
+
+    return {
+      categories: categories.data || [],
+      detailCategories: detailCategories.data || [],
+      locations: locations.data || [],
+      categoryMap,
+      detailCategoryMap,
+      locationMap
+    };
+  } catch (error) {
+    console.error('❌ [getAllCategoriesAndLocations] failed:', error);
+    throw error;
+  }
 }
 
 // Создание или получение категории затрат
@@ -118,9 +167,7 @@ async function upsertCostCategory(name: string, unit?: string): Promise<CostCate
       .insert({
         code,
         name,
-        description: unit ? `Единица измерения: ${unit}` : undefined,
-        sort_order: 0,
-        is_active: true
+        description: unit ? `Единица измерения: ${unit}` : undefined
       })
       .select()
       .single();
@@ -180,9 +227,7 @@ async function upsertDetailCostCategory(
         code,
         name,
         unit,
-        base_price: 0,
-        sort_order: 0,
-        is_active: true
+        base_price: 0
       })
       .select()
       .single();
@@ -236,9 +281,7 @@ async function upsertLocation(name: string): Promise<Location | null> {
         code,
         name,
         parent_id: null,
-        level: 0,
-        sort_order: 0,
-        is_active: true
+        level: 0
       })
       .select()
       .single();
@@ -388,7 +431,6 @@ async function upsertCostCategoryWithOrder(name: string, unit?: string, sortOrde
         .from('cost_categories')
         .update({
           description: unit ? `Единица измерения: ${unit}` : existing.description,
-          sort_order: sortOrder,
           updated_at: new Date().toISOString()
         })
         .eq('id', existing.id)
@@ -418,7 +460,6 @@ async function upsertCostCategoryWithOrder(name: string, unit?: string, sortOrde
         code,
         name,
         description: unit ? `Единица измерения: ${unit}` : undefined,
-        sort_order: sortOrder,
         is_active: true
       })
       .select()
@@ -466,7 +507,6 @@ async function upsertDetailCostCategoryWithOrder(
         .from('detail_cost_categories')
         .update({
           unit,
-          sort_order: sortOrder,
           updated_at: new Date().toISOString()
         })
         .eq('id', existing.id)
@@ -498,7 +538,6 @@ async function upsertDetailCostCategoryWithOrder(
         name,
         unit,
         base_price: 0,
-        sort_order: sortOrder,
         is_active: true
       })
       .select()
@@ -539,7 +578,6 @@ async function upsertLocationWithOrder(name: string, sortOrder: number = 0): Pro
       const { data, error } = await supabase
         .from('location')
         .update({
-          sort_order: sortOrder,
           updated_at: new Date().toISOString()
         })
         .eq('id', existing.id)
@@ -570,7 +608,6 @@ async function upsertLocationWithOrder(name: string, sortOrder: number = 0): Pro
         name,
         parent_id: null,
         level: 0,
-        sort_order: sortOrder,
         is_active: true
       })
       .select()
@@ -602,7 +639,7 @@ export async function exportCostCategories() {
   const { data: categoriesData, error: catError } = await supabase
     .from('cost_categories')
     .select('*')
-    .order('sort_order', { ascending: true });
+;
 
   if (catError) {
     console.error('❌ [exportCostCategories] categories failed:', catError);
@@ -613,7 +650,7 @@ export async function exportCostCategories() {
   const { data: detailsData, error: detError } = await supabase
     .from('detail_cost_categories')
     .select('*')
-    .order('sort_order', { ascending: true });
+;
 
   if (detError) {
     console.error('❌ [exportCostCategories] details failed:', detError);
@@ -624,7 +661,7 @@ export async function exportCostCategories() {
   const { data: locationsData, error: locError } = await supabase
     .from('location')
     .select('*')
-    .order('sort_order', { ascending: true });
+;
 
   if (locError) {
     console.error('❌ [exportCostCategories] locations failed:', locError);

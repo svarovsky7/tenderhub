@@ -1039,48 +1039,13 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
   const handleExportToExcel = async () => {
     setExportLoading(true);
     try {
-      // Show loading message
-      const loadingMessage = message.loading('Загрузка данных для экспорта...', 0);
+      // Show loading message - function will load all data internally
+      const loadingMessage = message.loading('Экспорт данных в Excel...', 0);
 
-      // Load all BOQ items for all positions
-      const allBOQItems = new Map<string, any[]>();
-
-      for (const position of positions) {
-        // Load items for main position
-        let items = loadedPositionItems.get(position.id);
-        if (!items) {
-          const { data, error } = await boqApi.getByClientPositionId(position.id);
-          if (error) {
-            console.error(`❌ Error loading items for position ${position.id}:`, error);
-            items = [];
-          } else {
-            items = data || [];
-          }
-        }
-        allBOQItems.set(position.id, items);
-
-        // Load items for additional works (ДОП positions)
-        if (position.additional_works && Array.isArray(position.additional_works)) {
-          for (const dopPosition of position.additional_works) {
-            let dopItems = loadedPositionItems.get(dopPosition.id);
-            if (!dopItems) {
-              const { data, error } = await boqApi.getByClientPositionId(dopPosition.id);
-              if (error) {
-                console.error(`❌ Error loading items for ДОП position ${dopPosition.id}:`, error);
-                dopItems = [];
-              } else {
-                dopItems = data || [];
-              }
-            }
-            allBOQItems.set(dopPosition.id, dopItems);
-          }
-        }
-      }
+      // Pass null for boqItemsMap - function will load all data via batch APIs
+      await exportBOQToExcel(positions, null, tender?.title || 'BOQ', tenderId);
 
       loadingMessage();
-
-      // Export to Excel
-      await exportBOQToExcel(positions, allBOQItems, tender?.title || 'BOQ');
       message.success('Данные успешно экспортированы в Excel');
     } catch (error) {
       console.error('❌ Export error:', error);

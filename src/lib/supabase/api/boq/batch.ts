@@ -22,27 +22,10 @@ export const boqBatchApi = {
     const startTime = performance.now();
 
     try {
-      // Fetch all BOQ items with their library data in one query
+      // Fetch all BOQ items (simplified query without joins)
       const { data, error } = await supabase
         .from('boq_items')
-        .select(`
-          *,
-          materials_library (
-            id,
-            name,
-            unit,
-            unit_rate,
-            category,
-            supplier
-          ),
-          works_library (
-            id,
-            name,
-            unit,
-            unit_rate,
-            category
-          )
-        `)
+        .select('*')
         .eq('tender_id', tenderId)
         .order('client_position_id')
         .order('sub_number');
