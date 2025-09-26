@@ -248,55 +248,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   
   // Commercial cost functions are now provided by useCommercialCost hook
   
-  // Auto-save commercial fields when values change
-  useEffect(() => {
-    if (!position.boq_items || !tenderMarkup) return;
-    
-    const savePromises = position.boq_items.map(async (item) => {
-      const commercialCost = calculateCommercialCost(item);
-      
-      // Calculate base cost properly based on item type - same logic as in calculateCommercialCost
-      // Include currency conversion if not RUB
-      const currencyMultiplier = item.currency_type && item.currency_type !== 'RUB' && item.currency_rate 
-        ? item.currency_rate 
-        : 1;
-      let baseCost = (item.quantity || 0) * (item.unit_rate || 0) * currencyMultiplier;
-      
-      // Add delivery only for materials with appropriate delivery type
-      if ((item.item_type === 'material' || item.item_type === 'sub_material')) {
-        const deliveryType = item.delivery_price_type || 'included';
-        const deliveryAmount = item.delivery_amount || 0;
-        
-        if (deliveryType === 'amount') {
-          // Fixed amount per unit (already in RUB)
-          baseCost = baseCost + (deliveryAmount * (item.quantity || 0));
-        } else if (deliveryType === 'not_included') {
-          // 3% of base cost
-          baseCost = baseCost + (baseCost * 0.03);
-        }
-      }
-      
-      console.log('💾 Saving commercial fields:', {
-        itemId: item.id,
-        itemType: item.item_type,
-        description: item.description,
-        quantity: item.quantity,
-        unitRate: item.unit_rate,
-        deliveryAmount: item.delivery_amount,
-        deliveryType: item.delivery_price_type,
-        baseCost: baseCost,
-        commercialCost: commercialCost,
-        coefficient: baseCost > 0 ? (commercialCost / baseCost).toFixed(3) : 'N/A'
-      });
-      
-      if (commercialCost > 0 && baseCost > 0) {
-        await saveCommercialFields(item.id, commercialCost, baseCost);
-      }
-    });
-    
-    Promise.allSettled(savePromises);
-  }, [position.boq_items, tenderMarkup, calculateCommercialCost, saveCommercialFields]);
-  // Commercial costs are already calculated by useCommercialCost hook
+  // Commercial cost recalculation moved to manual "Обновить" button
+  // to avoid unnecessary DB load on every page load
 
   // Используем хук для сортировки элементов BOQ
   const sortedBOQItems = useSortedBOQItems({

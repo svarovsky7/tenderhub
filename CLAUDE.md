@@ -30,6 +30,8 @@ node src/scripts/applyPositionTotalsTrigger.ts  # Apply position totals trigger 
 - Single Excel sheet with color-coded rows by item type
 - Loads cost categories asynchronously (Category → Detail → Location format)
 - ДОП (additional) positions appear after their parent positions
+- **Important**: Loads work-material links for proper sorting (materials grouped under their works)
+- Uses xlsx-js-style library for advanced Excel styling (borders, colors, alignment)
 
 **Single Component Testing:**
 ```bash
@@ -69,7 +71,7 @@ npm run dev
 - **State**: TanStack Query 5.84.1 (5-minute cache, no window refetch)
 - **Database**: Supabase 2.53.0 (PostgreSQL 16, RLS disabled)
 - **Styling**: Tailwind CSS 3.4.17 (preflight disabled for Ant Design)
-- **Excel**: XLSX 0.18.5 for import/export
+- **Excel**: xlsx-js-style 1.2.0 for import/export with styling support
 - **Drag & Drop**: @dnd-kit/core 6.3.1, @dnd-kit/sortable 10.0.0
 - **Virtual Scrolling**: react-window 1.8.11 + react-window-infinite-loader 1.0.10
 - **Forms**: react-hook-form 7.62.0 + yup 1.7.0 validation
@@ -404,17 +406,23 @@ When extracting business logic to hooks, watch for:
     }
   }
   ```
+- **Work-Material Links Loading**: Required for proper sorting
+  ```typescript
+  const { data: links } = await workMaterialLinksApi.getLinksByPosition(positionId);
+  // Process items to attach work_link data for sorting
+  ```
 - **Color Coding by Item Type**:
   ```typescript
   const itemTypeColors = {
-    'work': { rgb: 'FED7AA' },       // Orange
-    'material': { rgb: 'BFDBFE' },   // Blue
-    'sub_work': { rgb: 'E9D5FF' },   // Purple
-    'sub_material': { rgb: 'BBF7D0' } // Green
+    'work': 'FED7AA',       // Orange
+    'material': 'BFDBFE',   // Blue
+    'sub_work': 'E9D5FF',   // Purple
+    'sub_material': 'BBF7D0' // Green
   };
   ```
 - **ДОП Position Handling**: Process additional positions after parent with full hierarchy
 - **Column Order**: Matches reference BOQ.xlsx format with renamed types (Суб-раб, Суб-мат)
+- **Important**: Use `for...of` loops with async functions, not `forEach`
 
 ## Key Domain-Specific Patterns
 
@@ -430,6 +438,12 @@ When extracting business logic to hooks, watch for:
 - **Linked Materials**: `quantity = work_quantity * consumption_coefficient * conversion_coefficient`
 - **Base Quantity**: Stored only for unlinked materials, NULL for linked
 - **Total Amount Formula**: `total_amount = (unit_rate + delivery_amount) × quantity`
+
+### BOQ Item Sorting Logic
+- **Display Order**: Works → Linked Materials → Next Work → Its Materials → Unlinked Materials
+- **work_link Object**: Contains `work_boq_item_id` or `sub_work_boq_item_id` for material-work relationships
+- **Sort Implementation**: Uses `sub_number` field within each category
+- **Important**: Must load work_material_links from API to get proper sorting data
 
 ### Delivery Cost System
 - **Delivery Types**:
@@ -731,6 +745,8 @@ TenderHUB/
 - **Visual Updates Not Showing**: Check React.memo comparison logic, use checksums
 - **HTTP 400 Numeric Overflow**: Check for Infinity, NaN, or invalid number formats in numeric fields
 - **Cost Category Not Updating**: Ensure cache invalidation for both old and new category IDs
+- **Async/Await in forEach**: Use `for...of` loops instead of `forEach` with async operations
+- **Excel Export Sorting Issues**: Ensure work-material links are loaded for proper material grouping
 
 ## Additional Resources
 

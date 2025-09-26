@@ -86,6 +86,9 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
     cny_rate?: number | null;
   } | null>(null);
 
+  // Track last commercial cost refresh timestamp
+  const [lastCommercialRefresh, setLastCommercialRefresh] = useState<Date | null>(null);
+
   // Sort positions by position number only (preserving Excel file order)
   const sortPositionsByNumber = useCallback((positions: ClientPositionWithStats[]): ClientPositionWithStats[] => {
     return [...positions].sort((a, b) => a.position_number - b.position_number);
@@ -119,10 +122,124 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
     loadTenderData();
   }, [tenderId]);
 
+  // Recalculate commercial costs for changed BOQ items
+  const recalculateCommercialForChangedItems = useCallback(async (positions: ClientPositionWithStats[]) => {
+    console.log('💰 Starting commercial cost recalculation for changed items');
+
+    try {
+      // Get tender markup data
+      const { data: tenderMarkup, error: markupError } = await supabase
+        .from('tender_markup')
+        .select('*')
+        .eq('tender_id', tenderId)
+        .single();
+
+      if (markupError) {
+        console.error('❌ Error loading tender markup:', markupError);
+        message.warning('Не удалось загрузить наценки для расчета коммерческих стоимостей');
+        return;
+      }
+
+      if (!tenderMarkup) {
+        console.log('⚠️ No tender markup found, skipping commercial cost recalculation');
+        return;
+      }
+
+      // Import calculation utilities dynamically to avoid circular dependencies
+      const { calculateCommercialCost } = await import('../../utils/calculateCommercialCost');
+
+      let totalUpdated = 0;
+      const lastRefreshDate = lastCommercialRefresh || new Date(0); // Use epoch if never refreshed
+
+      // Process each position
+      for (const position of positions) {
+        // Skip if BOQ items not loaded
+        if (!loadedPositionItems.has(position.id)) {
+          continue;
+        }
+
+        const boqItems = loadedPositionItems.get(position.id) || [];
+
+        // Find items changed since last refresh
+        const changedItems = boqItems.filter(item => {
+          const itemUpdatedAt = new Date(item.updated_at);
+          return itemUpdatedAt > lastRefreshDate;
+        });
+
+        if (changedItems.length === 0) {
+          continue;
+        }
+
+        console.log(`📊 Position ${position.work_name}: Found ${changedItems.length} changed items`);
+
+        // Calculate and save commercial costs for changed items
+        for (const item of changedItems) {
+          const commercialCost = calculateCommercialCost(item, tenderMarkup);
+
+          // Calculate base cost
+          const currencyMultiplier = item.currency_type && item.currency_type !== 'RUB' && item.currency_rate
+            ? item.currency_rate
+            : 1;
+          let baseCost = (item.quantity || 0) * (item.unit_rate || 0) * currencyMultiplier;
+
+          // Add delivery for materials
+          if ((item.item_type === 'material' || item.item_type === 'sub_material')) {
+            const deliveryType = item.delivery_price_type || 'included';
+            const deliveryAmount = item.delivery_amount || 0;
+
+            if (deliveryType === 'amount') {
+              baseCost = baseCost + (deliveryAmount * (item.quantity || 0));
+            } else if (deliveryType === 'not_included') {
+              baseCost = baseCost + (baseCost * 0.03);
+            }
+          }
+
+          if (commercialCost > 0 && baseCost > 0) {
+            const coefficient = commercialCost / baseCost;
+
+            // Update in database
+            const { error: updateError } = await supabase
+              .from('boq_items')
+              .update({
+                commercial_cost: commercialCost,
+                commercial_markup_coefficient: coefficient
+              })
+              .eq('id', item.id);
+
+            if (updateError) {
+              console.error(`❌ Error updating commercial cost for item ${item.id}:`, updateError);
+            } else {
+              totalUpdated++;
+              console.log(`✅ Updated commercial cost for ${item.description}: ${commercialCost.toFixed(2)}`);
+            }
+          }
+        }
+      }
+
+      // Update last refresh timestamp
+      setLastCommercialRefresh(new Date());
+
+      if (totalUpdated > 0) {
+        message.success(`Коммерческие стоимости обновлены для ${totalUpdated} элементов`);
+      } else {
+        message.info('Нет изменений, требующих перерасчета коммерческих стоимостей');
+      }
+
+      console.log(`✅ Commercial cost recalculation completed. Updated ${totalUpdated} items`);
+
+    } catch (error) {
+      console.error('💥 Error recalculating commercial costs:', error);
+      message.error('Ошибка при перерасчете коммерческих стоимостей');
+    }
+  }, [tenderId, loadedPositionItems, lastCommercialRefresh]);
+
   // Load ONLY positions without BOQ items
-  const loadPositions = useCallback(async () => {
+  const loadPositions = useCallback(async (recalculateCommercial = false) => {
     console.log('📡 [TenderBOQManagerLazy] Loading positions (without BOQ items) for tender:', tenderId);
     console.log('🔍 [TenderBOQManagerLazy] Tender ID type:', typeof tenderId);
+    if (recalculateCommercial) {
+      console.log('💰 Commercial cost recalculation requested');
+    }
     setLoading(true);
 
     try {
@@ -243,6 +360,11 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
         total: totalCost
       });
 
+      // Recalculate commercial costs if requested
+      if (recalculateCommercial) {
+        await recalculateCommercialForChangedItems(positionsData);
+      }
+
     } catch (error) {
       console.error('❌ Error loading positions:', error);
       message.error('Ошибка загрузки позиций');
@@ -250,7 +372,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
       setLoading(false);
       setInitialLoading(false);
     }
-  }, [tenderId, onStatsUpdate]);
+  }, [tenderId, onStatsUpdate, recalculateCommercialForChangedItems]);
 
   // Load BOQ items for a specific position (lazy loading)
   const loadPositionItems = useCallback(async (positionId: string) => {
@@ -1036,7 +1158,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
             </Button>
             <Button
               icon={<ReloadOutlined />}
-              onClick={loadPositions}
+              onClick={() => loadPositions(true)}
               loading={loading}
             >
               Обновить список
