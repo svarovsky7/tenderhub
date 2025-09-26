@@ -1,5 +1,5 @@
 import { supabase } from '../client';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import type { ApiResponse, ClientPositionType } from '../types';
 import { handleSupabaseError } from './utils';
 import { HIERARCHY_LEVELS } from '../../../utils/clientPositionHierarchy';

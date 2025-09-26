@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Upload, Button, Table, message, Card, Space, Typography, Alert, Progress } from 'antd';
 import { UploadOutlined, DownloadOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { 
   importCostCategoriesWithOverwrite as importCostCategories, 
   type CostCategoryImportData 

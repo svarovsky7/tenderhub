@@ -15,7 +15,7 @@ import {
   Popconfirm,
   Divider
 } from 'antd';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import {
   PlusOutlined,
   EditOutlined,

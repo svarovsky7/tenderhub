@@ -20,7 +20,7 @@ import {
   CloseCircleOutlined,
   WarningOutlined
 } from '@ant-design/icons';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { 
   CreateConstructionCostInput,

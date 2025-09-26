@@ -48,7 +48,7 @@ import type {
   UpdateTenderConstructionCostInput
 } from '../../lib/supabase/types/construction-costs';
 import { ImportTenderCostsModal } from '../../components/admin/ImportTenderCostsModal';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 
 const { Search } = Input;
 const { Option } = Select;

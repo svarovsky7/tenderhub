@@ -53,7 +53,7 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { importConstructionCosts, type ImportRow } from '../../lib/supabase/api/import-costs';
 import { 
   getCategoriesWithDetails, 

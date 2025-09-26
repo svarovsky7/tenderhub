@@ -924,6 +924,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
       const allBOQItems = new Map<string, any[]>();
 
       for (const position of positions) {
+        // Load items for main position
         let items = loadedPositionItems.get(position.id);
         if (!items) {
           const { data, error } = await boqApi.getByClientPositionId(position.id);
@@ -935,6 +936,23 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
           }
         }
         allBOQItems.set(position.id, items);
+
+        // Load items for additional works (ДОП positions)
+        if (position.additional_works && Array.isArray(position.additional_works)) {
+          for (const dopPosition of position.additional_works) {
+            let dopItems = loadedPositionItems.get(dopPosition.id);
+            if (!dopItems) {
+              const { data, error } = await boqApi.getByClientPositionId(dopPosition.id);
+              if (error) {
+                console.error(`❌ Error loading items for ДОП position ${dopPosition.id}:`, error);
+                dopItems = [];
+              } else {
+                dopItems = data || [];
+              }
+            }
+            allBOQItems.set(dopPosition.id, dopItems);
+          }
+        }
       }
 
       loadingMessage();

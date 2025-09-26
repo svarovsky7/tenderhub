@@ -29,7 +29,7 @@ import {
   PartitionOutlined,
   EnvironmentOutlined
 } from '@ant-design/icons';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { costStructureApi } from '../../lib/supabase/api/cost-structure';
 import type { ImportCostRow, ImportResult } from '../../lib/supabase/types/new-cost-structure';
 

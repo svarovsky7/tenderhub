@@ -24,6 +24,13 @@ node src/scripts/checkPositionTotals.ts    # Verify position totals match calcul
 node src/scripts/applyPositionTotalsTrigger.ts  # Apply position totals trigger migration
 ```
 
+**Excel Export Feature:**
+- Available on `/boq` page via export button
+- Exports client positions with BOQ items in hierarchical structure
+- Single Excel sheet with color-coded rows by item type
+- Loads cost categories asynchronously (Category → Detail → Location format)
+- ДОП (additional) positions appear after their parent positions
+
 **Single Component Testing:**
 ```bash
 # Run dev server and manually test component at relevant route
@@ -164,6 +171,7 @@ src/components/tender/     # Core BOQ components (46 components)
       ActionButtons.tsx          # Action buttons component
       PositionSummary.tsx        # Position summary display
       BOQItemsTable.tsx          # Main table component
+      AdditionalWorkInlineForm.tsx # Inline form for additional work positions
       getTableColumns.tsx        # Column configuration
       PositionTable.tsx          # Main table component
       PositionTableColumns.tsx   # Column specifications
@@ -188,6 +196,7 @@ src/components/admin/      # Admin interfaces
 src/components/financial/  # Financial components
   FinancialIndicatorsTab.tsx # Financial indicators tab
   ModernFinancialIndicators.tsx # Modern financial dashboard
+  MarkupEditor.tsx # Tender markup percentage editor
 ```
 
 ### Routing (all lazy-loaded)
@@ -204,6 +213,7 @@ src/components/financial/  # Financial components
 - `/libraries/work-materials` - Template management (renamed from "Работы и Материалы" to "Шаблоны")
 - `/construction-costs` - Global construction costs management
 - `/financial-indicators` - Financial indicators dashboard
+- `/commercial-costs` - Commercial costs page
 - `/admin/users` - User management (placeholder)
 - `/admin/settings` - System settings
 - `/admin/construction-costs` - Admin construction costs
@@ -213,7 +223,7 @@ src/components/financial/  # Financial components
 ### Utility Functions (`src/utils/`)
 - `calculateCommercialCost.ts` - Complex commercial cost calculations
 - `currencyConverter.ts` - Currency conversion utilities
-- `excel-templates.ts` - Excel import/export templates
+- `excel-templates.ts` - Excel import/export templates with BOQ export functionality
 - `materialCalculations.ts` - Material quantity calculations
 - `clientPositionHierarchy.ts` - Position hierarchy management
 - `formatters.ts` - Number and date formatters
@@ -368,6 +378,44 @@ When extracting business logic to hooks, watch for:
   };
   ```
 
+### 9. Number Formatting Pattern
+- **Monetary Values**: Round to integers for display using `Math.round()`
+- **Implementation**:
+  ```typescript
+  // For display in tables and summaries
+  const formatAsInteger = (value: number): string => {
+    return Math.round(value).toLocaleString('ru-RU');
+  };
+
+  // For inline display
+  {Math.round(value).toLocaleString('ru-RU')} ₽
+  ```
+- **Applied to**: Commercial costs, financial indicators, markup editor tables
+
+### 10. Excel Export Pattern (`utils/excel-templates.ts`)
+- **Hierarchical Structure**: Single sheet with positions and their BOQ items
+- **Async Category Loading**: Load cost categories with caching to avoid N+1 queries
+  ```typescript
+  const categoryCache = new Map<string, string>();
+  for (const item of allItems) {
+    if (!categoryCache.has(item.detail_cost_category_id)) {
+      const { data } = await getDetailCategoryDisplay(item.detail_cost_category_id);
+      categoryCache.set(item.detail_cost_category_id, data || '');
+    }
+  }
+  ```
+- **Color Coding by Item Type**:
+  ```typescript
+  const itemTypeColors = {
+    'work': { rgb: 'FED7AA' },       // Orange
+    'material': { rgb: 'BFDBFE' },   // Blue
+    'sub_work': { rgb: 'E9D5FF' },   // Purple
+    'sub_material': { rgb: 'BBF7D0' } // Green
+  };
+  ```
+- **ДОП Position Handling**: Process additional positions after parent with full hierarchy
+- **Column Order**: Matches reference BOQ.xlsx format with renamed types (Суб-раб, Суб-мат)
+
 ## Key Domain-Specific Patterns
 
 ### State Management Architecture
@@ -424,6 +472,7 @@ Complex formula-based calculations with step-by-step logging:
 - **Structural Positions**: Cannot contain BOQ items (checked via `canContainBOQItems`)
 - **Client Data Display**: Volume, unit, and notes shown for structural positions
 - **ДОП (Additional) Positions**: Special handling with restricted editing when collapsed
+- **Inline Forms**: Additional work positions use inline forms instead of modals
 
 ### Drag-and-Drop Architecture
 - **@dnd-kit Integration**: Modern drag-and-drop with virtual scrolling support
@@ -436,6 +485,10 @@ Complex formula-based calculations with step-by-step logging:
 - **Batch Processing**: 5000+ rows with progress tracking
 - **Progress Modals**: Real-time feedback via `UploadProgressModal.tsx`
 - **Error Reporting**: Detailed per-row error messages
+- **BOQ Export**: Hierarchical export with positions and items in single sheet
+- **Color Coding**: Visual differentiation by item type (work, material, sub_work, sub_material)
+- **Cost Categories**: Async loading with caching for Category → Detail → Location display
+- **ДОП Support**: Additional positions exported after parent with full item hierarchy
 
 ### Template System for Work-Material Links
 - **Template Structure**: Can contain linked pairs and/or standalone elements
@@ -472,11 +525,12 @@ manualChunks: {
 ## UI/UX Standards
 - **Language**: Russian UI throughout
 - **Components**: Ant Design with Tailwind utilities
-- **Modals**: All create/edit operations
+- **Modals**: All create/edit operations (except additional work positions which use inline forms)
 - **Virtual Scrolling**: Required for large lists (>100 items)
 - **Inline Editing**: Consistent edit-in-place pattern
 - **Hover Effects**: Row highlighting with type-specific colors
 - **Column Widths**: Optimized for readability (e.g., "Ед. изм." 90px for "Комплект")
+- **Number Display**: Monetary values rounded to integers for readability
 
 ## Environment Setup
 
@@ -527,7 +581,7 @@ VITE_APP_VERSION=0.0.0   # Optional: Version display
 
 ### ✅ Working
 - Hierarchical BOQ with drag-drop
-- Excel import/export with progress
+- Excel import/export with progress and color coding
 - Materials/Works libraries with template system
 - Dashboard statistics
 - Work-Material linking and templates
@@ -537,13 +591,14 @@ VITE_APP_VERSION=0.0.0   # Optional: Version display
 - Base quantity tracking for unlinked materials
 - Tender markup management with templates
 - Inline editing for BOQ items and templates
-- ДОП (additional) positions with restricted editing when collapsed
+- ДОП (additional) positions with inline form creation
 - Multi-currency support with exchange rates
-- Financial indicators dashboard
+- Financial indicators dashboard with integer rounding
 - Template description editing
 - Client data display for structural positions
 - Lazy loading for BOQ items (improved INP)
 - Dynamic total calculation with React.memo optimization
+- BOQ Excel export with hierarchical structure and category display
 
 ### ⚠️ Disabled
 - Authentication (no login)
@@ -574,6 +629,7 @@ VITE_APP_VERSION=0.0.0   # Optional: Version display
 - **Template Link Fix**: Always runs alternative link search for combined templates
 - **Performance Monitoring**: INP (Interaction to Next Paint) is key metric for user experience
 - **Database Triggers**: Required for maintaining data consistency (position totals)
+- **Inline Forms**: Additional work positions use inline forms for better UX
 
 ## Development Workflow
 

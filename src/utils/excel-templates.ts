@@ -1,5 +1,6 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { getDetailCategoryDisplay } from '../lib/supabase/api/construction-costs';
+import { workMaterialLinksApi } from '../lib/supabase/api/work-material-links';
 
 /**
  * Generate Excel template for construction costs import
@@ -339,7 +340,9 @@ export const exportBOQToExcel = async (
   console.log('🚀 [exportBOQToExcel] Starting export with', positions.length, 'positions');
 
   const exportData: any[] = [];
-  const rowStyles: any[] = []; // Store styles for each row
+  const rowStyles: Map<number, string> = new Map(); // Store styles for each row with proper indexing
+  const unpricedExecutableRows: Set<number> = new Set(); // Track unpriced executable positions
+  const workLinksCache = new Map<string, any[]>(); // Cache for work-material links by position
 
   // Helper functions for translation
   const translateItemType = (type: string): string => {
@@ -373,8 +376,56 @@ export const exportBOQToExcel = async (
   };
 
   // Recursive function to add position with its items and additional positions
-  const addPositionWithItems = (position: any, level: number = 0) => {
+  const addPositionWithItems = async (position: any, level: number = 0) => {
+    // Get BOQ items for this position
+    let items = boqItemsMap.get(position.id) || [];
+
+    // Load work-material links for this position if not cached
+    let links: any[] = [];
+    if (!workLinksCache.has(position.id)) {
+      console.log('🔄 [exportBOQToExcel] Loading work-material links for position:', position.id);
+      const { data: linksData } = await workMaterialLinksApi.getLinksByPosition(position.id);
+      links = linksData || [];
+      workLinksCache.set(position.id, links);
+    } else {
+      links = workLinksCache.get(position.id) || [];
+    }
+
+    // Process items with link information (same logic as TenderBOQManagerLazy)
+    const processedItems = items.map(item => {
+      if ((item.item_type === 'material' || item.item_type === 'sub_material') && links && links.length > 0) {
+        const materialLinks = links.filter(l =>
+          l.material_boq_item_id === item.id ||
+          l.sub_material_boq_item_id === item.id
+        );
+
+        if (materialLinks.length > 0) {
+          return {
+            ...item,
+            work_links: materialLinks,
+            work_link: materialLinks[0]
+          };
+        }
+      } else if ((item.item_type === 'work' || item.item_type === 'sub_work') && links && links.length > 0) {
+        const workLinks = links.filter(l =>
+          l.work_boq_item_id === item.id ||
+          l.sub_work_boq_item_id === item.id
+        );
+
+        if (workLinks.length > 0) {
+          return {
+            ...item,
+            linked_materials: workLinks
+          };
+        }
+      }
+      return item;
+    });
+
+    items = processedItems;
+
     // Add client position row
+    const rowIndex = exportData.length;
     exportData.push({
       'Номер позиции': position.item_no || '',
       '№ п/п': position.position_number || '',
@@ -397,14 +448,55 @@ export const exportBOQToExcel = async (
       'Примечание ГП': position.manual_note || ''
     });
 
-    // Get and sort BOQ items for this position
-    const items = boqItemsMap.get(position.id) || [];
-    const sortedItems = [...items].sort((a, b) => {
-      if (a.sort_order !== b.sort_order) {
-        return (a.sort_order || 0) - (b.sort_order || 0);
-      }
-      return (a.item_number || '').localeCompare(b.item_number || '');
+    // Check if this is an unpriced executable position
+    if (position.position_type === 'executable' && items.length === 0) {
+      unpricedExecutableRows.add(rowIndex);
+    }
+
+    // Sort BOQ items properly - works first, then their linked materials
+    const sortedItems: any[] = [];
+
+    // Get all works and sub-works sorted by sub_number
+    const works = items
+      .filter(item => item.item_type === 'work' || item.item_type === 'sub_work')
+      .sort((a, b) => (a.sub_number || 0) - (b.sub_number || 0));
+
+    // Process each work and its linked materials (using work_link data)
+    works.forEach(work => {
+      // Add the work
+      sortedItems.push(work);
+
+      // Find materials linked to this work (using work_link object)
+      const linkedMaterials = items.filter(item => {
+        // Only check materials and sub-materials
+        if (item.item_type !== 'material' && item.item_type !== 'sub_material') {
+          return false;
+        }
+
+        // Check if material is linked to this work using work_link object
+        if (item.work_link) {
+          if (work.item_type === 'work') {
+            // Regular work - check work_boq_item_id
+            return item.work_link.work_boq_item_id === work.id;
+          } else if (work.item_type === 'sub_work') {
+            // Sub-work - check sub_work_boq_item_id
+            return item.work_link.sub_work_boq_item_id === work.id;
+          }
+        }
+        return false;
+      }).sort((a, b) => (a.sub_number || 0) - (b.sub_number || 0));
+
+      // Add linked materials after the work
+      sortedItems.push(...linkedMaterials);
     });
+
+    // Add unlinked materials at the end (materials without work_link)
+    const unlinkedMaterials = items.filter(item =>
+      (item.item_type === 'material' || item.item_type === 'sub_material') &&
+      !item.work_link
+    ).sort((a, b) => (a.sub_number || 0) - (b.sub_number || 0));
+
+    sortedItems.push(...unlinkedMaterials);
 
     // Add each BOQ item
     sortedItems.forEach(item => {
@@ -412,10 +504,6 @@ export const exportBOQToExcel = async (
       const materialType = (item.item_type === 'work' || item.item_type === 'sub_work')
         ? ''
         : translateMaterialType(item.material_type);
-
-      // Track row index and type for styling
-      const rowIndex = exportData.length;
-      rowStyles[rowIndex] = item.item_type;
 
       exportData.push({
         'Номер позиции': '',
@@ -438,6 +526,9 @@ export const exportBOQToExcel = async (
         'Примечание заказчика': '', // Empty for BOQ items
         'Примечание ГП': item.note || ''
       });
+
+      // Track row index and type for styling (use current length - 1 as the row was just added)
+      rowStyles.set(exportData.length - 1, item.item_type);
     });
 
     // Add additional positions (ДОП) from the position's additional_works property
@@ -451,7 +542,7 @@ export const exportBOQToExcel = async (
           ...addPos,
           item_no: `${position.item_no || ''}.ДОП.${addPos.position_number - position.position_number}`
         };
-        addPositionWithItems(dopPosition, level + 1);
+        await addPositionWithItems(dopPosition, level + 1);
       });
     }
 
@@ -476,7 +567,7 @@ export const exportBOQToExcel = async (
           ...addPos,
           item_no: `${position.item_no || ''}.ДОП.${addPos.position_number - position.position_number}`
         };
-        addPositionWithItems(dopPosition, level + 1);
+        await addPositionWithItems(dopPosition, level + 1);
       });
     }
   };
@@ -488,9 +579,10 @@ export const exportBOQToExcel = async (
 
   console.log('📊 [exportBOQToExcel] Processing', mainPositions.length, 'main positions');
 
-  mainPositions.forEach(position => {
-    addPositionWithItems(position, 0);
-  });
+  // Process positions sequentially to ensure proper async handling
+  for (const position of mainPositions) {
+    await addPositionWithItems(position, 0);
+  }
 
   // Load cost categories for all BOQ items
   console.log('🔄 [exportBOQToExcel] Loading cost categories...');
@@ -538,30 +630,105 @@ export const exportBOQToExcel = async (
 
   // Define colors for each item type (matching the UI)
   const itemTypeColors = {
-    'work': { rgb: 'FED7AA' },       // Orange
-    'material': { rgb: 'BFDBFE' },   // Blue
-    'sub_work': { rgb: 'E9D5FF' },   // Purple
-    'sub_material': { rgb: 'BBF7D0' } // Green
+    'work': 'FED7AA',       // Orange
+    'material': 'BFDBFE',   // Blue
+    'sub_work': 'E9D5FF',   // Purple
+    'sub_material': 'BBF7D0' // Green
   };
 
-  // Apply styles to rows based on BOQ item type
-  for (let row = 1; row <= range.e.r; row++) { // Skip header row
-    const itemType = rowStyles[row - 1]; // Adjust for header offset
+  // Define common styles
+  const borderStyle = {
+    top: { style: "thin", color: { rgb: "000000" } },
+    bottom: { style: "thin", color: { rgb: "000000" } },
+    left: { style: "thin", color: { rgb: "000000" } },
+    right: { style: "thin", color: { rgb: "000000" } }
+  };
 
-    if (itemType && itemTypeColors[itemType]) {
-      const bgColor = itemTypeColors[itemType];
+  const centerAlignment = {
+    horizontal: "center",
+    vertical: "center",
+    wrapText: true
+  };
 
-      // Apply style to all cells in the row
-      for (let col = 0; col <= range.e.c; col++) {
-        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-        const cell = ws[cellAddress];
+  const leftAlignment = {
+    horizontal: "left",
+    vertical: "center",
+    wrapText: true
+  };
 
-        if (cell) {
-          if (!cell.s) cell.s = {};
-          cell.s.fill = {
-            fgColor: bgColor,
-            patternType: 'solid'
-          };
+  const unpricedColor = 'FFCCCC'; // Light red for unpriced positions
+
+  // Define number formats for different column types
+  const integerFormat = '#,##0'; // Format with thousand separators for integers
+  const decimalFormat = '#,##0.00'; // Format with 2 decimal places
+
+  const integerColumns = [
+    7,  // Количество заказчика
+    13, // Стоимость доставки
+    14, // Цена за единицу
+    15  // Итоговая сумма
+  ];
+
+  const decimalColumns = [
+    8,  // Коэфф. перевода
+    9,  // Коэфф. расхода
+    10  // Количество ГП
+  ];
+
+  // Apply styles to all cells
+  for (let row = 0; row <= range.e.r; row++) {
+    for (let col = 0; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = ws[cellAddress];
+
+      if (cell) {
+        if (!cell.s) cell.s = {};
+
+        // Add borders to all cells
+        cell.s.border = borderStyle;
+
+        // Add number format for numeric columns (skip header row)
+        if (row > 0) {
+          if (integerColumns.includes(col)) {
+            cell.s.numFmt = integerFormat;
+          } else if (decimalColumns.includes(col)) {
+            cell.s.numFmt = decimalFormat;
+          }
+        }
+
+        // Add alignment based on column (column 5 is "Наименование")
+        if (col === 5) {
+          // "Наименование" column - left align
+          cell.s.alignment = leftAlignment;
+        } else {
+          // All other columns - center align
+          cell.s.alignment = centerAlignment;
+        }
+
+        // Apply background colors for data rows (skip header)
+        if (row > 0) {
+          const dataRowIndex = row - 1; // Adjust for header
+
+          // Check for unpriced executable positions
+          if (unpricedExecutableRows.has(dataRowIndex)) {
+            cell.s.fill = {
+              patternType: 'solid',
+              fgColor: { rgb: unpricedColor },
+              bgColor: { rgb: unpricedColor }
+            };
+          }
+          // Check for BOQ item types
+          else {
+            const itemType = rowStyles.get(dataRowIndex);
+            if (itemType && itemTypeColors[itemType]) {
+              const bgColor = itemTypeColors[itemType];
+              cell.s.fill = {
+                patternType: 'solid',
+                fgColor: { rgb: bgColor },
+                bgColor: { rgb: bgColor }
+              };
+            }
+          }
         }
       }
     }
@@ -590,8 +757,8 @@ export const exportBOQToExcel = async (
     { wch: 25 }   // Примечание ГП
   ];
 
-  // Freeze header row
-  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+  // Freeze header row - use both formats for compatibility
+  ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
 
   // Add worksheet to workbook
   XLSX.utils.book_append_sheet(wb, ws, 'BOQ');
