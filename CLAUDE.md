@@ -78,13 +78,15 @@ ALWAYS verify schema before ANY database work
 - `commercial_costs_by_category` - Aggregated costs by category (auto-updated via trigger)
 - `cost_categories` & `detail_cost_categories` - Cost categorization system
 - `tender_markup` & `markup_templates` - Markup configuration
+- `tender_version_mappings` - Version control mappings between tenders
+- `tender_version_history` - Version control audit trail
 
 ### API Layer Architecture (`src/lib/supabase/api/`)
 **Modular Domain Pattern** (all modules < 600 lines):
 - Domain-specific modules with `{domain}Api` exports
 - Complex domains split into sub-modules (e.g., BOQ: crud, hierarchy, bulk, analytics, queries)
 - Barrel exports for clean imports
-- Key modules: `boq/`, `tenders.ts`, `materials.ts`, `works.ts`, `client-positions.ts`, `commercial-costs.ts`
+- Key modules: `boq/`, `tenders.ts`, `materials.ts`, `works.ts`, `client-positions.ts`, `commercial-costs.ts`, `tender-versioning.ts`, `client-works-versioning.ts`
 
 ### Component Architecture
 ```
@@ -92,6 +94,7 @@ src/components/tender/     # Core BOQ components (46 components)
   TenderBOQManagerNew.tsx  # Main BOQ interface
   TenderBOQManagerLazy.tsx # Lazy loading variant for performance
   ClientPositionCardStreamlined.tsx # Position card (1414 lines, reduced from 5020)
+  TenderVersionManager.tsx # Tender versioning UI wizard
   ClientPositionStreamlined/  # Modular architecture (28 files)
     hooks/               # 18 specialized hooks extracted
     components/          # UI components
@@ -125,6 +128,7 @@ src/components/financial/  # Financial components
 - **Position Totals**: Updated via database trigger
 - **Currency System**: Exchange rates stored at tender level
 - **Delivery Cost**: Auto-calculated 3% for "not included" type
+- **Versioning**: New tender versions get unique `tender_number` with `_v{version}` suffix
 
 ### 2. Logging Pattern (Required)
 ```typescript
@@ -147,9 +151,18 @@ console.log('❌ [FunctionName] error:', error);
 
 ### 5. Excel Integration
 - Template-based import with progress tracking
-- Batch processing for 5000+ rows
+- Batch processing for 5000+ rows (optimized to 500 items/batch)
 - Real-time progress feedback
 - Styled exports with xlsx-js-style
+- Position grouping by number to handle duplicates
+
+### 6. Critical Code Patterns
+- **UUID Handling**: Always use actual database IDs, not generated keys
+- **Pagination**: Use controlled state with `pageSize` and `current` props
+- **Modal Cleanup**: Delete draft versions on cancel to prevent orphans
+- **Mapping Save**: Check for existing IDs before re-saving to prevent duplicates
+- **API Filtering**: Filter child versions at query level, not in UI
+- **Error Messages**: Always include context in console logs with emojis
 
 ## Environment Setup
 
@@ -185,19 +198,33 @@ VITE_APP_VERSION=0.0.0
 
 ### ✅ Working
 - Hierarchical BOQ with drag-drop
-- Excel import/export with styling
+- Excel import/export with styling (optimized batch loading)
 - Materials/Works libraries with templates
 - Multi-currency support with exchange rates
 - Commercial cost calculations with markup
 - Inline editing throughout
 - Virtual scrolling for large datasets
 - Lazy loading for improved performance
+- Tender versioning with automatic position mapping
+- Fuzzy matching for position comparison between versions
 
 ### ⚠️ Disabled/Placeholder
 - Authentication (no login required)
 - Real-time features
 - File storage
 - Edge Functions
+
+## Recent Migrations (Apply if needed)
+
+### 20250129_fix_version_number_conflict.sql
+- Fixes duplicate tender_number issue when creating versions
+- Adds `cleanup_draft_versions` function to remove empty drafts
+- Ensures unique tender_number generation with counter suffix
+
+### 20250129_add_mapping_columns.sql
+- Adds columns to `tender_version_mappings` for full position data:
+  - `old_volume`, `old_unit`, `old_client_note`, `old_item_no`
+  - `new_volume`, `new_unit`, `new_client_note`, `new_item_no`
 
 ## Git Workflow
 
@@ -210,6 +237,42 @@ VITE_APP_VERSION=0.0.0
   - 🔧 Refactoring
   - 💥 Breaking changes
 
+## Tender Versioning System
+
+### Overview
+The application supports creating new versions of tenders with position comparison and automatic mapping.
+
+### Key Components
+- **TenderVersionManager.tsx** - UI wizard for version creation and position mapping
+- **tender-versioning.ts** - Core API for version operations
+- **client-works-versioning.ts** - Excel upload as new version with auto-matching
+- **tender_version_mappings** table - Stores position mappings between versions
+- **tender_version_history** table - Audit trail of version operations
+
+### Versioning Workflow
+1. Create new version from parent tender (copies tender metadata)
+2. Upload Excel with new positions
+3. Auto-match positions using fuzzy algorithm:
+   - 60% weight: name similarity
+   - 30% weight: context (surrounding positions)
+   - 10% weight: hierarchy level
+4. Manual review/adjustment of mappings
+5. Apply mappings to transfer costs/materials
+
+### Important Notes
+- Parent tenders have `parent_version_id = NULL`
+- Child versions reference parent via `parent_version_id`
+- Tender list page filters out child versions (only shows parents)
+- Draft versions are deleted if cancelled before completion
+- Unique constraint prevents duplicate mappings per position
+
+### Key Fixes Applied (January 2025)
+1. **TenderVersionManager.tsx**: Restructured table from 4 to 12 columns for full data display
+2. **tenders.ts API**: Added `.is('parent_version_id', null)` filter to exclude versions
+3. **tender-versioning.ts**: Fixed null handling in `calculateContextScore`
+4. **saveMappings**: Excludes 'key' field and returns saved mappings with IDs
+5. **Pagination**: Changed to controlled state with `pagination` prop
+
 ## Common Troubleshooting
 
 - **Empty prod.sql**: Run `npm run db:schema` immediately
@@ -218,3 +281,10 @@ VITE_APP_VERSION=0.0.0
 - **MCP Not Working**: Restart Claude Code completely
 - **Position Totals Wrong**: Apply trigger migration via SQL Editor
 - **Import Path Errors**: Verify relative paths when refactoring
+- **Versioning SQL Errors**: Check table column names match prod.sql schema
+- **Excel Export Slow**: Batch loading implemented (reduced from 10-15s to 1-2s)
+- **Duplicate Key on Version Creation**: Check `create_tender_version` function generates unique tender_number
+- **Mappings Not Saving**: Verify mappings don't already exist (check for IDs)
+- **Deleted Versions Reappearing**: Ensure tender list filters by `parent_version_id IS NULL`
+- **UUID Errors in Version Modal**: Use mapping.id, not generated keys
+- **Missing Mapping Columns**: Run migration `20250129_add_mapping_columns.sql`

@@ -31,7 +31,10 @@ export const tendersApi = {
 
       // Apply filters
       // Note: status field removed from schema
-      
+
+      // Filter out child versions - only show main tenders (without parent_version_id)
+      query = query.is('parent_version_id', null);
+
       if (filters.client_name) {
         query = query.ilike('client_name', `%${filters.client_name}%`);
       }

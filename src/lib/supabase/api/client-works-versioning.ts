@@ -192,12 +192,19 @@ export const clientWorksVersioningApi = {
             - New: ${newCount}
             - Deleted: ${deletedCount}`);
 
-          // Сохраняем маппинги в базу
+          // Сохраняем маппинги в базу и получаем их с ID
           onProgress?.(70, 'Сохранение сопоставлений...');
-          const { error: saveError } = await tenderVersioningApi.saveMappings(mappings);
+          const saveResult = await tenderVersioningApi.saveMappings(mappings);
 
-          if (saveError) {
-            console.error('⚠️ Failed to save mappings:', saveError);
+          if (saveResult.error) {
+            console.error('⚠️ Failed to save mappings:', saveResult.error);
+          } else if (saveResult.data) {
+            // Обновляем маппинги с полученными ID из БД
+            mappings = mappings.map((m, index) => ({
+              ...m,
+              id: saveResult.data?.[index]?.id || m.id
+            }));
+            console.log('✅ Mappings saved with IDs');
           }
         }
       }
@@ -208,7 +215,7 @@ export const clientWorksVersioningApi = {
         data: {
           tenderId: newTenderId,
           positionsCount: createdPositions.length,
-          mappings: options.autoMatch ? mappings : undefined,
+          mappings: options.autoMatch ? mappings : undefined,  // Теперь маппинги будут с ID
           matchedCount,
           newCount,
           deletedCount

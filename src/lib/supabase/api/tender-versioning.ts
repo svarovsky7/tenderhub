@@ -9,8 +9,16 @@ export interface TenderVersionMapping {
   new_position_id?: string;
   old_position_number?: string;
   old_work_name?: string;
+  old_volume?: number;
+  old_unit?: string;
+  old_client_note?: string;
+  old_item_no?: string;
   new_position_number?: string;
   new_work_name?: string;
+  new_volume?: number;
+  new_unit?: string;
+  new_client_note?: string;
+  new_item_no?: string;
   mapping_type?: 'exact' | 'fuzzy' | 'manual' | 'dop' | 'new' | 'deleted';
   confidence_score?: number;
   fuzzy_score?: number;
@@ -94,12 +102,12 @@ export const tenderVersioningApi = {
 
       console.log(`📊 Matching ${oldPositions?.length || 0} old positions with ${newPositions?.length || 0} new positions`);
 
-      // Параметры сопоставления
-      const fuzzyWeight = options?.fuzzyWeight ?? 0.7;
-      const contextWeight = options?.contextWeight ?? 0.2;
+      // Параметры сопоставления (оптимизированы для лучшего распознавания)
+      const fuzzyWeight = options?.fuzzyWeight ?? 0.6;  // Уменьшили вес fuzzy для большего влияния контекста
+      const contextWeight = options?.contextWeight ?? 0.3;  // Увеличили вес контекста (номер позиции)
       const hierarchyWeight = options?.hierarchyWeight ?? 0.1;
-      const fuzzyThreshold = options?.fuzzyThreshold ?? 0.7;
-      const autoConfirmThreshold = options?.autoConfirmThreshold ?? 0.95;
+      const fuzzyThreshold = options?.fuzzyThreshold ?? 0.5;  // Снизили порог для более мягкого сопоставления
+      const autoConfirmThreshold = options?.autoConfirmThreshold ?? 0.9;  // Снизили порог автоподтверждения
 
       const mappings: TenderVersionMapping[] = [];
       const usedNewPositions = new Set<string>();
@@ -113,13 +121,13 @@ export const tenderVersioningApi = {
           // Пропускаем уже использованные позиции
           if (usedNewPositions.has(newPos.id)) continue;
 
-          // Расчет fuzzy score по work_name
+          // Расчет fuzzy score по work_name с улучшенным алгоритмом
           const fuzzyScore = this.calculateFuzzyScore(
             oldPos.work_name || '',
             newPos.work_name || ''
           );
 
-          // Расчет context score по номеру позиции
+          // Расчет context score по номеру позиции (повышенная важность)
           const contextScore = this.calculateContextScore(
             oldPos.position_number,
             newPos.position_number
@@ -152,10 +160,18 @@ export const tenderVersioningApi = {
             new_tender_id: newTenderId,
             old_position_id: oldPos.id,
             new_position_id: bestMatch.position.id,
-            old_position_number: oldPos.position_number,
+            old_position_number: oldPos.position_number || oldPos.item_no,
             old_work_name: oldPos.work_name,
-            new_position_number: bestMatch.position.position_number,
+            old_volume: oldPos.volume || oldPos.manual_volume,
+            old_unit: oldPos.unit,
+            old_client_note: oldPos.client_note || oldPos.manual_note,
+            old_item_no: oldPos.item_no,
+            new_position_number: bestMatch.position.position_number || bestMatch.position.item_no,
             new_work_name: bestMatch.position.work_name,
+            new_volume: bestMatch.position.volume || bestMatch.position.manual_volume,
+            new_unit: bestMatch.position.unit,
+            new_client_note: bestMatch.position.client_note || bestMatch.position.manual_note,
+            new_item_no: bestMatch.position.item_no,
             mapping_type: bestScore >= autoConfirmThreshold ? 'exact' : 'fuzzy',
             confidence_score: bestScore,
             fuzzy_score: bestMatch.scores.fuzzyScore,
@@ -171,8 +187,12 @@ export const tenderVersioningApi = {
             old_tender_id: oldTenderId,
             new_tender_id: newTenderId,
             old_position_id: oldPos.id,
-            old_position_number: oldPos.position_number,
+            old_position_number: oldPos.position_number || oldPos.item_no,
             old_work_name: oldPos.work_name,
+            old_volume: oldPos.volume || oldPos.manual_volume,
+            old_unit: oldPos.unit,
+            old_client_note: oldPos.client_note || oldPos.manual_note,
+            old_item_no: oldPos.item_no,
             mapping_type: 'deleted',
             confidence_score: 0,
             mapping_status: 'suggested',
@@ -189,8 +209,12 @@ export const tenderVersioningApi = {
             old_tender_id: oldTenderId,
             new_tender_id: newTenderId,
             new_position_id: newPos.id,
-            new_position_number: newPos.position_number,
+            new_position_number: newPos.position_number || newPos.item_no,
             new_work_name: newPos.work_name,
+            new_volume: newPos.volume || newPos.manual_volume,
+            new_unit: newPos.unit,
+            new_client_note: newPos.client_note || newPos.manual_note,
+            new_item_no: newPos.item_no,
             mapping_type: 'new',
             confidence_score: 0,
             mapping_status: 'suggested',
@@ -210,13 +234,17 @@ export const tenderVersioningApi = {
   /**
    * Сохранить маппинги в базу данных
    */
-  async saveMappings(mappings: TenderVersionMapping[]): Promise<ApiResponse<void>> {
+  async saveMappings(mappings: TenderVersionMapping[]): Promise<ApiResponse<any[]>> {
     console.log('🚀 Saving position mappings:', mappings.length);
 
     try {
-      const { error } = await supabase
+      // Очищаем маппинги от поля 'key' и других frontend-only полей
+      const cleanMappings = mappings.map(({ key, ...mapping }: any) => mapping);
+
+      const { data, error } = await supabase
         .from('tender_version_mappings')
-        .insert(mappings);
+        .insert(cleanMappings)
+        .select();
 
       if (error) {
         console.error('❌ Failed to save mappings:', error);
@@ -224,7 +252,10 @@ export const tenderVersioningApi = {
       }
 
       console.log('✅ Mappings saved successfully');
-      return { message: `Сохранено ${mappings.length} сопоставлений` };
+      return {
+        data: data || [],
+        message: `Сохранено ${mappings.length} сопоставлений`
+      };
     } catch (error) {
       console.error('💥 Exception in saveMappings:', error);
       return { error: error instanceof Error ? error.message : 'Unknown error' };
@@ -303,34 +334,53 @@ export const tenderVersioningApi = {
     console.log('🚀 Applying mappings for tender:', newTenderId);
 
     try {
-      // Получаем все подтвержденные маппинги
-      const { data: mappings, error: mappingsError } = await supabase
+      // Получаем ВСЕ маппинги для тендера
+      const { data: allMappings, error: mappingsError } = await supabase
         .from('tender_version_mappings')
         .select('*')
-        .eq('new_tender_id', newTenderId)
-        .eq('mapping_status', 'confirmed');
+        .eq('new_tender_id', newTenderId);
 
       if (mappingsError) {
-        console.error('❌ Failed to fetch confirmed mappings:', mappingsError);
+        console.error('❌ Failed to fetch mappings:', mappingsError);
         return { error: mappingsError.message };
       }
 
-      console.log(`📦 Found ${mappings?.length || 0} confirmed mappings to apply`);
+      // Фильтруем маппинги: подтвержденные + с высокой уверенностью
+      const mappingsToApply = (allMappings || []).filter(m =>
+        m.mapping_status === 'confirmed' ||
+        (m.confidence_score && m.confidence_score >= 0.9)
+      );
+
+      console.log(`📦 Found ${mappingsToApply.length} mappings to apply (из ${allMappings?.length || 0} всего)`);
 
       // Применяем каждый маппинг
       let successCount = 0;
       let errorCount = 0;
 
-      for (const mapping of mappings || []) {
-        if (mapping.action_type === 'copy_boq' && mapping.old_position_id) {
+      for (const mapping of mappingsToApply) {
+        // Автоматически подтверждаем маппинги с высокой уверенностью
+        if (mapping.mapping_status !== 'confirmed' && mapping.confidence_score >= 0.9) {
+          await supabase
+            .from('tender_version_mappings')
+            .update({ mapping_status: 'confirmed', updated_at: new Date().toISOString() })
+            .eq('id', mapping.id);
+        }
+
+        // Переносим BOQ items
+        if (mapping.action_type === 'copy_boq' &&
+            mapping.old_position_id &&
+            mapping.new_position_id) {
           const { error } = await supabase.rpc('transfer_boq_items', {
             p_mapping_id: mapping.id
           });
 
           if (error) {
             console.error(`❌ Failed to transfer BOQ for mapping ${mapping.id}:`, error);
+            console.error('  Old position:', mapping.old_position_number, mapping.old_work_name);
+            console.error('  New position:', mapping.new_position_number, mapping.new_work_name);
             errorCount++;
           } else {
+            console.log(`✅ Transferred BOQ: ${mapping.old_position_number} -> ${mapping.new_position_number}`);
             successCount++;
           }
         }
@@ -378,7 +428,30 @@ export const tenderVersioningApi = {
 
     if (s1 === s2) return 1;
 
-    // Простая реализация расстояния Левенштейна
+    // Проверка совпадения начала строки (первые 30 символов)
+    const prefixLength = 30;
+    const prefix1 = s1.substring(0, prefixLength);
+    const prefix2 = s2.substring(0, prefixLength);
+
+    // Если начала строк совпадают значительно, даем бонус
+    if (prefix1 === prefix2 && prefix1.length >= 10) {
+      // Минимум 0.7 если начала совпадают
+      return Math.max(0.7, this.calculateLevenshteinScore(s1, s2));
+    }
+
+    // Проверка на содержание ключевых слов друг в друге
+    if (s1.includes(s2) || s2.includes(s1)) {
+      return 0.8; // Высокий score если одна строка содержит другую
+    }
+
+    // Стандартный расчет через расстояние Левенштейна
+    return this.calculateLevenshteinScore(s1, s2);
+  },
+
+  /**
+   * Расчет score через расстояние Левенштейна
+   */
+  calculateLevenshteinScore(s1: string, s2: string): number {
     const len1 = s1.length;
     const len2 = s2.length;
     const matrix: number[][] = [];
@@ -411,26 +484,259 @@ export const tenderVersioningApi = {
   },
 
   /**
-   * Вспомогательная функция для расчета context score
+   * Создать ручное сопоставление между позициями
    */
-  calculateContextScore(pos1: string, pos2: string): number {
-    try {
-      const num1 = parseInt(pos1);
-      const num2 = parseInt(pos2);
+  async createManualMapping(
+    oldTenderId: string,
+    newTenderId: string,
+    oldPositionId: string,
+    newPositionId: string | null
+  ): Promise<ApiResponse<TenderVersionMapping>> {
+    console.log('🚀 Creating manual mapping:', { oldPositionId, newPositionId });
 
-      if (isNaN(num1) || isNaN(num2)) {
-        return pos1 === pos2 ? 1 : 0.3;
+    try {
+      // Получаем информацию о старой позиции
+      const { data: oldPosition, error: oldError } = await supabase
+        .from('client_positions')
+        .select('*')
+        .eq('id', oldPositionId)
+        .single();
+
+      if (oldError) {
+        console.error('❌ Failed to fetch old position:', oldError);
+        return { error: oldError.message };
       }
 
-      const diff = Math.abs(num1 - num2);
-      if (diff === 0) return 1.0;
-      if (diff === 1) return 0.8;
-      if (diff === 2) return 0.6;
-      if (diff <= 5) return 0.4;
-      return 0.3;
+      // Если указана новая позиция - получаем её информацию
+      let newPosition = null;
+      if (newPositionId) {
+        const { data: newPos, error: newError } = await supabase
+          .from('client_positions')
+          .select('*')
+          .eq('id', newPositionId)
+          .single();
+
+        if (newError) {
+          console.error('❌ Failed to fetch new position:', newError);
+          return { error: newError.message };
+        }
+        newPosition = newPos;
+      }
+
+      // Создаем маппинг
+      const mapping: TenderVersionMapping = {
+        old_tender_id: oldTenderId,
+        new_tender_id: newTenderId,
+        old_position_id: oldPositionId,
+        new_position_id: newPositionId,
+        old_position_number: oldPosition.position_number || oldPosition.item_no,
+        old_work_name: oldPosition.work_name,
+        old_volume: oldPosition.volume || oldPosition.manual_volume,
+        old_unit: oldPosition.unit,
+        old_client_note: oldPosition.client_note || oldPosition.manual_note,
+        old_item_no: oldPosition.item_no,
+        new_position_number: newPosition?.position_number || newPosition?.item_no,
+        new_work_name: newPosition?.work_name,
+        new_volume: newPosition?.volume || newPosition?.manual_volume,
+        new_unit: newPosition?.unit,
+        new_client_note: newPosition?.client_note || newPosition?.manual_note,
+        new_item_no: newPosition?.item_no,
+        mapping_type: 'manual',
+        confidence_score: 1.0, // Ручное сопоставление имеет максимальную уверенность
+        mapping_status: 'confirmed',
+        action_type: newPositionId ? 'copy_boq' : 'delete'
+      };
+
+      // Сохраняем в базу
+      const { data, error } = await supabase
+        .from('tender_version_mappings')
+        .insert(mapping)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Failed to save manual mapping:', error);
+        return { error: error.message };
+      }
+
+      console.log('✅ Manual mapping created');
+      return { data, message: 'Ручное сопоставление создано' };
+    } catch (error) {
+      console.error('💥 Exception in createManualMapping:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  /**
+   * Обновить сопоставление позиций
+   */
+  async updateMapping(
+    mappingId: string,
+    newPositionId: string | null
+  ): Promise<ApiResponse<void>> {
+    console.log('🚀 Updating mapping:', { mappingId, newPositionId });
+
+    try {
+      // Получаем текущий маппинг
+      const { data: currentMapping, error: fetchError } = await supabase
+        .from('tender_version_mappings')
+        .select('*')
+        .eq('id', mappingId)
+        .single();
+
+      if (fetchError) {
+        console.error('❌ Failed to fetch mapping:', fetchError);
+        return { error: fetchError.message };
+      }
+
+      // Получаем информацию о новой позиции (если указана)
+      let newPosition = null;
+      if (newPositionId) {
+        const { data: newPos, error: newError } = await supabase
+          .from('client_positions')
+          .select('*')
+          .eq('id', newPositionId)
+          .single();
+
+        if (newError) {
+          console.error('❌ Failed to fetch new position:', newError);
+          return { error: newError.message };
+        }
+        newPosition = newPos;
+      }
+
+      // Обновляем маппинг
+      const updateData: any = {
+        new_position_id: newPositionId,
+        new_position_number: newPosition?.position_number || newPosition?.item_no || null,
+        new_work_name: newPosition?.work_name || null,
+        new_volume: newPosition?.volume || newPosition?.manual_volume || null,
+        new_unit: newPosition?.unit || null,
+        new_client_note: newPosition?.client_note || newPosition?.manual_note || null,
+        new_item_no: newPosition?.item_no || null,
+        mapping_type: 'manual',
+        confidence_score: 1.0,
+        mapping_status: 'confirmed',
+        action_type: newPositionId ? 'copy_boq' : 'delete',
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('tender_version_mappings')
+        .update(updateData)
+        .eq('id', mappingId);
+
+      if (error) {
+        console.error('❌ Failed to update mapping:', error);
+        return { error: error.message };
+      }
+
+      console.log('✅ Mapping updated successfully');
+      return { message: 'Сопоставление обновлено' };
+    } catch (error) {
+      console.error('💥 Exception in updateMapping:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  /**
+   * Получить доступные позиции для сопоставления
+   */
+  async getAvailablePositionsForMapping(
+    newTenderId: string
+  ): Promise<ApiResponse<any[]>> {
+    console.log('🚀 Getting available positions for mapping:', newTenderId);
+
+    try {
+      // Получаем все позиции из новой версии
+      const { data: positions, error } = await supabase
+        .from('client_positions')
+        .select('id, position_number, item_no, work_name, unit, volume')
+        .eq('tender_id', newTenderId)
+        .order('position_number');
+
+      if (error) {
+        console.error('❌ Failed to fetch positions:', error);
+        return { error: error.message };
+      }
+
+      // Получаем уже использованные позиции
+      const { data: mappings, error: mappingError } = await supabase
+        .from('tender_version_mappings')
+        .select('new_position_id')
+        .eq('new_tender_id', newTenderId)
+        .not('new_position_id', 'is', null);
+
+      if (mappingError) {
+        console.error('❌ Failed to fetch mappings:', mappingError);
+        return { error: mappingError.message };
+      }
+
+      const usedPositionIds = new Set(mappings?.map(m => m.new_position_id) || []);
+
+      // Помечаем использованные позиции
+      const positionsWithStatus = positions?.map(pos => ({
+        ...pos,
+        isUsed: usedPositionIds.has(pos.id),
+        label: `${pos.position_number || pos.item_no || ''} - ${pos.work_name}`.trim()
+      })) || [];
+
+      console.log(`✅ Found ${positionsWithStatus.length} positions (${usedPositionIds.size} used)`);
+      return { data: positionsWithStatus };
+    } catch (error) {
+      console.error('💥 Exception in getAvailablePositionsForMapping:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  /**
+   * Вспомогательная функция для расчета context score
+   */
+  calculateContextScore(pos1: string | number | null | undefined, pos2: string | number | null | undefined): number {
+    // Приводим к строкам и обрабатываем null/undefined
+    const position1 = String(pos1 || '');
+    const position2 = String(pos2 || '');
+
+    // Если одна или обе позиции пустые
+    if (!position1 || !position2) return 0.3;
+
+    // Если позиции полностью совпадают - максимальный score
+    if (position1 === position2) return 1.0;
+
+    // Обрабатываем иерархические номера (например, "1.1", "2.3.4")
+    const parts1 = position1.split('.');
+    const parts2 = position2.split('.');
+
+    // Если структура номеров одинаковая
+    if (parts1.length === parts2.length) {
+      let matchCount = 0;
+      for (let i = 0; i < parts1.length; i++) {
+        if (parts1[i] === parts2[i]) {
+          matchCount++;
+        }
+      }
+      // Возвращаем score пропорционально совпадению частей
+      return matchCount / parts1.length;
+    }
+
+    // Для простых числовых номеров
+    try {
+      const num1 = parseInt(position1);
+      const num2 = parseInt(position2);
+
+      if (!isNaN(num1) && !isNaN(num2)) {
+        const diff = Math.abs(num1 - num2);
+        if (diff === 0) return 1.0;
+        if (diff === 1) return 0.85;  // Увеличили score для соседних позиций
+        if (diff === 2) return 0.7;
+        if (diff <= 5) return 0.5;
+        return 0.3;
+      }
     } catch {
       return 0.3;
     }
+
+    return 0.3;
   },
 
   /**

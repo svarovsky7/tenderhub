@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-09-26T16:37:34.177328
+-- Generated: 2025-09-29T14:23:42.725644
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -687,6 +687,14 @@ CREATE TABLE IF NOT EXISTS public.tender_version_mappings (
     updated_at timestamp with time zone DEFAULT now(),
     reviewed_by uuid,
     reviewed_at timestamp with time zone,
+    old_volume numeric,
+    old_unit text,
+    old_client_note text,
+    old_item_no text,
+    new_volume numeric,
+    new_unit text,
+    new_client_note text,
+    new_item_no text,
     CONSTRAINT tender_version_mappings_new_position_id_fkey FOREIGN KEY (new_position_id) REFERENCES None.None(None),
     CONSTRAINT tender_version_mappings_new_tender_id_fkey FOREIGN KEY (new_tender_id) REFERENCES None.None(None),
     CONSTRAINT tender_version_mappings_new_tender_id_new_position_id_key UNIQUE (new_position_id),
@@ -703,6 +711,14 @@ COMMENT ON TABLE public.tender_version_mappings IS 'Таблица для хра
 COMMENT ON COLUMN public.tender_version_mappings.mapping_type IS 'Тип сопоставления: exact - точное совпадение, fuzzy - нечеткое, manual - ручное, dop - ДОП позиция, new - новая позиция, deleted - удаленная';
 COMMENT ON COLUMN public.tender_version_mappings.confidence_score IS 'Уровень уверенности в сопоставлении от 0 до 1';
 COMMENT ON COLUMN public.tender_version_mappings.action_type IS 'Действие при переносе: copy_boq - копировать BOQ, create_new - создать новое, delete - удалить, preserve_dop - сохранить ДОП';
+COMMENT ON COLUMN public.tender_version_mappings.old_volume IS 'Объем работ в старой версии';
+COMMENT ON COLUMN public.tender_version_mappings.old_unit IS 'Единица измерения в старой версии';
+COMMENT ON COLUMN public.tender_version_mappings.old_client_note IS 'Примечание заказчика в старой версии';
+COMMENT ON COLUMN public.tender_version_mappings.old_item_no IS 'Номер позиции в старой версии';
+COMMENT ON COLUMN public.tender_version_mappings.new_volume IS 'Объем работ в новой версии';
+COMMENT ON COLUMN public.tender_version_mappings.new_unit IS 'Единица измерения в новой версии';
+COMMENT ON COLUMN public.tender_version_mappings.new_client_note IS 'Примечание заказчика в новой версии';
+COMMENT ON COLUMN public.tender_version_mappings.new_item_no IS 'Номер позиции в новой версии';
 
 -- Table: public.tenders
 -- Description: Main tender projects with client details
@@ -1435,19 +1451,19 @@ AS '$libdir/pgcrypto', $function$pg_random_uuid$function$
 
 
 -- Function: extensions.gen_salt
-CREATE OR REPLACE FUNCTION extensions.gen_salt(text, integer)
- RETURNS text
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pg_gen_salt_rounds$function$
-
-
--- Function: extensions.gen_salt
 CREATE OR REPLACE FUNCTION extensions.gen_salt(text)
  RETURNS text
  LANGUAGE c
  PARALLEL SAFE STRICT
 AS '$libdir/pgcrypto', $function$pg_gen_salt$function$
+
+
+-- Function: extensions.gen_salt
+CREATE OR REPLACE FUNCTION extensions.gen_salt(text, integer)
+ RETURNS text
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_gen_salt_rounds$function$
 
 
 -- Function: extensions.grant_pg_cron_access
@@ -1650,7 +1666,7 @@ AS '$libdir/pgcrypto', $function$pgp_key_id_w$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1658,7 +1674,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1674,7 +1690,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1690,7 +1706,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1698,7 +1714,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1706,7 +1722,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1762,7 +1778,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1770,7 +1786,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
 
 
 -- Function: extensions.pgp_sym_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -2743,41 +2759,6 @@ $function$
 
 
 -- Function: public.calculate_commercial_cost
-CREATE OR REPLACE FUNCTION public.calculate_commercial_cost(p_unit_rate numeric, p_delivery_amount numeric, p_delivery_price_type delivery_price_type, p_markup_coefficient numeric, p_item_type boq_item_type)
- RETURNS numeric
- LANGUAGE plpgsql
- IMMUTABLE
-AS $function$
-  DECLARE
-      base_cost numeric;
-      commercial_cost numeric;
-  BEGIN
-      -- Базовая стоимость = unit_rate + доставка (для материалов)
-      base_cost := COALESCE(p_unit_rate, 0);
-
-      -- Добавляем стоимость доставки для материалов
-      IF p_item_type IN ('material', 'sub_material') THEN
-          CASE p_delivery_price_type
-              WHEN 'amount' THEN
-                  base_cost := base_cost + COALESCE(p_delivery_amount, 0);
-              WHEN 'not_included' THEN
-                  -- Автоматические 3% от unit_rate
-                  base_cost := base_cost + (COALESCE(p_unit_rate, 0) * 0.03);
-              ELSE
-                  -- 'included' - доставка уже включена в unit_rate
-                  base_cost := base_cost;
-          END CASE;
-      END IF;
-
-      -- Применяем коммерческий коэффициент
-      commercial_cost := base_cost * COALESCE(p_markup_coefficient, 1.0);
-
-      RETURN ROUND(commercial_cost, 2);
-  END;
-  $function$
-
-
--- Function: public.calculate_commercial_cost
 CREATE OR REPLACE FUNCTION public.calculate_commercial_cost()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2829,6 +2810,41 @@ BEGIN
     RETURN NEW;
 END;
 $function$
+
+
+-- Function: public.calculate_commercial_cost
+CREATE OR REPLACE FUNCTION public.calculate_commercial_cost(p_unit_rate numeric, p_delivery_amount numeric, p_delivery_price_type delivery_price_type, p_markup_coefficient numeric, p_item_type boq_item_type)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+  DECLARE
+      base_cost numeric;
+      commercial_cost numeric;
+  BEGIN
+      -- Базовая стоимость = unit_rate + доставка (для материалов)
+      base_cost := COALESCE(p_unit_rate, 0);
+
+      -- Добавляем стоимость доставки для материалов
+      IF p_item_type IN ('material', 'sub_material') THEN
+          CASE p_delivery_price_type
+              WHEN 'amount' THEN
+                  base_cost := base_cost + COALESCE(p_delivery_amount, 0);
+              WHEN 'not_included' THEN
+                  -- Автоматические 3% от unit_rate
+                  base_cost := base_cost + (COALESCE(p_unit_rate, 0) * 0.03);
+              ELSE
+                  -- 'included' - доставка уже включена в unit_rate
+                  base_cost := base_cost;
+          END CASE;
+      END IF;
+
+      -- Применяем коммерческий коэффициент
+      commercial_cost := base_cost * COALESCE(p_markup_coefficient, 1.0);
+
+      RETURN ROUND(commercial_cost, 2);
+  END;
+  $function$
 
 
 -- Function: public.calculate_delivery_amount_trigger
@@ -3091,6 +3107,33 @@ END;
 $function$
 
 
+-- Function: public.cleanup_draft_versions
+-- Description: Удаляет неиспользованные черновые версии тендера
+CREATE OR REPLACE FUNCTION public.cleanup_draft_versions(p_parent_tender_id uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_deleted_count INTEGER;
+BEGIN
+    -- Удаляем все черновые версии, у которых нет позиций
+    WITH deleted AS (
+        DELETE FROM tenders
+        WHERE parent_version_id = p_parent_tender_id
+          AND version_status = 'draft'
+          AND NOT EXISTS (
+              SELECT 1 FROM client_positions cp
+              WHERE cp.tender_id = tenders.id
+          )
+        RETURNING id
+    )
+    SELECT COUNT(*) INTO v_deleted_count FROM deleted;
+
+    RETURN v_deleted_count;
+END;
+$function$
+
+
 -- Function: public.clear_all_category_location_mappings
 -- Description: Очищает все связи перед новым импортом
 CREATE OR REPLACE FUNCTION public.clear_all_category_location_mappings()
@@ -3166,7 +3209,7 @@ end $function$
 
 
 -- Function: public.create_tender_version
--- Description: Создает новую версию тендера на основе существующего
+-- Description: Создает новую версию тендера с автоматической генерацией уникального номера
 CREATE OR REPLACE FUNCTION public.create_tender_version(p_parent_tender_id uuid, p_created_by uuid DEFAULT NULL::uuid)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -3175,6 +3218,8 @@ DECLARE
     v_new_tender_id UUID;
     v_parent_tender RECORD;
     v_new_version INTEGER;
+    v_new_tender_number TEXT;
+    v_counter INTEGER := 2;
 BEGIN
     -- Получаем информацию о родительском тендере
     SELECT * INTO v_parent_tender
@@ -3185,19 +3230,37 @@ BEGIN
         RAISE EXCEPTION 'Parent tender not found: %', p_parent_tender_id;
     END IF;
 
-    -- Вычисляем новый номер версии
-    v_new_version := COALESCE(v_parent_tender.version, 1) + 1;
+    -- Находим максимальный номер версии для этого тендера
+    SELECT COALESCE(MAX(version), 1) + 1 INTO v_new_version
+    FROM tenders
+    WHERE id = p_parent_tender_id
+       OR parent_version_id = p_parent_tender_id;
+
+    -- Генерируем уникальный номер тендера
+    v_new_tender_number := v_parent_tender.tender_number || '_v' || v_new_version;
+
+    -- Проверяем уникальность и при необходимости добавляем суффикс
+    WHILE EXISTS (SELECT 1 FROM tenders WHERE tender_number = v_new_tender_number) LOOP
+        v_new_tender_number := v_parent_tender.tender_number || '_v' || v_new_version || '_' || v_counter;
+        v_counter := v_counter + 1;
+    END LOOP;
 
     -- Создаем новый тендер как версию
     INSERT INTO tenders (
         title,
         description,
-        status,
-        deadline,
-        currency,
+        client_name,
+        tender_number,
+        submission_deadline,
+        area_sp,
+        area_client,
         usd_rate,
         eur_rate,
         cny_rate,
+        upload_folder,
+        bsm_link,
+        tz_clarification_link,
+        qa_form_link,
         version,
         parent_version_id,
         version_status,
@@ -3206,12 +3269,18 @@ BEGIN
     SELECT
         title || ' (Версия ' || v_new_version || ')',
         description,
-        'draft',
-        deadline,
-        currency,
+        client_name,
+        v_new_tender_number,
+        submission_deadline,
+        area_sp,
+        area_client,
         usd_rate,
         eur_rate,
         cny_rate,
+        upload_folder,
+        bsm_link,
+        tz_clarification_link,
+        qa_form_link,
         v_new_version,
         p_parent_tender_id,
         'draft',
@@ -4360,7 +4429,7 @@ $function$
 
 
 -- Function: public.index
-CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
  RETURNS integer
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4368,7 +4437,7 @@ AS '$libdir/ltree', $function$ltree_index$function$
 
 
 -- Function: public.index
-CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
  RETURNS integer
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4405,11 +4474,35 @@ AS $function$
 
 
 -- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
 CREATE OR REPLACE FUNCTION public.lca(ltree[])
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/ltree', $function$_lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
@@ -4429,22 +4522,6 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
 CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
@@ -4453,15 +4530,7 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -5545,7 +5614,7 @@ AS '$libdir/ltree', $function$subltree$function$
 
 
 -- Function: public.subpath
-CREATE OR REPLACE FUNCTION public.subpath(ltree, integer)
+CREATE OR REPLACE FUNCTION public.subpath(ltree, integer, integer)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -5553,7 +5622,7 @@ AS '$libdir/ltree', $function$subpath$function$
 
 
 -- Function: public.subpath
-CREATE OR REPLACE FUNCTION public.subpath(ltree, integer, integer)
+CREATE OR REPLACE FUNCTION public.subpath(ltree, integer)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -5621,30 +5690,135 @@ AS '$libdir/ltree', $function$text2ltree$function$
 
 
 -- Function: public.transfer_boq_items
--- Description: Переносит BOQ items и связи между версиями
+-- Description: Переносит все BOQ items из старой позиции в новую согласно маппингу
 CREATE OR REPLACE FUNCTION public.transfer_boq_items(p_mapping_id uuid)
  RETURNS boolean
  LANGUAGE plpgsql
 AS $function$
 DECLARE
     v_mapping RECORD;
-    v_boq_item RECORD;
+    v_inserted_count INTEGER := 0;
 BEGIN
     -- Получаем информацию о маппинге
     SELECT * INTO v_mapping
     FROM tender_version_mappings
-    WHERE id = p_mapping_id AND mapping_status = 'confirmed';
+    WHERE id = p_mapping_id;
 
     IF NOT FOUND THEN
-        RAISE NOTICE 'Mapping not found or not confirmed: %', p_mapping_id;
+        RAISE NOTICE 'Mapping not found: %', p_mapping_id;
         RETURN FALSE;
     END IF;
 
-    -- Переносим BOQ items
-    FOR v_boq_item IN
-        SELECT * FROM boq_items
-        WHERE client_position_id = v_mapping.old_position_id
+    -- Проверяем, что есть обе позиции
+    IF v_mapping.old_position_id IS NULL OR v_mapping.new_position_id IS NULL THEN
+        RAISE NOTICE 'Missing position IDs in mapping: old=%, new=%',
+            v_mapping.old_position_id, v_mapping.new_position_id;
+        RETURN FALSE;
+    END IF;
+
+    -- Переносим все BOQ items из старой позиции в новую
+    INSERT INTO boq_items (
+        client_position_id,
+        work_id,
+        material_id,
+        material_name,
+        measurement_unit,
+        consumption_rate,
+        quantity,
+        gross_price,
+        currency,
+        delivery_cost_type,
+        delivery_cost,
+        line_number,
+        level,
+        parent_id,
+        created_at,
+        updated_at
+    )
+    SELECT
+        v_mapping.new_position_id,  -- Новая позиция
+        work_id,
+        material_id,
+        material_name,
+        measurement_unit,
+        consumption_rate,
+        quantity,
+        gross_price,
+        currency,
+        delivery_cost_type,
+        delivery_cost,
+        line_number,
+        level,
+        NULL, -- parent_id будет установлен отдельно при необходимости
+        NOW(),
+        NOW()
+    FROM boq_items
+    WHERE client_position_id = v_mapping.old_position_id;
+
+    -- Получаем количество перенесенных записей
+    GET DIAGNOSTICS v_inserted_count = ROW_COUNT;
+
+    RAISE NOTICE 'Transferred % BOQ items from position % to %',
+        v_inserted_count, v_mapping.old_position_id, v_mapping.new_position_id;
+
+    -- Обновляем статус маппинга только если были перенесены записи
+    IF v_inserted_count > 0 THEN
+        UPDATE tender_version_mappings
+        SET mapping_status = 'applied',
+            updated_at = CURRENT_TIMESTAMP,
+            notes = COALESCE(notes, '') || ' | Transferred ' || v_inserted_count || ' BOQ items'
+        WHERE id = p_mapping_id;
+    END IF;
+
+    RETURN TRUE;
+END;
+$function$
+
+
+-- Function: public.transfer_dop_positions
+-- Description: Переносит все ДОП позиции с их BOQ items в новую версию тендера
+CREATE OR REPLACE FUNCTION public.transfer_dop_positions(p_old_tender_id uuid, p_new_tender_id uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_dop_count INTEGER := 0;
+    v_dop_position RECORD;
+    v_new_position_id UUID;
+BEGIN
+    -- Находим все ДОП позиции в старом тендере
+    FOR v_dop_position IN
+        SELECT cp.*,
+               tvm.new_position_id as parent_new_position_id
+        FROM client_positions cp
+        LEFT JOIN tender_version_mappings tvm
+            ON tvm.old_position_id = cp.parent_id
+            AND tvm.new_tender_id = p_new_tender_id
+        WHERE cp.tender_id = p_old_tender_id
+        AND cp.position_type = 'dop'
     LOOP
+        -- Создаем новую ДОП позицию
+        INSERT INTO client_positions (
+            tender_id,
+            position_number,
+            work_name,
+            position_type,
+            parent_id,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            p_new_tender_id,
+            v_dop_position.position_number,
+            v_dop_position.work_name,
+            'dop',
+            v_dop_position.parent_new_position_id, -- Может быть NULL если родитель удален
+            NOW(),
+            NOW()
+        )
+        RETURNING id INTO v_new_position_id;
+
+        -- Переносим BOQ items для этой ДОП позиции
         INSERT INTO boq_items (
             client_position_id,
             work_id,
@@ -5659,10 +5833,11 @@ BEGIN
             delivery_cost,
             line_number,
             level,
-            parent_id
+            created_at,
+            updated_at
         )
         SELECT
-            v_mapping.new_position_id,
+            v_new_position_id,
             work_id,
             material_id,
             material_name,
@@ -5675,116 +5850,15 @@ BEGIN
             delivery_cost,
             line_number,
             level,
-            NULL -- parent_id will be updated separately if needed
+            NOW(),
+            NOW()
         FROM boq_items
-        WHERE id = v_boq_item.id;
+        WHERE client_position_id = v_dop_position.id;
+
+        v_dop_count := v_dop_count + 1;
     END LOOP;
 
-    -- Обновляем статус маппинга
-    UPDATE tender_version_mappings
-    SET mapping_status = 'applied',
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = p_mapping_id;
-
-    RETURN TRUE;
-END;
-$function$
-
-
--- Function: public.transfer_dop_positions
--- Description: Обрабатывает перенос ДОП позиций с сохранением всех данных
-CREATE OR REPLACE FUNCTION public.transfer_dop_positions(p_old_tender_id uuid, p_new_tender_id uuid)
- RETURNS integer
- LANGUAGE plpgsql
-AS $function$
-DECLARE
-    v_dop_position RECORD;
-    v_parent_mapping RECORD;
-    v_new_position_id UUID;
-    v_count INTEGER := 0;
-BEGIN
-    -- Находим все ДОП позиции в старом тендере
-    FOR v_dop_position IN
-        SELECT * FROM client_positions
-        WHERE tender_id = p_old_tender_id
-        AND position_type = 'dop'
-        ORDER BY position_number
-    LOOP
-        -- Ищем маппинг родительской позиции (если есть)
-        SELECT * INTO v_parent_mapping
-        FROM tender_version_mappings
-        WHERE old_tender_id = p_old_tender_id
-        AND new_tender_id = p_new_tender_id
-        AND old_position_id = v_dop_position.parent_position_id;
-
-        -- Создаем новую ДОП позицию
-        INSERT INTO client_positions (
-            tender_id,
-            position_number,
-            item_no,
-            work_name,
-            position_type,
-            parent_position_id,
-            notes
-        ) VALUES (
-            p_new_tender_id,
-            v_dop_position.position_number,
-            v_dop_position.item_no,
-            v_dop_position.work_name,
-            'dop',
-            v_parent_mapping.new_position_id, -- Может быть NULL если родитель удален
-            COALESCE(v_dop_position.notes, '') ||
-            CASE
-                WHEN v_parent_mapping.new_position_id IS NULL
-                THEN ' (Родительская позиция удалена)'
-                ELSE ''
-            END
-        ) RETURNING id INTO v_new_position_id;
-
-        -- Создаем маппинг для ДОП
-        INSERT INTO tender_version_mappings (
-            old_tender_id,
-            new_tender_id,
-            old_position_id,
-            new_position_id,
-            old_position_number,
-            old_work_name,
-            new_position_number,
-            new_work_name,
-            mapping_type,
-            confidence_score,
-            mapping_status,
-            action_type,
-            is_dop,
-            parent_mapping_id
-        ) VALUES (
-            p_old_tender_id,
-            p_new_tender_id,
-            v_dop_position.id,
-            v_new_position_id,
-            v_dop_position.position_number,
-            v_dop_position.work_name,
-            v_dop_position.position_number,
-            v_dop_position.work_name,
-            'dop',
-            1.0,
-            'confirmed',
-            'preserve_dop',
-            TRUE,
-            v_parent_mapping.id
-        );
-
-        -- Переносим BOQ items для ДОП
-        PERFORM transfer_boq_items(
-            (SELECT id FROM tender_version_mappings
-             WHERE old_position_id = v_dop_position.id
-             AND new_position_id = v_new_position_id)
-        );
-
-        v_count := v_count + 1;
-    END LOOP;
-
-    RETURN v_count;
+    RETURN v_dop_count;
 END;
 $function$
 
