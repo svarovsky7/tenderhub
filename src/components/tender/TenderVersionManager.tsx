@@ -51,7 +51,7 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
   });
   const [availablePositions, setAvailablePositions] = useState<any[]>([]);
   const [editingMappingId, setEditingMappingId] = useState<string | null>(null);
-  const [selectedNewPositionId, setSelectedNewPositionId] = useState<string | null>(null);
+  const [selectedPositions, setSelectedPositions] = useState<Record<string, string | null>>({});
   const [currentStep, setCurrentStep] = useState<'upload' | 'review' | 'complete'>('upload');
   const [pageSize, setPageSize] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
@@ -210,6 +210,16 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
         await tenderVersioningApi.updateMappingStatus(mappingId, 'confirmed');
       }
 
+      // Проверяем, что маппинги действительно существуют в БД
+      const { data: confirmedMappings, error: checkError } = await tenderVersioningApi.getMappings(newTenderId);
+
+      if (checkError || !confirmedMappings || confirmedMappings.length === 0) {
+        message.error('Ошибка: маппинги не найдены в базе данных');
+        return;
+      }
+
+      console.log(`📊 Found ${confirmedMappings.length} mappings in database ready to apply`);
+
       // Применяем маппинги
       const result = await tenderVersioningApi.applyMappings(newTenderId);
 
@@ -253,24 +263,167 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
 
   // Обработка ручного сопоставления позиций
   const handleManualMapping = useCallback(async (mappingId: string, newPositionId: string | null) => {
+    console.log('🚀 handleManualMapping called:', { mappingId, newPositionId });
+    console.log('Current mappings:', mappings.map(m => ({ id: m.id, key: m.key })));
+
     setLoading(true);
     try {
-      // Находим маппинг
-      const mapping = mappings.find(m => m.id === mappingId || m.key === mappingId);
+      // Находим текущий маппинг
+      console.log('🔍 Looking for mapping with ID:', mappingId);
+      console.log('Available mappings keys:', mappings.map(m => ({ id: m.id, key: m.key })));
+
+      const mapping = mappings.find(m => {
+        const matchById = m.id === mappingId;
+        const matchByKey = m.key === mappingId;
+        if (matchById || matchByKey) {
+          console.log(`✅ Match found: id=${m.id}, key=${m.key}, matchById=${matchById}, matchByKey=${matchByKey}`);
+        }
+        return matchById || matchByKey;
+      });
+
       if (!mapping) {
+        console.error('❌ Mapping not found for ID:', mappingId);
+        console.error('Available mappings:', mappings);
         message.error('Сопоставление не найдено');
         return;
       }
 
-      // Если у маппинга есть id - обновляем существующий
-      if (mapping.id) {
-        const result = await tenderVersioningApi.updateMapping(mapping.id, newPositionId);
-        if (result.error) {
-          message.error(result.error);
+      console.log('✅ Found mapping:', {
+        id: mapping.id,
+        key: mapping.key,
+        oldPosition: mapping.old_position_id,
+        newPosition: mapping.new_position_id,
+        mappingType: mapping.mapping_type
+      });
+
+      // Сохраняем старую позицию из текущего маппинга (если есть)
+      const oldPositionInCurrentMapping = mapping.new_position_id;
+
+      // Если выбрана новая позиция, проверяем не используется ли она где-то еще
+      if (newPositionId) {
+        // Находим маппинг, где эта позиция уже используется
+        const existingMappingWithPosition = mappings.find(
+          m => m.new_position_id === newPositionId && m.id !== mappingId && m.key !== mappingId
+        );
+
+        if (existingMappingWithPosition) {
+          // Если позиция используется в маппинге типа "new" - удаляем его
+          if (existingMappingWithPosition.mapping_type === 'new') {
+            // Удаляем маппинг типа "new" из списка
+            setMappings(prev => prev.filter(m =>
+              m.id !== existingMappingWithPosition.id &&
+              m.key !== existingMappingWithPosition.key
+            ));
+
+            // Удаляем из базы если есть id
+            if (existingMappingWithPosition.id) {
+              await supabase
+                .from('tender_version_mappings')
+                .delete()
+                .eq('id', existingMappingWithPosition.id);
+            }
+          } else {
+            // Если позиция используется в обычном маппинге - освобождаем её
+            const updatedMappings = mappings.map(m => {
+              if (m.id === existingMappingWithPosition.id || m.key === existingMappingWithPosition.key) {
+                return {
+                  ...m,
+                  new_position_id: undefined,
+                  new_position_number: undefined,
+                  new_work_name: undefined,
+                  new_volume: undefined,
+                  new_unit: undefined,
+                  new_client_note: undefined,
+                  new_item_no: undefined,
+                  mapping_type: 'deleted' as const,
+                  confidence_score: 0,
+                  mapping_status: 'suggested' as const
+                };
+              }
+              return m;
+            });
+
+            setMappings(updatedMappings);
+
+            // Обновляем в базе
+            if (existingMappingWithPosition.id) {
+              await tenderVersioningApi.updateMapping(existingMappingWithPosition.id, null);
+            }
+          }
+        }
+      }
+
+      // Обновляем текущий маппинг в базе
+      // Для deleted маппингов всегда есть id, так как они создаются при автоматическом сопоставлении
+      if (mapping.id || mapping.mapping_type === 'deleted') {
+        // Если id нет, но тип deleted - нужно сначала найти его в БД
+        let mappingIdToUpdate = mapping.id;
+
+        if (!mappingIdToUpdate && mapping.mapping_type === 'deleted') {
+          // Получаем маппинг из БД по old_position_id
+          const getResult = await tenderVersioningApi.getMappings(mapping.new_tender_id || newTenderId);
+          if (getResult.data) {
+            const existingMapping = getResult.data.find(m =>
+              m.old_position_id === mapping.old_position_id
+            );
+            if (existingMapping) {
+              mappingIdToUpdate = existingMapping.id;
+            }
+          }
+        }
+
+        if (mappingIdToUpdate) {
+          // Сначала проверяем, не используется ли уже эта позиция в другом маппинге
+          if (newPositionId) {
+            const getResult = await tenderVersioningApi.getMappings(mapping.new_tender_id || newTenderId);
+            if (getResult.data) {
+              const conflictingMapping = getResult.data.find(m =>
+                m.new_position_id === newPositionId && m.id !== mappingIdToUpdate
+              );
+
+              if (conflictingMapping) {
+                console.log('⚠️ Found conflicting mapping, clearing it first:', conflictingMapping.id);
+                // Освобождаем позицию от конфликтующего маппинга
+                const clearResult = await tenderVersioningApi.updateMapping(conflictingMapping.id, null);
+                if (clearResult.error) {
+                  console.error('❌ Failed to clear conflicting mapping:', clearResult.error);
+                } else {
+                  console.log('✅ Cleared conflicting mapping');
+                  // Обновляем локальный маппинг тоже
+                  setMappings(prev => prev.map(m => {
+                    if (m.id === conflictingMapping.id) {
+                      return {
+                        ...m,
+                        new_position_id: undefined,
+                        new_position_number: undefined,
+                        new_work_name: undefined,
+                        new_volume: undefined,
+                        new_unit: undefined,
+                        new_client_note: undefined,
+                        new_item_no: undefined,
+                        mapping_type: 'deleted' as const,
+                        confidence_score: 0,
+                        mapping_status: 'suggested' as const
+                      };
+                    }
+                    return m;
+                  }));
+                }
+              }
+            }
+          }
+
+          const result = await tenderVersioningApi.updateMapping(mappingIdToUpdate, newPositionId);
+          if (result.error) {
+            message.error(result.error);
+            return;
+          }
+        } else {
+          message.error('Не удалось найти маппинг для обновления');
           return;
         }
       } else {
-        // Создаем новый маппинг
+        // Создаем новый маппинг только если его точно нет
         const result = await tenderVersioningApi.createManualMapping(
           mapping.old_tender_id,
           mapping.new_tender_id,
@@ -278,35 +431,69 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
           newPositionId
         );
         if (result.error) {
-          message.error(result.error);
-          return;
+          // Если ошибка дубликата - пробуем обновить существующий
+          if (result.error.includes('duplicate key')) {
+            const getResult = await tenderVersioningApi.getMappings(mapping.new_tender_id || newTenderId);
+            if (getResult.data) {
+              const existingMapping = getResult.data.find(m =>
+                m.old_position_id === mapping.old_position_id
+              );
+              if (existingMapping) {
+                const updateResult = await tenderVersioningApi.updateMapping(existingMapping.id, newPositionId);
+                if (updateResult.error) {
+                  message.error(updateResult.error);
+                  return;
+                }
+              }
+            }
+          } else {
+            message.error(result.error);
+            return;
+          }
         }
       }
 
       // Обновляем локальное состояние
+      let updatedMappings = [...mappings];
+
       if (newPositionId) {
         const newPosition = availablePositions.find(p => p.id === newPositionId);
+        console.log('🔍 Looking for new position:', newPositionId);
+        console.log('Found position:', newPosition);
+
         if (newPosition) {
-          setMappings(prev => prev.map(m => {
-            if (m.id === mappingId || m.key === mappingId) {
-              return {
+          // Обновляем текущий маппинг
+          updatedMappings = updatedMappings.map(m => {
+            const shouldUpdate = m.id === mappingId || m.key === mappingId;
+            if (shouldUpdate) {
+              console.log('📝 Updating mapping:', { oldMapping: m, newPositionId });
+              const updated = {
                 ...m,
                 new_position_id: newPositionId,
                 new_position_number: newPosition.position_number || newPosition.item_no,
                 new_work_name: newPosition.work_name,
                 new_volume: newPosition.volume,
                 new_unit: newPosition.unit,
+                new_client_note: newPosition.client_note,
+                new_item_no: newPosition.item_no,
                 mapping_type: 'manual' as const,
                 confidence_score: 1.0,
                 mapping_status: 'confirmed' as const
               };
+              console.log('📝 Updated mapping:', updated);
+              return updated;
             }
             return m;
-          }));
+          });
+
+          // Удаляем маппинг типа "new" для этой позиции если он был
+          updatedMappings = updatedMappings.filter(m =>
+            !(m.mapping_type === 'new' && m.new_position_id === newPositionId)
+          );
         }
       } else {
-        // Удаление сопоставления
-        setMappings(prev => prev.map(m => {
+        // Если позиция очищается - помечаем как deleted
+        updatedMappings = updatedMappings.map(m => {
           if (m.id === mappingId || m.key === mappingId) {
             return {
               ...m,
@@ -315,24 +502,79 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
               new_work_name: undefined,
               new_volume: undefined,
               new_unit: undefined,
+              new_client_note: undefined,
+              new_item_no: undefined,
               mapping_type: 'deleted' as const,
               confidence_score: 0,
               mapping_status: 'suggested' as const
             };
           }
           return m;
-        }));
+        });
       }
 
+      // Если в текущем маппинге была позиция и она освободилась - создаем для неё маппинг типа "new"
+      if (oldPositionInCurrentMapping && oldPositionInCurrentMapping !== newPositionId) {
+        const freedPosition = availablePositions.find(p => p.id === oldPositionInCurrentMapping);
+        if (freedPosition) {
+          // Проверяем, не используется ли эта позиция теперь где-то еще
+          const isPositionUsedElsewhere = updatedMappings.some(m =>
+            m.new_position_id === oldPositionInCurrentMapping
+          );
+
+          if (!isPositionUsedElsewhere) {
+            // Создаем новый маппинг типа "new"
+            const newMapping: MappingTableRow = {
+              key: `new-${oldPositionInCurrentMapping}`,
+              old_tender_id: mapping.old_tender_id,
+              new_tender_id: mapping.new_tender_id,
+              new_position_id: oldPositionInCurrentMapping,
+              new_position_number: freedPosition.position_number || freedPosition.item_no,
+              new_work_name: freedPosition.work_name,
+              new_volume: freedPosition.volume,
+              new_unit: freedPosition.unit,
+              new_client_note: freedPosition.client_note,
+              new_item_no: freedPosition.item_no,
+              mapping_type: 'new',
+              confidence_score: 0,
+              mapping_status: 'suggested'
+            };
+            updatedMappings.push(newMapping);
+          }
+        }
+      }
+
+      console.log('💾 Setting updated mappings:', updatedMappings.length, 'items');
+      const updatedMapping = updatedMappings.find(m => m.id === mappingId || m.key === mappingId);
+      console.log('Updated mapping details:', updatedMapping);
+      console.log('Mappings before update:', mappings.length);
+
+      setMappings(updatedMappings);
+
+      // Добавим проверку после обновления
+      setTimeout(() => {
+        console.log('📊 Mappings after update (delayed check):', mappings.length);
+      }, 100);
+
       // Обновляем статистику
-      updateStatistics(mappings);
+      updateStatistics(updatedMappings);
 
       // Перезагружаем доступные позиции
       await loadAvailablePositions();
 
       message.success('Сопоставление обновлено');
       setEditingMappingId(null);
-      setSelectedNewPositionId(null);
+      // Очищаем только позицию для этого конкретного маппинга
+      setSelectedPositions(prev => {
+        const newPositions = { ...prev };
+        delete newPositions[mappingId];
+        // Также пробуем удалить по ключу маппинга, если он отличается
+        const mappingKey = mapping.key || mappingId;
+        if (mappingKey !== mappingId) {
+          delete newPositions[mappingKey];
+        }
+        return newPositions;
+      });
     } catch (error) {
       console.error('Error in manual mapping:', error);
       message.error('Ошибка при обновлении сопоставления');
@@ -462,31 +704,45 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
       ellipsis: true,
       render: (_, record) => {
         const isEditing = editingMappingId === (record.id || record.key);
+        const isDeleted = record.mapping_type === 'deleted';
 
-        if (isEditing) {
+        // Для удаленных строк всегда показываем селектор
+        if (isEditing || isDeleted) {
           return (
             <Select
               size="small"
               style={{ width: '100%' }}
               placeholder="Выберите позицию для сопоставления"
-              value={selectedNewPositionId || record.new_position_id}
-              onChange={(value) => setSelectedNewPositionId(value)}
+              value={selectedPositions[record.key] !== undefined ? selectedPositions[record.key] : record.new_position_id}
+              onChange={(value) => {
+                console.log('📝 Select onChange:', { recordKey: record.key, value });
+                setSelectedPositions(prev => ({ ...prev, [record.key]: value }));
+              }}
               allowClear
               showSearch
               filterOption={(input, option) =>
                 (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
               }
               options={[
-                { value: null, label: '-- Не сопоставлено --' },
+                { value: '', label: '-- Не сопоставлено --' },
                 ...availablePositions.map(pos => ({
                   value: pos.id,
-                  label: pos.label,
-                  disabled: pos.isUsed && pos.id !== record.new_position_id
+                  label: pos.isUsed && pos.id !== record.new_position_id
+                    ? `${pos.label} (уже используется)`
+                    : pos.label,
+                  disabled: false // Разрешаем выбор любой позиции для ручного сопоставления
                 }))
               ]}
               onBlur={() => {
-                setEditingMappingId(null);
-                setSelectedNewPositionId(null);
+                // Не очищаем состояние для удаленных строк, так как они всегда редактируемые
+                if (!isDeleted) {
+                  setEditingMappingId(null);
+                  setSelectedPositions(prev => {
+                    const newPositions = { ...prev };
+                    delete newPositions[record.key];
+                    return newPositions;
+                  });
+                }
               }}
             />
           );
@@ -537,8 +793,10 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
       align: 'center' as const,
       render: (_, record) => {
         const isEditing = editingMappingId === (record.id || record.key);
+        const isDeleted = record.mapping_type === 'deleted';
 
-        if (isEditing) {
+        // Для удаленных строк всегда показываем кнопки сохранения
+        if (isEditing || isDeleted) {
           return (
             <Space size={0}>
               <Tooltip title="Сохранить">
@@ -547,7 +805,11 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
                   type="link"
                   icon={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
                   onClick={() => {
-                    handleManualMapping(record.id || record.key, selectedNewPositionId || null);
+                    const selectedId = selectedPositions[record.key] !== undefined
+                      ? selectedPositions[record.key]
+                      : record.new_position_id;
+                    console.log('✅ Confirm clicked:', { recordKey: record.key, selectedId, recordId: record.id });
+                    handleManualMapping(record.id || record.key, selectedId || null);
                   }}
                   style={{ padding: '0 4px' }}
                 />
@@ -558,8 +820,16 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
                   type="link"
                   icon={<CloseCircleOutlined />}
                   onClick={() => {
-                    setEditingMappingId(null);
-                    setSelectedNewPositionId(null);
+                    // Для удаленных строк не сбрасываем editingMappingId, так как они всегда редактируемые
+                    if (!isDeleted) {
+                      setEditingMappingId(null);
+                    }
+                    // Сбрасываем выбранное значение
+                    setSelectedPositions(prev => {
+                      const newPositions = { ...prev };
+                      delete newPositions[record.key];
+                      return newPositions;
+                    });
                   }}
                   style={{ padding: '0 4px' }}
                 />
@@ -570,8 +840,8 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
 
         return (
           <Space size={0}>
-            {/* Кнопка редактирования сопоставления */}
-            {record.mapping_type !== 'new' && (
+            {/* Кнопка редактирования сопоставления (не показываем для deleted, так как у них селектор всегда доступен) */}
+            {record.mapping_type !== 'new' && record.mapping_type !== 'deleted' && (
               <Tooltip title="Изменить сопоставление">
                 <Button
                   size="small"
@@ -579,7 +849,7 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
                   icon={<EditOutlined />}
                   onClick={() => {
                     setEditingMappingId(record.id || record.key);
-                    setSelectedNewPositionId(record.new_position_id || null);
+                    setSelectedPositions(prev => ({ ...prev, [record.key]: record.new_position_id || null }));
                   }}
                   style={{ padding: '0 4px' }}
                 />

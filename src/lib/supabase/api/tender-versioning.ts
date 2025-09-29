@@ -76,11 +76,12 @@ export const tenderVersioningApi = {
     console.log('🚀 Auto-matching positions between tenders:', { oldTenderId, newTenderId });
 
     try {
-      // Получаем позиции из старого тендера
+      // Получаем позиции из старого тендера (исключая ДОП)
       const { data: oldPositions, error: oldError } = await supabase
         .from('client_positions')
         .select('*')
         .eq('tender_id', oldTenderId)
+        .eq('is_additional', false)  // Исключаем ДОП позиции по флагу is_additional
         .order('position_number');
 
       if (oldError) {
@@ -88,11 +89,12 @@ export const tenderVersioningApi = {
         return { error: oldError.message };
       }
 
-      // Получаем позиции из нового тендера
+      // Получаем позиции из нового тендера (исключая ДОП)
       const { data: newPositions, error: newError } = await supabase
         .from('client_positions')
         .select('*')
         .eq('tender_id', newTenderId)
+        .eq('is_additional', false)  // Исключаем ДОП позиции по флагу is_additional
         .order('position_number');
 
       if (newError) {
@@ -345,10 +347,11 @@ export const tenderVersioningApi = {
         return { error: mappingsError.message };
       }
 
-      // Фильтруем маппинги: подтвержденные + с высокой уверенностью
+      // Применяем ВСЕ маппинги кроме явно отклоненных
+      // Это нужно чтобы перенести все позиции между версиями
       const mappingsToApply = (allMappings || []).filter(m =>
-        m.mapping_status === 'confirmed' ||
-        (m.confidence_score && m.confidence_score >= 0.9)
+        m.mapping_status !== 'rejected' && // Исключаем только явно отклоненные
+        m.action_type === 'copy_boq' // Только маппинги для копирования BOQ
       );
 
       console.log(`📦 Found ${mappingsToApply.length} mappings to apply (из ${allMappings?.length || 0} всего)`);
@@ -358,8 +361,8 @@ export const tenderVersioningApi = {
       let errorCount = 0;
 
       for (const mapping of mappingsToApply) {
-        // Автоматически подтверждаем маппинги с высокой уверенностью
-        if (mapping.mapping_status !== 'confirmed' && mapping.confidence_score >= 0.9) {
+        // Автоматически подтверждаем ВСЕ маппинги перед применением
+        if (mapping.mapping_status !== 'confirmed') {
           await supabase
             .from('tender_version_mappings')
             .update({ mapping_status: 'confirmed', updated_at: new Date().toISOString() })
@@ -370,6 +373,23 @@ export const tenderVersioningApi = {
         if (mapping.action_type === 'copy_boq' &&
             mapping.old_position_id &&
             mapping.new_position_id) {
+
+          console.log(`📋 Transferring BOQ items for mapping:`, {
+            mappingId: mapping.id,
+            oldPosition: mapping.old_position_id,
+            newPosition: mapping.new_position_id,
+            oldName: mapping.old_work_name,
+            newName: mapping.new_work_name
+          });
+
+          // Сначала проверим, есть ли BOQ items для переноса
+          const { data: boqCount, error: countError } = await supabase
+            .from('boq_items')
+            .select('id', { count: 'exact', head: true })
+            .eq('client_position_id', mapping.old_position_id);
+
+          console.log(`📊 Found ${boqCount || 0} BOQ items in old position`);
+
           const { error } = await supabase.rpc('transfer_boq_items', {
             p_mapping_id: mapping.id
           });
@@ -381,12 +401,20 @@ export const tenderVersioningApi = {
             errorCount++;
           } else {
             console.log(`✅ Transferred BOQ: ${mapping.old_position_number} -> ${mapping.new_position_number}`);
+
+            // Проверим результат
+            const { data: newBoqCount, error: newCountError } = await supabase
+              .from('boq_items')
+              .select('id', { count: 'exact', head: true })
+              .eq('client_position_id', mapping.new_position_id);
+
+            console.log(`✅ New position now has ${newBoqCount || 0} BOQ items`);
             successCount++;
           }
         }
       }
 
-      // Обрабатываем ДОП позиции
+      // Обрабатываем ДОП позиции - автоматически переносим их с родительскими позициями
       const { data: oldTenderId } = await supabase
         .from('tender_version_mappings')
         .select('old_tender_id')
@@ -395,15 +423,19 @@ export const tenderVersioningApi = {
         .single();
 
       if (oldTenderId) {
-        const { data: dopCount, error: dopError } = await supabase.rpc('transfer_dop_positions', {
-          p_old_tender_id: oldTenderId.old_tender_id,
-          p_new_tender_id: newTenderId
-        });
+        console.log('🔄 Transferring DOP positions...');
 
-        if (dopError) {
-          console.error('❌ Failed to transfer DOP positions:', dopError);
-        } else {
-          console.log(`✅ Transferred ${dopCount || 0} DOP positions`);
+        // Переносим ДОП позиции автоматически
+        const dopResult = await this.transferDopPositionsWithMappings(
+          oldTenderId.old_tender_id,
+          newTenderId
+        );
+
+        if (dopResult.error) {
+          console.error('❌ Failed to transfer DOP positions:', dopResult.error);
+        } else if (dopResult.data) {
+          console.log(`✅ Transferred ${dopResult.data.dopCount || 0} DOP positions`);
+          console.log(`✅ Transferred BOQ items for ${dopResult.data.boqTransferCount || 0} DOP positions`);
         }
       }
 
@@ -413,6 +445,158 @@ export const tenderVersioningApi = {
       };
     } catch (error) {
       console.error('💥 Exception in applyMappings:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  /**
+   * Перенос ДОП позиций с учетом маппингов родительских позиций
+   */
+  async transferDopPositionsWithMappings(
+    oldTenderId: string,
+    newTenderId: string
+  ): Promise<ApiResponse<{ dopCount: number; boqTransferCount: number }>> {
+    console.log('🚀 Transferring DOP positions with mappings');
+
+    try {
+      // Получаем все ДОП позиции из старого тендера
+      const { data: dopPositions, error: dopError } = await supabase
+        .from('client_positions')
+        .select('*')
+        .eq('tender_id', oldTenderId)
+        .eq('is_additional', true)  // Используем флаг is_additional для ДОП позиций
+        .order('position_number');
+
+      if (dopError) {
+        console.error('❌ Failed to fetch DOP positions:', dopError);
+        return { error: dopError.message };
+      }
+
+      if (!dopPositions || dopPositions.length === 0) {
+        console.log('ℹ️ No DOP positions found in old tender');
+        return { data: { dopCount: 0, boqTransferCount: 0 } };
+      }
+
+      console.log(`📦 Found ${dopPositions.length} DOP positions to transfer`);
+
+      // Получаем маппинги для родительских позиций
+      const { data: mappings, error: mappingError } = await supabase
+        .from('tender_version_mappings')
+        .select('*')
+        .eq('new_tender_id', newTenderId)
+        .in('mapping_status', ['confirmed', 'applied']);
+
+      if (mappingError) {
+        console.error('❌ Failed to fetch mappings:', mappingError);
+        return { error: mappingError.message };
+      }
+
+      let dopCount = 0;
+      let boqTransferCount = 0;
+
+      // Переносим каждую ДОП позицию
+      for (const dopPosition of dopPositions) {
+        // Находим маппинг для родительской позиции (используем правильное имя поля)
+        const parentMapping = mappings?.find(m => m.old_position_id === dopPosition.parent_position_id);
+
+        let newParentId = null;
+        if (!parentMapping || !parentMapping.new_position_id) {
+          console.warn(`⚠️ No parent mapping found for DOP position ${dopPosition.id}`);
+
+          // Если родительская позиция не найдена, пытаемся найти другую позицию в том же разделе
+          const { data: alternativeParent } = await supabase
+            .from('client_positions')
+            .select('id')
+            .eq('tender_id', newTenderId)
+            .eq('is_additional', false)  // Не ДОП позиция
+            .limit(1)
+            .single();
+
+          if (!alternativeParent) {
+            console.error(`❌ No alternative parent found for orphaned DOP ${dopPosition.id}`);
+            continue;
+          }
+
+          newParentId = alternativeParent.id;
+          console.log(`📎 Reassigned orphaned DOP to alternative parent ${alternativeParent.id}`);
+        } else {
+          newParentId = parentMapping.new_position_id;
+        }
+
+        // Создаем новую ДОП позицию со всеми полями
+        const { data: newDopPosition, error: createError } = await supabase
+          .from('client_positions')
+          .insert({
+            tender_id: newTenderId,
+            parent_position_id: newParentId,  // Используем новый ID родителя
+            position_number: dopPosition.position_number,
+            item_no: dopPosition.item_no,
+            work_name: dopPosition.work_name,
+            unit: dopPosition.unit,
+            volume: dopPosition.volume,
+            manual_volume: dopPosition.manual_volume,
+            client_note: dopPosition.client_note,
+            manual_note: dopPosition.manual_note,
+            position_type: dopPosition.position_type,  // Копируем оригинальный тип
+            hierarchy_level: dopPosition.hierarchy_level,
+            is_additional: true,  // Важно! Устанавливаем флаг для ДОП
+            total_materials_cost: 0,
+            total_works_cost: 0,
+            total_commercial_materials_cost: 0,
+            total_commercial_works_cost: 0
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error(`❌ Failed to create DOP position:`, createError);
+          continue;
+        }
+
+        dopCount++;
+        console.log(`✅ Created DOP position ${newDopPosition.id}`);
+
+        // Переносим BOQ items для этой ДОП позиции
+        const { data: boqItems, error: boqError } = await supabase
+          .from('boq_items')
+          .select('*')
+          .eq('client_position_id', dopPosition.id);
+
+        if (boqError) {
+          console.error(`❌ Failed to fetch BOQ items for DOP:`, boqError);
+          continue;
+        }
+
+        if (boqItems && boqItems.length > 0) {
+          // Создаем новые BOQ items
+          const newBoqItems = boqItems.map(item => ({
+            ...item,
+            id: undefined, // Пусть БД сгенерирует новый ID
+            client_position_id: newDopPosition.id,
+            created_at: undefined,
+            updated_at: undefined
+          }));
+
+          const { error: insertBoqError } = await supabase
+            .from('boq_items')
+            .insert(newBoqItems);
+
+          if (insertBoqError) {
+            console.error(`❌ Failed to insert BOQ items for DOP:`, insertBoqError);
+          } else {
+            boqTransferCount++;
+            console.log(`✅ Transferred ${boqItems.length} BOQ items for DOP ${newDopPosition.id}`);
+          }
+        }
+      }
+
+      console.log(`✅ Successfully transferred ${dopCount} DOP positions with BOQ items`);
+      return {
+        data: { dopCount, boqTransferCount },
+        message: `Перенесено ${dopCount} ДОП позиций`
+      };
+    } catch (error) {
+      console.error('💥 Exception in transferDopPositionsWithMappings:', error);
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   },

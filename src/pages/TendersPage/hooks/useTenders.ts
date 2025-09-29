@@ -46,10 +46,13 @@ export const useTenders = (
     
     try {
       console.log('📡 Calling tendersApi.getAll...');
-      const result = await tendersApi.getAll(filters, {
-        page: 1,
-        limit: 10000  // Large number to get all tenders
-      });
+      const result = await tendersApi.getAll(
+        { ...filters, includeVersions: true }, // Include versions
+        {
+          page: 1,
+          limit: 10000  // Large number to get all tenders
+        }
+      );
 
       console.log('📦 tendersApi.getAll result:', result);
 

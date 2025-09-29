@@ -14,7 +14,7 @@ import { handleSupabaseError, applyPagination, type PaginationOptions } from './
 export const tendersApi = {
   // Get all tenders with optional filtering and pagination
   async getAll(
-    filters: TenderFilters = {},
+    filters: TenderFilters & { includeVersions?: boolean } = {},
     pagination: PaginationOptions = {}
   ): Promise<PaginatedResponse<TenderWithSummary>> {
     try {
@@ -32,8 +32,11 @@ export const tendersApi = {
       // Apply filters
       // Note: status field removed from schema
 
-      // Filter out child versions - only show main tenders (without parent_version_id)
-      query = query.is('parent_version_id', null);
+      // By default, filter out child versions - only show main tenders (without parent_version_id)
+      // Unless explicitly requested to include versions
+      if (!filters.includeVersions) {
+        query = query.is('parent_version_id', null);
+      }
 
       if (filters.client_name) {
         query = query.ilike('client_name', `%${filters.client_name}%`);

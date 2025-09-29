@@ -59,7 +59,7 @@ const BOQPageSimplified: React.FC = () => {
     console.log('📡 Loading tenders list...');
     setTendersLoading(true);
     try {
-      const result = await tendersApi.getAll();
+      const result = await tendersApi.getAll({ includeVersions: true });
       console.log('📦 Tenders API response:', result);
       
       if (result.error) {

@@ -264,21 +264,25 @@ const TenderTable: React.FC<TenderTableProps> = ({
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <Text 
-                  strong 
+                <Text
+                  strong
                   className="cursor-pointer hover:text-blue-600 transition-colors"
                   onClick={() => handleViewTender(record)}
                 >
                   {record.title}
                 </Text>
-                {record.version && record.version > 1 && (
-                  <Tag color="purple" size="small">
+                {record.parent_version_id && (
+                  <Tooltip title="Это версия другого тендера">
+                    <Tag color="purple" icon={<BranchesOutlined />}>
+                      Версия {record.version || 2}
+                    </Tag>
+                  </Tooltip>
+                )}
+                {!record.parent_version_id && record.version && record.version > 1 && (
+                  <Tag color="blue">
                     v{record.version}
                   </Tag>
                 )}
-                <Tag color="blue" size="small">
-                  v{record.version || 1}
-                </Tag>
               </div>
               <Text type="secondary" className="text-sm">
                 №{record.tender_number || '—'} • {record.client_name || '—'}
