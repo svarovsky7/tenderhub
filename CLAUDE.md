@@ -129,6 +129,7 @@ src/components/financial/  # Financial components
 - **Currency System**: Exchange rates stored at tender level
 - **Delivery Cost**: Auto-calculated 3% for "not included" type
 - **Versioning**: New tender versions get unique `tender_number` with `_v{version}` suffix
+- **Migration Workflow**: Apply migrations directly in Supabase SQL Editor, then delete migration files after application
 
 ### 2. Logging Pattern (Required)
 ```typescript
@@ -158,11 +159,12 @@ console.log('❌ [FunctionName] error:', error);
 
 ### 6. Critical Code Patterns
 - **UUID Handling**: Always use actual database IDs, not generated keys
-- **Pagination**: Use controlled state with `pageSize` and `current` props
+- **Pagination**: Use controlled state with `pageSize` and `current` props (default 100 rows)
 - **Modal Cleanup**: Delete draft versions on cancel to prevent orphans
 - **Mapping Save**: Check for existing IDs before re-saving to prevent duplicates
 - **API Filtering**: Filter child versions at query level, not in UI
 - **Error Messages**: Always include context in console logs with emojis
+- **Function Order**: Define functions before use to avoid initialization errors
 
 ## Environment Setup
 
@@ -207,6 +209,8 @@ VITE_APP_VERSION=0.0.0
 - Lazy loading for improved performance
 - Tender versioning with automatic position mapping
 - Fuzzy matching for position comparison between versions
+- Manual fields (manual_volume, manual_note) transfer between versions
+- Filtering by confidence score and mapping type in version modal
 
 ### ⚠️ Disabled/Placeholder
 - Authentication (no login required)
@@ -216,20 +220,21 @@ VITE_APP_VERSION=0.0.0
 
 ## Important Database Functions
 
-### Versioning Functions (in prod.sql and migrations)
+### Versioning Functions (in prod.sql)
 - **`create_tender_version`** - Creates new tender version with unique number
-- **`transfer_boq_with_mapping`** - Transfers BOQ items between position mappings (calls `transfer_work_material_links`)
-- **`transfer_dop_positions`** - Transfers additional (DOP) positions with BOQ items and work_material_links
+- **`complete_version_transfer`** - Transfers all data including manual_volume and manual_note
+- **`complete_version_transfer_with_links`** - Full transfer with work_material_links and manual fields
+- **`transfer_boq_with_mapping`** - Transfers BOQ items and manual fields based on mapping
+- **`transfer_dop_positions`** - Transfers additional (DOP) positions including manual fields
 - **`transfer_work_material_links`** - Transfers work-material relationships between positions
-- **`transfer_all_tender_data`** - Comprehensive transfer of all data including links and DOP positions
-- **`complete_version_transfer`** - Transfers all data between versions including manual_volume and manual_note
-- **`complete_version_transfer_with_links`** - Transfers data with work_material_links and manual fields
 - **`cleanup_draft_versions`** - Removes empty draft versions
 
 ### Critical Fields
 - **`is_additional`** - Boolean flag in `client_positions` for DOP positions (NOT `position_type = 'dop'`)
 - **`parent_position_id`** - Links DOP positions to parent positions
 - **`parent_version_id`** - Links child tender versions to parent tenders
+- **`manual_volume`** - Manual quantity override for positions
+- **`manual_note`** - Manual notes for positions
 
 ## Git Workflow
 
@@ -262,7 +267,7 @@ The application supports creating new versions of tenders with position comparis
    - 30% weight: context (position numbers)
    - 10% weight: hierarchy level
 4. Manual review/adjustment of mappings
-5. Apply mappings to transfer BOQ items and DOP positions
+5. Apply mappings to transfer BOQ items, DOP positions, and manual fields
 
 ### Important Notes
 - Parent tenders have `parent_version_id = NULL`
@@ -270,18 +275,22 @@ The application supports creating new versions of tenders with position comparis
 - Tender list page filters out child versions (only shows parents)
 - Draft versions are deleted if cancelled before completion
 - Unique constraint prevents duplicate mappings per position
+- DOP positions transfer automatically (not shown in mapping UI)
+- Manual fields (manual_volume, manual_note) transfer for all position types
 
 ### Key Fixes Applied (January 2025)
 1. **TenderVersionManager.tsx**: Restructured table from 4 to 12 columns for full data display
 2. **tenders.ts API**: Added `.is('parent_version_id', null)` filter to exclude versions
 3. **tender-versioning.ts**: Fixed null handling in `calculateContextScore`
 4. **saveMappings**: Excludes 'key' field and returns saved mappings with IDs
-5. **Pagination**: Changed to controlled state with `pagination` prop
-6. **DOP Position Transfer**: Fixed parameter order in `transfer_dop_positions` calls (now p_new_tender_id, p_old_tender_id)
-7. **work_material_links Transfer**: Added comprehensive transfer function for all position types
-8. **SQL Functions**: Removed dependency on tender_version_mappings for DOP position transfers
+5. **Pagination**: Changed to controlled state with default 100 rows
+6. **DOP Position Transfer**: Fixed parameter order in `transfer_dop_positions` calls
+7. **work_material_links Transfer**: Added comprehensive transfer function
+8. **SQL Functions**: Removed dependency on tender_version_mappings for DOP transfers
 9. **Filtering**: Added confidence score and mapping type filters to version modal
 10. **updateStatistics**: Fixed initialization order to prevent reference errors
+11. **Manual Fields Transfer**: Added transfer for regular positions, not just DOP
+12. **DOP Display**: Removed DOP count from modal (transfers automatically)
 
 ## Common Troubleshooting
 
@@ -297,8 +306,8 @@ The application supports creating new versions of tenders with position comparis
 - **Mappings Not Saving**: Verify mappings don't already exist (check for IDs)
 - **Deleted Versions Reappearing**: Ensure tender list filters by `parent_version_id IS NULL`
 - **UUID Errors in Version Modal**: Use mapping.id, not generated keys
-- **Missing Mapping Columns**: Run migration `20250129_add_mapping_columns.sql`
-- **DOP Positions Not Transferring**: Check parameter order (p_new_tender_id, p_old_tender_id) and ensure parent positions exist
-- **work_material_links Missing**: Run migration `20250130_transfer_work_material_links.sql` for comprehensive transfer
+- **DOP Positions Not Transferring**: Check parameter order and ensure parent positions exist
+- **work_material_links Missing**: Ensure transfer functions are called in correct order
 - **updateStatistics Before Initialization**: Ensure function definitions are ordered correctly in components
-- **Manual Fields Not Transferring**: Run migrations for manual_volume and manual_note transfer functions
+- **Manual Fields Not Transferring**: Check that complete_version_transfer includes UPDATE for manual fields
+- **Excel Import Errors**: Check for stream module externalization warnings (normal in browser environment)
