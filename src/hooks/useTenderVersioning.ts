@@ -159,8 +159,8 @@ export const useTenderVersioning = () => {
 
         try {
           const { data: dopCount, error: dopError } = await supabase.rpc('transfer_dop_positions', {
-            p_old_tender_id: oldTenderId,
-            p_new_tender_id: newTenderId
+            p_new_tender_id: newTenderId,
+            p_old_tender_id: oldTenderId
           });
 
           if (dopError) {

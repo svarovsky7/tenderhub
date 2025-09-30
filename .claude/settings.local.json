@@ -1,5 +1,4 @@
 {
-  "defaultMode": "acceptEdits",
   "permissions": {
     "allow": [
       "Bash(npm install:*)",
@@ -39,11 +38,14 @@
       "mcp__github__search_repositories",
       "mcp__supabase__supabase_query",
       "mcp__supabase__supabase_schema",
-      "Read(//c/Users/odintsov.a.a/AppData/Roaming/Claude/**)"
+      "Read(//c/Users/odintsov.a.a/AppData/Roaming/Claude/**)",
+      "mcp__supabase__supabase_delete",
+      "Bash(cmd /c:*)"
     ],
     "deny": [],
     "additionalDirectories": [
       "C:\\\\Users\\\\nekrasov.l.m\\\\AppData\\\\Roaming\\\\Claude"
     ]
-  }
+  },
+  "defaultMode": "acceptEdits"
 }

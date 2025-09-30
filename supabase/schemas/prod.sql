@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-09-29T16:06:05.341007
+-- Generated: 2025-09-30T12:26:13.548208
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -301,6 +301,31 @@ CREATE TABLE IF NOT EXISTS auth.users (
 );
 COMMENT ON TABLE auth.users IS 'Auth: Stores user login data within a secure schema.';
 COMMENT ON COLUMN auth.users.is_sso_user IS 'Auth: Set this column to true when the account comes from SSO. These accounts can have duplicate emails.';
+
+-- Table: public.boq_item_version_mappings
+-- Description: Маппинг BOQ items между версиями тендеров для корректного переноса work_material_links
+CREATE TABLE IF NOT EXISTS public.boq_item_version_mappings (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    old_boq_item_id uuid NOT NULL,
+    new_boq_item_id uuid NOT NULL,
+    old_tender_id uuid NOT NULL,
+    new_tender_id uuid NOT NULL,
+    position_mapping_id uuid,
+    mapping_type text DEFAULT 'auto'::text,
+    item_number text,
+    description text,
+    item_type text,
+    created_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT boq_item_version_mappings_new_boq_item_id_fkey FOREIGN KEY (new_boq_item_id) REFERENCES None.None(None),
+    CONSTRAINT boq_item_version_mappings_new_tender_id_fkey FOREIGN KEY (new_tender_id) REFERENCES None.None(None),
+    CONSTRAINT boq_item_version_mappings_old_boq_item_id_fkey FOREIGN KEY (old_boq_item_id) REFERENCES None.None(None),
+    CONSTRAINT boq_item_version_mappings_old_tender_id_fkey FOREIGN KEY (old_tender_id) REFERENCES None.None(None),
+    CONSTRAINT boq_item_version_mappings_pkey PRIMARY KEY (id),
+    CONSTRAINT boq_item_version_mappings_position_mapping_id_fkey FOREIGN KEY (position_mapping_id) REFERENCES None.None(None),
+    CONSTRAINT uq_boq_mapping UNIQUE (new_tender_id),
+    CONSTRAINT uq_boq_mapping UNIQUE (old_boq_item_id)
+);
+COMMENT ON TABLE public.boq_item_version_mappings IS 'Маппинг BOQ items между версиями тендеров для корректного переноса work_material_links';
 
 -- Table: public.boq_items
 -- Description: Bill of Quantities line items for each tender
@@ -793,6 +818,8 @@ CREATE TABLE IF NOT EXISTS public.work_material_links (
     CONSTRAINT fk_work_material_links_sub_material FOREIGN KEY (sub_material_boq_item_id) REFERENCES None.None(None),
     CONSTRAINT fk_work_material_links_sub_work FOREIGN KEY (sub_work_boq_item_id) REFERENCES None.None(None),
     CONSTRAINT fk_work_material_links_work FOREIGN KEY (work_boq_item_id) REFERENCES None.None(None),
+    CONSTRAINT uq_sub_work_material_pair UNIQUE (sub_material_boq_item_id),
+    CONSTRAINT uq_sub_work_material_pair UNIQUE (sub_work_boq_item_id),
     CONSTRAINT uq_work_material_pair UNIQUE (material_boq_item_id),
     CONSTRAINT uq_work_material_pair UNIQUE (work_boq_item_id),
     CONSTRAINT work_material_links_pkey PRIMARY KEY (id)
@@ -1451,19 +1478,19 @@ AS '$libdir/pgcrypto', $function$pg_random_uuid$function$
 
 
 -- Function: extensions.gen_salt
-CREATE OR REPLACE FUNCTION extensions.gen_salt(text)
- RETURNS text
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pg_gen_salt$function$
-
-
--- Function: extensions.gen_salt
 CREATE OR REPLACE FUNCTION extensions.gen_salt(text, integer)
  RETURNS text
  LANGUAGE c
  PARALLEL SAFE STRICT
 AS '$libdir/pgcrypto', $function$pg_gen_salt_rounds$function$
+
+
+-- Function: extensions.gen_salt
+CREATE OR REPLACE FUNCTION extensions.gen_salt(text)
+ RETURNS text
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_gen_salt$function$
 
 
 -- Function: extensions.grant_pg_cron_access
@@ -1610,7 +1637,7 @@ $function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1618,7 +1645,7 @@ AS '$libdir/pgcrypto', $function$pg_hmac$function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1674,14 +1701,6 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
- RETURNS text
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
-
-
--- Function: extensions.pgp_pub_decrypt
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
  RETURNS text
  LANGUAGE c
@@ -1689,8 +1708,16 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
 AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
+-- Function: extensions.pgp_pub_decrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
+ RETURNS text
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
+
+
 -- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1706,7 +1733,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1714,7 +1741,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1722,7 +1749,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1778,7 +1805,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1786,7 +1813,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
 
 
 -- Function: extensions.pgp_sym_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -2973,6 +3000,25 @@ END;
 $function$
 
 
+-- Function: public.check_boq_mappings
+CREATE OR REPLACE FUNCTION public.check_boq_mappings(p_new_tender_id uuid)
+ RETURNS TABLE(mapping_type text, item_type text, count bigint)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    SELECT
+        bm.mapping_type,
+        bm.item_type,
+        COUNT(*) as cnt
+    FROM boq_item_version_mappings bm
+    WHERE bm.new_tender_id = p_new_tender_id
+    GROUP BY bm.mapping_type, bm.item_type
+    ORDER BY bm.mapping_type, bm.item_type;
+END;
+$function$
+
+
 -- Function: public.check_delivery_consistency_boq
 CREATE OR REPLACE FUNCTION public.check_delivery_consistency_boq()
  RETURNS trigger
@@ -3002,6 +3048,27 @@ BEGIN
     END IF;
     
     RETURN NEW;
+END;
+$function$
+
+
+-- Function: public.check_transfer_functions
+CREATE OR REPLACE FUNCTION public.check_transfer_functions()
+ RETURNS TABLE(function_name text, parameters text, return_type text, is_available boolean)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    SELECT
+        p.proname::TEXT as function_name,
+        pg_get_function_arguments(p.oid)::TEXT as parameters,
+        pg_get_function_result(p.oid)::TEXT as return_type,
+        true as is_available
+    FROM pg_proc p
+    JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public'
+    AND p.proname LIKE '%transfer%'
+    ORDER BY p.proname;
 END;
 $function$
 
@@ -3146,6 +3213,248 @@ BEGIN
     
     -- Сбрасываем счетчики если нужно
     -- PERFORM setval('category_location_mapping_id_seq', 1, false);
+END;
+$function$
+
+
+-- Function: public.complete_version_transfer
+-- Description: Переносит все данные между версиями с генерацией правильных item_numbers
+CREATE OR REPLACE FUNCTION public.complete_version_transfer(p_old_tender_id uuid, p_new_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_mapping RECORD;
+    v_result JSON;
+    v_total_boq INTEGER := 0;
+    v_total_positions INTEGER := 0;
+    v_total_links INTEGER := 0;
+    v_dop_result JSON;
+    v_old_boq RECORD;
+    v_new_boq_id UUID;
+    v_dop_count INTEGER := 0;
+    v_new_dop_id UUID;
+    v_new_parent_id UUID;
+    v_new_position RECORD;
+BEGIN
+    RAISE NOTICE 'Starting transfer from % to %', p_old_tender_id, p_new_tender_id;
+
+    -- Переносим BOQ items для всех замапленных позиций
+    FOR v_mapping IN
+        SELECT * FROM tender_version_mappings
+        WHERE new_tender_id = p_new_tender_id
+        AND old_position_id IS NOT NULL
+        AND new_position_id IS NOT NULL
+        AND mapping_status != 'rejected'
+    LOOP
+        -- Получаем информацию о новой позиции
+        SELECT * INTO v_new_position
+        FROM client_positions
+        WHERE id = v_mapping.new_position_id;
+
+        -- Проверяем, что функция transfer_boq_with_mapping существует
+        BEGIN
+            v_result := transfer_boq_with_mapping(v_mapping.id);
+
+            IF (v_result->>'success')::boolean THEN
+                v_total_boq := v_total_boq + COALESCE((v_result->>'boq_items_mapped')::integer, 0);
+                v_total_positions := v_total_positions + 1;
+            END IF;
+        EXCEPTION
+            WHEN undefined_function THEN
+                -- Если функция не существует, делаем прямое копирование
+                RAISE NOTICE 'Function transfer_boq_with_mapping not found, using direct copy';
+
+                -- Удаляем существующие BOQ items в новой позиции
+                DELETE FROM boq_items WHERE client_position_id = v_mapping.new_position_id;
+
+                -- Копируем BOQ items напрямую с правильными item_numbers
+                FOR v_old_boq IN
+                    SELECT * FROM boq_items
+                    WHERE client_position_id = v_mapping.old_position_id
+                LOOP
+                    INSERT INTO boq_items (
+                        tender_id, client_position_id, item_number, sub_number,
+                        sort_order, item_type, description, unit, quantity, unit_rate,
+                        material_id, work_id, consumption_coefficient, conversion_coefficient,
+                        delivery_price_type, delivery_amount, base_quantity,
+                        detail_cost_category_id, total_amount,
+                        currency_type, currency_rate,
+                        created_at, updated_at
+                    )
+                    VALUES (
+                        p_new_tender_id,
+                        v_mapping.new_position_id,
+                        v_new_position.position_number || '.' || v_old_boq.sub_number, -- Исправленная генерация
+                        v_old_boq.sub_number,
+                        v_old_boq.sort_order,
+                        v_old_boq.item_type,
+                        v_old_boq.description,
+                        v_old_boq.unit,
+                        v_old_boq.quantity,
+                        v_old_boq.unit_rate,
+                        v_old_boq.material_id,
+                        v_old_boq.work_id,
+                        v_old_boq.consumption_coefficient,
+                        v_old_boq.conversion_coefficient,
+                        v_old_boq.delivery_price_type,
+                        v_old_boq.delivery_amount,
+                        v_old_boq.base_quantity,
+                        v_old_boq.detail_cost_category_id,
+                        v_old_boq.total_amount,
+                        v_old_boq.currency_type,
+                        v_old_boq.currency_rate,
+                        now(),
+                        now()
+                    );
+
+                    v_total_boq := v_total_boq + 1;
+                END LOOP;
+
+                v_total_positions := v_total_positions + 1;
+        END;
+    END LOOP;
+
+    -- Переносим ДОП позиции
+    v_dop_result := transfer_dop_positions(p_new_tender_id, p_old_tender_id);
+
+    RETURN json_build_object(
+        'success', true,
+        'positions_transferred', v_total_positions,
+        'boq_items_transferred', v_total_boq,
+        'dop_result', v_dop_result
+    );
+END;
+$function$
+
+
+-- Function: public.complete_version_transfer_with_links
+-- Description: Переносит BOQ items (включая валютные поля), ДОП позиции и work_material_links между версиями тендера
+CREATE OR REPLACE FUNCTION public.complete_version_transfer_with_links(p_old_tender_id uuid, p_new_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_main_result JSON;
+    v_total_links INTEGER := 0;
+    v_mapping RECORD;
+    v_link RECORD;
+    v_old_boq RECORD;
+    v_new_work_id UUID;
+    v_new_mat_id UUID;
+    v_new_sub_work_id UUID;
+    v_new_sub_mat_id UUID;
+BEGIN
+    -- Вызываем основную функцию переноса (теперь с валютными полями)
+    v_main_result := complete_version_transfer(p_old_tender_id, p_new_tender_id);
+
+    -- Переносим work_material_links для каждого маппинга
+    FOR v_mapping IN
+        SELECT * FROM tender_version_mappings
+        WHERE new_tender_id = p_new_tender_id
+        AND old_position_id IS NOT NULL
+        AND new_position_id IS NOT NULL
+    LOOP
+        -- Удаляем существующие links в новой позиции
+        DELETE FROM work_material_links WHERE client_position_id = v_mapping.new_position_id;
+
+        -- Переносим каждый link
+        FOR v_link IN
+            SELECT * FROM work_material_links
+            WHERE client_position_id = v_mapping.old_position_id
+        LOOP
+            -- Находим соответствующие BOQ items в новой позиции по item_number
+            IF v_link.work_boq_item_id IS NOT NULL THEN
+                SELECT b_old.item_number, b_old.sub_number INTO v_old_boq
+                FROM boq_items b_old WHERE b_old.id = v_link.work_boq_item_id;
+
+                SELECT id INTO v_new_work_id FROM boq_items
+                WHERE client_position_id = v_mapping.new_position_id
+                AND item_number = v_old_boq.item_number
+                AND COALESCE(sub_number, 0) = COALESCE(v_old_boq.sub_number, 0)
+                AND item_type IN ('work', 'sub_work')
+                LIMIT 1;
+            END IF;
+
+            IF v_link.material_boq_item_id IS NOT NULL THEN
+                SELECT b_old.item_number, b_old.sub_number INTO v_old_boq
+                FROM boq_items b_old WHERE b_old.id = v_link.material_boq_item_id;
+
+                SELECT id INTO v_new_mat_id FROM boq_items
+                WHERE client_position_id = v_mapping.new_position_id
+                AND item_number = v_old_boq.item_number
+                AND COALESCE(sub_number, 0) = COALESCE(v_old_boq.sub_number, 0)
+                AND item_type IN ('material', 'sub_material')
+                LIMIT 1;
+            END IF;
+
+            IF v_link.sub_work_boq_item_id IS NOT NULL THEN
+                SELECT b_old.item_number, b_old.sub_number INTO v_old_boq
+                FROM boq_items b_old WHERE b_old.id = v_link.sub_work_boq_item_id;
+
+                SELECT id INTO v_new_sub_work_id FROM boq_items
+                WHERE client_position_id = v_mapping.new_position_id
+                AND item_number = v_old_boq.item_number
+                AND COALESCE(sub_number, 0) = COALESCE(v_old_boq.sub_number, 0)
+                AND item_type = 'sub_work'
+                LIMIT 1;
+            END IF;
+
+            IF v_link.sub_material_boq_item_id IS NOT NULL THEN
+                SELECT b_old.item_number, b_old.sub_number INTO v_old_boq
+                FROM boq_items b_old WHERE b_old.id = v_link.sub_material_boq_item_id;
+
+                SELECT id INTO v_new_sub_mat_id FROM boq_items
+                WHERE client_position_id = v_mapping.new_position_id
+                AND item_number = v_old_boq.item_number
+                AND COALESCE(sub_number, 0) = COALESCE(v_old_boq.sub_number, 0)
+                AND item_type = 'sub_material'
+                LIMIT 1;
+            END IF;
+
+            -- Создаем новый link только если есть хотя бы одна пара work-material
+            IF (v_new_work_id IS NOT NULL AND v_new_mat_id IS NOT NULL) OR
+               (v_new_work_id IS NOT NULL AND v_new_sub_mat_id IS NOT NULL) OR
+               (v_new_sub_work_id IS NOT NULL AND v_new_mat_id IS NOT NULL) OR
+               (v_new_sub_work_id IS NOT NULL AND v_new_sub_mat_id IS NOT NULL) THEN
+
+                INSERT INTO work_material_links (
+                    client_position_id, work_boq_item_id, material_boq_item_id,
+                    sub_work_boq_item_id, sub_material_boq_item_id, notes,
+                    delivery_price_type, delivery_amount, material_quantity_per_work,
+                    usage_coefficient, created_at, updated_at
+                )
+                VALUES (
+                    v_mapping.new_position_id, v_new_work_id, v_new_mat_id,
+                    v_new_sub_work_id, v_new_sub_mat_id, v_link.notes,
+                    v_link.delivery_price_type, v_link.delivery_amount,
+                    v_link.material_quantity_per_work, v_link.usage_coefficient,
+                    now(), now()
+                );
+
+                v_total_links := v_total_links + 1;
+            END IF;
+
+            -- Сбрасываем переменные
+            v_new_work_id := NULL;
+            v_new_mat_id := NULL;
+            v_new_sub_work_id := NULL;
+            v_new_sub_mat_id := NULL;
+        END LOOP;
+    END LOOP;
+
+    -- Добавляем информацию о links в результат
+    RETURN json_build_object(
+        'success', (v_main_result->>'success')::boolean,
+        'positions_transferred', v_main_result->>'positions_transferred',
+        'boq_items_transferred', v_main_result->>'boq_items_transferred',
+        'dop_result', v_main_result->'dop_result',
+        'links_transferred', v_total_links
+    );
 END;
 $function$
 
@@ -3336,6 +3645,159 @@ BEGIN
     WHERE (p_category_name IS NULL OR cp.name ILIKE '%' || p_category_name || '%')
     ORDER BY cn.path
     LIMIT p_limit;
+END;
+$function$
+
+
+-- Function: public.debug_transfer_mapping
+CREATE OR REPLACE FUNCTION public.debug_transfer_mapping(p_mapping_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping RECORD;
+    v_old_boq_count INTEGER;
+    v_new_boq_count INTEGER;
+    v_old_links_count INTEGER;
+    v_old_tender_id UUID;
+    v_new_tender_id UUID;
+BEGIN
+    -- Получаем маппинг
+    SELECT * INTO v_mapping
+    FROM tender_version_mappings
+    WHERE id = p_mapping_id;
+
+    IF NOT FOUND THEN
+        RETURN json_build_object(
+            'error', 'Mapping not found',
+            'mapping_id', p_mapping_id
+        );
+    END IF;
+
+    -- Получаем tender_id для старой позиции
+    SELECT tender_id INTO v_old_tender_id
+    FROM client_positions
+    WHERE id = v_mapping.old_position_id;
+
+    -- Получаем tender_id для новой позиции
+    SELECT tender_id INTO v_new_tender_id
+    FROM client_positions
+    WHERE id = v_mapping.new_position_id;
+
+    -- Считаем BOQ items в старой позиции
+    SELECT COUNT(*) INTO v_old_boq_count
+    FROM boq_items
+    WHERE client_position_id = v_mapping.old_position_id;
+
+    -- Считаем BOQ items в новой позиции
+    SELECT COUNT(*) INTO v_new_boq_count
+    FROM boq_items
+    WHERE client_position_id = v_mapping.new_position_id;
+
+    -- Считаем links в старой позиции
+    SELECT COUNT(*) INTO v_old_links_count
+    FROM work_material_links
+    WHERE client_position_id = v_mapping.old_position_id;
+
+    RETURN json_build_object(
+        'mapping_id', p_mapping_id,
+        'old_position_id', v_mapping.old_position_id,
+        'new_position_id', v_mapping.new_position_id,
+        'old_tender_id', v_old_tender_id,
+        'new_tender_id', v_new_tender_id,
+        'old_boq_count', v_old_boq_count,
+        'new_boq_count', v_new_boq_count,
+        'old_links_count', v_old_links_count
+    );
+END;
+$function$
+
+
+-- Function: public.diagnose_tender_transfer
+CREATE OR REPLACE FUNCTION public.diagnose_tender_transfer(p_old_tender_id uuid, p_new_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_result JSON;
+    v_old_positions INTEGER;
+    v_new_positions INTEGER;
+    v_old_boq INTEGER;
+    v_new_boq INTEGER;
+    v_old_links INTEGER;
+    v_new_links INTEGER;
+    v_old_dop INTEGER;
+    v_new_dop INTEGER;
+    v_mappings INTEGER;
+BEGIN
+    -- Считаем позиции в старом тендере
+    SELECT COUNT(*) INTO v_old_positions
+    FROM client_positions
+    WHERE tender_id = p_old_tender_id
+    AND is_additional = false;
+
+    -- Считаем позиции в новом тендере
+    SELECT COUNT(*) INTO v_new_positions
+    FROM client_positions
+    WHERE tender_id = p_new_tender_id
+    AND is_additional = false;
+
+    -- Считаем BOQ items в старом тендере
+    SELECT COUNT(*) INTO v_old_boq
+    FROM boq_items
+    WHERE tender_id = p_old_tender_id;
+
+    -- Считаем BOQ items в новом тендере
+    SELECT COUNT(*) INTO v_new_boq
+    FROM boq_items
+    WHERE tender_id = p_new_tender_id;
+
+    -- Считаем links в старом тендере
+    SELECT COUNT(*) INTO v_old_links
+    FROM work_material_links wml
+    JOIN client_positions cp ON cp.id = wml.client_position_id
+    WHERE cp.tender_id = p_old_tender_id;
+
+    -- Считаем links в новом тендере
+    SELECT COUNT(*) INTO v_new_links
+    FROM work_material_links wml
+    JOIN client_positions cp ON cp.id = wml.client_position_id
+    WHERE cp.tender_id = p_new_tender_id;
+
+    -- Считаем ДОП позиции в старом тендере
+    SELECT COUNT(*) INTO v_old_dop
+    FROM client_positions
+    WHERE tender_id = p_old_tender_id
+    AND is_additional = true;
+
+    -- Считаем ДОП позиции в новом тендере
+    SELECT COUNT(*) INTO v_new_dop
+    FROM client_positions
+    WHERE tender_id = p_new_tender_id
+    AND is_additional = true;
+
+    -- Считаем маппинги
+    SELECT COUNT(*) INTO v_mappings
+    FROM tender_version_mappings
+    WHERE new_tender_id = p_new_tender_id;
+
+    RETURN json_build_object(
+        'old_tender', json_build_object(
+            'id', p_old_tender_id,
+            'positions', v_old_positions,
+            'boq_items', v_old_boq,
+            'links', v_old_links,
+            'dop_positions', v_old_dop
+        ),
+        'new_tender', json_build_object(
+            'id', p_new_tender_id,
+            'positions', v_new_positions,
+            'boq_items', v_new_boq,
+            'links', v_new_links,
+            'dop_positions', v_new_dop
+        ),
+        'mappings', v_mappings
+    );
 END;
 $function$
 
@@ -4430,7 +4892,7 @@ $function$
 
 
 -- Function: public.index
-CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
  RETURNS integer
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4438,7 +4900,7 @@ AS '$libdir/ltree', $function$ltree_index$function$
 
 
 -- Function: public.index
-CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
  RETURNS integer
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4475,39 +4937,7 @@ AS $function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4523,7 +4953,7 @@ AS '$libdir/ltree', $function$_lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4532,6 +4962,38 @@ AS '$libdir/ltree', $function$lca$function$
 
 -- Function: public.lca
 CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4880,6 +5342,60 @@ CREATE OR REPLACE FUNCTION public.nlevel(ltree)
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/ltree', $function$nlevel$function$
+
+
+-- Function: public.rebuild_boq_mappings
+CREATE OR REPLACE FUNCTION public.rebuild_boq_mappings(p_old_tender_id uuid, p_new_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping RECORD;
+    v_old_boq RECORD;
+    v_new_boq RECORD;
+    v_mapped INTEGER := 0;
+BEGIN
+    -- Очищаем старые маппинги
+    DELETE FROM boq_item_version_mappings
+    WHERE new_tender_id = p_new_tender_id;
+
+    -- Создаем маппинги на основе позиций и item_number
+    FOR v_mapping IN
+        SELECT * FROM tender_version_mappings
+        WHERE new_tender_id = p_new_tender_id
+    LOOP
+        FOR v_old_boq IN
+            SELECT * FROM boq_items
+            WHERE client_position_id = v_mapping.old_position_id
+        LOOP
+            -- Ищем соответствующий новый BOQ по item_number
+            SELECT * INTO v_new_boq
+            FROM boq_items
+            WHERE client_position_id = v_mapping.new_position_id
+            AND item_number = v_old_boq.item_number
+            AND COALESCE(sub_number, '') = COALESCE(v_old_boq.sub_number, '')
+            LIMIT 1;
+
+            IF FOUND THEN
+                PERFORM save_boq_mapping(
+                    v_old_boq.id,
+                    v_new_boq.id,
+                    p_old_tender_id,
+                    p_new_tender_id,
+                    v_mapping.id,
+                    'rebuild'
+                );
+                v_mapped := v_mapped + 1;
+            END IF;
+        END LOOP;
+    END LOOP;
+
+    RETURN json_build_object(
+        'success', true,
+        'mappings_created', v_mapped
+    );
+END;
+$function$
 
 
 -- Function: public.recalculate_client_position_totals
@@ -5286,6 +5802,28 @@ END;
 $function$
 
 
+-- Function: public.rpc_transfer_boq
+CREATE OR REPLACE FUNCTION public.rpc_transfer_boq(mapping_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN transfer_mapping_data(mapping_id);
+END;
+$function$
+
+
+-- Function: public.rpc_transfer_dop
+CREATE OR REPLACE FUNCTION public.rpc_transfer_dop(new_tender_id uuid, old_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN transfer_dop_positions_fixed(new_tender_id, old_tender_id);
+END;
+$function$
+
+
 -- Function: public.safe_upsert_cost_category
 -- Description: Безопасное создание или обновление категории затрат
 CREATE OR REPLACE FUNCTION public.safe_upsert_cost_category(p_name text, p_description text DEFAULT NULL::text, p_sort_order integer DEFAULT 0)
@@ -5404,6 +5942,56 @@ BEGIN
         updated_at = NOW()
     RETURNING id INTO v_mapping_id;
     
+    RETURN v_mapping_id;
+END;
+$function$
+
+
+-- Function: public.save_boq_mapping
+CREATE OR REPLACE FUNCTION public.save_boq_mapping(p_old_boq_id uuid, p_new_boq_id uuid, p_old_tender_id uuid, p_new_tender_id uuid, p_position_mapping_id uuid DEFAULT NULL::uuid, p_mapping_type text DEFAULT 'auto'::text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping_id UUID;
+    v_item_info RECORD;
+BEGIN
+    -- Получаем информацию о BOQ item
+    SELECT item_number, description, item_type
+    INTO v_item_info
+    FROM boq_items
+    WHERE id = p_old_boq_id;
+
+    -- Вставляем или обновляем маппинг
+    INSERT INTO boq_item_version_mappings (
+        old_boq_item_id,
+        new_boq_item_id,
+        old_tender_id,
+        new_tender_id,
+        position_mapping_id,
+        mapping_type,
+        item_number,
+        description,
+        item_type
+    )
+    VALUES (
+        p_old_boq_id,
+        p_new_boq_id,
+        p_old_tender_id,
+        p_new_tender_id,
+        p_position_mapping_id,
+        p_mapping_type,
+        v_item_info.item_number,
+        v_item_info.description,
+        v_item_info.item_type
+    )
+    ON CONFLICT (old_boq_item_id, new_tender_id)
+    DO UPDATE SET
+        new_boq_item_id = EXCLUDED.new_boq_item_id,
+        mapping_type = EXCLUDED.mapping_type,
+        position_mapping_id = EXCLUDED.position_mapping_id
+    RETURNING id INTO v_mapping_id;
+
     RETURN v_mapping_id;
 END;
 $function$
@@ -5566,6 +6154,238 @@ CREATE OR REPLACE FUNCTION public.similarity_op(text, text)
 AS '$libdir/pg_trgm', $function$similarity_op$function$
 
 
+-- Function: public.simple_transfer_all_data
+CREATE OR REPLACE FUNCTION public.simple_transfer_all_data(p_old_tender_id uuid, p_new_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping RECORD;
+    v_total_boq INTEGER := 0;
+    v_total_positions INTEGER := 0;
+    v_dop_positions INTEGER := 0;
+    v_result JSON;
+    v_old_dop RECORD;
+    v_new_parent_id UUID;
+    v_new_dop_id UUID;
+BEGIN
+    RAISE NOTICE 'Starting simple transfer from % to %', p_old_tender_id, p_new_tender_id;
+
+    -- 1. Переносим BOQ items для всех замапленных позиций
+    FOR v_mapping IN
+        SELECT * FROM tender_version_mappings
+        WHERE new_tender_id = p_new_tender_id
+        AND old_position_id IS NOT NULL
+        AND new_position_id IS NOT NULL
+        AND mapping_status != 'rejected'
+    LOOP
+        v_result := transfer_single_mapping(v_mapping.id);
+
+        IF (v_result->>'success')::boolean THEN
+            v_total_boq := v_total_boq + COALESCE((v_result->>'boq_transferred')::integer, 0);
+            v_total_positions := v_total_positions + 1;
+        END IF;
+    END LOOP;
+
+    -- 2. Переносим ДОП позиции
+    FOR v_old_dop IN
+        SELECT * FROM client_positions
+        WHERE tender_id = p_old_tender_id
+        AND is_additional = true
+    LOOP
+        -- Находим новый parent_id через маппинг
+        IF v_old_dop.parent_position_id IS NOT NULL THEN
+            SELECT new_position_id INTO v_new_parent_id
+            FROM tender_version_mappings
+            WHERE old_position_id = v_old_dop.parent_position_id
+            AND new_tender_id = p_new_tender_id
+            LIMIT 1;
+
+            -- Если нашли родителя, создаем ДОП позицию
+            IF v_new_parent_id IS NOT NULL THEN
+                INSERT INTO client_positions (
+                    tender_id,
+                    position_number,
+                    work_name,
+                    parent_position_id,
+                    is_additional,
+                    unit,
+                    volume,
+                    manual_volume,
+                    client_note,
+                    item_no,
+                    manual_note,
+                    position_type,
+                    hierarchy_level,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    p_new_tender_id,
+                    v_old_dop.position_number,
+                    v_old_dop.work_name,
+                    v_new_parent_id,
+                    true,
+                    v_old_dop.unit,
+                    v_old_dop.volume,
+                    v_old_dop.manual_volume,
+                    v_old_dop.client_note,
+                    v_old_dop.item_no,
+                    v_old_dop.manual_note,
+                    v_old_dop.position_type,
+                    v_old_dop.hierarchy_level,
+                    now(),
+                    now()
+                )
+                RETURNING id INTO v_new_dop_id;
+
+                IF v_new_dop_id IS NOT NULL THEN
+                    v_dop_positions := v_dop_positions + 1;
+
+                    -- Копируем BOQ items для ДОП позиции
+                    INSERT INTO boq_items (
+                        tender_id,
+                        client_position_id,
+                        item_number,
+                        sub_number,
+                        sort_order,
+                        item_type,
+                        description,
+                        unit,
+                        quantity,
+                        unit_rate,
+                        material_id,
+                        work_id,
+                        consumption_coefficient,
+                        conversion_coefficient,
+                        delivery_price_type,
+                        delivery_amount,
+                        base_quantity,
+                        detail_cost_category_id,
+                        total_amount,
+                        created_at,
+                        updated_at
+                    )
+                    SELECT
+                        p_new_tender_id,
+                        v_new_dop_id,
+                        item_number,
+                        sub_number,
+                        sort_order,
+                        item_type,
+                        description,
+                        unit,
+                        quantity,
+                        unit_rate,
+                        material_id,
+                        work_id,
+                        consumption_coefficient,
+                        conversion_coefficient,
+                        delivery_price_type,
+                        delivery_amount,
+                        base_quantity,
+                        detail_cost_category_id,
+                        total_amount,
+                        now(),
+                        now()
+                    FROM boq_items
+                    WHERE client_position_id = v_old_dop.id;
+                END IF;
+            END IF;
+        END IF;
+    END LOOP;
+
+    RAISE NOTICE 'Transfer complete: % positions, % BOQ items, % DOP positions',
+        v_total_positions, v_total_boq, v_dop_positions;
+
+    RETURN json_build_object(
+        'success', true,
+        'positions_transferred', v_total_positions,
+        'boq_items_transferred', v_total_boq,
+        'dop_positions', v_dop_positions
+    );
+END;
+$function$
+
+
+-- Function: public.simple_transfer_boq
+CREATE OR REPLACE FUNCTION public.simple_transfer_boq(p_old_position_id uuid, p_new_position_id uuid, p_new_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_count INTEGER;
+    v_transferred INTEGER;
+BEGIN
+    -- Считаем сколько есть
+    SELECT COUNT(*) INTO v_count
+    FROM boq_items
+    WHERE client_position_id = p_old_position_id;
+
+    -- Удаляем существующие в новой позиции
+    DELETE FROM boq_items
+    WHERE client_position_id = p_new_position_id;
+
+    -- Переносим
+    INSERT INTO boq_items (
+        tender_id,
+        client_position_id,
+        item_number,
+        sub_number,
+        sort_order,
+        item_type,
+        description,
+        unit,
+        quantity,
+        unit_rate,
+        material_id,
+        work_id,
+        consumption_coefficient,
+        conversion_coefficient,
+        delivery_price_type,
+        delivery_amount,
+        base_quantity,
+        detail_cost_category_id,
+        total_amount,
+        created_at,
+        updated_at
+    )
+    SELECT
+        p_new_tender_id,
+        p_new_position_id,
+        item_number,
+        sub_number,
+        sort_order,
+        item_type,
+        description,
+        unit,
+        quantity,
+        unit_rate,
+        material_id,
+        work_id,
+        consumption_coefficient,
+        conversion_coefficient,
+        delivery_price_type,
+        delivery_amount,
+        base_quantity,
+        detail_cost_category_id,
+        total_amount,
+        now(),
+        now()
+    FROM boq_items
+    WHERE client_position_id = p_old_position_id;
+
+    GET DIAGNOSTICS v_transferred = ROW_COUNT;
+
+    RETURN json_build_object(
+        'success', true,
+        'found', v_count,
+        'transferred', v_transferred
+    );
+END;
+$function$
+
+
 -- Function: public.strict_word_similarity
 CREATE OR REPLACE FUNCTION public.strict_word_similarity(text, text)
  RETURNS real
@@ -5682,6 +6502,158 @@ END;
 $function$
 
 
+-- Function: public.test_mapping_transfer
+CREATE OR REPLACE FUNCTION public.test_mapping_transfer(p_mapping_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping RECORD;
+    v_old_boq INTEGER;
+    v_old_links INTEGER;
+    v_result JSON;
+    v_new_boq INTEGER;
+    v_new_links INTEGER;
+BEGIN
+    -- Получаем маппинг
+    SELECT * INTO v_mapping
+    FROM tender_version_mappings
+    WHERE id = p_mapping_id;
+
+    IF NOT FOUND THEN
+        RETURN json_build_object('error', 'Mapping not found');
+    END IF;
+
+    -- Считаем данные ДО переноса
+    SELECT COUNT(*) INTO v_old_boq
+    FROM boq_items
+    WHERE client_position_id = v_mapping.old_position_id;
+
+    SELECT COUNT(*) INTO v_old_links
+    FROM work_material_links
+    WHERE client_position_id = v_mapping.old_position_id;
+
+    -- Выполняем перенос
+    v_result := transfer_mapping_data(p_mapping_id);
+
+    -- Считаем данные ПОСЛЕ переноса
+    SELECT COUNT(*) INTO v_new_boq
+    FROM boq_items
+    WHERE client_position_id = v_mapping.new_position_id;
+
+    SELECT COUNT(*) INTO v_new_links
+    FROM work_material_links
+    WHERE client_position_id = v_mapping.new_position_id;
+
+    RETURN json_build_object(
+        'mapping_id', p_mapping_id,
+        'before', json_build_object(
+            'old_position_boq', v_old_boq,
+            'old_position_links', v_old_links
+        ),
+        'transfer_result', v_result,
+        'after', json_build_object(
+            'new_position_boq', v_new_boq,
+            'new_position_links', v_new_links
+        )
+    );
+END;
+$function$
+
+
+-- Function: public.test_single_mapping_transfer
+CREATE OR REPLACE FUNCTION public.test_single_mapping_transfer(p_mapping_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_before JSON;
+    v_transfer_result JSON;
+    v_after JSON;
+BEGIN
+    -- Снимок до переноса
+    v_before := debug_transfer_mapping(p_mapping_id);
+
+    -- Выполняем перенос
+    v_transfer_result := transfer_boq_items_with_creation(p_mapping_id);
+
+    -- Снимок после переноса
+    v_after := debug_transfer_mapping(p_mapping_id);
+
+    RETURN json_build_object(
+        'before', v_before,
+        'transfer_result', v_transfer_result,
+        'after', v_after
+    );
+END;
+$function$
+
+
+-- Function: public.test_versioning_transfer
+-- Description: Тестовая функция для проверки переноса версий
+CREATE OR REPLACE FUNCTION public.test_versioning_transfer(p_old_tender_id uuid, p_new_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_result JSON;
+    v_stats JSON;
+    v_position_count INTEGER := 0;
+    v_dop_count INTEGER := 0;
+    v_links_count INTEGER := 0;
+BEGIN
+    RAISE NOTICE '🧪 Testing versioning transfer from % to %', p_old_tender_id, p_new_tender_id;
+
+    -- Считаем позиции
+    SELECT COUNT(*) INTO v_position_count
+    FROM tender_version_mappings
+    WHERE old_tender_id = p_old_tender_id
+    AND new_tender_id = p_new_tender_id;
+
+    -- Считаем ДОП позиции в старом тендере
+    SELECT COUNT(*) INTO v_dop_count
+    FROM client_positions
+    WHERE tender_id = p_old_tender_id
+    AND is_additional = true;
+
+    -- Считаем work_material_links в старом тендере
+    SELECT COUNT(*) INTO v_links_count
+    FROM work_material_links wml
+    INNER JOIN client_positions cp ON cp.id = wml.client_position_id
+    WHERE cp.tender_id = p_old_tender_id;
+
+    v_stats := json_build_object(
+        'mappings_count', v_position_count,
+        'old_dop_positions', v_dop_count,
+        'old_work_material_links', v_links_count
+    );
+
+    RAISE NOTICE '📊 Stats: %', v_stats;
+
+    -- Проверяем результаты в новом тендере
+    SELECT COUNT(*) INTO v_dop_count
+    FROM client_positions
+    WHERE tender_id = p_new_tender_id
+    AND is_additional = true;
+
+    SELECT COUNT(*) INTO v_links_count
+    FROM work_material_links wml
+    INNER JOIN client_positions cp ON cp.id = wml.client_position_id
+    WHERE cp.tender_id = p_new_tender_id;
+
+    v_result := json_build_object(
+        'before', v_stats,
+        'after', json_build_object(
+            'new_dop_positions', v_dop_count,
+            'new_work_material_links', v_links_count
+        )
+    );
+
+    RETURN v_result;
+END;
+$function$
+
+
 -- Function: public.text2ltree
 CREATE OR REPLACE FUNCTION public.text2ltree(text)
  RETURNS ltree
@@ -5690,9 +6662,267 @@ CREATE OR REPLACE FUNCTION public.text2ltree(text)
 AS '$libdir/ltree', $function$text2ltree$function$
 
 
+-- Function: public.transfer_all_tender_data
+-- Description: Комплексный перенос всех данных между версиями тендера включая work_material_links и ДОП позиции
+CREATE OR REPLACE FUNCTION public.transfer_all_tender_data(p_old_tender_id uuid, p_new_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_old_position RECORD;
+    v_new_position RECORD;
+    v_links_result JSON;
+    v_dop_result JSON;
+    v_positions_count INTEGER := 0;
+    v_links_count INTEGER := 0;
+    v_result JSON;
+BEGIN
+    RAISE NOTICE 'Starting comprehensive data transfer from tender % to %',
+        p_old_tender_id, p_new_tender_id;
+
+    -- Переносим work_material_links для всех обычных позиций
+    FOR v_old_position IN
+        SELECT old_pos.*
+        FROM client_positions old_pos
+        WHERE old_pos.tender_id = p_old_tender_id
+        AND old_pos.is_additional = false
+    LOOP
+        SELECT * INTO v_new_position
+        FROM client_positions
+        WHERE tender_id = p_new_tender_id
+        AND position_number = v_old_position.position_number
+        AND is_additional = false
+        LIMIT 1;
+
+        IF v_new_position.id IS NOT NULL THEN
+            v_links_result := transfer_work_material_links(
+                v_old_position.id,
+                v_new_position.id
+            );
+
+            IF (v_links_result->>'success')::boolean THEN
+                v_links_count := v_links_count + (v_links_result->>'links_transferred')::integer;
+                RAISE NOTICE 'Transferred % links for position %',
+                    v_links_result->>'links_transferred', v_old_position.position_number;
+            END IF;
+
+            v_positions_count := v_positions_count + 1;
+        END IF;
+    END LOOP;
+
+    -- Переносим ДОП позиции (с ПРАВИЛЬНЫМ порядком параметров!)
+    v_dop_result := transfer_dop_positions(p_new_tender_id, p_old_tender_id);
+
+    v_result := json_build_object(
+        'success', true,
+        'positions_processed', v_positions_count,
+        'links_transferred', v_links_count,
+        'dop_positions_transferred', (v_dop_result->>'dopCount')::integer,
+        'message', format('Processed %s positions, transferred %s links and %s DOP positions',
+            v_positions_count, v_links_count, v_dop_result->>'dopCount')
+    );
+
+    RAISE NOTICE 'Transfer complete: %', v_result;
+    RETURN v_result;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error in comprehensive transfer: %', SQLERRM;
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM,
+            'positions_processed', v_positions_count,
+            'links_transferred', v_links_count
+        );
+END;
+$function$
+
+
+-- Function: public.transfer_all_version_data
+CREATE OR REPLACE FUNCTION public.transfer_all_version_data(p_old_tender_id uuid, p_new_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping RECORD;
+    v_result JSON;
+    v_boq_total INTEGER := 0;
+    v_links_total INTEGER := 0;
+    v_dop_result JSON;
+    v_mappings_processed INTEGER := 0;
+BEGIN
+    RAISE NOTICE 'Starting complete transfer from % to %', p_old_tender_id, p_new_tender_id;
+
+    -- Переносим данные для каждого маппинга
+    FOR v_mapping IN
+        SELECT id FROM tender_version_mappings
+        WHERE new_tender_id = p_new_tender_id
+    LOOP
+        v_result := transfer_mapping_data(v_mapping.id);
+
+        IF (v_result->>'success')::boolean THEN
+            v_boq_total := v_boq_total + ((v_result->'boq')->>'boq_transferred')::integer;
+            v_links_total := v_links_total + ((v_result->'links')->>'links_transferred')::integer;
+            v_mappings_processed := v_mappings_processed + 1;
+        END IF;
+    END LOOP;
+
+    -- Переносим ДОП позиции
+    v_dop_result := transfer_dop_positions_fixed(p_new_tender_id, p_old_tender_id);
+
+    RETURN json_build_object(
+        'success', true,
+        'mappings_processed', v_mappings_processed,
+        'boq_items_transferred', v_boq_total,
+        'links_transferred', v_links_total,
+        'dop_positions', v_dop_result
+    );
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM
+        );
+END;
+$function$
+
+
 -- Function: public.transfer_boq_items
--- Description: Переносит все BOQ items из старой позиции в новую согласно маппингу
 CREATE OR REPLACE FUNCTION public.transfer_boq_items(p_mapping_id uuid)
+ RETURNS boolean
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    -- Вызываем новую версию функции
+    RETURN transfer_boq_items_v2(p_mapping_id);
+END;
+$function$
+
+
+-- Function: public.transfer_boq_items_fixed
+CREATE OR REPLACE FUNCTION public.transfer_boq_items_fixed(p_mapping_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping RECORD;
+    v_boq_count INTEGER := 0;
+    v_transferred INTEGER := 0;
+    v_new_tender_id UUID;
+BEGIN
+    -- Получаем маппинг с JOIN для получения tender_id
+    SELECT
+        tvm.*,
+        cp_new.tender_id as new_tender_id
+    INTO v_mapping
+    FROM tender_version_mappings tvm
+    JOIN client_positions cp_new ON cp_new.id = tvm.new_position_id
+    WHERE tvm.id = p_mapping_id;
+
+    IF NOT FOUND THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', 'Mapping not found'
+        );
+    END IF;
+
+    v_new_tender_id := v_mapping.new_tender_id;
+
+    -- Считаем BOQ items в старой позиции
+    SELECT COUNT(*) INTO v_boq_count
+    FROM boq_items
+    WHERE client_position_id = v_mapping.old_position_id;
+
+    RAISE NOTICE 'Found % BOQ items in position %', v_boq_count, v_mapping.old_position_id;
+
+    IF v_boq_count > 0 THEN
+        -- Удаляем существующие BOQ items в новой позиции
+        DELETE FROM boq_items
+        WHERE client_position_id = v_mapping.new_position_id;
+
+        -- Переносим BOQ items
+        INSERT INTO boq_items (
+            tender_id,
+            client_position_id,
+            item_number,
+            sub_number,
+            sort_order,
+            item_type,
+            description,
+            unit,
+            quantity,
+            unit_rate,
+            material_id,
+            work_id,
+            consumption_coefficient,
+            conversion_coefficient,
+            delivery_price_type,
+            delivery_amount,
+            base_quantity,
+            detail_cost_category_id,
+            total_amount,
+            created_at,
+            updated_at
+        )
+        SELECT
+            v_new_tender_id,
+            v_mapping.new_position_id,
+            item_number,
+            sub_number,
+            sort_order,
+            item_type,
+            description,
+            unit,
+            quantity,
+            unit_rate,
+            material_id,
+            work_id,
+            consumption_coefficient,
+            conversion_coefficient,
+            delivery_price_type,
+            delivery_amount,
+            base_quantity,
+            detail_cost_category_id,
+            total_amount,
+            now(),
+            now()
+        FROM boq_items
+        WHERE client_position_id = v_mapping.old_position_id;
+
+        GET DIAGNOSTICS v_transferred = ROW_COUNT;
+        RAISE NOTICE 'Transferred % BOQ items', v_transferred;
+    END IF;
+
+    RETURN json_build_object(
+        'success', true,
+        'boq_found', v_boq_count,
+        'boq_transferred', v_transferred,
+        'mapping_id', p_mapping_id
+    );
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM
+        );
+END;
+$function$
+
+
+-- Function: public.transfer_boq_items_rpc
+CREATE OR REPLACE FUNCTION public.transfer_boq_items_rpc(mapping_id uuid)
+ RETURNS boolean
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN public.transfer_boq_items(mapping_id);
+END;
+$function$
+
+
+-- Function: public.transfer_boq_items_v2
+-- Description: Улучшенная версия переноса BOQ items с автоматическим переносом связей
+CREATE OR REPLACE FUNCTION public.transfer_boq_items_v2(p_mapping_id uuid)
  RETURNS boolean
  LANGUAGE plpgsql
 AS $function$
@@ -5700,30 +6930,30 @@ DECLARE
     v_mapping RECORD;
     v_inserted_count INTEGER := 0;
     v_new_tender_id UUID;
+    v_links_result JSON;
 BEGIN
-    -- Получаем информацию о маппинге
+    RAISE NOTICE '🔄 Starting transfer_boq_items_v2 for mapping %', p_mapping_id;
+
     SELECT * INTO v_mapping
     FROM tender_version_mappings
     WHERE id = p_mapping_id;
 
     IF NOT FOUND THEN
-        RAISE NOTICE 'Mapping not found: %', p_mapping_id;
+        RAISE NOTICE '❌ Mapping not found: %', p_mapping_id;
         RETURN FALSE;
     END IF;
 
-    -- Проверяем, что есть обе позиции
     IF v_mapping.old_position_id IS NULL OR v_mapping.new_position_id IS NULL THEN
-        RAISE NOTICE 'Missing position IDs in mapping: old=%, new=%',
+        RAISE NOTICE '❌ Missing position IDs in mapping: old=%, new=%',
             v_mapping.old_position_id, v_mapping.new_position_id;
         RETURN FALSE;
     END IF;
 
-    -- Получаем tender_id для новой версии
     SELECT tender_id INTO v_new_tender_id
     FROM client_positions
     WHERE id = v_mapping.new_position_id;
 
-    -- Переносим ВСЕ поля BOQ items из старой позиции в новую
+    -- Переносим BOQ items
     INSERT INTO boq_items (
         tender_id,
         client_position_id,
@@ -5755,8 +6985,8 @@ BEGIN
         updated_at
     )
     SELECT
-        v_new_tender_id,  -- Новый tender_id
-        v_mapping.new_position_id,  -- Новая позиция
+        v_new_tender_id,
+        v_mapping.new_position_id,
         item_number,
         sub_number,
         sort_order,
@@ -5786,94 +7016,96 @@ BEGIN
     FROM boq_items
     WHERE client_position_id = v_mapping.old_position_id;
 
-    -- Получаем количество перенесенных записей
     GET DIAGNOSTICS v_inserted_count = ROW_COUNT;
 
-    RAISE NOTICE 'Transferred % BOQ items from position % to %',
+    RAISE NOTICE '  ✓ Transferred % BOQ items from position % to %',
         v_inserted_count, v_mapping.old_position_id, v_mapping.new_position_id;
 
-    -- Обновляем статус маппинга только если были перенесены записи
-    IF v_inserted_count > 0 THEN
+    -- Используем новую функцию для переноса work_material_links
+    v_links_result := transfer_work_material_links_v2(
+        v_mapping.old_position_id,
+        v_mapping.new_position_id
+    );
+
+    RAISE NOTICE '  📎 Work_material_links transfer: %', v_links_result;
+
+    IF v_inserted_count > 0 OR (v_links_result->>'links_transferred')::int > 0 THEN
         UPDATE tender_version_mappings
-        SET mapping_status = 'applied',
-            updated_at = CURRENT_TIMESTAMP,
-            notes = COALESCE(notes, '') || ' | Transferred ' || v_inserted_count || ' BOQ items'
+        SET
+            mapping_status = 'applied',
+            updated_at = NOW()
         WHERE id = p_mapping_id;
+
+        RETURN TRUE;
     END IF;
 
-    RETURN TRUE;
+    RETURN FALSE;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE '❌ Error in transfer_boq_items_v2: %', SQLERRM;
+        RETURN FALSE;
 END;
 $function$
 
 
--- Function: public.transfer_dop_positions
--- Description: Переносит все ДОП позиции с их BOQ items в новую версию тендера
-CREATE OR REPLACE FUNCTION public.transfer_dop_positions(p_old_tender_id uuid, p_new_tender_id uuid)
- RETURNS integer
+-- Function: public.transfer_boq_items_with_creation
+CREATE OR REPLACE FUNCTION public.transfer_boq_items_with_creation(p_mapping_id uuid)
+ RETURNS json
  LANGUAGE plpgsql
 AS $function$
 DECLARE
-    v_dop_count INTEGER := 0;
-    v_dop_position RECORD;
-    v_new_position_id UUID;
+    v_mapping RECORD;
+    v_boq_count INTEGER := 0;
+    v_transferred_count INTEGER := 0;
+    v_links_count INTEGER := 0;
+    v_new_tender_id UUID;
+    v_debug_info JSON;
 BEGIN
-    -- Находим все ДОП позиции в старом тендере (используем флаг is_additional)
-    FOR v_dop_position IN
-        SELECT cp.*,
-               tvm.new_position_id as parent_new_position_id
-        FROM client_positions cp
-        LEFT JOIN tender_version_mappings tvm
-            ON tvm.old_position_id = cp.parent_position_id
-            AND tvm.new_tender_id = p_new_tender_id
-        WHERE cp.tender_id = p_old_tender_id
-        AND cp.is_additional = true  -- Используем флаг is_additional вместо position_type
-    LOOP
-        -- Создаем новую ДОП позицию со всеми полями
-        INSERT INTO client_positions (
-            tender_id,
-            position_number,
-            item_no,
-            work_name,
-            unit,
-            volume,
-            client_note,
-            manual_volume,
-            manual_note,
-            position_type,
-            hierarchy_level,
-            parent_position_id,
-            is_additional,
-            total_materials_cost,
-            total_works_cost,
-            total_commercial_materials_cost,
-            total_commercial_works_cost,
-            created_at,
-            updated_at
-        )
-        VALUES (
-            p_new_tender_id,
-            v_dop_position.position_number,
-            v_dop_position.item_no,
-            v_dop_position.work_name,
-            v_dop_position.unit,
-            v_dop_position.volume,
-            v_dop_position.client_note,
-            v_dop_position.manual_volume,
-            v_dop_position.manual_note,
-            v_dop_position.position_type,
-            v_dop_position.hierarchy_level,
-            v_dop_position.parent_new_position_id, -- Может быть NULL если родитель удален
-            true,  -- is_additional всегда true для ДОП
-            0, -- total_materials_cost
-            0, -- total_works_cost
-            0, -- total_commercial_materials_cost
-            0, -- total_commercial_works_cost
-            NOW(),
-            NOW()
-        )
-        RETURNING id INTO v_new_position_id;
+    -- Получаем данные маппинга с JOIN на позиции
+    SELECT
+        tvm.*,
+        cp_old.tender_id as old_tender_id,
+        cp_new.tender_id as new_tender_id
+    INTO v_mapping
+    FROM tender_version_mappings tvm
+    LEFT JOIN client_positions cp_old ON cp_old.id = tvm.old_position_id
+    LEFT JOIN client_positions cp_new ON cp_new.id = tvm.new_position_id
+    WHERE tvm.id = p_mapping_id;
 
-        -- Переносим BOQ items для этой ДОП позиции
+    IF NOT FOUND THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', format('Mapping not found: %s', p_mapping_id)
+        );
+    END IF;
+
+    IF v_mapping.old_position_id IS NULL OR v_mapping.new_position_id IS NULL THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', format('Invalid mapping: old=%s, new=%s', v_mapping.old_position_id, v_mapping.new_position_id)
+        );
+    END IF;
+
+    v_new_tender_id := v_mapping.new_tender_id;
+
+    RAISE NOTICE 'Processing mapping % : old_pos=%, new_pos=%, new_tender=%',
+        p_mapping_id, v_mapping.old_position_id, v_mapping.new_position_id, v_new_tender_id;
+
+    -- Считаем BOQ items в старой позиции
+    SELECT COUNT(*) INTO v_boq_count
+    FROM boq_items
+    WHERE client_position_id = v_mapping.old_position_id;
+
+    RAISE NOTICE 'Found % BOQ items in old position', v_boq_count;
+
+    -- Если есть BOQ items для переноса
+    IF v_boq_count > 0 THEN
+        -- Сначала удаляем существующие BOQ items в новой позиции
+        DELETE FROM boq_items
+        WHERE client_position_id = v_mapping.new_position_id;
+
+        -- Переносим BOQ items
         INSERT INTO boq_items (
             tender_id,
             client_position_id,
@@ -5894,19 +7126,12 @@ BEGIN
             base_quantity,
             detail_cost_category_id,
             total_amount,
-            commercial_cost,
-            commercial_markup_coefficient,
-            material_type,
-            currency_type,
-            currency_rate,
-            quote_link,
-            note,
             created_at,
             updated_at
         )
         SELECT
-            p_new_tender_id,
-            v_new_position_id,
+            v_new_tender_id,
+            v_mapping.new_position_id,
             item_number,
             sub_number,
             sort_order,
@@ -5924,23 +7149,1947 @@ BEGIN
             base_quantity,
             detail_cost_category_id,
             total_amount,
-            commercial_cost,
-            commercial_markup_coefficient,
-            material_type,
+            now(),
+            now()
+        FROM boq_items
+        WHERE client_position_id = v_mapping.old_position_id;
+
+        GET DIAGNOSTICS v_transferred_count = ROW_COUNT;
+        RAISE NOTICE 'Transferred % BOQ items', v_transferred_count;
+    END IF;
+
+    -- Переносим work_material_links
+    SELECT COUNT(*) INTO v_links_count
+    FROM work_material_links
+    WHERE client_position_id = v_mapping.old_position_id;
+
+    IF v_links_count > 0 THEN
+        -- Удаляем существующие links
+        DELETE FROM work_material_links
+        WHERE client_position_id = v_mapping.new_position_id;
+
+        -- Переносим links
+        INSERT INTO work_material_links (
+            client_position_id,
+            work_id,
+            material_id,
+            sub_work_id,
+            sub_material_id,
+            work_quantity,
+            material_quantity,
+            consumption_coefficient,
+            conversion_coefficient,
+            detail_cost_category_id,
+            created_at,
+            updated_at
+        )
+        SELECT
+            v_mapping.new_position_id,
+            work_id,
+            material_id,
+            sub_work_id,
+            sub_material_id,
+            work_quantity,
+            material_quantity,
+            consumption_coefficient,
+            conversion_coefficient,
+            detail_cost_category_id,
+            now(),
+            now()
+        FROM work_material_links
+        WHERE client_position_id = v_mapping.old_position_id;
+
+        GET DIAGNOSTICS v_links_count = ROW_COUNT;
+        RAISE NOTICE 'Transferred % work_material_links', v_links_count;
+    END IF;
+
+    -- Возвращаем детальный результат
+    RETURN json_build_object(
+        'success', true,
+        'mapping_id', p_mapping_id,
+        'old_position_id', v_mapping.old_position_id,
+        'new_position_id', v_mapping.new_position_id,
+        'boq_items_found', v_boq_count,
+        'boq_items_transferred', v_transferred_count,
+        'links_transferred', v_links_count
+    );
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM,
+            'mapping_id', p_mapping_id,
+            'detail', SQLSTATE
+        );
+END;
+$function$
+
+
+-- Function: public.transfer_boq_with_mapping
+-- Description: Переносит BOQ items на основе маппинга с правильными item_numbers
+CREATE OR REPLACE FUNCTION public.transfer_boq_with_mapping(p_mapping_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping RECORD;
+    v_old_boq RECORD;
+    v_new_position RECORD;
+    v_inserted_count INTEGER := 0;
+    v_links_result JSON;
+BEGIN
+    -- Получаем информацию о маппинге
+    SELECT * INTO v_mapping
+    FROM tender_version_mappings
+    WHERE id = p_mapping_id;
+
+    IF v_mapping IS NULL THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', 'Mapping not found'
+        );
+    END IF;
+
+    -- Получаем информацию о новой позиции
+    SELECT * INTO v_new_position
+    FROM client_positions
+    WHERE id = v_mapping.new_position_id;
+
+    -- Сначала удаляем существующие BOQ items в новой позиции
+    DELETE FROM boq_items
+    WHERE client_position_id = v_mapping.new_position_id;
+
+    -- Переносим BOQ items с правильными item_numbers
+    FOR v_old_boq IN
+        SELECT * FROM boq_items
+        WHERE client_position_id = v_mapping.old_position_id
+        ORDER BY sort_order, item_number
+    LOOP
+        INSERT INTO boq_items (
+            tender_id,
+            client_position_id,
+            item_number,
+            sub_number,
+            sort_order,
+            item_type,
+            description,
+            unit,
+            quantity,
+            unit_rate,
+            material_id,
+            work_id,
+            consumption_coefficient,
+            conversion_coefficient,
+            delivery_price_type,
+            delivery_amount,
+            base_quantity,
+            detail_cost_category_id,
+            total_amount,
             currency_type,
             currency_rate,
-            quote_link,
-            note,
-            NOW(),
-            NOW()
-        FROM boq_items
-        WHERE client_position_id = v_dop_position.id;
+            created_at,
+            updated_at
+        )
+        VALUES (
+            v_mapping.new_tender_id,
+            v_mapping.new_position_id,
+            v_new_position.position_number || '.' || v_old_boq.sub_number, -- Исправленная генерация
+            v_old_boq.sub_number,
+            v_old_boq.sort_order,
+            v_old_boq.item_type,
+            v_old_boq.description,
+            v_old_boq.unit,
+            v_old_boq.quantity,
+            v_old_boq.unit_rate,
+            v_old_boq.material_id,
+            v_old_boq.work_id,
+            v_old_boq.consumption_coefficient,
+            v_old_boq.conversion_coefficient,
+            v_old_boq.delivery_price_type,
+            v_old_boq.delivery_amount,
+            v_old_boq.base_quantity,
+            v_old_boq.detail_cost_category_id,
+            v_old_boq.total_amount,
+            v_old_boq.currency_type,
+            v_old_boq.currency_rate,
+            now(),
+            now()
+        );
 
-        v_dop_count := v_dop_count + 1;
+        v_inserted_count := v_inserted_count + 1;
     END LOOP;
 
-    RAISE NOTICE 'Transferred % DOP positions', v_dop_count;
-    RETURN v_dop_count;
+    RAISE NOTICE '  ✓ Transferred % BOQ items from position % to %',
+        v_inserted_count, v_mapping.old_position_id, v_mapping.new_position_id;
+
+    -- Используем функцию для переноса work_material_links если она существует
+    BEGIN
+        v_links_result := transfer_work_material_links_v2(
+            v_mapping.old_position_id,
+            v_mapping.new_position_id
+        );
+        RAISE NOTICE '  📎 Work_material_links transfer: %', v_links_result;
+    EXCEPTION
+        WHEN undefined_function THEN
+            RAISE NOTICE '  ⚠️ Function transfer_work_material_links_v2 not found, skipping links transfer';
+            v_links_result := json_build_object('links_transferred', 0);
+    END;
+
+    IF v_inserted_count > 0 OR (v_links_result->>'links_transferred')::int > 0 THEN
+        UPDATE tender_version_mappings
+        SET
+            mapping_status = 'applied',
+            updated_at = now()
+        WHERE id = p_mapping_id;
+    END IF;
+
+    RETURN json_build_object(
+        'success', true,
+        'boq_items_mapped', v_inserted_count,
+        'links_transferred', COALESCE((v_links_result->>'links_transferred')::int, 0),
+        'mapping_id', p_mapping_id
+    );
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM,
+            'mapping_id', p_mapping_id
+        );
+END;
+$function$
+
+
+-- Function: public.transfer_dop_positions
+-- Description: Переносит ДОП позиции с правильной генерацией item_numbers и корректным переносом links
+CREATE OR REPLACE FUNCTION public.transfer_dop_positions(p_new_tender_id uuid, p_old_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_dop_position RECORD;
+    v_new_parent_id UUID;
+    v_new_dop_id UUID;
+    v_dop_count INTEGER := 0;
+    v_boq_count INTEGER := 0;
+    v_links_count INTEGER := 0;
+    v_total_boq INTEGER := 0;
+    v_total_links INTEGER := 0;
+    v_mapping RECORD;
+    v_new_dop_position RECORD;
+    v_old_link RECORD;
+    v_new_work_boq_id UUID;
+    v_new_material_boq_id UUID;
+    v_new_sub_work_boq_id UUID;
+    v_new_sub_material_boq_id UUID;
+BEGIN
+    RAISE NOTICE '🚀 Starting DOP positions transfer from tender % to %', p_old_tender_id, p_new_tender_id;
+
+    -- Переносим все ДОП позиции
+    FOR v_dop_position IN
+        SELECT * FROM client_positions
+        WHERE tender_id = p_old_tender_id
+        AND is_additional = true
+    LOOP
+        RAISE NOTICE '📦 Processing DOP position: % (parent: %)',
+            v_dop_position.position_number, v_dop_position.parent_position_id;
+
+        -- Ищем новый parent_id через маппинги
+        v_new_parent_id := NULL;
+
+        IF v_dop_position.parent_position_id IS NOT NULL THEN
+            -- Используем tender_version_mappings для поиска нового родителя
+            SELECT new_position_id INTO v_new_parent_id
+            FROM tender_version_mappings
+            WHERE old_position_id = v_dop_position.parent_position_id
+            AND new_tender_id = p_new_tender_id
+            LIMIT 1;
+        END IF;
+
+        -- Создаем новую ДОП позицию (только существующие колонки)
+        INSERT INTO client_positions (
+            tender_id,
+            position_number,
+            item_no,
+            work_name,
+            parent_position_id,
+            is_additional,
+            position_type,
+            hierarchy_level,
+            unit,
+            volume,
+            manual_volume,
+            manual_note,
+            client_note,
+            total_materials_cost,
+            total_works_cost,
+            total_commercial_materials_cost,
+            total_commercial_works_cost,
+            created_at,
+            updated_at
+        )
+        SELECT
+            p_new_tender_id,
+            position_number,
+            item_no,
+            work_name,
+            v_new_parent_id,
+            true,
+            position_type,
+            hierarchy_level,
+            unit,
+            volume,
+            manual_volume,
+            manual_note,
+            client_note,
+            total_materials_cost,
+            total_works_cost,
+            total_commercial_materials_cost,
+            total_commercial_works_cost,
+            now(),
+            now()
+        FROM client_positions
+        WHERE id = v_dop_position.id
+        ON CONFLICT (tender_id, position_number) DO NOTHING
+        RETURNING id INTO v_new_dop_id;
+
+        IF v_new_dop_id IS NOT NULL THEN
+            v_dop_count := v_dop_count + 1;
+
+            -- Получаем информацию о новой ДОП позиции
+            SELECT * INTO v_new_dop_position
+            FROM client_positions
+            WHERE id = v_new_dop_id;
+
+            -- Переносим BOQ items для ДОП позиции с правильными item_numbers
+            INSERT INTO boq_items (
+                tender_id,
+                client_position_id,
+                item_number,
+                sub_number,
+                sort_order,
+                item_type,
+                description,
+                unit,
+                quantity,
+                unit_rate,
+                material_id,
+                work_id,
+                consumption_coefficient,
+                conversion_coefficient,
+                delivery_price_type,
+                delivery_amount,
+                base_quantity,
+                detail_cost_category_id,
+                total_amount,
+                currency_type,
+                currency_rate,
+                created_at,
+                updated_at
+            )
+            SELECT
+                p_new_tender_id,
+                v_new_dop_id,
+                v_new_dop_position.position_number || '.' || sub_number, -- Исправленная генерация
+                sub_number,
+                sort_order,
+                item_type,
+                description,
+                unit,
+                quantity,
+                unit_rate,
+                material_id,
+                work_id,
+                consumption_coefficient,
+                conversion_coefficient,
+                delivery_price_type,
+                delivery_amount,
+                base_quantity,
+                detail_cost_category_id,
+                total_amount,
+                currency_type,
+                currency_rate,
+                now(),
+                now()
+            FROM boq_items
+            WHERE client_position_id = v_dop_position.id;
+
+            GET DIAGNOSTICS v_boq_count = ROW_COUNT;
+            v_total_boq := v_total_boq + v_boq_count;
+
+            -- Переносим work_material_links для ДОП позиции с правильным маппингом BOQ items
+            FOR v_old_link IN
+                SELECT * FROM work_material_links
+                WHERE client_position_id = v_dop_position.id
+            LOOP
+                -- Находим новые BOQ item IDs по старым
+                v_new_work_boq_id := NULL;
+                v_new_material_boq_id := NULL;
+                v_new_sub_work_boq_id := NULL;
+                v_new_sub_material_boq_id := NULL;
+
+                -- Маппинг work_boq_item_id
+                IF v_old_link.work_boq_item_id IS NOT NULL THEN
+                    SELECT new_boq.id INTO v_new_work_boq_id
+                    FROM boq_items old_boq
+                    JOIN boq_items new_boq ON (
+                        new_boq.client_position_id = v_new_dop_id
+                        AND new_boq.item_type = old_boq.item_type
+                        AND new_boq.sub_number = old_boq.sub_number
+                        AND COALESCE(new_boq.work_id, '00000000-0000-0000-0000-000000000000'::uuid) =
+                            COALESCE(old_boq.work_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                    )
+                    WHERE old_boq.id = v_old_link.work_boq_item_id
+                    LIMIT 1;
+                END IF;
+
+                -- Маппинг material_boq_item_id
+                IF v_old_link.material_boq_item_id IS NOT NULL THEN
+                    SELECT new_boq.id INTO v_new_material_boq_id
+                    FROM boq_items old_boq
+                    JOIN boq_items new_boq ON (
+                        new_boq.client_position_id = v_new_dop_id
+                        AND new_boq.item_type = old_boq.item_type
+                        AND new_boq.sub_number = old_boq.sub_number
+                        AND COALESCE(new_boq.material_id, '00000000-0000-0000-0000-000000000000'::uuid) =
+                            COALESCE(old_boq.material_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                    )
+                    WHERE old_boq.id = v_old_link.material_boq_item_id
+                    LIMIT 1;
+                END IF;
+
+                -- Маппинг sub_work_boq_item_id
+                IF v_old_link.sub_work_boq_item_id IS NOT NULL THEN
+                    SELECT new_boq.id INTO v_new_sub_work_boq_id
+                    FROM boq_items old_boq
+                    JOIN boq_items new_boq ON (
+                        new_boq.client_position_id = v_new_dop_id
+                        AND new_boq.item_type = old_boq.item_type
+                        AND new_boq.sub_number = old_boq.sub_number
+                    )
+                    WHERE old_boq.id = v_old_link.sub_work_boq_item_id
+                    LIMIT 1;
+                END IF;
+
+                -- Маппинг sub_material_boq_item_id
+                IF v_old_link.sub_material_boq_item_id IS NOT NULL THEN
+                    SELECT new_boq.id INTO v_new_sub_material_boq_id
+                    FROM boq_items old_boq
+                    JOIN boq_items new_boq ON (
+                        new_boq.client_position_id = v_new_dop_id
+                        AND new_boq.item_type = old_boq.item_type
+                        AND new_boq.sub_number = old_boq.sub_number
+                    )
+                    WHERE old_boq.id = v_old_link.sub_material_boq_item_id
+                    LIMIT 1;
+                END IF;
+
+                -- Вставляем новый link только если нашли соответствующие BOQ items
+                IF (v_new_work_boq_id IS NOT NULL OR v_new_sub_work_boq_id IS NOT NULL) AND
+                   (v_new_material_boq_id IS NOT NULL OR v_new_sub_material_boq_id IS NOT NULL) THEN
+
+                    INSERT INTO work_material_links (
+                        client_position_id,
+                        work_boq_item_id,
+                        material_boq_item_id,
+                        sub_work_boq_item_id,
+                        sub_material_boq_item_id,
+                        material_quantity_per_work,
+                        usage_coefficient,
+                        delivery_price_type,
+                        delivery_amount,
+                        notes,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (
+                        v_new_dop_id,
+                        v_new_work_boq_id,
+                        v_new_material_boq_id,
+                        v_new_sub_work_boq_id,
+                        v_new_sub_material_boq_id,
+                        v_old_link.material_quantity_per_work,
+                        v_old_link.usage_coefficient,
+                        v_old_link.delivery_price_type,
+                        v_old_link.delivery_amount,
+                        v_old_link.notes,
+                        now(),
+                        now()
+                    )
+                    ON CONFLICT DO NOTHING;
+
+                    v_links_count := v_links_count + 1;
+                END IF;
+            END LOOP;
+
+            v_total_links := v_total_links + v_links_count;
+
+            RAISE NOTICE '✅ Created DOP position % with % BOQ items and % links',
+                v_dop_position.position_number, v_boq_count, v_links_count;
+        END IF;
+    END LOOP;
+
+    RAISE NOTICE '🎉 DOP transfer complete: % positions, % BOQ items, % links',
+        v_dop_count, v_total_boq, v_total_links;
+
+    RETURN json_build_object(
+        'success', true,
+        'dopCount', v_dop_count,
+        'boqCount', v_total_boq,
+        'linksCount', v_total_links
+    );
+END;
+$function$
+
+
+-- Function: public.transfer_dop_positions_fixed
+-- Description: Исправленная версия переноса ДОП позиций
+CREATE OR REPLACE FUNCTION public.transfer_dop_positions_fixed(p_new_tender_id uuid, p_old_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_dop_position RECORD;
+    v_new_parent_id UUID;
+    v_new_dop_id UUID;
+    v_dop_count INTEGER := 0;
+    v_boq_count INTEGER := 0;
+    v_total_boq INTEGER := 0;
+    v_new_dop_position RECORD;
+BEGIN
+    RAISE NOTICE 'Starting DOP transfer from % to %', p_old_tender_id, p_new_tender_id;
+
+    -- Переносим все ДОП позиции
+    FOR v_dop_position IN
+        SELECT * FROM client_positions
+        WHERE tender_id = p_old_tender_id
+        AND is_additional = true
+    LOOP
+        RAISE NOTICE 'Processing DOP: %', v_dop_position.position_number;
+
+        -- Ищем новый parent_id
+        v_new_parent_id := NULL;
+
+        IF v_dop_position.parent_position_id IS NOT NULL THEN
+            -- Ищем через маппинги
+            SELECT new_position_id INTO v_new_parent_id
+            FROM tender_version_mappings
+            WHERE old_position_id = v_dop_position.parent_position_id
+            AND new_tender_id = p_new_tender_id
+            LIMIT 1;
+        END IF;
+
+        -- Создаем новую ДОП позицию с правильными колонками
+        INSERT INTO client_positions (
+            tender_id, position_number, item_no, work_name, parent_position_id, is_additional,
+            position_type, hierarchy_level, unit, volume, manual_volume, manual_note, client_note,
+            total_materials_cost, total_works_cost, total_commercial_materials_cost,
+            total_commercial_works_cost, created_at, updated_at
+        )
+        SELECT
+            p_new_tender_id, position_number, item_no, work_name, v_new_parent_id, true,
+            position_type, hierarchy_level, unit, volume, manual_volume, manual_note, client_note,
+            total_materials_cost, total_works_cost, total_commercial_materials_cost,
+            total_commercial_works_cost, now(), now()
+        FROM client_positions
+        WHERE id = v_dop_position.id
+        ON CONFLICT (tender_id, position_number) DO NOTHING
+        RETURNING id INTO v_new_dop_id;
+
+        IF v_new_dop_id IS NOT NULL THEN
+            v_dop_count := v_dop_count + 1;
+
+            -- Получаем информацию о новой ДОП позиции
+            SELECT * INTO v_new_dop_position
+            FROM client_positions
+            WHERE id = v_new_dop_id;
+
+            -- Переносим BOQ items с правильными item_numbers
+            INSERT INTO boq_items (
+                tender_id, client_position_id, item_number, sub_number,
+                sort_order, item_type, description, unit, quantity, unit_rate,
+                material_id, work_id, consumption_coefficient, conversion_coefficient,
+                delivery_price_type, delivery_amount, base_quantity,
+                detail_cost_category_id, total_amount,
+                currency_type, currency_rate,
+                created_at, updated_at
+            )
+            SELECT
+                p_new_tender_id,
+                v_new_dop_id,
+                v_new_dop_position.position_number || '.' || sub_number, -- Исправленная генерация
+                sub_number,
+                sort_order, item_type, description, unit, quantity, unit_rate,
+                material_id, work_id, consumption_coefficient, conversion_coefficient,
+                delivery_price_type, delivery_amount, base_quantity,
+                detail_cost_category_id, total_amount,
+                currency_type, currency_rate,
+                now(), now()
+            FROM boq_items
+            WHERE client_position_id = v_dop_position.id;
+
+            GET DIAGNOSTICS v_boq_count = ROW_COUNT;
+            v_total_boq := v_total_boq + v_boq_count;
+        END IF;
+    END LOOP;
+
+    RETURN json_build_object(
+        'success', true,
+        'dopCount', v_dop_count,
+        'boqCount', v_total_boq
+    );
+END;
+$function$
+
+
+-- Function: public.transfer_dop_positions_rpc
+CREATE OR REPLACE FUNCTION public.transfer_dop_positions_rpc(new_tender_id uuid, old_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    -- Вызываем основную функцию с префиксом p_
+    RETURN public.transfer_dop_positions(new_tender_id, old_tender_id);
+END;
+$function$
+
+
+-- Function: public.transfer_dop_positions_v2
+-- Description: Улучшенная версия переноса ДОП позиций без использования transfer_links_using_mapping
+CREATE OR REPLACE FUNCTION public.transfer_dop_positions_v2(p_new_tender_id uuid, p_old_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_dop_position RECORD;
+    v_new_parent_id UUID;
+    v_new_dop_id UUID;
+    v_dop_count INTEGER := 0;
+    v_old_boq RECORD;
+    v_boq_total INTEGER := 0;
+    v_new_dop_position RECORD;
+BEGIN
+    RAISE NOTICE '🚀 Starting transfer_dop_positions_v2 from tender % to %',
+        p_old_tender_id, p_new_tender_id;
+
+    -- Переносим все ДОП позиции
+    FOR v_dop_position IN
+        SELECT * FROM client_positions
+        WHERE tender_id = p_old_tender_id
+        AND is_additional = true
+        ORDER BY position_number
+    LOOP
+        RAISE NOTICE '📋 Processing DOP position: id=%, number=%, name=%',
+            v_dop_position.id, v_dop_position.position_number, v_dop_position.work_name;
+
+        v_new_parent_id := NULL;
+
+        -- Сначала пытаемся найти родителя через tender_version_mappings
+        IF v_dop_position.parent_position_id IS NOT NULL THEN
+            SELECT new_position_id INTO v_new_parent_id
+            FROM tender_version_mappings
+            WHERE old_position_id = v_dop_position.parent_position_id
+            AND new_tender_id = p_new_tender_id
+            LIMIT 1;
+        END IF;
+
+        -- Создаем новую ДОП позицию с правильными колонками
+        INSERT INTO client_positions (
+            tender_id, position_number, item_no, work_name, parent_position_id, is_additional,
+            position_type, hierarchy_level, unit, volume, manual_volume, manual_note, client_note,
+            total_materials_cost, total_works_cost, total_commercial_materials_cost,
+            total_commercial_works_cost, created_at, updated_at
+        )
+        SELECT
+            p_new_tender_id, position_number, item_no, work_name, v_new_parent_id, true,
+            position_type, hierarchy_level, unit, volume, manual_volume, manual_note, client_note,
+            total_materials_cost, total_works_cost, total_commercial_materials_cost,
+            total_commercial_works_cost, now(), now()
+        FROM client_positions
+        WHERE id = v_dop_position.id
+        ON CONFLICT (tender_id, position_number) DO UPDATE SET
+            parent_position_id = EXCLUDED.parent_position_id
+        RETURNING id INTO v_new_dop_id;
+
+        IF v_new_dop_id IS NOT NULL THEN
+            v_dop_count := v_dop_count + 1;
+            RAISE NOTICE '✅ Created DOP position %', v_dop_position.position_number;
+
+            -- Получаем информацию о новой ДОП позиции
+            SELECT * INTO v_new_dop_position
+            FROM client_positions
+            WHERE id = v_new_dop_id;
+
+            -- Переносим BOQ items с маппингом для ДОП позиции
+            FOR v_old_boq IN
+                SELECT * FROM boq_items
+                WHERE client_position_id = v_dop_position.id
+            LOOP
+                INSERT INTO boq_items (
+                    tender_id,
+                    client_position_id,
+                    item_number,
+                    sub_number,
+                    sort_order,
+                    item_type,
+                    description,
+                    unit,
+                    quantity,
+                    unit_rate,
+                    material_id,
+                    work_id,
+                    consumption_coefficient,
+                    conversion_coefficient,
+                    delivery_price_type,
+                    delivery_amount,
+                    base_quantity,
+                    detail_cost_category_id,
+                    total_amount,
+                    currency_type,
+                    currency_rate,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    p_new_tender_id,
+                    v_new_dop_id,
+                    v_new_dop_position.position_number || '.' || v_old_boq.sub_number, -- Исправленная генерация
+                    v_old_boq.sub_number,
+                    v_old_boq.sort_order,
+                    v_old_boq.item_type,
+                    v_old_boq.description,
+                    v_old_boq.unit,
+                    v_old_boq.quantity,
+                    v_old_boq.unit_rate,
+                    v_old_boq.material_id,
+                    v_old_boq.work_id,
+                    v_old_boq.consumption_coefficient,
+                    v_old_boq.conversion_coefficient,
+                    v_old_boq.delivery_price_type,
+                    v_old_boq.delivery_amount,
+                    v_old_boq.base_quantity,
+                    v_old_boq.detail_cost_category_id,
+                    v_old_boq.total_amount,
+                    v_old_boq.currency_type,
+                    v_old_boq.currency_rate,
+                    now(),
+                    now()
+                );
+
+                v_boq_total := v_boq_total + 1;
+            END LOOP;
+        ELSE
+            RAISE NOTICE '  ✓ DOP position already exists: %', v_new_dop_id;
+        END IF;
+    END LOOP;
+
+    RAISE NOTICE '🎉 DOP transfer complete: % positions, % BOQ items',
+        v_dop_count, v_boq_total;
+
+    RETURN json_build_object(
+        'success', true,
+        'dop_positions_created', v_dop_count,
+        'boq_items_transferred', v_boq_total
+    );
+END;
+$function$
+
+
+-- Function: public.transfer_dop_with_mapping
+CREATE OR REPLACE FUNCTION public.transfer_dop_with_mapping(p_new_tender_id uuid, p_old_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_dop_position RECORD;
+    v_new_parent_id UUID;
+    v_new_dop_id UUID;
+    v_old_boq RECORD;
+    v_new_boq_id UUID;
+    v_dop_count INTEGER := 0;
+    v_boq_total INTEGER := 0;
+    v_links_result JSON;
+BEGIN
+    RAISE NOTICE '🚀 Starting DOP transfer with mapping from % to %', p_old_tender_id, p_new_tender_id;
+
+    FOR v_dop_position IN
+        SELECT * FROM client_positions
+        WHERE tender_id = p_old_tender_id
+        AND is_additional = true
+    LOOP
+        -- Находим новый parent через маппинг
+        v_new_parent_id := NULL;
+        IF v_dop_position.parent_position_id IS NOT NULL THEN
+            SELECT new_position_id INTO v_new_parent_id
+            FROM tender_version_mappings
+            WHERE old_position_id = v_dop_position.parent_position_id
+            AND new_tender_id = p_new_tender_id
+            LIMIT 1;
+        END IF;
+
+        IF v_new_parent_id IS NULL AND v_dop_position.parent_position_id IS NOT NULL THEN
+            RAISE NOTICE '⚠️ Parent not found for DOP %', v_dop_position.position_number;
+            CONTINUE; -- Пропускаем если не нашли родителя
+        END IF;
+
+        -- Создаем новую ДОП позицию (только с существующими полями)
+        INSERT INTO client_positions (
+            tender_id,
+            position_number,
+            work_name,
+            parent_position_id,
+            is_additional,
+            unit,
+            volume,
+            manual_volume,
+            client_note,
+            item_no,
+            manual_note,
+            position_type,
+            hierarchy_level,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            p_new_tender_id,
+            v_dop_position.position_number,
+            v_dop_position.work_name,
+            v_new_parent_id,
+            true,
+            v_dop_position.unit,
+            v_dop_position.volume,
+            v_dop_position.manual_volume,
+            v_dop_position.client_note,
+            v_dop_position.item_no,
+            v_dop_position.manual_note,
+            v_dop_position.position_type,
+            v_dop_position.hierarchy_level,
+            now(),
+            now()
+        )
+        RETURNING id INTO v_new_dop_id;
+
+        v_dop_count := v_dop_count + 1;
+        RAISE NOTICE '✅ Created DOP position %', v_dop_position.position_number;
+
+        -- Переносим BOQ items с маппингом для ДОП позиции
+        FOR v_old_boq IN
+            SELECT * FROM boq_items
+            WHERE client_position_id = v_dop_position.id
+        LOOP
+            INSERT INTO boq_items (
+                tender_id,
+                client_position_id,
+                item_number,
+                sub_number,
+                sort_order,
+                item_type,
+                description,
+                unit,
+                quantity,
+                unit_rate,
+                material_id,
+                work_id,
+                consumption_coefficient,
+                conversion_coefficient,
+                delivery_price_type,
+                delivery_amount,
+                base_quantity,
+                detail_cost_category_id,
+                total_amount,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                p_new_tender_id,
+                v_new_dop_id,
+                v_old_boq.item_number,
+                v_old_boq.sub_number,
+                v_old_boq.sort_order,
+                v_old_boq.item_type,
+                v_old_boq.description,
+                v_old_boq.unit,
+                v_old_boq.quantity,
+                v_old_boq.unit_rate,
+                v_old_boq.material_id,
+                v_old_boq.work_id,
+                v_old_boq.consumption_coefficient,
+                v_old_boq.conversion_coefficient,
+                v_old_boq.delivery_price_type,
+                v_old_boq.delivery_amount,
+                v_old_boq.base_quantity,
+                v_old_boq.detail_cost_category_id,
+                v_old_boq.total_amount,
+                now(),
+                now()
+            )
+            RETURNING id INTO v_new_boq_id;
+
+            -- Сохраняем маппинг BOQ items
+            PERFORM save_boq_mapping(
+                v_old_boq.id,
+                v_new_boq_id,
+                p_old_tender_id,
+                p_new_tender_id,
+                NULL,
+                'dop'
+            );
+
+            v_boq_total := v_boq_total + 1;
+        END LOOP;
+
+        -- Переносим work_material_links для ДОП позиции
+        v_links_result := transfer_links_using_mapping(
+            v_dop_position.id,
+            v_new_dop_id,
+            p_new_tender_id
+        );
+
+        IF (v_links_result->>'success')::boolean THEN
+            RAISE NOTICE '  Links transferred: %', v_links_result->>'links_transferred';
+        END IF;
+    END LOOP;
+
+    RAISE NOTICE '🎉 DOP transfer complete: % positions, % BOQ items',
+        v_dop_count, v_boq_total;
+
+    RETURN json_build_object(
+        'success', true,
+        'dop_positions', v_dop_count,
+        'boq_items', v_boq_total
+    );
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM,
+            'detail', SQLSTATE
+        );
+END;
+$function$
+
+
+-- Function: public.transfer_links_final
+CREATE OR REPLACE FUNCTION public.transfer_links_final(p_old_position_id uuid, p_new_position_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_link RECORD;
+    v_new_work_id UUID;
+    v_new_mat_id UUID;
+    v_transferred INTEGER := 0;
+    v_skipped INTEGER := 0;
+    v_errors INTEGER := 0;
+BEGIN
+    -- Очищаем существующие links
+    DELETE FROM work_material_links WHERE client_position_id = p_new_position_id;
+
+    FOR v_link IN
+        SELECT
+            wml.*,
+            work_boq.item_number as work_num,
+            mat_boq.item_number as mat_num
+        FROM work_material_links wml
+        LEFT JOIN boq_items work_boq ON work_boq.id = wml.work_boq_item_id
+        LEFT JOIN boq_items mat_boq ON mat_boq.id = wml.material_boq_item_id
+        WHERE wml.client_position_id = p_old_position_id
+    LOOP
+        -- Маппинг work BOQ item
+        v_new_work_id := NULL;
+        IF v_link.work_boq_item_id IS NOT NULL AND v_link.work_num IS NOT NULL THEN
+            SELECT id INTO v_new_work_id
+            FROM boq_items
+            WHERE client_position_id = p_new_position_id
+            AND item_number = v_link.work_num
+            LIMIT 1;
+        END IF;
+
+        -- Маппинг material BOQ item
+        v_new_mat_id := NULL;
+        IF v_link.material_boq_item_id IS NOT NULL AND v_link.mat_num IS NOT NULL THEN
+            SELECT id INTO v_new_mat_id
+            FROM boq_items
+            WHERE client_position_id = p_new_position_id
+            AND item_number = v_link.mat_num
+            LIMIT 1;
+        END IF;
+
+        -- Проверяем что есть хотя бы один валидный ID (требование триггера)
+        IF v_new_work_id IS NOT NULL OR v_new_mat_id IS NOT NULL THEN
+            BEGIN
+                INSERT INTO work_material_links (
+                    client_position_id,
+                    work_boq_item_id,
+                    material_boq_item_id,
+                    sub_work_boq_item_id,
+                    sub_material_boq_item_id,
+                    notes,
+                    delivery_price_type,
+                    delivery_amount,
+                    material_quantity_per_work,
+                    usage_coefficient,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    p_new_position_id,
+                    v_new_work_id,
+                    v_new_mat_id,
+                    NULL, -- sub items пока пропускаем
+                    NULL,
+                    v_link.notes,
+                    v_link.delivery_price_type,
+                    v_link.delivery_amount,
+                    v_link.material_quantity_per_work,
+                    v_link.usage_coefficient,
+                    now(),
+                    now()
+                );
+                v_transferred := v_transferred + 1;
+            EXCEPTION
+                WHEN OTHERS THEN
+                    v_errors := v_errors + 1;
+                    RAISE NOTICE 'Error transferring link: %', SQLERRM;
+            END;
+        ELSE
+            v_skipped := v_skipped + 1;
+        END IF;
+    END LOOP;
+
+    RETURN json_build_object(
+        'success', true,
+        'transferred', v_transferred,
+        'skipped', v_skipped,
+        'errors', v_errors
+    );
+END;
+$function$
+
+
+-- Function: public.transfer_links_fixed
+CREATE OR REPLACE FUNCTION public.transfer_links_fixed(p_mapping_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping RECORD;
+    v_links_count INTEGER := 0;
+    v_transferred INTEGER := 0;
+BEGIN
+    -- Получаем маппинг
+    SELECT * INTO v_mapping
+    FROM tender_version_mappings
+    WHERE id = p_mapping_id;
+
+    IF NOT FOUND THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', 'Mapping not found'
+        );
+    END IF;
+
+    -- Считаем links в старой позиции (используем правильные имена колонок!)
+    SELECT COUNT(*) INTO v_links_count
+    FROM work_material_links
+    WHERE client_position_id = v_mapping.old_position_id;
+
+    RAISE NOTICE 'Found % links in position %', v_links_count, v_mapping.old_position_id;
+
+    IF v_links_count > 0 THEN
+        -- Удаляем существующие links в новой позиции
+        DELETE FROM work_material_links
+        WHERE client_position_id = v_mapping.new_position_id;
+
+        -- Переносим links (используем правильные имена колонок!)
+        INSERT INTO work_material_links (
+            client_position_id,
+            work_boq_item_id,
+            material_boq_item_id,
+            sub_work_boq_item_id,
+            sub_material_boq_item_id,
+            notes,
+            delivery_price_type,
+            delivery_amount,
+            material_quantity_per_work,
+            usage_coefficient,
+            created_at,
+            updated_at
+        )
+        SELECT
+            v_mapping.new_position_id,
+            work_boq_item_id,
+            material_boq_item_id,
+            sub_work_boq_item_id,
+            sub_material_boq_item_id,
+            notes,
+            delivery_price_type,
+            delivery_amount,
+            material_quantity_per_work,
+            usage_coefficient,
+            now(),
+            now()
+        FROM work_material_links
+        WHERE client_position_id = v_mapping.old_position_id;
+
+        GET DIAGNOSTICS v_transferred = ROW_COUNT;
+        RAISE NOTICE 'Transferred % links', v_transferred;
+    END IF;
+
+    RETURN json_build_object(
+        'success', true,
+        'links_found', v_links_count,
+        'links_transferred', v_transferred,
+        'mapping_id', p_mapping_id
+    );
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM
+        );
+END;
+$function$
+
+
+-- Function: public.transfer_links_using_mapping
+CREATE OR REPLACE FUNCTION public.transfer_links_using_mapping(p_old_position_id uuid, p_new_position_id uuid, p_new_tender_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_link RECORD;
+    v_new_work_id UUID;
+    v_new_mat_id UUID;
+    v_new_sub_work_id UUID;
+    v_new_sub_mat_id UUID;
+    v_links_count INTEGER := 0;
+    v_transferred INTEGER := 0;
+    v_skipped INTEGER := 0;
+BEGIN
+    -- Удаляем существующие links в новой позиции
+    DELETE FROM work_material_links
+    WHERE client_position_id = p_new_position_id;
+
+    -- Переносим каждый link используя маппинг BOQ items
+    FOR v_link IN
+        SELECT * FROM work_material_links
+        WHERE client_position_id = p_old_position_id
+    LOOP
+        v_links_count := v_links_count + 1;
+
+        -- Находим новые ID через маппинг
+        v_new_work_id := NULL;
+        IF v_link.work_boq_item_id IS NOT NULL THEN
+            SELECT new_boq_item_id INTO v_new_work_id
+            FROM boq_item_version_mappings
+            WHERE old_boq_item_id = v_link.work_boq_item_id
+            AND new_tender_id = p_new_tender_id;
+        END IF;
+
+        v_new_mat_id := NULL;
+        IF v_link.material_boq_item_id IS NOT NULL THEN
+            SELECT new_boq_item_id INTO v_new_mat_id
+            FROM boq_item_version_mappings
+            WHERE old_boq_item_id = v_link.material_boq_item_id
+            AND new_tender_id = p_new_tender_id;
+        END IF;
+
+        v_new_sub_work_id := NULL;
+        IF v_link.sub_work_boq_item_id IS NOT NULL THEN
+            SELECT new_boq_item_id INTO v_new_sub_work_id
+            FROM boq_item_version_mappings
+            WHERE old_boq_item_id = v_link.sub_work_boq_item_id
+            AND new_tender_id = p_new_tender_id;
+        END IF;
+
+        v_new_sub_mat_id := NULL;
+        IF v_link.sub_material_boq_item_id IS NOT NULL THEN
+            SELECT new_boq_item_id INTO v_new_sub_mat_id
+            FROM boq_item_version_mappings
+            WHERE old_boq_item_id = v_link.sub_material_boq_item_id
+            AND new_tender_id = p_new_tender_id;
+        END IF;
+
+        -- Проверяем, что есть хотя бы одна валидная пара
+        IF (v_new_work_id IS NOT NULL AND v_new_mat_id IS NOT NULL) OR
+           (v_new_work_id IS NOT NULL AND v_new_sub_mat_id IS NOT NULL) OR
+           (v_new_sub_work_id IS NOT NULL AND v_new_mat_id IS NOT NULL) OR
+           (v_new_sub_work_id IS NOT NULL AND v_new_sub_mat_id IS NOT NULL) THEN
+
+            BEGIN
+                INSERT INTO work_material_links (
+                    client_position_id,
+                    work_boq_item_id,
+                    material_boq_item_id,
+                    sub_work_boq_item_id,
+                    sub_material_boq_item_id,
+                    notes,
+                    delivery_price_type,
+                    delivery_amount,
+                    material_quantity_per_work,
+                    usage_coefficient,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    p_new_position_id,
+                    v_new_work_id,
+                    v_new_mat_id,
+                    v_new_sub_work_id,
+                    v_new_sub_mat_id,
+                    v_link.notes,
+                    v_link.delivery_price_type,
+                    v_link.delivery_amount,
+                    v_link.material_quantity_per_work,
+                    v_link.usage_coefficient,
+                    now(),
+                    now()
+                );
+                v_transferred := v_transferred + 1;
+            EXCEPTION
+                WHEN OTHERS THEN
+                    RAISE NOTICE 'Failed to transfer link: %', SQLERRM;
+                    v_skipped := v_skipped + 1;
+            END;
+        ELSE
+            v_skipped := v_skipped + 1;
+        END IF;
+    END LOOP;
+
+    RETURN json_build_object(
+        'success', true,
+        'links_found', v_links_count,
+        'links_transferred', v_transferred,
+        'links_skipped', v_skipped
+    );
+END;
+$function$
+
+
+-- Function: public.transfer_links_with_boq_mapping
+CREATE OR REPLACE FUNCTION public.transfer_links_with_boq_mapping(p_old_position_id uuid, p_new_position_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_link RECORD;
+    v_new_work_boq_id UUID;
+    v_new_material_boq_id UUID;
+    v_new_sub_work_id UUID;
+    v_new_sub_material_id UUID;
+    v_links_transferred INTEGER := 0;
+    v_links_skipped INTEGER := 0;
+BEGIN
+    -- Удаляем существующие links в новой позиции
+    DELETE FROM work_material_links
+    WHERE client_position_id = p_new_position_id;
+
+    -- Переносим каждый link с маппингом BOQ items
+    FOR v_link IN
+        SELECT * FROM work_material_links
+        WHERE client_position_id = p_old_position_id
+    LOOP
+        -- Находим новый work_boq_item_id по соответствию
+        v_new_work_boq_id := NULL;
+        IF v_link.work_boq_item_id IS NOT NULL THEN
+            SELECT new_boq.id INTO v_new_work_boq_id
+            FROM boq_items old_boq
+            JOIN boq_items new_boq ON (
+                new_boq.client_position_id = p_new_position_id
+                AND new_boq.item_number = old_boq.item_number
+                AND COALESCE(new_boq.description, '') = COALESCE(old_boq.description, '')
+            )
+            WHERE old_boq.id = v_link.work_boq_item_id
+            LIMIT 1;
+        END IF;
+
+        -- Находим новый material_boq_item_id по соответствию
+        v_new_material_boq_id := NULL;
+        IF v_link.material_boq_item_id IS NOT NULL THEN
+            SELECT new_boq.id INTO v_new_material_boq_id
+            FROM boq_items old_boq
+            JOIN boq_items new_boq ON (
+                new_boq.client_position_id = p_new_position_id
+                AND new_boq.item_number = old_boq.item_number
+                AND COALESCE(new_boq.description, '') = COALESCE(old_boq.description, '')
+            )
+            WHERE old_boq.id = v_link.material_boq_item_id
+            LIMIT 1;
+        END IF;
+
+        -- Находим новые sub IDs
+        v_new_sub_work_id := NULL;
+        IF v_link.sub_work_boq_item_id IS NOT NULL THEN
+            SELECT new_boq.id INTO v_new_sub_work_id
+            FROM boq_items old_boq
+            JOIN boq_items new_boq ON (
+                new_boq.client_position_id = p_new_position_id
+                AND new_boq.item_number = old_boq.item_number
+                AND COALESCE(new_boq.description, '') = COALESCE(old_boq.description, '')
+            )
+            WHERE old_boq.id = v_link.sub_work_boq_item_id
+            LIMIT 1;
+        END IF;
+
+        v_new_sub_material_id := NULL;
+        IF v_link.sub_material_boq_item_id IS NOT NULL THEN
+            SELECT new_boq.id INTO v_new_sub_material_id
+            FROM boq_items old_boq
+            JOIN boq_items new_boq ON (
+                new_boq.client_position_id = p_new_position_id
+                AND new_boq.item_number = old_boq.item_number
+                AND COALESCE(new_boq.description, '') = COALESCE(old_boq.description, '')
+            )
+            WHERE old_boq.id = v_link.sub_material_boq_item_id
+            LIMIT 1;
+        END IF;
+
+        -- Если нашли соответствия, создаем новый link
+        IF (v_link.work_boq_item_id IS NULL OR v_new_work_boq_id IS NOT NULL) AND
+           (v_link.material_boq_item_id IS NULL OR v_new_material_boq_id IS NOT NULL) THEN
+
+            INSERT INTO work_material_links (
+                client_position_id,
+                work_boq_item_id,
+                material_boq_item_id,
+                sub_work_boq_item_id,
+                sub_material_boq_item_id,
+                notes,
+                delivery_price_type,
+                delivery_amount,
+                material_quantity_per_work,
+                usage_coefficient,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                p_new_position_id,
+                v_new_work_boq_id,
+                v_new_material_boq_id,
+                v_new_sub_work_id,
+                v_new_sub_material_id,
+                v_link.notes,
+                v_link.delivery_price_type,
+                v_link.delivery_amount,
+                v_link.material_quantity_per_work,
+                v_link.usage_coefficient,
+                now(),
+                now()
+            );
+
+            v_links_transferred := v_links_transferred + 1;
+        ELSE
+            v_links_skipped := v_links_skipped + 1;
+            RAISE NOTICE 'Skipped link: work_boq=%->%, material_boq=%->%',
+                v_link.work_boq_item_id, v_new_work_boq_id,
+                v_link.material_boq_item_id, v_new_material_boq_id;
+        END IF;
+    END LOOP;
+
+    RETURN json_build_object(
+        'success', true,
+        'links_transferred', v_links_transferred,
+        'links_skipped', v_links_skipped
+    );
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM
+        );
+END;
+$function$
+
+
+-- Function: public.transfer_mapping_data
+CREATE OR REPLACE FUNCTION public.transfer_mapping_data(p_mapping_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_boq_result JSON;
+    v_links_result JSON;
+BEGIN
+    -- Переносим BOQ items
+    v_boq_result := transfer_boq_items_fixed(p_mapping_id);
+
+    -- Переносим work_material_links
+    v_links_result := transfer_links_fixed(p_mapping_id);
+
+    RETURN json_build_object(
+        'success', true,
+        'boq', v_boq_result,
+        'links', v_links_result,
+        'mapping_id', p_mapping_id
+    );
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM
+        );
+END;
+$function$
+
+
+-- Function: public.transfer_mapping_data_v2
+CREATE OR REPLACE FUNCTION public.transfer_mapping_data_v2(p_mapping_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping RECORD;
+    v_boq_result JSON;
+    v_links_result JSON;
+BEGIN
+    SELECT * INTO v_mapping
+    FROM tender_version_mappings
+    WHERE id = p_mapping_id;
+
+    IF NOT FOUND THEN
+        RETURN json_build_object('success', false, 'error', 'Mapping not found');
+    END IF;
+
+    -- Переносим BOQ items
+    v_boq_result := transfer_boq_items_fixed(p_mapping_id);
+
+    -- Переносим links с правильным маппингом
+    v_links_result := transfer_links_with_boq_mapping(
+        v_mapping.old_position_id,
+        v_mapping.new_position_id
+    );
+
+    RETURN json_build_object(
+        'success', true,
+        'boq', v_boq_result,
+        'links', v_links_result,
+        'mapping_id', p_mapping_id
+    );
+END;
+$function$
+
+
+-- Function: public.transfer_single_mapping
+CREATE OR REPLACE FUNCTION public.transfer_single_mapping(p_mapping_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_mapping RECORD;
+    v_boq_count INTEGER := 0;
+    v_old_boq RECORD;
+    v_new_boq_id UUID;
+BEGIN
+    -- Получаем маппинг
+    SELECT * INTO v_mapping
+    FROM tender_version_mappings
+    WHERE id = p_mapping_id;
+
+    IF NOT FOUND THEN
+        RETURN json_build_object('success', false, 'error', 'Mapping not found');
+    END IF;
+
+    -- Удаляем существующие BOQ items в новой позиции
+    DELETE FROM boq_items
+    WHERE client_position_id = v_mapping.new_position_id;
+
+    -- Копируем BOQ items из старой позиции в новую
+    FOR v_old_boq IN
+        SELECT * FROM boq_items
+        WHERE client_position_id = v_mapping.old_position_id
+        ORDER BY sort_order, item_number
+    LOOP
+        INSERT INTO boq_items (
+            tender_id,
+            client_position_id,
+            item_number,
+            sub_number,
+            sort_order,
+            item_type,
+            description,
+            unit,
+            quantity,
+            unit_rate,
+            material_id,
+            work_id,
+            consumption_coefficient,
+            conversion_coefficient,
+            delivery_price_type,
+            delivery_amount,
+            base_quantity,
+            detail_cost_category_id,
+            total_amount,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            v_mapping.new_tender_id,
+            v_mapping.new_position_id,
+            v_old_boq.item_number,
+            v_old_boq.sub_number,
+            v_old_boq.sort_order,
+            v_old_boq.item_type,
+            v_old_boq.description,
+            v_old_boq.unit,
+            v_old_boq.quantity,
+            v_old_boq.unit_rate,
+            v_old_boq.material_id,
+            v_old_boq.work_id,
+            v_old_boq.consumption_coefficient,
+            v_old_boq.conversion_coefficient,
+            v_old_boq.delivery_price_type,
+            v_old_boq.delivery_amount,
+            v_old_boq.base_quantity,
+            v_old_boq.detail_cost_category_id,
+            v_old_boq.total_amount,
+            now(),
+            now()
+        );
+
+        v_boq_count := v_boq_count + 1;
+    END LOOP;
+
+    RETURN json_build_object(
+        'success', true,
+        'boq_transferred', v_boq_count
+    );
+END;
+$function$
+
+
+-- Function: public.transfer_work_material_links
+CREATE OR REPLACE FUNCTION public.transfer_work_material_links(p_old_position_id uuid, p_new_position_id uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_count INTEGER := 0;
+    v_link RECORD;
+    v_old_boq RECORD;
+    v_new_boq RECORD;
+    v_new_work_id UUID;
+    v_new_mat_id UUID;
+    v_new_sub_work_id UUID;
+    v_new_sub_mat_id UUID;
+BEGIN
+    -- Удаляем существующие links в новой позиции
+    DELETE FROM work_material_links WHERE client_position_id = p_new_position_id;
+
+    -- Переносим каждый link
+    FOR v_link IN
+        SELECT * FROM work_material_links
+        WHERE client_position_id = p_old_position_id
+    LOOP
+        -- Находим соответствующие BOQ items в новой позиции по item_number
+        IF v_link.work_boq_item_id IS NOT NULL THEN
+            SELECT b_old.item_number, b_old.sub_number INTO v_old_boq
+            FROM boq_items b_old WHERE b_old.id = v_link.work_boq_item_id;
+
+            SELECT id INTO v_new_work_id FROM boq_items
+            WHERE client_position_id = p_new_position_id
+            AND item_number = v_old_boq.item_number
+            AND COALESCE(sub_number, 0) = COALESCE(v_old_boq.sub_number, 0)
+            AND item_type IN ('work', 'sub_work')
+            LIMIT 1;
+        END IF;
+
+        IF v_link.material_boq_item_id IS NOT NULL THEN
+            SELECT b_old.item_number, b_old.sub_number INTO v_old_boq
+            FROM boq_items b_old WHERE b_old.id = v_link.material_boq_item_id;
+
+            SELECT id INTO v_new_mat_id FROM boq_items
+            WHERE client_position_id = p_new_position_id
+            AND item_number = v_old_boq.item_number
+            AND COALESCE(sub_number, 0) = COALESCE(v_old_boq.sub_number, 0)
+            AND item_type IN ('material', 'sub_material')
+            LIMIT 1;
+        END IF;
+
+        IF v_link.sub_work_boq_item_id IS NOT NULL THEN
+            SELECT b_old.item_number, b_old.sub_number INTO v_old_boq
+            FROM boq_items b_old WHERE b_old.id = v_link.sub_work_boq_item_id;
+
+            SELECT id INTO v_new_sub_work_id FROM boq_items
+            WHERE client_position_id = p_new_position_id
+            AND item_number = v_old_boq.item_number
+            AND COALESCE(sub_number, 0) = COALESCE(v_old_boq.sub_number, 0)
+            AND item_type = 'sub_work'
+            LIMIT 1;
+        END IF;
+
+        IF v_link.sub_material_boq_item_id IS NOT NULL THEN
+            SELECT b_old.item_number, b_old.sub_number INTO v_old_boq
+            FROM boq_items b_old WHERE b_old.id = v_link.sub_material_boq_item_id;
+
+            SELECT id INTO v_new_sub_mat_id FROM boq_items
+            WHERE client_position_id = p_new_position_id
+            AND item_number = v_old_boq.item_number
+            AND COALESCE(sub_number, 0) = COALESCE(v_old_boq.sub_number, 0)
+            AND item_type = 'sub_material'
+            LIMIT 1;
+        END IF;
+
+        -- Создаем новый link только если есть хотя бы одна пара work-material
+        IF (v_new_work_id IS NOT NULL AND v_new_mat_id IS NOT NULL) OR
+           (v_new_work_id IS NOT NULL AND v_new_sub_mat_id IS NOT NULL) OR
+           (v_new_sub_work_id IS NOT NULL AND v_new_mat_id IS NOT NULL) OR
+           (v_new_sub_work_id IS NOT NULL AND v_new_sub_mat_id IS NOT NULL) THEN
+
+            INSERT INTO work_material_links (
+                client_position_id, work_boq_item_id, material_boq_item_id,
+                sub_work_boq_item_id, sub_material_boq_item_id, notes,
+                delivery_price_type, delivery_amount, material_quantity_per_work,
+                usage_coefficient, created_at, updated_at
+            )
+            VALUES (
+                p_new_position_id, v_new_work_id, v_new_mat_id,
+                v_new_sub_work_id, v_new_sub_mat_id, v_link.notes,
+                v_link.delivery_price_type, v_link.delivery_amount,
+                v_link.material_quantity_per_work, v_link.usage_coefficient,
+                now(), now()
+            );
+
+            v_count := v_count + 1;
+        END IF;
+
+        -- Сбрасываем переменные для следующей итерации
+        v_new_work_id := NULL;
+        v_new_mat_id := NULL;
+        v_new_sub_work_id := NULL;
+        v_new_sub_mat_id := NULL;
+    END LOOP;
+
+    RETURN v_count;
+END;
+$function$
+
+
+-- Function: public.transfer_work_material_links_v2
+-- Description: Улучшенная версия переноса work_material_links с созданием BOQ items
+CREATE OR REPLACE FUNCTION public.transfer_work_material_links_v2(p_old_position_id uuid, p_new_position_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_links_count INTEGER := 0;
+    v_boq_created INTEGER := 0;
+    v_link RECORD;
+    v_old_boq RECORD;
+    v_new_tender_id UUID;
+    v_new_work_id UUID;
+    v_new_material_id UUID;
+    v_new_sub_work_id UUID;
+    v_new_sub_material_id UUID;
+    v_result JSON;
+    v_boq_mapping JSONB := '{}'::jsonb;
+BEGIN
+    RAISE NOTICE '🔄 Starting transfer_work_material_links_v2 from % to %',
+        p_old_position_id, p_new_position_id;
+
+    -- Получаем tender_id для новой позиции
+    SELECT tender_id INTO v_new_tender_id
+    FROM client_positions
+    WHERE id = p_new_position_id;
+
+    -- Переносим все work_material_links
+    FOR v_link IN
+        SELECT * FROM work_material_links
+        WHERE client_position_id = p_old_position_id
+    LOOP
+        RAISE NOTICE '  📎 Processing link: work=%, material=%, sub_work=%, sub_material=%',
+            v_link.work_boq_item_id, v_link.material_boq_item_id,
+            v_link.sub_work_boq_item_id, v_link.sub_material_boq_item_id;
+
+        -- Обработка work_boq_item_id
+        v_new_work_id := NULL;
+        IF v_link.work_boq_item_id IS NOT NULL THEN
+            -- Проверяем, создавали ли мы уже этот BOQ item
+            IF v_boq_mapping ? v_link.work_boq_item_id::text THEN
+                v_new_work_id := (v_boq_mapping->>(v_link.work_boq_item_id::text))::uuid;
+                RAISE NOTICE '    ✓ Using cached work BOQ: %', v_new_work_id;
+            ELSE
+                -- Получаем информацию о старом BOQ item
+                SELECT * INTO v_old_boq FROM boq_items WHERE id = v_link.work_boq_item_id;
+
+                IF FOUND THEN
+                    -- Пытаемся найти существующий BOQ item в новой позиции
+                    SELECT id INTO v_new_work_id
+                    FROM boq_items
+                    WHERE client_position_id = p_new_position_id
+                      AND item_type = v_old_boq.item_type
+                      AND COALESCE(work_id, '00000000-0000-0000-0000-000000000000') =
+                          COALESCE(v_old_boq.work_id, '00000000-0000-0000-0000-000000000000')
+                      AND COALESCE(item_number, '') = COALESCE(v_old_boq.item_number, '')
+                      AND COALESCE(sub_number, 0) = COALESCE(v_old_boq.sub_number, 0)
+                    LIMIT 1;
+
+                    -- Если не нашли - создаем новый
+                    IF v_new_work_id IS NULL THEN
+                        INSERT INTO boq_items (
+                            tender_id, client_position_id, item_number, sub_number,
+                            sort_order, item_type, description, unit, quantity,
+                            unit_rate, work_id, material_id,
+                            consumption_coefficient, conversion_coefficient,
+                            delivery_price_type, delivery_amount, base_quantity,
+                            detail_cost_category_id, total_amount, commercial_cost,
+                            commercial_markup_coefficient, material_type,
+                            currency_type, currency_rate, quote_link, note,
+                            created_at, updated_at
+                        )
+                        SELECT
+                            v_new_tender_id, p_new_position_id, item_number, sub_number,
+                            sort_order, item_type, description, unit, quantity,
+                            unit_rate, work_id, material_id,
+                            consumption_coefficient, conversion_coefficient,
+                            delivery_price_type, delivery_amount, base_quantity,
+                            detail_cost_category_id, total_amount, commercial_cost,
+                            commercial_markup_coefficient, material_type,
+                            currency_type, currency_rate, quote_link, note,
+                            NOW(), NOW()
+                        FROM boq_items
+                        WHERE id = v_link.work_boq_item_id
+                        RETURNING id INTO v_new_work_id;
+
+                        v_boq_created := v_boq_created + 1;
+                        RAISE NOTICE '    ✨ Created new work BOQ: %', v_new_work_id;
+                    ELSE
+                        RAISE NOTICE '    ✓ Found existing work BOQ: %', v_new_work_id;
+                    END IF;
+
+                    -- Сохраняем маппинг
+                    v_boq_mapping := v_boq_mapping || jsonb_build_object(v_link.work_boq_item_id::text, v_new_work_id::text);
+                END IF;
+            END IF;
+        END IF;
+
+        -- Обработка material_boq_item_id (аналогично work)
+        v_new_material_id := NULL;
+        IF v_link.material_boq_item_id IS NOT NULL THEN
+            IF v_boq_mapping ? v_link.material_boq_item_id::text THEN
+                v_new_material_id := (v_boq_mapping->>(v_link.material_boq_item_id::text))::uuid;
+                RAISE NOTICE '    ✓ Using cached material BOQ: %', v_new_material_id;
+            ELSE
+                SELECT * INTO v_old_boq FROM boq_items WHERE id = v_link.material_boq_item_id;
+
+                IF FOUND THEN
+                    SELECT id INTO v_new_material_id
+                    FROM boq_items
+                    WHERE client_position_id = p_new_position_id
+                      AND item_type = v_old_boq.item_type
+                      AND COALESCE(material_id, '00000000-0000-0000-0000-000000000000') =
+                          COALESCE(v_old_boq.material_id, '00000000-0000-0000-0000-000000000000')
+                      AND COALESCE(item_number, '') = COALESCE(v_old_boq.item_number, '')
+                      AND COALESCE(sub_number, 0) = COALESCE(v_old_boq.sub_number, 0)
+                    LIMIT 1;
+
+                    IF v_new_material_id IS NULL THEN
+                        INSERT INTO boq_items (
+                            tender_id, client_position_id, item_number, sub_number,
+                            sort_order, item_type, description, unit, quantity,
+                            unit_rate, work_id, material_id,
+                            consumption_coefficient, conversion_coefficient,
+                            delivery_price_type, delivery_amount, base_quantity,
+                            detail_cost_category_id, total_amount, commercial_cost,
+                            commercial_markup_coefficient, material_type,
+                            currency_type, currency_rate, quote_link, note,
+                            created_at, updated_at
+                        )
+                        SELECT
+                            v_new_tender_id, p_new_position_id, item_number, sub_number,
+                            sort_order, item_type, description, unit, quantity,
+                            unit_rate, work_id, material_id,
+                            consumption_coefficient, conversion_coefficient,
+                            delivery_price_type, delivery_amount, base_quantity,
+                            detail_cost_category_id, total_amount, commercial_cost,
+                            commercial_markup_coefficient, material_type,
+                            currency_type, currency_rate, quote_link, note,
+                            NOW(), NOW()
+                        FROM boq_items
+                        WHERE id = v_link.material_boq_item_id
+                        RETURNING id INTO v_new_material_id;
+
+                        v_boq_created := v_boq_created + 1;
+                        RAISE NOTICE '    ✨ Created new material BOQ: %', v_new_material_id;
+                    ELSE
+                        RAISE NOTICE '    ✓ Found existing material BOQ: %', v_new_material_id;
+                    END IF;
+
+                    v_boq_mapping := v_boq_mapping || jsonb_build_object(v_link.material_boq_item_id::text, v_new_material_id::text);
+                END IF;
+            END IF;
+        END IF;
+
+        -- Обработка sub_work_boq_item_id
+        v_new_sub_work_id := NULL;
+        IF v_link.sub_work_boq_item_id IS NOT NULL THEN
+            IF v_boq_mapping ? v_link.sub_work_boq_item_id::text THEN
+                v_new_sub_work_id := (v_boq_mapping->>(v_link.sub_work_boq_item_id::text))::uuid;
+            ELSE
+                SELECT * INTO v_old_boq FROM boq_items WHERE id = v_link.sub_work_boq_item_id;
+
+                IF FOUND THEN
+                    SELECT id INTO v_new_sub_work_id
+                    FROM boq_items
+                    WHERE client_position_id = p_new_position_id
+                      AND item_type = v_old_boq.item_type
+                      AND COALESCE(work_id, '00000000-0000-0000-0000-000000000000') =
+                          COALESCE(v_old_boq.work_id, '00000000-0000-0000-0000-000000000000')
+                      AND COALESCE(item_number, '') = COALESCE(v_old_boq.item_number, '')
+                      AND COALESCE(sub_number, 0) = COALESCE(v_old_boq.sub_number, 0)
+                    LIMIT 1;
+
+                    IF v_new_sub_work_id IS NULL THEN
+                        INSERT INTO boq_items (
+                            tender_id, client_position_id, item_number, sub_number,
+                            sort_order, item_type, description, unit, quantity,
+                            unit_rate, work_id, material_id,
+                            consumption_coefficient, conversion_coefficient,
+                            delivery_price_type, delivery_amount, base_quantity,
+                            detail_cost_category_id, total_amount, commercial_cost,
+                            commercial_markup_coefficient, material_type,
+                            currency_type, currency_rate, quote_link, note,
+                            created_at, updated_at
+                        )
+                        SELECT
+                            v_new_tender_id, p_new_position_id, item_number, sub_number,
+                            sort_order, item_type, description, unit, quantity,
+                            unit_rate, work_id, material_id,
+                            consumption_coefficient, conversion_coefficient,
+                            delivery_price_type, delivery_amount, base_quantity,
+                            detail_cost_category_id, total_amount, commercial_cost,
+                            commercial_markup_coefficient, material_type,
+                            currency_type, currency_rate, quote_link, note,
+                            NOW(), NOW()
+                        FROM boq_items
+                        WHERE id = v_link.sub_work_boq_item_id
+                        RETURNING id INTO v_new_sub_work_id;
+
+                        v_boq_created := v_boq_created + 1;
+                        RAISE NOTICE '    ✨ Created new sub_work BOQ: %', v_new_sub_work_id;
+                    END IF;
+
+                    v_boq_mapping := v_boq_mapping || jsonb_build_object(v_link.sub_work_boq_item_id::text, v_new_sub_work_id::text);
+                END IF;
+            END IF;
+        END IF;
+
+        -- Обработка sub_material_boq_item_id
+        v_new_sub_material_id := NULL;
+        IF v_link.sub_material_boq_item_id IS NOT NULL THEN
+            IF v_boq_mapping ? v_link.sub_material_boq_item_id::text THEN
+                v_new_sub_material_id := (v_boq_mapping->>(v_link.sub_material_boq_item_id::text))::uuid;
+            ELSE
+                SELECT * INTO v_old_boq FROM boq_items WHERE id = v_link.sub_material_boq_item_id;
+
+                IF FOUND THEN
+                    SELECT id INTO v_new_sub_material_id
+                    FROM boq_items
+                    WHERE client_position_id = p_new_position_id
+                      AND item_type = v_old_boq.item_type
+                      AND COALESCE(material_id, '00000000-0000-0000-0000-000000000000') =
+                          COALESCE(v_old_boq.material_id, '00000000-0000-0000-0000-000000000000')
+                      AND COALESCE(item_number, '') = COALESCE(v_old_boq.item_number, '')
+                      AND COALESCE(sub_number, 0) = COALESCE(v_old_boq.sub_number, 0)
+                    LIMIT 1;
+
+                    IF v_new_sub_material_id IS NULL THEN
+                        INSERT INTO boq_items (
+                            tender_id, client_position_id, item_number, sub_number,
+                            sort_order, item_type, description, unit, quantity,
+                            unit_rate, work_id, material_id,
+                            consumption_coefficient, conversion_coefficient,
+                            delivery_price_type, delivery_amount, base_quantity,
+                            detail_cost_category_id, total_amount, commercial_cost,
+                            commercial_markup_coefficient, material_type,
+                            currency_type, currency_rate, quote_link, note,
+                            created_at, updated_at
+                        )
+                        SELECT
+                            v_new_tender_id, p_new_position_id, item_number, sub_number,
+                            sort_order, item_type, description, unit, quantity,
+                            unit_rate, work_id, material_id,
+                            consumption_coefficient, conversion_coefficient,
+                            delivery_price_type, delivery_amount, base_quantity,
+                            detail_cost_category_id, total_amount, commercial_cost,
+                            commercial_markup_coefficient, material_type,
+                            currency_type, currency_rate, quote_link, note,
+                            NOW(), NOW()
+                        FROM boq_items
+                        WHERE id = v_link.sub_material_boq_item_id
+                        RETURNING id INTO v_new_sub_material_id;
+
+                        v_boq_created := v_boq_created + 1;
+                        RAISE NOTICE '    ✨ Created new sub_material BOQ: %', v_new_sub_material_id;
+                    END IF;
+
+                    v_boq_mapping := v_boq_mapping || jsonb_build_object(v_link.sub_material_boq_item_id::text, v_new_sub_material_id::text);
+                END IF;
+            END IF;
+        END IF;
+
+        -- Создаем новую связь work_material_links
+        IF v_new_work_id IS NOT NULL OR v_new_material_id IS NOT NULL
+           OR v_new_sub_work_id IS NOT NULL OR v_new_sub_material_id IS NOT NULL THEN
+            BEGIN
+                INSERT INTO work_material_links (
+                    client_position_id,
+                    work_boq_item_id,
+                    material_boq_item_id,
+                    sub_work_boq_item_id,
+                    sub_material_boq_item_id,
+                    notes,
+                    delivery_price_type,
+                    delivery_amount,
+                    material_quantity_per_work,
+                    usage_coefficient,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    p_new_position_id,
+                    v_new_work_id,
+                    v_new_material_id,
+                    v_new_sub_work_id,
+                    v_new_sub_material_id,
+                    v_link.notes,
+                    v_link.delivery_price_type,
+                    v_link.delivery_amount,
+                    v_link.material_quantity_per_work,
+                    v_link.usage_coefficient,
+                    NOW(),
+                    NOW()
+                );
+
+                v_links_count := v_links_count + 1;
+                RAISE NOTICE '  ✅ Created work_material_link #%', v_links_count;
+            EXCEPTION
+                WHEN unique_violation THEN
+                    RAISE NOTICE '  ⚠️ Duplicate link skipped';
+            END;
+        END IF;
+    END LOOP;
+
+    v_result := json_build_object(
+        'success', true,
+        'links_transferred', v_links_count,
+        'boq_items_created', v_boq_created,
+        'message', format('Transferred %s links, created %s BOQ items', v_links_count, v_boq_created)
+    );
+
+    RAISE NOTICE '✅ Successfully transferred % work_material_links, created % BOQ items',
+        v_links_count, v_boq_created;
+    RETURN v_result;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE '❌ Error in transfer_work_material_links_v2: %', SQLERRM;
+        RETURN json_build_object(
+            'success', false,
+            'links_transferred', 0,
+            'boq_items_created', 0,
+            'error', SQLERRM
+        );
 END;
 $function$
 
@@ -8010,6 +11159,18 @@ CREATE INDEX users_is_anonymous_idx ON auth.users USING btree (is_anonymous);
 -- Index on auth.users
 CREATE UNIQUE INDEX users_phone_key ON auth.users USING btree (phone);
 
+-- Index on public.boq_item_version_mappings
+CREATE INDEX idx_boq_mapping_new ON public.boq_item_version_mappings USING btree (new_boq_item_id);
+
+-- Index on public.boq_item_version_mappings
+CREATE INDEX idx_boq_mapping_old ON public.boq_item_version_mappings USING btree (old_boq_item_id);
+
+-- Index on public.boq_item_version_mappings
+CREATE INDEX idx_boq_mapping_tenders ON public.boq_item_version_mappings USING btree (old_tender_id, new_tender_id);
+
+-- Index on public.boq_item_version_mappings
+CREATE UNIQUE INDEX uq_boq_mapping ON public.boq_item_version_mappings USING btree (old_boq_item_id, new_tender_id);
+
 -- Index on public.boq_items
 CREATE INDEX idx_boq_items_aggregation ON public.boq_items USING btree (client_position_id, total_amount, quantity, unit_rate);
 
@@ -8297,6 +11458,9 @@ CREATE INDEX idx_work_material_links_sub_work ON public.work_material_links USIN
 
 -- Index on public.work_material_links
 CREATE INDEX idx_work_material_links_work ON public.work_material_links USING btree (work_boq_item_id);
+
+-- Index on public.work_material_links
+CREATE UNIQUE INDEX uq_sub_work_material_pair ON public.work_material_links USING btree (sub_work_boq_item_id, sub_material_boq_item_id);
 
 -- Index on public.work_material_links
 CREATE UNIQUE INDEX uq_work_material_pair ON public.work_material_links USING btree (work_boq_item_id, material_boq_item_id);
