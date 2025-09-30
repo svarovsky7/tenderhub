@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Modal, Table, Button, Tag, Space, Progress, Alert, Badge, Descriptions, Typography, Tooltip, Upload, Select } from 'antd';
+import { Modal, Table, Button, Tag, Space, Progress, Alert, Badge, Descriptions, Typography, Tooltip, Upload, Select, Radio, InputNumber, Row, Col } from 'antd';
 import {
   UploadOutlined,
   CheckCircleOutlined,
@@ -53,8 +53,39 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
   const [editingMappingId, setEditingMappingId] = useState<string | null>(null);
   const [selectedPositions, setSelectedPositions] = useState<Record<string, string | null>>({});
   const [currentStep, setCurrentStep] = useState<'upload' | 'review' | 'complete'>('upload');
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(100);
   const [currentPage, setCurrentPage] = useState(1);
+  const [confidenceFilter, setConfidenceFilter] = useState<number | null>(null);
+  const [mappingTypeFilter, setMappingTypeFilter] = useState<string>('all');
+  const [actualDopCount, setActualDopCount] = useState(0);
+
+  // Загрузка фактического количества ДОП позиций
+  useEffect(() => {
+    const loadDopCount = async () => {
+      if (parentTenderId) {
+        const { count } = await supabase
+          .from('client_positions')
+          .select('*', { count: 'exact', head: true })
+          .eq('tender_id', parentTenderId)
+          .eq('is_additional', true);
+
+        setActualDopCount(count || 0);
+      }
+    };
+    loadDopCount();
+  }, [parentTenderId]);
+
+  // Обновление статистики
+  const updateStatistics = useCallback((mappingsList: MappingTableRow[]) => {
+    const stats = {
+      total: mappingsList.length,
+      matched: mappingsList.filter(m => m.mapping_type === 'exact' || m.mapping_type === 'fuzzy' || m.mapping_type === 'manual').length,
+      new: mappingsList.filter(m => m.mapping_type === 'new').length,
+      deleted: mappingsList.filter(m => m.mapping_type === 'deleted').length,
+      dop: actualDopCount // Используем реальное количество ДОП позиций из БД
+    };
+    setStatistics(stats);
+  }, [actualDopCount]);
 
   // Обработка загрузки файла
   const handleFileUpload = useCallback(async (file: File) => {
@@ -83,6 +114,18 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
 
       if (result.data) {
         setNewTenderId(result.data.tenderId);
+
+        // Загружаем количество ДОП позиций после загрузки файла
+        if (parentTenderId) {
+          const { count } = await supabase
+            .from('client_positions')
+            .select('*', { count: 'exact', head: true })
+            .eq('tender_id', parentTenderId)
+            .eq('is_additional', true);
+
+          setActualDopCount(count || 0);
+          console.log('🚀 [handleFileUpload] DOP count loaded:', count);
+        }
 
         // Преобразуем маппинги для таблицы
         const tableData: MappingTableRow[] = (result.data.mappings || []).map((m, index) => ({
@@ -123,7 +166,7 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [parentTenderId]);
+  }, [parentTenderId, updateStatistics]);
 
   // Изменение статуса маппинга
   const handleMappingStatusChange = useCallback(async (mappingId: string, status: 'confirmed' | 'rejected') => {
@@ -600,18 +643,6 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
     }
   }, [mappings, newTenderId, availablePositions]);
 
-  // Обновление статистики
-  const updateStatistics = (mappingsList: MappingTableRow[]) => {
-    const stats = {
-      total: mappingsList.length,
-      matched: mappingsList.filter(m => m.mapping_type === 'exact' || m.mapping_type === 'fuzzy' || m.mapping_type === 'manual').length,
-      new: mappingsList.filter(m => m.mapping_type === 'new').length,
-      deleted: mappingsList.filter(m => m.mapping_type === 'deleted').length,
-      dop: mappingsList.filter(m => m.is_dop).length
-    };
-    setStatistics(stats);
-  };
-
   // Колонки таблицы маппингов
   const columns: ColumnsType<MappingTableRow> = [
     // Старая версия - колонки
@@ -1015,8 +1046,11 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
             <Descriptions.Item label="Удалены">
               <Badge count={statistics.deleted} showZero style={{ backgroundColor: '#ff4d4f' }} />
             </Descriptions.Item>
-            <Descriptions.Item label="ДОП">
-              <Badge count={statistics.dop} showZero style={{ backgroundColor: '#722ed1' }} />
+            <Descriptions.Item label="ДОП позиции">
+              <Space>
+                <Badge count={statistics.dop} showZero style={{ backgroundColor: '#722ed1' }} />
+                {statistics.dop > 0 && <Text type="secondary" style={{ fontSize: '12px' }}>(переносятся автоматически)</Text>}
+              </Space>
             </Descriptions.Item>
           </Descriptions>
 
@@ -1028,15 +1062,83 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
             style={{ marginBottom: 20 }}
           />
 
+          {/* Панель фильтров */}
+          <Row gutter={16} style={{ marginBottom: 20 }}>
+            <Col span={12}>
+              <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                <Text strong>Тип сопоставления:</Text>
+                <Radio.Group value={mappingTypeFilter} onChange={(e) => setMappingTypeFilter(e.target.value)}>
+                  <Radio.Button value="all">Все</Radio.Button>
+                  <Radio.Button value="matched">Сопоставлено</Radio.Button>
+                  <Radio.Button value="new">Добавлено</Radio.Button>
+                  <Radio.Button value="deleted">Удалено</Radio.Button>
+                </Radio.Group>
+              </Space>
+            </Col>
+            <Col span={12}>
+              <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                <Text strong>Показать только с уверенностью менее:</Text>
+                <Space>
+                  <InputNumber
+                    value={confidenceFilter ? confidenceFilter * 100 : null}
+                    onChange={(value) => setConfidenceFilter(value ? value / 100 : null)}
+                    min={0}
+                    max={100}
+                    formatter={(value) => value ? `${value}%` : ''}
+                    parser={(value) => value ? parseFloat(value.replace('%', '')) : 0}
+                    style={{ width: 100 }}
+                    placeholder="Нет"
+                  />
+                  {confidenceFilter && (
+                    <Button size="small" onClick={() => setConfidenceFilter(null)}>Сбросить</Button>
+                  )}
+                </Space>
+              </Space>
+            </Col>
+          </Row>
+
           <Table
             columns={columns}
-            dataSource={mappings}
+            dataSource={(() => {
+              // Применяем фильтры к данным
+              let filtered = [...mappings];
+
+              // Фильтр по типу маппинга
+              if (mappingTypeFilter !== 'all') {
+                switch (mappingTypeFilter) {
+                  case 'matched':
+                    filtered = filtered.filter(m =>
+                      m.mapping_type === 'exact' ||
+                      m.mapping_type === 'fuzzy' ||
+                      m.mapping_type === 'manual'
+                    );
+                    break;
+                  case 'new':
+                    filtered = filtered.filter(m => m.mapping_type === 'new');
+                    break;
+                  case 'deleted':
+                    filtered = filtered.filter(m => m.mapping_type === 'deleted');
+                    break;
+                }
+              }
+
+              // Фильтр по уверенности (показываем только с низкой уверенностью)
+              if (confidenceFilter !== null) {
+                filtered = filtered.filter(m =>
+                  m.confidence_score !== null &&
+                  m.confidence_score !== undefined &&
+                  m.confidence_score < confidenceFilter
+                );
+              }
+
+              return filtered;
+            })()}
             loading={loading}
             pagination={{
               current: currentPage,
               pageSize: pageSize,
               showSizeChanger: true,
-              pageSizeOptions: ['10', '20', '50', '100'],
+              pageSizeOptions: ['50', '100', '500', '1000'],
               showTotal: (total, range) => `${range[0]}-${range[1]} из ${total} позиций`,
               onChange: (page, size) => {
                 setCurrentPage(page);
