@@ -40,7 +40,8 @@
       "mcp__supabase__supabase_schema",
       "Read(//c/Users/odintsov.a.a/AppData/Roaming/Claude/**)",
       "mcp__supabase__supabase_delete",
-      "Bash(cmd /c:*)"
+      "Bash(cmd /c:*)",
+      "Read(//c/Users/nekrasov.l.m/mcp-servers/playwright/**)"
     ],
     "deny": [],
     "additionalDirectories": [

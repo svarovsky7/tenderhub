@@ -61,33 +61,53 @@ export const useLocalState = ({ position, isExpanded = false }: UseLocalStatePro
 
   // Dynamic total cost calculation using shared function
   const totalCost = useMemo(() => {
-    // If position is expanded and has BOQ items - always calculate dynamically for real-time updates
-    if (isExpanded && position.boq_items?.length > 0) {
+    // If position has BOQ items loaded - always calculate dynamically for accuracy
+    // This ensures correct totals even for collapsed positions when items are available
+    if (position.boq_items?.length > 0) {
       // Use the shared calculation function that matches table footer logic
       const dynamicTotal = calculateBOQItemsTotal(position.boq_items, position.boq_items);
-      console.log('💰 Dynamic total calculation for expanded position:', {
+      console.log('💰 Dynamic total calculation for position with items:', {
         position_name: position.work_name,
         items_count: position.boq_items.length,
         dynamic_total: dynamicTotal,
-        db_total: position.total_position_cost,
-        using: 'dynamic'
+        is_expanded: isExpanded,
+        using: 'dynamic_with_items'
       });
       return dynamicTotal;
     }
 
-    // For collapsed positions or positions without items, use DB value if available
+    // For positions without loaded items - use DB values
+    // Note: These values might be outdated if work_material_links changed
+    const materialsCost = parseFloat(position.total_materials_cost) || 0;
+    const worksCost = parseFloat(position.total_works_cost) || 0;
+    const calculatedTotal = materialsCost + worksCost;
+
+    if (calculatedTotal > 0) {
+      console.log('💰 Using DB totals for position without items:', {
+        position_name: position.work_name,
+        materials_cost: materialsCost,
+        works_cost: worksCost,
+        calculated_total: calculatedTotal,
+        is_expanded: isExpanded,
+        using: 'db_totals'
+      });
+      return calculatedTotal;
+    }
+
+    // Fallback to total_position_cost if available
     if (position.total_position_cost !== undefined && position.total_position_cost !== null) {
-      console.log('💰 Using DB total for collapsed/empty position:', {
+      console.log('💰 Using fallback total for position:', {
         position_name: position.work_name,
         db_total: position.total_position_cost,
-        using: 'database'
+        is_expanded: isExpanded,
+        using: 'fallback'
       });
       return position.total_position_cost;
     }
 
     // Fallback to 0
     return 0;
-  }, [isExpanded, position.boq_items, position.total_position_cost, position.work_name]);
+  }, [isExpanded, position.boq_items, position.total_position_cost, position.total_materials_cost, position.total_works_cost, position.work_name]);
 
   // Sync state when position changes
   useEffect(() => {

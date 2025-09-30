@@ -365,6 +365,10 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
         await recalculateCommercialForChangedItems(positionsData);
       }
 
+      // Check if any position might have outdated totals (e.g., with work_material_links)
+      // This is indicated by positions having work_material_links but the totals seem incorrect
+      // For now, we rely on the user to click refresh if totals look wrong
+
     } catch (error) {
       console.error('❌ Error loading positions:', error);
       message.error('Ошибка загрузки позиций');

@@ -29,6 +29,7 @@ import TenderBOQManagerLazy from '../components/tender/TenderBOQManagerLazy';
 import DeadlineStatusBar from '../components/tender/DeadlineStatusBar';
 import QuickTenderSelector from '../components/common/QuickTenderSelector';
 import { tendersApi } from '../lib/supabase/api';
+import { supabase } from '../lib/supabase/client';
 import type { Tender } from '../lib/supabase/types';
 import { formatQuantity } from '../utils/formatters';
 import dayjs from 'dayjs';
@@ -171,36 +172,71 @@ const BOQPageSimplified: React.FC = () => {
     }
   }, [selectedTenderId, tenders, selectedTender]);
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
     if (!selectedTenderId) {
       console.log('❌ No tender selected for refresh');
       message.info('Выберите тендер для обновления');
       return;
     }
-    
+
     console.log('🔄 Starting refresh for tender:', selectedTenderId);
     setLoading(true);
-    message.loading('Обновление данных...', 0.5);
-    
+    const loadingMsg = message.loading('Пересчет и обновление данных...', 0);
+
+    // Force recalculate position totals in DB before refresh
+    // This ensures totals account for work_material_links
+    try {
+      console.log('🔄 Triggering position totals recalculation in DB...');
+      const { data: positions } = await supabase
+        .from('client_positions')
+        .select('id')
+        .eq('tender_id', selectedTenderId);
+
+      if (positions && positions.length > 0) {
+        // Touch first BOQ item in each position to trigger recalculation
+        let recalculated = 0;
+        for (const position of positions) {
+          const { data: firstItem } = await supabase
+            .from('boq_items')
+            .select('id')
+            .eq('client_position_id', position.id)
+            .limit(1)
+            .single();
+
+          if (firstItem) {
+            await supabase
+              .from('boq_items')
+              .update({ updated_at: new Date().toISOString() })
+              .eq('id', firstItem.id);
+            recalculated++;
+          }
+        }
+        console.log(`✅ Position totals recalculation triggered for ${recalculated}/${positions.length} positions`);
+      }
+    } catch (error) {
+      console.error('⚠️ Failed to trigger position totals recalculation:', error);
+    }
+
     // Hide content with animation
     console.log('🎬 Hiding content...');
     setIsContentVisible(false);
-    
-    // Force reload the TenderBOQManagerSimplified component by changing its key
+
+    // Force reload the component by changing its key
     setTimeout(() => {
       const currentId = selectedTenderId;
       console.log('🔧 Unmounting component by clearing tenderId');
       setSelectedTenderId(null);
-      
+
       setTimeout(() => {
         console.log('🔄 Remounting component with tenderId:', currentId);
         setSelectedTenderId(currentId);
         setIsContentVisible(true);
         setLoading(false);
-        message.success('Данные обновлены');
-        console.log('✅ Refresh completed');
-      }, 100);
-    }, 300);
+        loadingMsg();
+        message.success('Данные пересчитаны и обновлены');
+        console.log('✅ Refresh completed with recalculation');
+      }, 200);
+    }, 500); // Increased delay to allow DB triggers to complete
   }, [selectedTenderId]);
 
   const handleNavigateToTender = useCallback(() => {

@@ -24,6 +24,7 @@ npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 node src/scripts/checkPositionTotals.ts    # Verify position totals match calculated values
 node src/scripts/applyPositionTotalsTrigger.ts  # Apply position totals trigger migration
 node src/scripts/updateCommercialCostsFunction.ts  # Update commercial costs function
+node src/scripts/recalculatePositionTotals.ts [tenderId]  # Force recalculate position totals (optional tender ID)
 ```
 
 ## Tech Stack
@@ -70,14 +71,15 @@ ALWAYS verify schema before ANY database work
 
 ### Core Database Tables
 - `boq_items` - Bill of Quantities items with hierarchy
-- `client_positions` - Position groupings with totals (includes manual_volume, manual_note fields)
+- `client_positions` - Position groupings with totals
 - `tenders` - Main tender records (includes currency rates: usd_rate, eur_rate, cny_rate)
 - `materials_library` & `works_library` - Resource libraries
 - `work_material_links` - M2M work-material relationships
 - `work_material_templates` - Templates for work-material combinations
 - `commercial_costs_by_category` - Aggregated costs by category (auto-updated via trigger)
 - `cost_categories` & `detail_cost_categories` - Cost categorization system
-- `tender_markup` & `markup_templates` - Markup configuration
+- `tender_markup_percentages` - Markup configuration (unique active record per tender)
+- `markup_templates` - Reusable markup templates
 - `tender_version_mappings` - Version control mappings between tenders
 - `tender_version_history` - Version control audit trail
 
@@ -107,6 +109,14 @@ src/components/admin/      # Admin interfaces
 src/components/financial/  # Financial components
 ```
 
+### Custom Hooks (`src/hooks/`)
+- `useBOQItems` - BOQ item CRUD operations
+- `useBOQManagement` - BOQ hierarchy management
+- `useClientPositions` - Position management
+- `useTenderVersioning` - Version control operations
+- `useWorkMaterialLinks` - Work-material relationship management
+- `useMaterialDragDrop` - Drag-drop functionality
+
 ### Routing (all lazy-loaded)
 - `/` → `/dashboard` - Main dashboard
 - `/tenders/*` - Tender management
@@ -117,6 +127,7 @@ src/components/financial/  # Financial components
 - `/libraries/materials`, `/libraries/works` - Resource libraries
 - `/libraries/work-materials` - Template management
 - `/construction-costs/tender` - Tender construction costs page
+- `/commercial-costs` - Commercial costs page (includes versions with `includeVersions: true`)
 - `/financial-indicators` - Financial indicators dashboard
 - `/admin/*` - Admin interfaces
 
@@ -130,6 +141,7 @@ src/components/financial/  # Financial components
 - **Delivery Cost**: Auto-calculated 3% for "not included" type
 - **Versioning**: New tender versions get unique `tender_number` with `_v{version}` suffix
 - **Migration Workflow**: Apply migrations directly in Supabase SQL Editor, then delete migration files after application
+- **Markup Records**: Only one active markup record per tender (enforced by unique constraint)
 
 ### 2. Logging Pattern (Required)
 ```typescript
@@ -149,6 +161,7 @@ console.log('❌ [FunctionName] error:', error);
 - React Query caching with 5-minute staleTime
 - Debounced search (300ms default)
 - Map-based caching for BOQ items
+- Manual chunks in Vite for optimal loading (xlsx, antd, react-vendor, etc.)
 
 ### 5. Excel Integration
 - Template-based import with progress tracking
@@ -162,9 +175,10 @@ console.log('❌ [FunctionName] error:', error);
 - **Pagination**: Use controlled state with `pageSize` and `current` props (default 100 rows)
 - **Modal Cleanup**: Delete draft versions on cancel to prevent orphans
 - **Mapping Save**: Check for existing IDs before re-saving to prevent duplicates
-- **API Filtering**: Filter child versions at query level, not in UI
+- **API Filtering**: Filter child versions at query level, not in UI (`includeVersions` parameter)
 - **Error Messages**: Always include context in console logs with emojis
 - **Function Order**: Define functions before use to avoid initialization errors
+- **Duplicate Prevention**: Use unique constraints (e.g., active markup records)
 
 ## Environment Setup
 
@@ -183,6 +197,7 @@ VITE_APP_VERSION=0.0.0
 - HMR: overlay disabled, 5s timeout
 - Manual chunk splitting for optimal loading
 - lucide-react excluded from optimization
+- Separate chunks: xlsx, antd, react-vendor, tanstack, utils, dnd-kit, supabase, boq, tender, admin, financial
 
 ### TypeScript Configuration
 - Project references: tsconfig.app.json and tsconfig.node.json
@@ -211,6 +226,7 @@ VITE_APP_VERSION=0.0.0
 - Fuzzy matching for position comparison between versions
 - Manual fields (manual_volume, manual_note) transfer between versions
 - Filtering by confidence score and mapping type in version modal
+- Single active markup record per tender enforcement
 
 ### ⚠️ Disabled/Placeholder
 - Authentication (no login required)
@@ -227,14 +243,14 @@ VITE_APP_VERSION=0.0.0
 - **`transfer_boq_with_mapping`** - Transfers BOQ items and manual fields based on mapping
 - **`transfer_dop_positions`** - Transfers additional (DOP) positions including manual fields
 - **`transfer_work_material_links`** - Transfers work-material relationships between positions
+- **`transfer_all_tender_data`** - Comprehensive transfer of all data including links and DOP positions
 - **`cleanup_draft_versions`** - Removes empty draft versions
 
 ### Critical Fields
 - **`is_additional`** - Boolean flag in `client_positions` for DOP positions (NOT `position_type = 'dop'`)
 - **`parent_position_id`** - Links DOP positions to parent positions
 - **`parent_version_id`** - Links child tender versions to parent tenders
-- **`manual_volume`** - Manual quantity override for positions
-- **`manual_note`** - Manual notes for positions
+- **`is_active`** - Boolean flag in `tender_markup_percentages` (unique when true)
 
 ## Git Workflow
 
@@ -267,7 +283,7 @@ The application supports creating new versions of tenders with position comparis
    - 30% weight: context (position numbers)
    - 10% weight: hierarchy level
 4. Manual review/adjustment of mappings
-5. Apply mappings to transfer BOQ items, DOP positions, and manual fields
+5. Apply mappings to transfer BOQ items and DOP positions
 
 ### Important Notes
 - Parent tenders have `parent_version_id = NULL`
@@ -275,22 +291,21 @@ The application supports creating new versions of tenders with position comparis
 - Tender list page filters out child versions (only shows parents)
 - Draft versions are deleted if cancelled before completion
 - Unique constraint prevents duplicate mappings per position
-- DOP positions transfer automatically (not shown in mapping UI)
-- Manual fields (manual_volume, manual_note) transfer for all position types
+- CommercialCostsPage requires `includeVersions: true` to show versions
 
 ### Key Fixes Applied (January 2025)
 1. **TenderVersionManager.tsx**: Restructured table from 4 to 12 columns for full data display
 2. **tenders.ts API**: Added `.is('parent_version_id', null)` filter to exclude versions
 3. **tender-versioning.ts**: Fixed null handling in `calculateContextScore`
 4. **saveMappings**: Excludes 'key' field and returns saved mappings with IDs
-5. **Pagination**: Changed to controlled state with default 100 rows
-6. **DOP Position Transfer**: Fixed parameter order in `transfer_dop_positions` calls
-7. **work_material_links Transfer**: Added comprehensive transfer function
-8. **SQL Functions**: Removed dependency on tender_version_mappings for DOP transfers
-9. **Filtering**: Added confidence score and mapping type filters to version modal
-10. **updateStatistics**: Fixed initialization order to prevent reference errors
-11. **Manual Fields Transfer**: Added transfer for regular positions, not just DOP
-12. **DOP Display**: Removed DOP count from modal (transfers automatically)
+5. **Pagination**: Changed to controlled state with `pagination` prop
+6. **DOP Position Transfer**: Fixed parameter order in `transfer_dop_positions` calls (now p_new_tender_id, p_old_tender_id)
+7. **work_material_links Transfer**: Added comprehensive transfer function for all position types
+8. **SQL Functions**: Removed dependency on tender_version_mappings for DOP position transfers
+9. **Manual Fields Transfer**: Added transfer of manual_volume and manual_note for regular positions
+10. **Markup Records**: Fixed duplicate active records issue, enforced single active record per tender
+11. **CommercialCostsPage**: Added `includeVersions: true` parameter to show all tender versions
+12. **Position Totals Trigger**: Updated to properly account for linked materials with work_material_links (migration 20250131_fix_position_totals_trigger.sql)
 
 ## Common Troubleshooting
 
@@ -306,8 +321,10 @@ The application supports creating new versions of tenders with position comparis
 - **Mappings Not Saving**: Verify mappings don't already exist (check for IDs)
 - **Deleted Versions Reappearing**: Ensure tender list filters by `parent_version_id IS NULL`
 - **UUID Errors in Version Modal**: Use mapping.id, not generated keys
-- **DOP Positions Not Transferring**: Check parameter order and ensure parent positions exist
-- **work_material_links Missing**: Ensure transfer functions are called in correct order
-- **updateStatistics Before Initialization**: Ensure function definitions are ordered correctly in components
-- **Manual Fields Not Transferring**: Check that complete_version_transfer includes UPDATE for manual fields
-- **Excel Import Errors**: Check for stream module externalization warnings (normal in browser environment)
+- **Missing Mapping Columns**: Run migration `20250129_add_mapping_columns.sql`
+- **DOP Positions Not Transferring**: Check parameter order (p_new_tender_id, p_old_tender_id) and ensure parent positions exist
+- **work_material_links Missing**: Run migration `20250130_transfer_work_material_links.sql` for comprehensive transfer
+- **Markup Not Saving**: Check for duplicate active records in tender_markup_percentages table
+- **Versions Not Showing**: Ensure API calls include `includeVersions: true` parameter
+- **Position Totals Incorrect**: Run `node src/scripts/recalculatePositionTotals.ts` to force DB recalculation
+- **Collapsed Card Shows Wrong Total**: DB totals outdated when work_material_links change, need trigger update
