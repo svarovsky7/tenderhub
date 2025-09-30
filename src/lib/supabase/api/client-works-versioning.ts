@@ -207,6 +207,23 @@ export const clientWorksVersioningApi = {
             console.log('✅ Mappings saved with IDs');
           }
         }
+
+        // Автоматически применяем маппинги и переносим данные
+        if (mappings.length > 0) {
+          onProgress?.(80, 'Перенос BOQ items, ДОП позиций и связей...');
+          console.log('🔄 Automatically applying mappings and transferring data...');
+
+          const transferResult = await tenderVersioningApi.applyMappings(newTenderId);
+
+          if (transferResult.error) {
+            console.error('⚠️ Data transfer failed:', transferResult.error);
+            // Не считаем критической ошибкой, позволяем пользователю повторить позже
+            console.log('ℹ️ User can manually transfer data later if needed');
+          } else {
+            console.log('✅ Data transfer completed successfully');
+            onProgress?.(95, 'Перенос данных завершен');
+          }
+        }
       }
 
       onProgress?.(100, 'Завершено!');

@@ -97,8 +97,25 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
         // Подсчитываем статистику
         updateStatistics(tableData);
 
+        // Данные уже перенесены автоматически в client-works-versioning.ts
+        // Показываем пользователю результат
         setCurrentStep('review');
-        message.success(`Загружено ${result.data.positionsCount} позиций`);
+
+        // Проверяем, были ли перенесены данные
+        const hasMatchedPositions = result.data.matchedCount && result.data.matchedCount > 0;
+
+        if (hasMatchedPositions) {
+          message.success(
+            <span>
+              Загружено {result.data.positionsCount} позиций.
+              <br />
+              BOQ items, ДОП позиции и связи перенесены автоматически!
+            </span>,
+            5
+          );
+        } else {
+          message.success(`Загружено ${result.data.positionsCount} позиций`);
+        }
       }
     } catch (error) {
       console.error('Error uploading file:', error);

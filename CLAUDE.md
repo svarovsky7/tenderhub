@@ -214,17 +214,18 @@ VITE_APP_VERSION=0.0.0
 - File storage
 - Edge Functions
 
-## Recent Migrations (Apply if needed)
+## Important Database Functions
 
-### 20250129_fix_version_number_conflict.sql
-- Fixes duplicate tender_number issue when creating versions
-- Adds `cleanup_draft_versions` function to remove empty drafts
-- Ensures unique tender_number generation with counter suffix
+### Versioning Functions (in prod.sql)
+- **`create_tender_version`** - Creates new tender version with unique number
+- **`transfer_boq_items`** - Transfers BOQ items between position mappings
+- **`transfer_dop_positions`** - Transfers additional (DOP) positions with BOQ items
+- **`cleanup_draft_versions`** - Removes empty draft versions
 
-### 20250129_add_mapping_columns.sql
-- Adds columns to `tender_version_mappings` for full position data:
-  - `old_volume`, `old_unit`, `old_client_note`, `old_item_no`
-  - `new_volume`, `new_unit`, `new_client_note`, `new_item_no`
+### Critical Fields
+- **`is_additional`** - Boolean flag in `client_positions` for DOP positions (NOT `position_type = 'dop'`)
+- **`parent_position_id`** - Links DOP positions to parent positions
+- **`parent_version_id`** - Links child tender versions to parent tenders
 
 ## Git Workflow
 
@@ -253,11 +254,11 @@ The application supports creating new versions of tenders with position comparis
 1. Create new version from parent tender (copies tender metadata)
 2. Upload Excel with new positions
 3. Auto-match positions using fuzzy algorithm:
-   - 60% weight: name similarity
-   - 30% weight: context (surrounding positions)
+   - 60% weight: name similarity (calculateFuzzyScore)
+   - 30% weight: context (position numbers)
    - 10% weight: hierarchy level
 4. Manual review/adjustment of mappings
-5. Apply mappings to transfer costs/materials
+5. Apply mappings to transfer BOQ items and DOP positions
 
 ### Important Notes
 - Parent tenders have `parent_version_id = NULL`

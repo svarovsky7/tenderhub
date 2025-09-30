@@ -316,6 +316,43 @@ export const tendersApi = {
       
       console.log('📋 Related BOQ items:', { boqItems, boqError });
 
+      // First delete related version mappings
+      console.log('🗑️ Deleting version mappings...');
+      const { error: mappingError } = await supabase
+        .from('tender_version_mappings')
+        .delete()
+        .or(`old_tender_id.eq.${id},new_tender_id.eq.${id}`);
+
+      if (mappingError) {
+        console.error('❌ Error deleting version mappings:', mappingError);
+      }
+
+      // Delete BOQ item version mappings
+      console.log('🗑️ Deleting BOQ item version mappings...');
+      const { error: boqMappingError } = await supabase
+        .from('boq_item_version_mappings')
+        .delete()
+        .or(`old_tender_id.eq.${id},new_tender_id.eq.${id}`);
+
+      if (boqMappingError) {
+        console.error('❌ Error deleting BOQ item version mappings:', boqMappingError);
+      }
+
+      // Then delete DOP positions (they reference parent positions)
+      console.log('🗑️ Deleting DOP positions...');
+      const { error: dopError } = await supabase
+        .from('client_positions')
+        .delete()
+        .eq('tender_id', id)
+        .eq('is_additional', true);
+
+      if (dopError) {
+        console.error('❌ Error deleting DOP positions:', dopError);
+        // Continue with deletion even if there's an error
+      } else {
+        console.log('✅ DOP positions deleted successfully');
+      }
+
       // Perform the deletion
       console.log('🗑️ Performing tender deletion...');
       const { error } = await supabase
