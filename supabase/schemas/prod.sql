@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-09-30T12:26:13.548208
+-- Generated: 2025-09-30T13:27:12.148004
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -1382,7 +1382,7 @@ $function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
+CREATE OR REPLACE FUNCTION extensions.armor(bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1390,7 +1390,7 @@ AS '$libdir/pgcrypto', $function$pg_armor$function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea)
+CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1430,7 +1430,7 @@ AS '$libdir/pgcrypto', $function$pg_decrypt_iv$function$
 
 
 -- Function: extensions.digest
-CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.digest(text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1438,7 +1438,7 @@ AS '$libdir/pgcrypto', $function$pg_digest$function$
 
 
 -- Function: extensions.digest
-CREATE OR REPLACE FUNCTION extensions.digest(text, text)
+CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1478,19 +1478,19 @@ AS '$libdir/pgcrypto', $function$pg_random_uuid$function$
 
 
 -- Function: extensions.gen_salt
-CREATE OR REPLACE FUNCTION extensions.gen_salt(text, integer)
- RETURNS text
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pg_gen_salt_rounds$function$
-
-
--- Function: extensions.gen_salt
 CREATE OR REPLACE FUNCTION extensions.gen_salt(text)
  RETURNS text
  LANGUAGE c
  PARALLEL SAFE STRICT
 AS '$libdir/pgcrypto', $function$pg_gen_salt$function$
+
+
+-- Function: extensions.gen_salt
+CREATE OR REPLACE FUNCTION extensions.gen_salt(text, integer)
+ RETURNS text
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_gen_salt_rounds$function$
 
 
 -- Function: extensions.grant_pg_cron_access
@@ -1637,7 +1637,7 @@ $function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1645,7 +1645,7 @@ AS '$libdir/pgcrypto', $function$pg_hmac$function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1693,7 +1693,7 @@ AS '$libdir/pgcrypto', $function$pgp_key_id_w$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1701,7 +1701,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1714,6 +1714,14 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
+
+
+-- Function: extensions.pgp_pub_decrypt_bytea
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_decrypt_bytea
@@ -1732,16 +1740,8 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text, 
 AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
--- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text)
- RETURNS bytea
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
-
-
 -- Function: extensions.pgp_pub_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1749,7 +1749,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt(text, bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1789,14 +1789,6 @@ AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_text$function$
 
 
 -- Function: extensions.pgp_sym_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt_bytea(bytea, text, text)
- RETURNS bytea
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
-
-
--- Function: extensions.pgp_sym_decrypt_bytea
 CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt_bytea(bytea, text)
  RETURNS bytea
  LANGUAGE c
@@ -1804,12 +1796,12 @@ CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt_bytea(bytea, text)
 AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
 
 
--- Function: extensions.pgp_sym_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
+-- Function: extensions.pgp_sym_decrypt_bytea
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt_bytea(bytea, text, text)
  RETURNS bytea
  LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt
@@ -1820,8 +1812,16 @@ CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
 AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
 
 
+-- Function: extensions.pgp_sym_encrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
+ RETURNS bytea
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
+
+
 -- Function: extensions.pgp_sym_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1829,7 +1829,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -2786,41 +2786,6 @@ $function$
 
 
 -- Function: public.calculate_commercial_cost
-CREATE OR REPLACE FUNCTION public.calculate_commercial_cost(p_unit_rate numeric, p_delivery_amount numeric, p_delivery_price_type delivery_price_type, p_markup_coefficient numeric, p_item_type boq_item_type)
- RETURNS numeric
- LANGUAGE plpgsql
- IMMUTABLE
-AS $function$
-  DECLARE
-      base_cost numeric;
-      commercial_cost numeric;
-  BEGIN
-      -- Базовая стоимость = unit_rate + доставка (для материалов)
-      base_cost := COALESCE(p_unit_rate, 0);
-
-      -- Добавляем стоимость доставки для материалов
-      IF p_item_type IN ('material', 'sub_material') THEN
-          CASE p_delivery_price_type
-              WHEN 'amount' THEN
-                  base_cost := base_cost + COALESCE(p_delivery_amount, 0);
-              WHEN 'not_included' THEN
-                  -- Автоматические 3% от unit_rate
-                  base_cost := base_cost + (COALESCE(p_unit_rate, 0) * 0.03);
-              ELSE
-                  -- 'included' - доставка уже включена в unit_rate
-                  base_cost := base_cost;
-          END CASE;
-      END IF;
-
-      -- Применяем коммерческий коэффициент
-      commercial_cost := base_cost * COALESCE(p_markup_coefficient, 1.0);
-
-      RETURN ROUND(commercial_cost, 2);
-  END;
-  $function$
-
-
--- Function: public.calculate_commercial_cost
 CREATE OR REPLACE FUNCTION public.calculate_commercial_cost()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2872,6 +2837,41 @@ BEGIN
     RETURN NEW;
 END;
 $function$
+
+
+-- Function: public.calculate_commercial_cost
+CREATE OR REPLACE FUNCTION public.calculate_commercial_cost(p_unit_rate numeric, p_delivery_amount numeric, p_delivery_price_type delivery_price_type, p_markup_coefficient numeric, p_item_type boq_item_type)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+  DECLARE
+      base_cost numeric;
+      commercial_cost numeric;
+  BEGIN
+      -- Базовая стоимость = unit_rate + доставка (для материалов)
+      base_cost := COALESCE(p_unit_rate, 0);
+
+      -- Добавляем стоимость доставки для материалов
+      IF p_item_type IN ('material', 'sub_material') THEN
+          CASE p_delivery_price_type
+              WHEN 'amount' THEN
+                  base_cost := base_cost + COALESCE(p_delivery_amount, 0);
+              WHEN 'not_included' THEN
+                  -- Автоматические 3% от unit_rate
+                  base_cost := base_cost + (COALESCE(p_unit_rate, 0) * 0.03);
+              ELSE
+                  -- 'included' - доставка уже включена в unit_rate
+                  base_cost := base_cost;
+          END CASE;
+      END IF;
+
+      -- Применяем коммерческий коэффициент
+      commercial_cost := base_cost * COALESCE(p_markup_coefficient, 1.0);
+
+      RETURN ROUND(commercial_cost, 2);
+  END;
+  $function$
 
 
 -- Function: public.calculate_delivery_amount_trigger
@@ -4937,7 +4937,23 @@ AS $function$
 
 
 -- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
 CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4953,23 +4969,7 @@ AS '$libdir/ltree', $function$_lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4985,7 +4985,7 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4993,7 +4993,7 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -6435,7 +6435,7 @@ AS '$libdir/ltree', $function$subltree$function$
 
 
 -- Function: public.subpath
-CREATE OR REPLACE FUNCTION public.subpath(ltree, integer, integer)
+CREATE OR REPLACE FUNCTION public.subpath(ltree, integer)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -6443,7 +6443,7 @@ AS '$libdir/ltree', $function$subpath$function$
 
 
 -- Function: public.subpath
-CREATE OR REPLACE FUNCTION public.subpath(ltree, integer)
+CREATE OR REPLACE FUNCTION public.subpath(ltree, integer, integer)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -7362,7 +7362,7 @@ $function$
 
 
 -- Function: public.transfer_dop_positions
--- Description: Переносит ДОП позиции с правильной генерацией item_numbers и корректным переносом links
+-- Description: Переносит ДОП позиции включая manual_volume и manual_note
 CREATE OR REPLACE FUNCTION public.transfer_dop_positions(p_new_tender_id uuid, p_old_tender_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -7407,7 +7407,7 @@ BEGIN
             LIMIT 1;
         END IF;
 
-        -- Создаем новую ДОП позицию (только существующие колонки)
+        -- Создаем новую ДОП позицию (включая manual_volume и manual_note)
         INSERT INTO client_positions (
             tender_id,
             position_number,
@@ -7419,8 +7419,8 @@ BEGIN
             hierarchy_level,
             unit,
             volume,
-            manual_volume,
-            manual_note,
+            manual_volume,  -- Добавлено
+            manual_note,    -- Добавлено
             client_note,
             total_materials_cost,
             total_works_cost,
@@ -7440,8 +7440,8 @@ BEGIN
             hierarchy_level,
             unit,
             volume,
-            manual_volume,
-            manual_note,
+            manual_volume,  -- Добавлено
+            manual_note,    -- Добавлено
             client_note,
             total_materials_cost,
             total_works_cost,
@@ -7491,7 +7491,7 @@ BEGIN
             SELECT
                 p_new_tender_id,
                 v_new_dop_id,
-                v_new_dop_position.position_number || '.' || sub_number, -- Исправленная генерация
+                v_new_dop_position.position_number || '.' || sub_number,
                 sub_number,
                 sort_order,
                 item_type,
@@ -7644,7 +7644,7 @@ $function$
 
 
 -- Function: public.transfer_dop_positions_fixed
--- Description: Исправленная версия переноса ДОП позиций
+-- Description: Исправленная версия переноса ДОП позиций с manual полями
 CREATE OR REPLACE FUNCTION public.transfer_dop_positions_fixed(p_new_tender_id uuid, p_old_tender_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -7680,16 +7680,20 @@ BEGIN
             LIMIT 1;
         END IF;
 
-        -- Создаем новую ДОП позицию с правильными колонками
+        -- Создаем новую ДОП позицию с правильными колонками (включая manual поля)
         INSERT INTO client_positions (
             tender_id, position_number, item_no, work_name, parent_position_id, is_additional,
-            position_type, hierarchy_level, unit, volume, manual_volume, manual_note, client_note,
+            position_type, hierarchy_level, unit, volume,
+            manual_volume, manual_note,  -- Добавлено
+            client_note,
             total_materials_cost, total_works_cost, total_commercial_materials_cost,
             total_commercial_works_cost, created_at, updated_at
         )
         SELECT
             p_new_tender_id, position_number, item_no, work_name, v_new_parent_id, true,
-            position_type, hierarchy_level, unit, volume, manual_volume, manual_note, client_note,
+            position_type, hierarchy_level, unit, volume,
+            manual_volume, manual_note,  -- Добавлено
+            client_note,
             total_materials_cost, total_works_cost, total_commercial_materials_cost,
             total_commercial_works_cost, now(), now()
         FROM client_positions
@@ -7718,7 +7722,7 @@ BEGIN
             SELECT
                 p_new_tender_id,
                 v_new_dop_id,
-                v_new_dop_position.position_number || '.' || sub_number, -- Исправленная генерация
+                v_new_dop_position.position_number || '.' || sub_number,
                 sub_number,
                 sort_order, item_type, description, unit, quantity, unit_rate,
                 material_id, work_id, consumption_coefficient, conversion_coefficient,
@@ -7756,7 +7760,7 @@ $function$
 
 
 -- Function: public.transfer_dop_positions_v2
--- Description: Улучшенная версия переноса ДОП позиций без использования transfer_links_using_mapping
+-- Description: Улучшенная версия переноса ДОП позиций с manual полями
 CREATE OR REPLACE FUNCTION public.transfer_dop_positions_v2(p_new_tender_id uuid, p_old_tender_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -7794,16 +7798,20 @@ BEGIN
             LIMIT 1;
         END IF;
 
-        -- Создаем новую ДОП позицию с правильными колонками
+        -- Создаем новую ДОП позицию с правильными колонками (включая manual поля)
         INSERT INTO client_positions (
             tender_id, position_number, item_no, work_name, parent_position_id, is_additional,
-            position_type, hierarchy_level, unit, volume, manual_volume, manual_note, client_note,
+            position_type, hierarchy_level, unit, volume,
+            manual_volume, manual_note,  -- Добавлено
+            client_note,
             total_materials_cost, total_works_cost, total_commercial_materials_cost,
             total_commercial_works_cost, created_at, updated_at
         )
         SELECT
             p_new_tender_id, position_number, item_no, work_name, v_new_parent_id, true,
-            position_type, hierarchy_level, unit, volume, manual_volume, manual_note, client_note,
+            position_type, hierarchy_level, unit, volume,
+            manual_volume, manual_note,  -- Добавлено
+            client_note,
             total_materials_cost, total_works_cost, total_commercial_materials_cost,
             total_commercial_works_cost, now(), now()
         FROM client_positions
@@ -7854,7 +7862,7 @@ BEGIN
                 VALUES (
                     p_new_tender_id,
                     v_new_dop_id,
-                    v_new_dop_position.position_number || '.' || v_old_boq.sub_number, -- Исправленная генерация
+                    v_new_dop_position.position_number || '.' || v_old_boq.sub_number,
                     v_old_boq.sub_number,
                     v_old_boq.sort_order,
                     v_old_boq.item_type,
@@ -9445,45 +9453,6 @@ $function$
 
 
 -- Function: public.upsert_location
--- Description: Безопасное создание или обновление локации
-CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text)
- RETURNS uuid
- LANGUAGE plpgsql
-AS $function$
-DECLARE
-    v_id uuid;
-    v_code text;
-BEGIN
-    -- Пытаемся найти существующую локацию
-    SELECT id INTO v_id
-    FROM public.location
-    WHERE LOWER(TRIM(name)) = LOWER(TRIM(p_name))
-    AND (parent_id IS NULL AND p_parent_id IS NULL OR parent_id = p_parent_id);
-    
-    IF v_id IS NOT NULL THEN
-        -- Обновляем описание если оно предоставлено
-        IF p_description IS NOT NULL THEN
-            UPDATE public.location
-            SET description = p_description,
-                updated_at = now()
-            WHERE id = v_id;
-        END IF;
-        RETURN v_id;
-    END IF;
-    
-    -- Создаем новую локацию
-    v_code := 'LOC-' || extract(epoch from now())::bigint || '-' || md5(random()::text)::text;
-    
-    INSERT INTO public.location (code, name, parent_id, description)
-    VALUES (v_code, TRIM(p_name), p_parent_id, p_description)
-    RETURNING id INTO v_id;
-    
-    RETURN v_id;
-END;
-$function$
-
-
--- Function: public.upsert_location
 CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_description text DEFAULT NULL::text, p_parent_id uuid DEFAULT NULL::uuid, p_location_type text DEFAULT 'other'::text)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -9547,6 +9516,45 @@ BEGIN
     END IF;
     
     RETURN v_location_id;
+END;
+$function$
+
+
+-- Function: public.upsert_location
+-- Description: Безопасное создание или обновление локации
+CREATE OR REPLACE FUNCTION public.upsert_location(p_name text, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_id uuid;
+    v_code text;
+BEGIN
+    -- Пытаемся найти существующую локацию
+    SELECT id INTO v_id
+    FROM public.location
+    WHERE LOWER(TRIM(name)) = LOWER(TRIM(p_name))
+    AND (parent_id IS NULL AND p_parent_id IS NULL OR parent_id = p_parent_id);
+    
+    IF v_id IS NOT NULL THEN
+        -- Обновляем описание если оно предоставлено
+        IF p_description IS NOT NULL THEN
+            UPDATE public.location
+            SET description = p_description,
+                updated_at = now()
+            WHERE id = v_id;
+        END IF;
+        RETURN v_id;
+    END IF;
+    
+    -- Создаем новую локацию
+    v_code := 'LOC-' || extract(epoch from now())::bigint || '-' || md5(random()::text)::text;
+    
+    INSERT INTO public.location (code, name, parent_id, description)
+    VALUES (v_code, TRIM(p_name), p_parent_id, p_description)
+    RETURNING id INTO v_id;
+    
+    RETURN v_id;
 END;
 $function$
 

@@ -46,8 +46,7 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
     total: 0,
     matched: 0,
     new: 0,
-    deleted: 0,
-    dop: 0
+    deleted: 0
   });
   const [availablePositions, setAvailablePositions] = useState<any[]>([]);
   const [editingMappingId, setEditingMappingId] = useState<string | null>(null);
@@ -57,23 +56,6 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [confidenceFilter, setConfidenceFilter] = useState<number | null>(null);
   const [mappingTypeFilter, setMappingTypeFilter] = useState<string>('all');
-  const [actualDopCount, setActualDopCount] = useState(0);
-
-  // Загрузка фактического количества ДОП позиций
-  useEffect(() => {
-    const loadDopCount = async () => {
-      if (parentTenderId) {
-        const { count } = await supabase
-          .from('client_positions')
-          .select('*', { count: 'exact', head: true })
-          .eq('tender_id', parentTenderId)
-          .eq('is_additional', true);
-
-        setActualDopCount(count || 0);
-      }
-    };
-    loadDopCount();
-  }, [parentTenderId]);
 
   // Обновление статистики
   const updateStatistics = useCallback((mappingsList: MappingTableRow[]) => {
@@ -81,11 +63,10 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
       total: mappingsList.length,
       matched: mappingsList.filter(m => m.mapping_type === 'exact' || m.mapping_type === 'fuzzy' || m.mapping_type === 'manual').length,
       new: mappingsList.filter(m => m.mapping_type === 'new').length,
-      deleted: mappingsList.filter(m => m.mapping_type === 'deleted').length,
-      dop: actualDopCount // Используем реальное количество ДОП позиций из БД
+      deleted: mappingsList.filter(m => m.mapping_type === 'deleted').length
     };
     setStatistics(stats);
-  }, [actualDopCount]);
+  }, []);
 
   // Обработка загрузки файла
   const handleFileUpload = useCallback(async (file: File) => {
@@ -114,18 +95,6 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
 
       if (result.data) {
         setNewTenderId(result.data.tenderId);
-
-        // Загружаем количество ДОП позиций после загрузки файла
-        if (parentTenderId) {
-          const { count } = await supabase
-            .from('client_positions')
-            .select('*', { count: 'exact', head: true })
-            .eq('tender_id', parentTenderId)
-            .eq('is_additional', true);
-
-          setActualDopCount(count || 0);
-          console.log('🚀 [handleFileUpload] DOP count loaded:', count);
-        }
 
         // Преобразуем маппинги для таблицы
         const tableData: MappingTableRow[] = (result.data.mappings || []).map((m, index) => ({
@@ -1045,12 +1014,6 @@ export const TenderVersionManager: React.FC<TenderVersionManagerProps> = ({
             </Descriptions.Item>
             <Descriptions.Item label="Удалены">
               <Badge count={statistics.deleted} showZero style={{ backgroundColor: '#ff4d4f' }} />
-            </Descriptions.Item>
-            <Descriptions.Item label="ДОП позиции">
-              <Space>
-                <Badge count={statistics.dop} showZero style={{ backgroundColor: '#722ed1' }} />
-                {statistics.dop > 0 && <Text type="secondary" style={{ fontSize: '12px' }}>(переносятся автоматически)</Text>}
-              </Space>
             </Descriptions.Item>
           </Descriptions>
 
