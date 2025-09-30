@@ -80,6 +80,7 @@ ALWAYS verify schema before ANY database work
 - `tender_markup` & `markup_templates` - Markup configuration
 - `tender_version_mappings` - Version control mappings between tenders
 - `tender_version_history` - Version control audit trail
+- `boq_item_version_mappings` - BOQ item mappings between versions
 
 ### API Layer Architecture (`src/lib/supabase/api/`)
 **Modular Domain Pattern** (all modules < 600 lines):
@@ -129,6 +130,7 @@ src/components/financial/  # Financial components
 - **Currency System**: Exchange rates stored at tender level
 - **Delivery Cost**: Auto-calculated 3% for "not included" type
 - **Versioning**: New tender versions get unique `tender_number` with `_v{version}` suffix
+- **Deletion Order**: When deleting tenders, first delete: tender_version_mappings, boq_item_version_mappings, DOP positions (is_additional=true)
 
 ### 2. Logging Pattern (Required)
 ```typescript
@@ -207,6 +209,8 @@ VITE_APP_VERSION=0.0.0
 - Lazy loading for improved performance
 - Tender versioning with automatic position mapping
 - Fuzzy matching for position comparison between versions
+- Automatic data transfer (BOQ items, DOP positions, work_material_links) on version creation
+- Enhanced tender deletion handling with related data cleanup
 
 ### ⚠️ Disabled/Placeholder
 - Authentication (no login required)
@@ -216,10 +220,11 @@ VITE_APP_VERSION=0.0.0
 
 ## Important Database Functions
 
-### Versioning Functions (in prod.sql)
+### Versioning Functions (applied directly in database)
 - **`create_tender_version`** - Creates new tender version with unique number
-- **`transfer_boq_items`** - Transfers BOQ items between position mappings
-- **`transfer_dop_positions`** - Transfers additional (DOP) positions with BOQ items
+- **`complete_version_transfer`** - Basic transfer of BOQ items and DOP positions
+- **`complete_version_transfer_with_links`** - Full transfer including work_material_links
+- **`transfer_work_material_links`** - Transfers work-material relationships between positions
 - **`cleanup_draft_versions`** - Removes empty draft versions
 
 ### Critical Fields
@@ -258,7 +263,7 @@ The application supports creating new versions of tenders with position comparis
    - 30% weight: context (position numbers)
    - 10% weight: hierarchy level
 4. Manual review/adjustment of mappings
-5. Apply mappings to transfer BOQ items and DOP positions
+5. Data automatically transfers after Excel upload (BOQ items, DOP positions, work_material_links)
 
 ### Important Notes
 - Parent tenders have `parent_version_id = NULL`
@@ -266,13 +271,13 @@ The application supports creating new versions of tenders with position comparis
 - Tender list page filters out child versions (only shows parents)
 - Draft versions are deleted if cancelled before completion
 - Unique constraint prevents duplicate mappings per position
+- Data transfer happens automatically during Excel upload process
 
 ### Key Fixes Applied (January 2025)
-1. **TenderVersionManager.tsx**: Restructured table from 4 to 12 columns for full data display
-2. **tenders.ts API**: Added `.is('parent_version_id', null)` filter to exclude versions
-3. **tender-versioning.ts**: Fixed null handling in `calculateContextScore`
-4. **saveMappings**: Excludes 'key' field and returns saved mappings with IDs
-5. **Pagination**: Changed to controlled state with `pagination` prop
+1. **Automatic data transfer**: BOQ items, DOP positions, and work_material_links transfer automatically after Excel upload
+2. **Enhanced deletion**: Cleans up related tables (version mappings, BOQ mappings, DOP positions) before tender deletion
+3. **Improved error handling**: Better validation of old_tender_id and array result handling in mappings
+4. **UI improvements**: Shows transfer progress and results to user
 
 ## Common Troubleshooting
 
@@ -288,4 +293,7 @@ The application supports creating new versions of tenders with position comparis
 - **Mappings Not Saving**: Verify mappings don't already exist (check for IDs)
 - **Deleted Versions Reappearing**: Ensure tender list filters by `parent_version_id IS NULL`
 - **UUID Errors in Version Modal**: Use mapping.id, not generated keys
-- **Missing Mapping Columns**: Run migration `20250129_add_mapping_columns.sql`
+- **Missing Mapping Columns**: Ensure all migrations have been applied to database
+- **DOP Positions Not Transferring**: Check parameter order and ensure parent positions exist
+- **work_material_links Missing**: Functions handle transfer automatically after Excel upload
+- **Deletion Error "Referenced record"**: Related tables are cleaned up automatically, if error persists check for new foreign key constraints
