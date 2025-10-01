@@ -1,12 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { Button, Typography, ConfigProvider, message } from 'antd';
+import { Button, Typography, ConfigProvider, message, Input } from 'antd';
 import {
   PlusOutlined,
   AppstoreOutlined,
   ReloadOutlined,
   FileTextOutlined,
   EyeOutlined,
-  EyeInvisibleOutlined
+  EyeInvisibleOutlined,
+  SearchOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import TemplateList from '../components/template/TemplateList';
@@ -24,6 +25,7 @@ const WorkMaterialsPage: React.FC = () => {
   const [selectedTemplateForBOQ, setSelectedTemplateForBOQ] = useState<{ name: string; note?: string } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleAddToTemplate = (templateName: string, templateNote?: string) => {
     console.log('🚀 Adding template to BOQ:', templateName, 'Note:', templateNote);
@@ -92,6 +94,24 @@ const WorkMaterialsPage: React.FC = () => {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           }
+          .wm-search-input input {
+            background: transparent !important;
+            color: white !important;
+          }
+          .wm-search-input input::placeholder {
+            color: rgba(255, 255, 255, 0.6) !important;
+          }
+          .wm-search-input .ant-input-prefix {
+            color: rgba(255, 255, 255, 0.8) !important;
+          }
+          .wm-search-input .ant-input-clear-icon {
+            color: rgba(255, 255, 255, 0.8) !important;
+          }
+          .wm-search-input:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s ease;
+          }
         `}
       </style>
       <ConfigProvider
@@ -124,6 +144,23 @@ const WorkMaterialsPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="wm-action-buttons">
+                  <Input
+                    placeholder="Поиск по наименованию"
+                    prefix={<SearchOutlined />}
+                    allowClear
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="wm-search-input"
+                    style={{
+                      width: 280,
+                      height: 42,
+                      borderRadius: 8,
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      color: 'white',
+                      borderColor: 'rgba(255, 255, 255, 0.3)',
+                      fontSize: 15
+                    }}
+                  />
                   <Button
                     className="wm-action-btn"
                     style={{
@@ -217,6 +254,7 @@ const WorkMaterialsPage: React.FC = () => {
               key={refreshKey}
               onAddToTemplate={handleAddToTemplate}
               showContent={showTemplatesContent}
+              searchQuery={searchQuery}
             />
           </div>
         </div>

@@ -25,6 +25,7 @@ import type { ColumnsType } from 'antd/es/table';
 interface TemplateListProps {
   onAddToTemplate?: (templateName: string, templateNote?: string) => void;
   showContent?: boolean;
+  searchQuery?: string;
 }
 
 interface TemplateItem {
@@ -71,8 +72,8 @@ interface TemplateItem {
   linked_work_name?: string;
 }
 
-const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showContent = false }) => {
-  console.log('🚀 TemplateList render', { showContent });
+const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showContent = false, searchQuery = '' }) => {
+  console.log('🚀 TemplateList render', { showContent, searchQuery });
 
   const [expandedTemplates, setExpandedTemplates] = useState<string[]>([]);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -1920,7 +1921,13 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
           <Empty description="Нет созданных шаблонов" />
         </Card>
       ) : (
-        transformedTemplates.map((template: any) => (
+        transformedTemplates
+          .filter((template: any) => {
+            if (!searchQuery) return true;
+            const query = searchQuery.toLowerCase();
+            return template.template_name.toLowerCase().includes(query);
+          })
+          .map((template: any) => (
           <Card
             key={template.template_name}
             className="template-card"
