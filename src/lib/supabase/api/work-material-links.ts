@@ -367,7 +367,7 @@ export const workMaterialLinksApi = {
    */
   async deleteLink(linkId: string) {
     console.log('🚀 Deleting work-material link:', linkId);
-    
+
     try {
       const { error } = await supabase
         .from('work_material_links')
@@ -385,6 +385,33 @@ export const workMaterialLinksApi = {
       return { data: null };
     } catch (error) {
       console.error('💥 Exception in deleteLink:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  /**
+   * Удалить все links для позиции
+   */
+  async deleteByPosition(positionId: string) {
+    console.log('🚀 Deleting all links for position:', positionId);
+
+    try {
+      const { error } = await supabase
+        .from('work_material_links')
+        .delete()
+        .eq('client_position_id', positionId);
+
+      console.log('📦 Delete by position result:', { error });
+
+      if (error) {
+        console.error('❌ Failed to delete links:', error);
+        return { error: error.message };
+      }
+
+      console.log('✅ All links deleted successfully');
+      return { data: null };
+    } catch (error) {
+      console.error('💥 Exception in deleteByPosition:', error);
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   },

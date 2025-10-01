@@ -74,6 +74,12 @@ interface ClientPositionCardStreamlinedProps {
     cny_rate?: number | null;
   } | null;
   isLoading?: boolean;  // Add loading state for lazy loading
+  onCopyPosition?: (positionId: string) => Promise<void>;
+  onPastePosition?: (positionId: string) => Promise<void>;
+  hasCopiedData?: boolean;
+  copiedItemsCount?: number;
+  copiedFromPositionId?: string | null;
+  clipboardLoading?: boolean;
 }
 
 
@@ -84,7 +90,13 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   onUpdate,
   tenderId,
   tender,
-  isLoading = false  // Default to false
+  isLoading = false,  // Default to false
+  onCopyPosition,
+  onPastePosition,
+  hasCopiedData,
+  copiedItemsCount,
+  copiedFromPositionId,
+  clipboardLoading
 }) => {
   
   // Forms
@@ -321,6 +333,13 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
           // Handlers
           handleManualVolumeChange={handleManualVolumeChange}
           handleManualNoteChange={handleManualNoteChange}
+          // Clipboard
+          onCopyPosition={onCopyPosition}
+          onPastePosition={onPastePosition}
+          hasCopiedData={hasCopiedData}
+          copiedItemsCount={copiedItemsCount}
+          copiedFromPositionId={copiedFromPositionId}
+          clipboardLoading={clipboardLoading}
         />
 
         {/* Additional Work Inline Form - показывается даже когда позиция свернута */}

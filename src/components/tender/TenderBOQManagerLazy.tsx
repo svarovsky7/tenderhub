@@ -18,6 +18,7 @@ import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links
 import ClientPositionCardStreamlined from './ClientPositionCardStreamlined';
 import type { ClientPositionInsert, ClientPositionType } from '../../lib/supabase/types';
 import { exportBOQToExcel } from '../../utils/excel-templates';
+import { usePositionClipboard } from '../../hooks/usePositionClipboard';
 
 const { Title, Text } = Typography;
 
@@ -738,6 +739,21 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
     }
   }, [expandedPositions, positions, loadedPositionItems, onStatsUpdate, clientPositionsApi, boqApi, workMaterialLinksApi]);
 
+  // Position clipboard hook for copy/paste functionality
+  const {
+    hasCopiedData,
+    copiedItemsCount,
+    copiedLinksCount,
+    copiedFromPositionId,
+    loading: clipboardLoading,
+    handleCopy,
+    handlePaste,
+    clearClipboard
+  } = usePositionClipboard({
+    tenderId,
+    onUpdate: forceRefreshPosition
+  });
+
   // Update single position after changes
   const updateSinglePosition = useCallback(async (positionId: string) => {
     console.log('🔄 Updating single position:', positionId);
@@ -1058,6 +1074,12 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
                 tenderId={tenderId}
                 tender={tender}
                 isLoading={loadingPositions.has(position.id)}
+                onCopyPosition={handleCopy}
+                onPastePosition={handlePaste}
+                hasCopiedData={hasCopiedData}
+                copiedItemsCount={copiedItemsCount}
+                copiedFromPositionId={copiedFromPositionId}
+                clipboardLoading={clipboardLoading}
               />
 
               {/* Additional works for this position */}
@@ -1098,6 +1120,12 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
                     tenderId={tenderId}
                     tender={tender}
                     isLoading={loadingPositions.has(additionalWork.id)}
+                    onCopyPosition={handleCopy}
+                    onPastePosition={handlePaste}
+                    hasCopiedData={hasCopiedData}
+                    copiedItemsCount={copiedItemsCount}
+                    copiedFromPositionId={copiedFromPositionId}
+                    clipboardLoading={clipboardLoading}
                   />
                 </div>
               ))}

@@ -12,7 +12,7 @@ import {
   Typography,
   message
 } from 'antd';
-import { LinkOutlined, DeleteOutlined } from '@ant-design/icons';
+import { LinkOutlined, DeleteOutlined, CopyOutlined, SnippetsOutlined } from '@ant-design/icons';
 import { PositionSummary } from './PositionSummary';
 import { clientPositionsApi } from '../../../../lib/supabase/api';
 
@@ -57,6 +57,13 @@ interface PositionHeaderProps {
   // Handlers
   handleManualVolumeChange: (value: number | null) => void;
   handleManualNoteChange: (value: string) => void;
+  // Clipboard
+  onCopyPosition?: (positionId: string) => Promise<void>;
+  onPastePosition?: (positionId: string) => Promise<void>;
+  hasCopiedData?: boolean;
+  copiedItemsCount?: number;
+  copiedFromPositionId?: string | null;
+  clipboardLoading?: boolean;
 }
 
 /**
@@ -96,7 +103,13 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
   worksCount,
   materialsCount,
   handleManualVolumeChange,
-  handleManualNoteChange
+  handleManualNoteChange,
+  onCopyPosition,
+  onPastePosition,
+  hasCopiedData,
+  copiedItemsCount,
+  copiedFromPositionId,
+  clipboardLoading
 }) => {
   return (
     <div
@@ -579,6 +592,55 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
                   Удалить
                 </Button>
               </Popconfirm>
+            )}
+
+            {/* Кнопка копирования содержимого позиции - показывать только если ничего не скопировано или это скопированная позиция */}
+            {canAddItems && onCopyPosition && position.id && (!hasCopiedData || copiedFromPositionId === position.id) && (
+              <Tooltip title="Копировать содержимое позиции">
+                <Button
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    console.log('📋 Copy button clicked for position:', position.id);
+                    await onCopyPosition(position.id);
+                  }}
+                  loading={clipboardLoading}
+                  disabled={loading || clipboardLoading}
+                  style={{
+                    fontSize: '12px',
+                    padding: '2px 8px',
+                    height: '24px'
+                  }}
+                >
+                  Копировать
+                </Button>
+              </Tooltip>
+            )}
+
+            {/* Кнопка вставки содержимого из буфера - показывать на всех позициях */}
+            {hasCopiedData && onPastePosition && position.id && (
+              <Tooltip title={`Вставить ${copiedItemsCount} элементов`}>
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<SnippetsOutlined />}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    console.log('📋 Paste button clicked for position:', position.id);
+                    await onPastePosition(position.id);
+                  }}
+                  loading={clipboardLoading}
+                  disabled={loading || clipboardLoading}
+                  style={{
+                    fontSize: '12px',
+                    padding: '2px 8px',
+                    height: '24px'
+                  }}
+                >
+                  Вставить
+                </Button>
+              </Tooltip>
             )}
 
             <PositionSummary
