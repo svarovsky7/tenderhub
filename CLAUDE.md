@@ -169,6 +169,9 @@ console.log('❌ [FunctionName] error:', error);
 - Real-time progress feedback
 - Styled exports with xlsx-js-style
 - Position grouping by number to handle duplicates
+- **Export naming conventions**:
+  - BOQ exports: `{TenderName} (Версия {version}).xlsx`
+  - Commercial costs: `Коммерческие стоимости {TenderName} (Версия {version}).xlsx`
 
 ### 6. Critical Code Patterns
 - **UUID Handling**: Always use actual database IDs, not generated keys
@@ -179,6 +182,8 @@ console.log('❌ [FunctionName] error:', error);
 - **Error Messages**: Always include context in console logs with emojis
 - **Function Order**: Define functions before use to avoid initialization errors
 - **Duplicate Prevention**: Use unique constraints (e.g., active markup records)
+- **API Response Handling**: Some APIs return objects with numeric keys (e.g., `{0: {...}}`), access via `data[0]` or `data?.["0"]`
+- **Excel Export Naming**: Include tender name and version in filename format
 
 ## Environment Setup
 
@@ -306,6 +311,8 @@ The application supports creating new versions of tenders with position comparis
 10. **Markup Records**: Fixed duplicate active records issue, enforced single active record per tender
 11. **CommercialCostsPage**: Added `includeVersions: true` parameter to show all tender versions
 12. **Position Totals Trigger**: Updated to properly account for linked materials with work_material_links (migration 20250131_fix_position_totals_trigger.sql)
+13. **Position Totals Trigger**: Removed `UPDATE OF` clause to fire on all updates including currency rate changes (October 2025)
+14. **Excel Export Naming**: Fixed tender name/version loading in TenderCommercialManager (API returns `{0: {...}}` format) (October 2025)
 
 ## Common Troubleshooting
 
@@ -328,3 +335,5 @@ The application supports creating new versions of tenders with position comparis
 - **Versions Not Showing**: Ensure API calls include `includeVersions: true` parameter
 - **Position Totals Incorrect**: Run `node src/scripts/recalculatePositionTotals.ts` to force DB recalculation
 - **Collapsed Card Shows Wrong Total**: DB totals outdated when work_material_links change, need trigger update
+- **Excel Export Wrong Filename**: Check API response structure (may return `{0: {...}}` instead of direct object)
+- **Trigger Not Firing on Currency Change**: Remove `UPDATE OF` clause to fire on all column updates
