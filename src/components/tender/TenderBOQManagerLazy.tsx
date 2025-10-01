@@ -79,8 +79,10 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [form] = Form.useForm();
 
-  // Tender data for currency rates
+  // Tender data for currency rates and export
   const [tender, setTender] = useState<{
+    title?: string;
+    version?: number;
     usd_rate?: number | null;
     eur_rate?: number | null;
     cny_rate?: number | null;
@@ -102,13 +104,15 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
       try {
         const { data: directData, error: directError } = await supabase
           .from('tenders')
-          .select('id, title, usd_rate, eur_rate, cny_rate')
+          .select('id, title, version, usd_rate, eur_rate, cny_rate')
           .eq('id', tenderId)
           .single();
 
         if (directData && !directError) {
           const actualData = Array.isArray(directData) ? directData[0] : directData;
           setTender({
+            title: actualData.title,
+            version: actualData.version || 1,
             usd_rate: actualData.usd_rate,
             eur_rate: actualData.eur_rate,
             cny_rate: actualData.cny_rate
@@ -1046,8 +1050,13 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
       // Show loading message - function will load all data internally
       const loadingMessage = message.loading('Экспорт данных в Excel...', 0);
 
+      // Format tender name with version
+      const tenderFullName = tender?.title
+        ? `${tender.title} (Версия ${tender.version || 1})`
+        : 'BOQ';
+
       // Pass null for boqItemsMap - function will load all data via batch APIs
-      await exportBOQToExcel(positions, null, tender?.title || 'BOQ', tenderId);
+      await exportBOQToExcel(positions, null, tenderFullName, tenderId);
 
       loadingMessage();
       message.success('Данные успешно экспортированы в Excel');

@@ -923,9 +923,9 @@ export const exportBOQToExcel = async (
   // Add worksheet to workbook
   XLSX.utils.book_append_sheet(wb, ws, 'BOQ');
 
-  // Generate filename
-  const safeFileName = tenderName.replace(/[^а-яА-Яa-zA-Z0-9\s]/g, '_').trim();
-  const fileName = `BOQ_${safeFileName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+  // Generate filename (tenderName already includes version in format "Title (Версия X)")
+  const safeFileName = tenderName.replace(/[^а-яА-Яa-zA-Z0-9\s()]/g, '_').trim();
+  const fileName = `${safeFileName}.xlsx`;
 
   // Write file
   XLSX.writeFile(wb, fileName);

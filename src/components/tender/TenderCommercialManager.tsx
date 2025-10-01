@@ -96,6 +96,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
   const [positions, setPositions] = useState<ClientPositionWithCommercial[]>([]);
   const [loading, setLoading] = useState(false);
   const [tenderName, setTenderName] = useState<string>('');
+  const [tenderVersion, setTenderVersion] = useState<number>(1);
   const [markups, setMarkups] = useState<TenderMarkupPercentages | null>(null);
   
   // Sort positions by position number
@@ -134,9 +135,18 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
     try {
       // Загружаем информацию о тендере
       const tenderResult = await tendersApi.getById(tenderId);
-      if (tenderResult.data) {
-        setTenderName(tenderResult.data.title || '');
-        console.log('✅ Tender info loaded:', tenderResult.data.title);
+
+      // API возвращает объект с ключом "0" или массив, берем первый элемент
+      const tenderData = Array.isArray(tenderResult.data)
+        ? tenderResult.data[0]
+        : tenderResult.data?.[0] || tenderResult.data;
+
+      if (tenderData && tenderData.title) {
+        setTenderName(tenderData.title || '');
+        setTenderVersion(tenderData.version || 1);
+        console.log('✅ Tender info loaded:', { title: tenderData.title, version: tenderData.version });
+      } else {
+        console.error('❌ No tender data received or missing title');
       }
 
       // Загружаем проценты накруток для тендера
@@ -524,14 +534,18 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
   const handleExportToExcel = () => {
     try {
       console.log('🚀 Starting Excel export for positions:', positions.length);
-      
+      console.log('📋 Tender info for export:', { tenderName, tenderVersion });
+
       if (positions.length === 0) {
         message.warning('Нет данных для экспорта');
         return;
       }
 
-      const fileName = `Коммерческие_стоимости_${tenderName || 'Тендер'}_${new Date().toLocaleDateString('ru-RU').replace(/\./g, '-')}.xlsx`;
-      
+      const fileName = tenderName
+        ? `Коммерческие стоимости ${tenderName} (Версия ${tenderVersion}).xlsx`
+        : `Коммерческие_стоимости_${new Date().toLocaleDateString('ru-RU')}.xlsx`;
+
+      console.log('📁 Export file name:', fileName);
       exportCommercialCostsToExcel(positions, tenderName, fileName);
       message.success(`Экспорт в Excel завершен: ${fileName}`);
     } catch (error) {
