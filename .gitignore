@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Environment files (IMPORTANT: Never commit credentials)
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,10 +29,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-/.env
-/.env.local
-/.claude/
-/supabase/.temp/
+
+# Claude Code
 /.claude/
 /.claude/agents/
 /.mcp.json
+
+# Supabase
+/supabase/.temp/
+
+# Vercel
+.vercel
