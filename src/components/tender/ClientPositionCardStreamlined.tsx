@@ -98,7 +98,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   copiedFromPositionId,
   clipboardLoading
 }) => {
-  
+  console.log(`🎨 [ClientPositionCardStreamlined] Rendering position: ${position.work_name}, isLoading: ${isLoading}, isExpanded: ${isExpanded}`);
+
   // Forms
   const [form] = Form.useForm();
   const [quickAddForm] = Form.useForm();
@@ -366,7 +367,7 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
         >
           <div className="p-4 bg-gray-50 min-h-0">
             {/* Show loading state if items are being loaded */}
-            {isLoading && !position.boq_items ? (
+            {isLoading ? (
               <div className="flex justify-center items-center py-8">
                 <div className="text-center">
                   <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>

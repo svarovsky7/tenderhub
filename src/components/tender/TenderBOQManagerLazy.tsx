@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import {
   Button,
   Empty,
@@ -59,11 +60,18 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
   // State for positions (without BOQ items initially)
   const [positions, setPositions] = useState<ClientPositionWithStats[]>([]);
 
-  // Cache for loaded BOQ items by position ID
+  // Cache for loaded BOQ items by position ID (use ref for synchronous access)
+  const loadedPositionItemsRef = useRef<Map<string, any[]>>(new Map());
   const [loadedPositionItems, setLoadedPositionItems] = useState<Map<string, any[]>>(new Map());
 
   // Track which positions are currently loading
   const [loadingPositions, setLoadingPositions] = useState<Set<string>>(new Set());
+
+  // Ref for synchronous loading check (prevents race conditions)
+  const loadingPositionsRef = useRef<Set<string>>(new Set());
+
+  // Force update counter to trigger re-render when loading completes
+  const [, forceUpdate] = useState(0);
 
   // Track expanded positions
   const [expandedPositions, setExpandedPositions] = useState<Set<string>>(new Set());
@@ -260,20 +268,29 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
 
   // Load BOQ items for a specific position (lazy loading)
   const loadPositionItems = useCallback(async (positionId: string) => {
-    // Check if already loaded or loading
-    if (loadedPositionItems.has(positionId)) {
-      console.log('✅ Items already cached for position:', positionId);
-      return loadedPositionItems.get(positionId);
-    }
+    console.log('🔄 [loadPositionItems] CALLED for position:', positionId);
+    console.log('🔍 [loadPositionItems] loadedPositionItemsRef.current.has:', loadedPositionItemsRef.current.has(positionId), 'for position:', positionId);
+    console.log('🔍 [loadPositionItems] loadingPositionsRef.current.has:', loadingPositionsRef.current.has(positionId), 'for position:', positionId);
+    console.log('🔍 [loadPositionItems] Cache contents:', Array.from(loadedPositionItemsRef.current.keys()));
 
-    if (loadingPositions.has(positionId)) {
-      console.log('⏳ Already loading items for position:', positionId);
-      return;
+    // Check if already loaded (use ref for synchronous check)
+    if (loadedPositionItemsRef.current.has(positionId)) {
+      console.log('✅ Items already cached for position:', positionId);
+      return loadedPositionItemsRef.current.get(positionId);
     }
 
     console.log('📡 Loading BOQ items for position:', positionId);
 
-    // Mark as loading
+    // Synchronous check using ref to prevent race conditions
+    if (loadingPositionsRef.current.has(positionId)) {
+      console.log('⏳ Already loading items for position (ref check):', positionId);
+      return;
+    }
+
+    // Mark as loading in ref (synchronous)
+    loadingPositionsRef.current.add(positionId);
+
+    // Also update state for UI
     setLoadingPositions(prev => new Set(prev).add(positionId));
 
     try {
@@ -342,8 +359,17 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
 
       console.log(`✅ Loaded ${sortedItems.length} items for position ${positionId}`);
 
-      // Cache the loaded items
-      setLoadedPositionItems(prev => new Map(prev).set(positionId, sortedItems));
+      // Cache the loaded items (both in ref and state)
+      console.log('💾 [loadPositionItems] Caching items for position:', positionId, 'count:', sortedItems.length);
+      loadedPositionItemsRef.current.set(positionId, sortedItems);
+      console.log('💾 [loadPositionItems] Ref cache updated, total cached positions:', loadedPositionItemsRef.current.size);
+
+      setLoadedPositionItems(prev => {
+        const next = new Map(prev);
+        next.set(positionId, sortedItems);
+        console.log('💾 [loadPositionItems] State cache updated, total cached positions:', next.size);
+        return next;
+      });
 
       // Update position with loaded items
       setPositions(prevPositions =>
@@ -420,14 +446,32 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
       console.error('❌ Error loading position items:', error);
       message.error('Ошибка загрузки элементов позиции');
     } finally {
-      // Remove from loading set
-      setLoadingPositions(prev => {
-        const next = new Set(prev);
-        next.delete(positionId);
-        return next;
+      // Remove from loading set (both ref and state)
+      console.log('🔄 [loadPositionItems] FINALLY block executing for:', positionId);
+      loadingPositionsRef.current.delete(positionId);
+      console.log('🔄 [loadPositionItems] Deleted from ref, ref size:', loadingPositionsRef.current.size);
+
+      // Use flushSync to force synchronous state update and re-render
+      flushSync(() => {
+        // Force re-render by updating state (even though we use ref for the actual check)
+        setLoadingPositions(prev => {
+          const next = new Set(prev);
+          next.delete(positionId);
+          console.log('🔄 [loadPositionItems] State updated, new loading set:', Array.from(next));
+          return next;
+        });
+
+        // Increment force update counter to trigger re-render of child components
+        forceUpdate(prev => {
+          const next = prev + 1;
+          console.log('🔄 [loadPositionItems] Force update triggered, counter:', next);
+          return next;
+        });
       });
+
+      console.log('🔄 [loadPositionItems] FINALLY block completed for:', positionId);
     }
-  }, [loadedPositionItems, loadingPositions, onStatsUpdate, positions, initialTotalCost]);
+  }, [onStatsUpdate, positions, initialTotalCost]); // Removed loadedPositionItems from deps as we use ref now
 
   // Toggle position expansion and load items if needed
   const togglePosition = useCallback(async (positionId: string) => {
@@ -444,11 +488,11 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
       return next;
     });
 
-    // Load items if expanding and not loaded
-    if (isExpanding && !loadedPositionItems.has(positionId)) {
+    // Load items if expanding and not loaded (use ref for synchronous check)
+    if (isExpanding && !loadedPositionItemsRef.current.has(positionId)) {
       await loadPositionItems(positionId);
     }
-  }, [expandedPositions, loadedPositionItems, loadPositionItems]);
+  }, [expandedPositions, loadPositionItems]);
 
   // Force refresh position - always reload items regardless of cache
   const forceRefreshPosition = useCallback(async (positionId: string) => {
@@ -1064,6 +1108,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
           {sortPositionsByNumber(positions.filter(p => !p.is_additional && !p.is_orphaned)).map(position => (
             <React.Fragment key={position.id}>
               <ClientPositionCardStreamlined
+                key={`${position.id}-loading-${loadingPositionsRef.current.has(position.id)}`}
                 position={{
                   ...position,
                   boq_items: loadedPositionItems.get(position.id) || position.boq_items
@@ -1073,7 +1118,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
                 onUpdate={() => forceRefreshPosition(position.id)}
                 tenderId={tenderId}
                 tender={tender}
-                isLoading={loadingPositions.has(position.id)}
+                isLoading={loadingPositionsRef.current.has(position.id)}
                 onCopyPosition={handleCopy}
                 onPastePosition={handlePaste}
                 hasCopiedData={hasCopiedData}
@@ -1109,6 +1154,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
                   />
 
                   <ClientPositionCardStreamlined
+                    key={`${additionalWork.id}-loading-${loadingPositionsRef.current.has(additionalWork.id)}`}
                     position={{
                       ...additionalWork,
                       is_additional: true,
@@ -1119,7 +1165,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
                     onUpdate={() => forceRefreshPosition(additionalWork.id)}
                     tenderId={tenderId}
                     tender={tender}
-                    isLoading={loadingPositions.has(additionalWork.id)}
+                    isLoading={loadingPositionsRef.current.has(additionalWork.id)}
                     onCopyPosition={handleCopy}
                     onPastePosition={handlePaste}
                     hasCopiedData={hasCopiedData}
@@ -1150,7 +1196,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
 
               {sortPositionsByNumber(positions.filter(p => p.is_orphaned)).map(orphanedWork => (
                 <ClientPositionCardStreamlined
-                  key={orphanedWork.id}
+                  key={`${orphanedWork.id}-loading-${loadingPositionsRef.current.has(orphanedWork.id)}`}
                   position={{
                     ...orphanedWork,
                     is_additional: true,
@@ -1162,7 +1208,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
                   onUpdate={() => forceRefreshPosition(orphanedWork.id)}
                   tenderId={tenderId}
                   tender={tender}
-                  isLoading={loadingPositions.has(orphanedWork.id)}
+                  isLoading={loadingPositionsRef.current.has(orphanedWork.id)}
                 />
               ))}
             </>
