@@ -116,6 +116,7 @@ src/components/financial/  # Financial components
 - `useTenderVersioning` - Version control operations
 - `useWorkMaterialLinks` - Work-material relationship management
 - `useMaterialDragDrop` - Drag-drop functionality
+- `usePositionClipboard` - Copy/paste position contents with BOQ items and links
 
 ### Routing (all lazy-loaded)
 - `/` → `/dashboard` - Main dashboard
@@ -184,6 +185,7 @@ console.log('❌ [FunctionName] error:', error);
 - **Duplicate Prevention**: Use unique constraints (e.g., active markup records)
 - **API Response Handling**: Some APIs return objects with numeric keys (e.g., `{0: {...}}`), access via `data[0]` or `data?.["0"]`
 - **Excel Export Naming**: Include tender name and version in filename format
+- **Position Copy/Paste**: Uses array index mapping (not sort_order) for reliable ID mapping on repeated paste; links accumulate (not replaced)
 
 ## Environment Setup
 
@@ -232,6 +234,7 @@ VITE_APP_VERSION=0.0.0
 - Manual fields (manual_volume, manual_note) transfer between versions
 - Filtering by confidence score and mapping type in version modal
 - Single active markup record per tender enforcement
+- Position copy/paste with BOQ items and work_material_links (supports repeated paste)
 
 ### ⚠️ Disabled/Placeholder
 - Authentication (no login required)
@@ -313,6 +316,8 @@ The application supports creating new versions of tenders with position comparis
 12. **Position Totals Trigger**: Updated to properly account for linked materials with work_material_links (migration 20250131_fix_position_totals_trigger.sql)
 13. **Position Totals Trigger**: Removed `UPDATE OF` clause to fire on all updates including currency rate changes (October 2025)
 14. **Excel Export Naming**: Fixed tender name/version loading in TenderCommercialManager (API returns `{0: {...}}` format) (October 2025)
+15. **Position Copy/Paste**: Implemented usePositionClipboard hook with index-based ID mapping; removed deleteByPosition call to preserve links on repeated paste (October 2025)
+16. **Position Totals Trigger on work_material_links**: Added trigger to recalculate client_positions totals when work_material_links change (migration 20251001_trigger_position_totals_on_wml.sql); fixed recalculatePositionTotals.ts to update quantity field instead of updated_at (October 2025)
 
 ## Common Troubleshooting
 
@@ -337,3 +342,8 @@ The application supports creating new versions of tenders with position comparis
 - **Collapsed Card Shows Wrong Total**: DB totals outdated when work_material_links change, need trigger update
 - **Excel Export Wrong Filename**: Check API response structure (may return `{0: {...}}` instead of direct object)
 - **Trigger Not Firing on Currency Change**: Remove `UPDATE OF` clause to fire on all column updates
+- **Position Copy Button Shows Everywhere**: Check logic uses `(!hasCopiedData || copiedFromPositionId === position.id)`
+- **Links Wrong on Repeated Paste**: Ensure no `deleteByPosition` call in paste flow; links should accumulate
+- **Copy/Paste ID Mapping Fails**: Use array index mapping, not sort_order (which gets overwritten by bulkCreateInPosition)
+- **recalculatePositionTotals.ts Doesn't Work**: Trigger watches specific fields (total_amount, quantity, unit_rate, item_type, client_position_id), not updated_at. Update quantity field to trigger recalculation.
+- **Totals Wrong After work_material_links Change**: Apply migration 20251001_trigger_position_totals_on_wml.sql to auto-recalculate on links changes

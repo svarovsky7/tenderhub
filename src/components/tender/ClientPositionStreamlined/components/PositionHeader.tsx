@@ -594,8 +594,8 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
               </Popconfirm>
             )}
 
-            {/* Кнопка копирования содержимого позиции - показывать только если ничего не скопировано или это скопированная позиция */}
-            {canAddItems && onCopyPosition && position.id && (!hasCopiedData || copiedFromPositionId === position.id) && (
+            {/* Кнопка копирования содержимого позиции - показывать всегда, если ничего не скопировано, или только на скопированной позиции */}
+            {canAddItems && onCopyPosition && position.id && !hasCopiedData && (
               <Tooltip title="Копировать содержимое позиции">
                 <Button
                   size="small"

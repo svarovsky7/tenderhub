@@ -287,18 +287,20 @@ export const usePositionClipboard = ({ tenderId, onUpdate }: UsePositionClipboar
         console.log(`✅ Created ${successfulLinksCount} links, failed: ${failedLinksCount}`);
       }
 
-      // 8. Обновить целевую позицию для отображения изменений
-      console.log('🔄 Refreshing target position...');
-      await onUpdate(targetPositionId);
-
       console.log('✅ Paste operation completed successfully');
       message.success(
         `Вставлено: ${insertedCount} элементов${clipboardData.links.length > 0 ? `, ${clipboardData.links.length} связей` : ''}`
       );
+
+      // Сбросить loading ПЕРЕД обновлением позиции, чтобы избежать бесконечной загрузки
+      setLoading(false);
+
+      // 8. Обновить целевую позицию для отображения изменений
+      console.log('🔄 Refreshing target position...');
+      await onUpdate(targetPositionId);
     } catch (error) {
       console.error('💥 Exception in handlePaste:', error);
       message.error('Ошибка при вставке содержимого позиции');
-    } finally {
       setLoading(false);
     }
   }, [clipboardData, tenderId, onUpdate]); // Include all dependencies

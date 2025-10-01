@@ -61,13 +61,14 @@ async function recalculatePositionTotals(tenderId?: string) {
         continue;
       }
 
-      // Trigger recalculation by updating a dummy field
+      // Trigger recalculation by updating quantity to same value
       // This will fire the recalculate_position_totals_trigger
+      // (trigger watches: total_amount, quantity, unit_rate, item_type, client_position_id)
       const firstItem = boqItems[0];
       const { error: updateError } = await supabase
         .from('boq_items')
         .update({
-          updated_at: new Date().toISOString()
+          quantity: firstItem.quantity  // Update to same value triggers the recalculation
         })
         .eq('id', firstItem.id);
 
