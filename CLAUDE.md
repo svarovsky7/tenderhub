@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TenderHub is a construction tender management portal built with React 19, TypeScript 5.8, and Vite 7. The application manages hierarchical Bill of Quantities (BOQ), materials/works libraries, and tender workflows for construction project bidding.
+TenderHub is a construction tender management portal built with React 18, TypeScript 5.8, and Vite 7. The application manages hierarchical Bill of Quantities (BOQ), materials/works libraries, and tender workflows for construction project bidding.
 
 **Language**: Russian UI throughout
-**React 19**: Using compatibility patch for Ant Design (`@ant-design/v5-patch-for-react-19`)
+**React Version**: React 18.3.1 (stable, compatible with Ant Design 5)
 **Authentication**: Currently disabled for development
 
 ## Development Commands
@@ -15,8 +15,9 @@ TenderHub is a construction tender management portal built with React 19, TypeSc
 ```bash
 npm install          # Install dependencies
 npm run dev          # Start dev server (http://localhost:5173, auto-assigns port if busy)
-npm run build        # Production build with TypeScript checking (tsc -b && vite build)
-npm run preview      # Preview production build
+npm run build        # Production build (Vite only, NO TypeScript checking for faster builds)
+npm run build:check  # Production build WITH TypeScript type checking (use for validation)
+npm run preview      # Preview production build locally
 npm run lint         # Run ESLint checks (flat config)
 npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 
@@ -25,12 +26,15 @@ node src/scripts/checkPositionTotals.ts    # Verify position totals match calcul
 node src/scripts/applyPositionTotalsTrigger.ts  # Apply position totals trigger migration
 node src/scripts/updateCommercialCostsFunction.ts  # Update commercial costs function
 node src/scripts/recalculatePositionTotals.ts [tenderId]  # Force recalculate position totals (optional tender ID)
+
+# Deployment (Vercel)
+vercel --prod        # Deploy to production (requires VERCEL_TOKEN env var or login)
 ```
 
 ## Tech Stack
 
-- **Frontend**: React 19.1.0, TypeScript 5.8.3, Vite 7.0.4
-- **UI**: Ant Design 5.26.7 + React 19 patch
+- **Frontend**: React 18.3.1, TypeScript 5.8.3, Vite 7.0.4
+- **UI**: Ant Design 5.26.7 (no patch needed for React 18)
 - **State**: TanStack Query 5.84.1 (5-minute cache, no window refetch)
 - **Database**: Supabase 2.53.0 (PostgreSQL 16, RLS disabled)
 - **Styling**: Tailwind CSS 3.4.17 (preflight disabled for Ant Design)
@@ -39,6 +43,7 @@ node src/scripts/recalculatePositionTotals.ts [tenderId]  # Force recalculate po
 - **Virtual Scrolling**: react-window 1.8.11 + react-window-infinite-loader
 - **Forms**: react-hook-form 7.62.0 + yup 1.7.0 validation
 - **Routing**: react-router-dom 7.7.1
+- **Deployment**: Vercel (production deployment platform)
 
 ## MCP (Model Context Protocol) Integration
 
@@ -137,7 +142,11 @@ src/components/financial/  # Financial components
 ### 1. Database Operations
 - **NEVER enable RLS** - Disabled by design
 - **Foreign Key Fields**: `work_id` and `material_id` reference library tables
-- **Position Totals**: Updated via database trigger
+- **Position Totals**: Updated via dual-trigger system:
+  1. `update_linked_material_total_amount()` on work_material_links - Updates boq_items.total_amount for linked materials
+  2. `trigger_recalc_position_on_wml_change()` on work_material_links - Recalculates position totals via SUM(total_amount)
+  3. `recalculate_client_position_totals()` on boq_items - Recalculates when BOQ items change
+- **Linked Materials**: Quantity and total_amount automatically calculated from work.quantity * coefficients
 - **Currency System**: Exchange rates stored at tender level
 - **Delivery Cost**: Auto-calculated 3% for "not included" type
 - **Versioning**: New tender versions get unique `tender_number` with `_v{version}` suffix
@@ -189,6 +198,7 @@ console.log('❌ [FunctionName] error:', error);
 
 ## Environment Setup
 
+### Local Development
 Create `.env.local`:
 ```
 VITE_SUPABASE_URL=https://lkmgbizyyaaacetllbzr.supabase.co
@@ -197,14 +207,26 @@ VITE_APP_NAME=TenderHub
 VITE_APP_VERSION=0.0.0
 ```
 
+### Vercel Deployment
+Environment variables must be configured in Vercel dashboard:
+- `VITE_SUPABASE_URL` - Supabase project URL
+- `VITE_SUPABASE_ANON_KEY` - Supabase anonymous key
+- `VITE_APP_NAME` - Application name (optional)
+- `VITE_APP_VERSION` - Application version (optional)
+
+**Important**: Both local and Vercel use the SAME production Supabase database. Data changes are synchronized, but code updates require redeployment.
+
 ## Configuration Files
 
 ### Vite Configuration
 - Dev server: port 5173 (auto-assigns if busy), host enabled
 - HMR: overlay disabled, 5s timeout
-- Manual chunk splitting for optimal loading
-- lucide-react excluded from optimization
-- Separate chunks: xlsx, antd, react-vendor, tanstack, utils, dnd-kit, supabase, boq, tender, admin, financial
+- **Manual chunking**: Simplified to avoid circular dependencies
+  - `vendor` chunk: All node_modules (except xlsx)
+  - `xlsx` chunk: Separate due to large size (869KB)
+  - Application code: Single bundle (no manual splits to prevent initialization errors)
+- Build: `process.env` defined as empty object to prevent undefined errors
+- **Important**: Complex chunking (splitting react, antd, app modules) causes module initialization errors in production
 
 ### TypeScript Configuration
 - Project references: tsconfig.app.json and tsconfig.node.json
@@ -243,6 +265,11 @@ VITE_APP_VERSION=0.0.0
 - Edge Functions
 
 ## Important Database Functions
+
+### Totals Calculation Functions (in prod.sql)
+- **`update_linked_material_total_amount()`** - Trigger function that updates boq_items.total_amount for linked materials when work_material_links change
+- **`trigger_recalc_position_on_wml_change()`** - Trigger function that recalculates client_positions totals via simple SUM(total_amount)
+- **`recalculate_client_position_totals()`** - Trigger function on boq_items that recalculates position totals when BOQ items change
 
 ### Versioning Functions (in prod.sql)
 - **`create_tender_version`** - Creates new tender version with unique number
@@ -301,7 +328,7 @@ The application supports creating new versions of tenders with position comparis
 - Unique constraint prevents duplicate mappings per position
 - CommercialCostsPage requires `includeVersions: true` to show versions
 
-### Key Fixes Applied (January 2025)
+### Key Fixes Applied (2025)
 1. **TenderVersionManager.tsx**: Restructured table from 4 to 12 columns for full data display
 2. **tenders.ts API**: Added `.is('parent_version_id', null)` filter to exclude versions
 3. **tender-versioning.ts**: Fixed null handling in `calculateContextScore`
@@ -317,18 +344,30 @@ The application supports creating new versions of tenders with position comparis
 13. **Position Totals Trigger**: Removed `UPDATE OF` clause to fire on all updates including currency rate changes (October 2025)
 14. **Excel Export Naming**: Fixed tender name/version loading in TenderCommercialManager (API returns `{0: {...}}` format) (October 2025)
 15. **Position Copy/Paste**: Implemented usePositionClipboard hook with index-based ID mapping; removed deleteByPosition call to preserve links on repeated paste (October 2025)
-16. **Position Totals Trigger on work_material_links**: Added trigger to recalculate client_positions totals when work_material_links change (migration 20251001_trigger_position_totals_on_wml.sql); fixed recalculatePositionTotals.ts to update quantity field instead of updated_at (October 2025)
+16. **Position Totals with Links**: Added dual-trigger system for correct totals calculation (October 2025):
+    - `update_linked_material_total_amount()` - Updates boq_items.total_amount when work_material_links change
+    - `trigger_recalc_position_on_wml_change()` - Simple SUM(total_amount) for position totals
+    - Migration `20251001_FINAL_fix_totals_calculation.sql` fixes existing data and implements both triggers
 
 ## Common Troubleshooting
 
+### Development & Build Issues
 - **Empty prod.sql**: Run `npm run db:schema` immediately
 - **Port Already in Use**: Dev server auto-assigns new port
-- **Type Errors**: Run `npm run build` to check all TypeScript errors
+- **Type Errors**: Run `npm run build:check` to check all TypeScript errors (NOT `npm run build`)
 - **MCP Not Working**: Restart Claude Code completely
-- **Position Totals Wrong**: Apply trigger migration via SQL Editor
 - **Import Path Errors**: Verify relative paths when refactoring
+
+### Database & Position Totals
+- **Position Totals Wrong**: Apply trigger migration via SQL Editor
+- **Position Totals Incorrect**: Run `node src/scripts/recalculatePositionTotals.ts` to force DB recalculation
+- **Collapsed Card Shows Wrong Total**: DB totals outdated when work_material_links change, need trigger update
+- **recalculatePositionTotals.ts Doesn't Work**: Trigger watches specific fields (total_amount, quantity, unit_rate, item_type, client_position_id), not updated_at. Update quantity field to trigger recalculation.
+- **Totals Wrong After work_material_links Change**: Apply migration `20251001_FINAL_fix_totals_calculation.sql` for complete fix (updates both boq_items.total_amount and position totals)
+- **Linked Material Quantity Wrong**: The dual-trigger system automatically updates linked material quantities based on work quantities; boq_items.total_amount reflects calculated quantity, not stored quantity
+
+### Versioning & Mapping
 - **Versioning SQL Errors**: Check table column names match prod.sql schema
-- **Excel Export Slow**: Batch loading implemented (reduced from 10-15s to 1-2s)
 - **Duplicate Key on Version Creation**: Check `create_tender_version` function generates unique tender_number
 - **Mappings Not Saving**: Verify mappings don't already exist (check for IDs)
 - **Deleted Versions Reappearing**: Ensure tender list filters by `parent_version_id IS NULL`
@@ -336,14 +375,25 @@ The application supports creating new versions of tenders with position comparis
 - **Missing Mapping Columns**: Run migration `20250129_add_mapping_columns.sql`
 - **DOP Positions Not Transferring**: Check parameter order (p_new_tender_id, p_old_tender_id) and ensure parent positions exist
 - **work_material_links Missing**: Run migration `20250130_transfer_work_material_links.sql` for comprehensive transfer
-- **Markup Not Saving**: Check for duplicate active records in tender_markup_percentages table
 - **Versions Not Showing**: Ensure API calls include `includeVersions: true` parameter
-- **Position Totals Incorrect**: Run `node src/scripts/recalculatePositionTotals.ts` to force DB recalculation
-- **Collapsed Card Shows Wrong Total**: DB totals outdated when work_material_links change, need trigger update
+
+### Excel & Export
+- **Excel Export Slow**: Batch loading implemented (reduced from 10-15s to 1-2s)
 - **Excel Export Wrong Filename**: Check API response structure (may return `{0: {...}}` instead of direct object)
-- **Trigger Not Firing on Currency Change**: Remove `UPDATE OF` clause to fire on all column updates
+
+### Copy/Paste & UI
 - **Position Copy Button Shows Everywhere**: Check logic uses `(!hasCopiedData || copiedFromPositionId === position.id)`
 - **Links Wrong on Repeated Paste**: Ensure no `deleteByPosition` call in paste flow; links should accumulate
 - **Copy/Paste ID Mapping Fails**: Use array index mapping, not sort_order (which gets overwritten by bulkCreateInPosition)
-- **recalculatePositionTotals.ts Doesn't Work**: Trigger watches specific fields (total_amount, quantity, unit_rate, item_type, client_position_id), not updated_at. Update quantity field to trigger recalculation.
-- **Totals Wrong After work_material_links Change**: Apply migration 20251001_trigger_position_totals_on_wml.sql to auto-recalculate on links changes
+
+### Deployment (Vercel)
+- **Module Initialization Errors**: Use simplified chunking (vendor + xlsx only)
+- **React.version Undefined**: Ensure React is not split across chunks
+- **Circular Dependency Errors**: Don't split application code into manual chunks
+- **Vercel Build Fails**: Check that `npm run build` works locally first
+- **Environment Variables Missing**: Configure in Vercel dashboard, not .env files
+- **Database Changes Not Reflected**: Database is shared; code changes need redeploy via `vercel --prod`
+
+### Other
+- **Markup Not Saving**: Check for duplicate active records in tender_markup_percentages table
+- **Trigger Not Firing on Currency Change**: Remove `UPDATE OF` clause to fire on all column updates

@@ -10,7 +10,8 @@ import {
   Input,
   Space,
   Typography,
-  Card
+  Card,
+  AutoComplete
 } from 'antd';
 import { PlusOutlined, ReloadOutlined, FolderOpenOutlined, BuildOutlined, ToolOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { clientPositionsApi, boqApi, tendersApi } from '../../lib/supabase/api';
@@ -96,6 +97,10 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
     eur_rate?: number | null;
     cny_rate?: number | null;
   } | null>(null);
+
+  // Search state for position autocomplete
+  const [searchValue, setSearchValue] = useState<string>('');
+  const positionCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Sort positions by position number only (preserving Excel file order)
   const sortPositionsByNumber = useCallback((positions: ClientPositionWithStats[]): ClientPositionWithStats[] => {
@@ -1003,6 +1008,53 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
     }
   };
 
+  // Handle position search and scroll
+  const handlePositionSearch = (value: string, option: any) => {
+    console.log('🔍 Position search selected:', value, option);
+    const positionId = option.key;
+
+    // Find the position card element and scroll to it
+    const cardElement = positionCardRefs.current.get(positionId);
+    if (cardElement) {
+      cardElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // Highlight the card briefly
+      cardElement.style.transition = 'all 0.3s ease';
+      cardElement.style.boxShadow = '0 0 20px rgba(24, 144, 255, 0.6)';
+      cardElement.style.transform = 'scale(1.02)';
+
+      setTimeout(() => {
+        cardElement.style.boxShadow = '';
+        cardElement.style.transform = '';
+      }, 1500);
+    }
+
+    // Clear the search value after selection
+    setSearchValue('');
+  };
+
+  // Get autocomplete options from positions
+  const getPositionOptions = () => {
+    if (!searchValue) return [];
+
+    const searchLower = searchValue.toLowerCase();
+    return positions
+      .filter(pos => pos.work_name.toLowerCase().includes(searchLower))
+      .slice(0, 10) // Limit to 10 results
+      .map(pos => ({
+        key: pos.id,
+        value: pos.work_name,
+        label: (
+          <div>
+            <div style={{ fontWeight: 500 }}>{pos.work_name}</div>
+            <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
+              Позиция № {pos.position_number} • {pos.item_no}
+            </div>
+          </div>
+        )
+      }));
+  };
+
   // Handle create position
   const handleCreatePosition = async (values: any) => {
     try {
@@ -1055,6 +1107,17 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
             </Text>
           </div>
           <Space>
+            <AutoComplete
+              value={searchValue}
+              onChange={setSearchValue}
+              onSelect={handlePositionSearch}
+              options={getPositionOptions()}
+              style={{ width: 500 }}
+              placeholder="Поиск по наименованию позиции"
+              allowClear
+              popupMatchSelectWidth={false}
+              dropdownStyle={{ minWidth: 600 }}
+            />
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -1107,25 +1170,27 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
         <div className="space-y-2">
           {sortPositionsByNumber(positions.filter(p => !p.is_additional && !p.is_orphaned)).map(position => (
             <React.Fragment key={position.id}>
-              <ClientPositionCardStreamlined
-                key={`${position.id}-loading-${loadingPositionsRef.current.has(position.id)}`}
-                position={{
-                  ...position,
-                  boq_items: loadedPositionItems.get(position.id) || position.boq_items
-                }}
-                isExpanded={expandedPositions.has(position.id)}
-                onToggle={() => togglePosition(position.id)}
-                onUpdate={() => forceRefreshPosition(position.id)}
-                tenderId={tenderId}
-                tender={tender}
-                isLoading={loadingPositionsRef.current.has(position.id)}
-                onCopyPosition={handleCopy}
-                onPastePosition={handlePaste}
-                hasCopiedData={hasCopiedData}
-                copiedItemsCount={copiedItemsCount}
-                copiedFromPositionId={copiedFromPositionId}
-                clipboardLoading={clipboardLoading}
-              />
+              <div ref={(el) => el && positionCardRefs.current.set(position.id, el)}>
+                <ClientPositionCardStreamlined
+                  key={`${position.id}-loading-${loadingPositionsRef.current.has(position.id)}`}
+                  position={{
+                    ...position,
+                    boq_items: loadedPositionItems.get(position.id) || position.boq_items
+                  }}
+                  isExpanded={expandedPositions.has(position.id)}
+                  onToggle={() => togglePosition(position.id)}
+                  onUpdate={() => forceRefreshPosition(position.id)}
+                  tenderId={tenderId}
+                  tender={tender}
+                  isLoading={loadingPositionsRef.current.has(position.id)}
+                  onCopyPosition={handleCopy}
+                  onPastePosition={handlePaste}
+                  hasCopiedData={hasCopiedData}
+                  copiedItemsCount={copiedItemsCount}
+                  copiedFromPositionId={copiedFromPositionId}
+                  clipboardLoading={clipboardLoading}
+                />
+              </div>
 
               {/* Additional works for this position */}
               {position.additional_works?.map(additionalWork => (
@@ -1153,26 +1218,28 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
                     }}
                   />
 
-                  <ClientPositionCardStreamlined
-                    key={`${additionalWork.id}-loading-${loadingPositionsRef.current.has(additionalWork.id)}`}
-                    position={{
-                      ...additionalWork,
-                      is_additional: true,
-                      boq_items: loadedPositionItems.get(additionalWork.id) || additionalWork.boq_items
-                    }}
-                    isExpanded={expandedPositions.has(additionalWork.id)}
-                    onToggle={() => togglePosition(additionalWork.id)}
-                    onUpdate={() => forceRefreshPosition(additionalWork.id)}
-                    tenderId={tenderId}
-                    tender={tender}
-                    isLoading={loadingPositionsRef.current.has(additionalWork.id)}
-                    onCopyPosition={handleCopy}
+                  <div ref={(el) => el && positionCardRefs.current.set(additionalWork.id, el)}>
+                    <ClientPositionCardStreamlined
+                      key={`${additionalWork.id}-loading-${loadingPositionsRef.current.has(additionalWork.id)}`}
+                      position={{
+                        ...additionalWork,
+                        is_additional: true,
+                        boq_items: loadedPositionItems.get(additionalWork.id) || additionalWork.boq_items
+                      }}
+                      isExpanded={expandedPositions.has(additionalWork.id)}
+                      onToggle={() => togglePosition(additionalWork.id)}
+                      onUpdate={() => forceRefreshPosition(additionalWork.id)}
+                      tenderId={tenderId}
+                      tender={tender}
+                      isLoading={loadingPositionsRef.current.has(additionalWork.id)}
+                      onCopyPosition={handleCopy}
                     onPastePosition={handlePaste}
                     hasCopiedData={hasCopiedData}
                     copiedItemsCount={copiedItemsCount}
                     copiedFromPositionId={copiedFromPositionId}
                     clipboardLoading={clipboardLoading}
                   />
+                  </div>
                 </div>
               ))}
             </React.Fragment>
@@ -1195,21 +1262,23 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
               </div>
 
               {sortPositionsByNumber(positions.filter(p => p.is_orphaned)).map(orphanedWork => (
-                <ClientPositionCardStreamlined
-                  key={`${orphanedWork.id}-loading-${loadingPositionsRef.current.has(orphanedWork.id)}`}
-                  position={{
-                    ...orphanedWork,
-                    is_additional: true,
-                    is_orphaned: true,
-                    boq_items: loadedPositionItems.get(orphanedWork.id) || orphanedWork.boq_items
-                  }}
-                  isExpanded={expandedPositions.has(orphanedWork.id)}
-                  onToggle={() => togglePosition(orphanedWork.id)}
-                  onUpdate={() => forceRefreshPosition(orphanedWork.id)}
-                  tenderId={tenderId}
-                  tender={tender}
-                  isLoading={loadingPositionsRef.current.has(orphanedWork.id)}
-                />
+                <div key={orphanedWork.id} ref={(el) => el && positionCardRefs.current.set(orphanedWork.id, el)}>
+                  <ClientPositionCardStreamlined
+                    key={`${orphanedWork.id}-loading-${loadingPositionsRef.current.has(orphanedWork.id)}`}
+                    position={{
+                      ...orphanedWork,
+                      is_additional: true,
+                      is_orphaned: true,
+                      boq_items: loadedPositionItems.get(orphanedWork.id) || orphanedWork.boq_items
+                    }}
+                    isExpanded={expandedPositions.has(orphanedWork.id)}
+                    onToggle={() => togglePosition(orphanedWork.id)}
+                    onUpdate={() => forceRefreshPosition(orphanedWork.id)}
+                    tenderId={tenderId}
+                    tender={tender}
+                    isLoading={loadingPositionsRef.current.has(orphanedWork.id)}
+                  />
+                </div>
               ))}
             </>
           )}

@@ -25,14 +25,13 @@ import type { CategoryLocationMapping } from '../../lib/supabase/types/new-cost-
 const { Title, Text } = Typography;
 const { Search } = Input;
 const { Option } = Select;
-const { Panel } = Collapse;
 
 type CostCategory = Database['public']['Tables']['cost_categories']['Row'];
 type DetailCostCategory = Database['public']['Tables']['detail_cost_categories']['Row'] & {
   cost_categories?: {
     id: string;
     name: string;
-    code: string;
+    code: string | null;
   };
 };
 type Location = Database['public']['Tables']['location']['Row'];

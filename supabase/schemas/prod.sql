@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-09-30T13:44:54.229967
+-- Generated: 2025-10-01T15:30:48.760936
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -908,6 +908,76 @@ CREATE TABLE IF NOT EXISTS realtime.messages (
     CONSTRAINT messages_pkey PRIMARY KEY (inserted_at)
 );
 
+-- Table: realtime.messages_2025_09_29
+CREATE TABLE IF NOT EXISTS realtime.messages_2025_09_29 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone NOT NULL DEFAULT now(),
+    inserted_at timestamp without time zone NOT NULL DEFAULT now(),
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    CONSTRAINT messages_2025_09_29_pkey PRIMARY KEY (id),
+    CONSTRAINT messages_2025_09_29_pkey PRIMARY KEY (inserted_at)
+);
+
+-- Table: realtime.messages_2025_09_30
+CREATE TABLE IF NOT EXISTS realtime.messages_2025_09_30 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone NOT NULL DEFAULT now(),
+    inserted_at timestamp without time zone NOT NULL DEFAULT now(),
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    CONSTRAINT messages_2025_09_30_pkey PRIMARY KEY (id),
+    CONSTRAINT messages_2025_09_30_pkey PRIMARY KEY (inserted_at)
+);
+
+-- Table: realtime.messages_2025_10_01
+CREATE TABLE IF NOT EXISTS realtime.messages_2025_10_01 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone NOT NULL DEFAULT now(),
+    inserted_at timestamp without time zone NOT NULL DEFAULT now(),
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    CONSTRAINT messages_2025_10_01_pkey PRIMARY KEY (id),
+    CONSTRAINT messages_2025_10_01_pkey PRIMARY KEY (inserted_at)
+);
+
+-- Table: realtime.messages_2025_10_02
+CREATE TABLE IF NOT EXISTS realtime.messages_2025_10_02 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone NOT NULL DEFAULT now(),
+    inserted_at timestamp without time zone NOT NULL DEFAULT now(),
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    CONSTRAINT messages_2025_10_02_pkey PRIMARY KEY (id),
+    CONSTRAINT messages_2025_10_02_pkey PRIMARY KEY (inserted_at)
+);
+
+-- Table: realtime.messages_2025_10_03
+CREATE TABLE IF NOT EXISTS realtime.messages_2025_10_03 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone NOT NULL DEFAULT now(),
+    inserted_at timestamp without time zone NOT NULL DEFAULT now(),
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    CONSTRAINT messages_2025_10_03_pkey PRIMARY KEY (id),
+    CONSTRAINT messages_2025_10_03_pkey PRIMARY KEY (inserted_at)
+);
+
 -- Table: realtime.schema_migrations
 -- Description: Auth: Manages updates to the auth system.
 CREATE TABLE IF NOT EXISTS realtime.schema_migrations (
@@ -1382,7 +1452,7 @@ $function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea)
+CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1390,7 +1460,7 @@ AS '$libdir/pgcrypto', $function$pg_armor$function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
+CREATE OR REPLACE FUNCTION extensions.armor(bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1637,7 +1707,7 @@ $function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1645,7 +1715,7 @@ AS '$libdir/pgcrypto', $function$pg_hmac$function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1693,7 +1763,7 @@ AS '$libdir/pgcrypto', $function$pgp_key_id_w$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1701,7 +1771,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1717,7 +1787,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1733,7 +1803,7 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1805,14 +1875,6 @@ AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
- RETURNS bytea
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
-
-
--- Function: extensions.pgp_sym_encrypt
 CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
  RETURNS bytea
  LANGUAGE c
@@ -1820,8 +1882,16 @@ CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text)
 AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
 
 
+-- Function: extensions.pgp_sym_encrypt
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt(text, text, text)
+ RETURNS bytea
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$
+
+
 -- Function: extensions.pgp_sym_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -1829,7 +1899,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_encrypt_bytea$function$
 
 
 -- Function: extensions.pgp_sym_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_encrypt_bytea(bytea, text)
  RETURNS bytea
  LANGUAGE c
  PARALLEL SAFE STRICT
@@ -2786,41 +2856,6 @@ $function$
 
 
 -- Function: public.calculate_commercial_cost
-CREATE OR REPLACE FUNCTION public.calculate_commercial_cost(p_unit_rate numeric, p_delivery_amount numeric, p_delivery_price_type delivery_price_type, p_markup_coefficient numeric, p_item_type boq_item_type)
- RETURNS numeric
- LANGUAGE plpgsql
- IMMUTABLE
-AS $function$
-  DECLARE
-      base_cost numeric;
-      commercial_cost numeric;
-  BEGIN
-      -- Базовая стоимость = unit_rate + доставка (для материалов)
-      base_cost := COALESCE(p_unit_rate, 0);
-
-      -- Добавляем стоимость доставки для материалов
-      IF p_item_type IN ('material', 'sub_material') THEN
-          CASE p_delivery_price_type
-              WHEN 'amount' THEN
-                  base_cost := base_cost + COALESCE(p_delivery_amount, 0);
-              WHEN 'not_included' THEN
-                  -- Автоматические 3% от unit_rate
-                  base_cost := base_cost + (COALESCE(p_unit_rate, 0) * 0.03);
-              ELSE
-                  -- 'included' - доставка уже включена в unit_rate
-                  base_cost := base_cost;
-          END CASE;
-      END IF;
-
-      -- Применяем коммерческий коэффициент
-      commercial_cost := base_cost * COALESCE(p_markup_coefficient, 1.0);
-
-      RETURN ROUND(commercial_cost, 2);
-  END;
-  $function$
-
-
--- Function: public.calculate_commercial_cost
 CREATE OR REPLACE FUNCTION public.calculate_commercial_cost()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2872,6 +2907,41 @@ BEGIN
     RETURN NEW;
 END;
 $function$
+
+
+-- Function: public.calculate_commercial_cost
+CREATE OR REPLACE FUNCTION public.calculate_commercial_cost(p_unit_rate numeric, p_delivery_amount numeric, p_delivery_price_type delivery_price_type, p_markup_coefficient numeric, p_item_type boq_item_type)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+  DECLARE
+      base_cost numeric;
+      commercial_cost numeric;
+  BEGIN
+      -- Базовая стоимость = unit_rate + доставка (для материалов)
+      base_cost := COALESCE(p_unit_rate, 0);
+
+      -- Добавляем стоимость доставки для материалов
+      IF p_item_type IN ('material', 'sub_material') THEN
+          CASE p_delivery_price_type
+              WHEN 'amount' THEN
+                  base_cost := base_cost + COALESCE(p_delivery_amount, 0);
+              WHEN 'not_included' THEN
+                  -- Автоматические 3% от unit_rate
+                  base_cost := base_cost + (COALESCE(p_unit_rate, 0) * 0.03);
+              ELSE
+                  -- 'included' - доставка уже включена в unit_rate
+                  base_cost := base_cost;
+          END CASE;
+      END IF;
+
+      -- Применяем коммерческий коэффициент
+      commercial_cost := base_cost * COALESCE(p_markup_coefficient, 1.0);
+
+      RETURN ROUND(commercial_cost, 2);
+  END;
+  $function$
 
 
 -- Function: public.calculate_delivery_amount_trigger
@@ -4869,22 +4939,6 @@ AS $function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree[])
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$_lca$function$
-
-
--- Function: public.lca
 CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
  RETURNS ltree
  LANGUAGE c
@@ -4930,6 +4984,22 @@ CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, 
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree[])
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$_lca$function$
 
 
 -- Function: public.lquery_in
@@ -6367,7 +6437,7 @@ AS '$libdir/ltree', $function$subltree$function$
 
 
 -- Function: public.subpath
-CREATE OR REPLACE FUNCTION public.subpath(ltree, integer)
+CREATE OR REPLACE FUNCTION public.subpath(ltree, integer, integer)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -6375,7 +6445,7 @@ AS '$libdir/ltree', $function$subpath$function$
 
 
 -- Function: public.subpath
-CREATE OR REPLACE FUNCTION public.subpath(ltree, integer, integer)
+CREATE OR REPLACE FUNCTION public.subpath(ltree, integer)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -8740,6 +8810,60 @@ END;
 $function$
 
 
+-- Function: public.trigger_recalc_position_on_wml_change
+-- Description: ПРОСТОЕ суммирование total_amount построчно. Без логики связей.
+CREATE OR REPLACE FUNCTION public.trigger_recalc_position_on_wml_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_position_id UUID;
+    materials_total DECIMAL(15,2);
+    works_total DECIMAL(15,2);
+    commercial_materials_total DECIMAL(15,2);
+    commercial_works_total DECIMAL(15,2);
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        v_position_id := OLD.client_position_id;
+    ELSE
+        v_position_id := NEW.client_position_id;
+    END IF;
+
+    IF v_position_id IS NULL THEN
+        RETURN COALESCE(NEW, OLD);
+    END IF;
+
+    -- ПРОСТОЕ суммирование total_amount
+    SELECT COALESCE(SUM(total_amount), 0) INTO materials_total
+    FROM boq_items WHERE client_position_id = v_position_id
+    AND item_type IN ('material', 'sub_material');
+
+    SELECT COALESCE(SUM(total_amount), 0) INTO works_total
+    FROM boq_items WHERE client_position_id = v_position_id
+    AND item_type IN ('work', 'sub_work');
+
+    SELECT COALESCE(SUM(quantity * commercial_cost), 0) INTO commercial_materials_total
+    FROM boq_items WHERE client_position_id = v_position_id
+    AND item_type IN ('material', 'sub_material');
+
+    SELECT COALESCE(SUM(quantity * commercial_cost), 0) INTO commercial_works_total
+    FROM boq_items WHERE client_position_id = v_position_id
+    AND item_type IN ('work', 'sub_work');
+
+    -- Обновляем позицию
+    UPDATE client_positions SET
+        total_materials_cost = materials_total,
+        total_works_cost = works_total,
+        total_commercial_materials_cost = commercial_materials_total,
+        total_commercial_works_cost = commercial_works_total,
+        updated_at = NOW()
+    WHERE id = v_position_id;
+
+    RETURN COALESCE(NEW, OLD);
+END;
+$function$
+
+
 -- Function: public.trigger_update_boq_currency_rates
 -- Description: Trigger function that automatically calls update_boq_currency_rates when tender currency rates are updated.
 CREATE OR REPLACE FUNCTION public.trigger_update_boq_currency_rates()
@@ -8802,62 +8926,73 @@ $function$
 
 
 -- Function: public.update_boq_currency_rates
--- Description: Updates currency_rate field in boq_items table when tender currency rates change. Returns count of updated items by currency type.
+-- Description: Updates currency_rate field in boq_items table when tender currency rates change.
+V2 FIX: Updates both currency_rate AND unit_rate (to itself) to trigger calculate_boq_amounts_trigger.
+This ensures total_amount is recalculated with the new currency_rate by the BEFORE trigger.
+The AFTER trigger recalculate_position_totals_trigger then updates client_positions totals.
 CREATE OR REPLACE FUNCTION public.update_boq_currency_rates(p_tender_id uuid, p_usd_rate numeric DEFAULT NULL::numeric, p_eur_rate numeric DEFAULT NULL::numeric, p_cny_rate numeric DEFAULT NULL::numeric)
  RETURNS TABLE(updated_items_count integer, updated_usd_items integer, updated_eur_items integer, updated_cny_items integer)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
     v_updated_usd INTEGER := 0;
-    v_updated_eur INTEGER := 0; 
+    v_updated_eur INTEGER := 0;
     v_updated_cny INTEGER := 0;
     v_total_updated INTEGER := 0;
 BEGIN
     -- Log the function call
-    RAISE NOTICE 'update_boq_currency_rates called for tender_id: %, usd_rate: %, eur_rate: %, cny_rate: %', 
+    RAISE NOTICE 'update_boq_currency_rates called for tender_id: %, usd_rate: %, eur_rate: %, cny_rate: %',
         p_tender_id, p_usd_rate, p_eur_rate, p_cny_rate;
 
     -- Update USD currency items if new USD rate provided
+    -- Strategy: Update currency_rate AND trigger unit_rate update to force BEFORE trigger recalculation
+    -- The calculate_boq_amounts_trigger will use the new currency_rate to recalculate total_amount
     IF p_usd_rate IS NOT NULL THEN
-        UPDATE boq_items 
-        SET 
+        UPDATE boq_items
+        SET
             currency_rate = p_usd_rate,
+            -- Trigger unit_rate change to force recalculation (set to itself triggers UPDATE OF unit_rate)
+            unit_rate = unit_rate,
             updated_at = NOW()
-        WHERE 
-            tender_id = p_tender_id 
+        WHERE
+            tender_id = p_tender_id
             AND currency_type = 'USD'
             AND currency_rate != p_usd_rate;
-        
+
         GET DIAGNOSTICS v_updated_usd = ROW_COUNT;
         RAISE NOTICE 'Updated % USD items with new rate: %', v_updated_usd, p_usd_rate;
     END IF;
 
     -- Update EUR currency items if new EUR rate provided
     IF p_eur_rate IS NOT NULL THEN
-        UPDATE boq_items 
-        SET 
+        UPDATE boq_items
+        SET
             currency_rate = p_eur_rate,
+            -- Trigger unit_rate change to force recalculation
+            unit_rate = unit_rate,
             updated_at = NOW()
-        WHERE 
-            tender_id = p_tender_id 
+        WHERE
+            tender_id = p_tender_id
             AND currency_type = 'EUR'
             AND currency_rate != p_eur_rate;
-        
+
         GET DIAGNOSTICS v_updated_eur = ROW_COUNT;
         RAISE NOTICE 'Updated % EUR items with new rate: %', v_updated_eur, p_eur_rate;
     END IF;
 
     -- Update CNY currency items if new CNY rate provided
     IF p_cny_rate IS NOT NULL THEN
-        UPDATE boq_items 
-        SET 
+        UPDATE boq_items
+        SET
             currency_rate = p_cny_rate,
+            -- Trigger unit_rate change to force recalculation
+            unit_rate = unit_rate,
             updated_at = NOW()
-        WHERE 
-            tender_id = p_tender_id 
+        WHERE
+            tender_id = p_tender_id
             AND currency_type = 'CNY'
             AND currency_rate != p_cny_rate;
-        
+
         GET DIAGNOSTICS v_updated_cny = ROW_COUNT;
         RAISE NOTICE 'Updated % CNY items with new rate: %', v_updated_cny, p_cny_rate;
     END IF;
@@ -8865,11 +9000,11 @@ BEGIN
     -- Calculate total updated items
     v_total_updated := v_updated_usd + v_updated_eur + v_updated_cny;
 
-    RAISE NOTICE 'Total updated items: %, USD: %, EUR: %, CNY: %', 
+    RAISE NOTICE 'Total updated items: %, USD: %, EUR: %, CNY: %',
         v_total_updated, v_updated_usd, v_updated_eur, v_updated_cny;
 
     -- Return the counts
-    RETURN QUERY SELECT 
+    RETURN QUERY SELECT
         v_total_updated,
         v_updated_usd,
         v_updated_eur,
@@ -8900,6 +9035,70 @@ AS $function$
       RETURN NEW;
   END;
   $function$
+
+
+-- Function: public.update_linked_material_total_amount
+CREATE OR REPLACE FUNCTION public.update_linked_material_total_amount()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_work RECORD;
+    v_material RECORD;
+    new_quantity DECIMAL(15,2);
+    new_total DECIMAL(15,2);
+    material_id UUID;
+    work_id UUID;
+BEGIN
+    -- Определяем IDs
+    IF TG_OP = 'DELETE' THEN
+        material_id := COALESCE(OLD.material_boq_item_id, OLD.sub_material_boq_item_id);
+        work_id := COALESCE(OLD.work_boq_item_id, OLD.sub_work_boq_item_id);
+        RETURN OLD; -- При удалении не обновляем
+    ELSE
+        material_id := COALESCE(NEW.material_boq_item_id, NEW.sub_material_boq_item_id);
+        work_id := COALESCE(NEW.work_boq_item_id, NEW.sub_work_boq_item_id);
+    END IF;
+
+    IF material_id IS NULL OR work_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    -- Получаем работу
+    SELECT quantity INTO v_work FROM boq_items WHERE id = work_id;
+
+    -- Получаем материал
+    SELECT
+        unit_rate, currency_type, currency_rate,
+        delivery_price_type, delivery_amount,
+        consumption_coefficient, conversion_coefficient
+    INTO v_material FROM boq_items WHERE id = material_id;
+
+    -- Пересчитываем quantity
+    new_quantity := COALESCE(v_work.quantity, 0) *
+                   COALESCE(v_material.consumption_coefficient, NEW.material_quantity_per_work, 1) *
+                   COALESCE(v_material.conversion_coefficient, NEW.usage_coefficient, 1);
+
+    -- Пересчитываем total_amount
+    new_total := new_quantity * COALESCE(v_material.unit_rate, 0) *
+                CASE WHEN v_material.currency_type IS NOT NULL AND v_material.currency_type != 'RUB'
+                     THEN COALESCE(v_material.currency_rate, 1) ELSE 1 END;
+
+    -- Delivery cost
+    new_total := new_total + CASE
+        WHEN v_material.delivery_price_type = 'amount' THEN
+            COALESCE(v_material.delivery_amount, 0) * new_quantity
+        WHEN v_material.delivery_price_type = 'not_included' THEN new_total * 0.03
+        ELSE 0
+    END;
+
+    -- Обновляем материал
+    UPDATE boq_items SET quantity = new_quantity, total_amount = new_total, updated_at = NOW()
+    WHERE id = material_id;
+
+    RETURN NEW;
+END;
+$function$
 
 
 -- Function: public.update_location_hierarchy
@@ -10586,8 +10785,7 @@ $function$
 CREATE TRIGGER calculate_boq_amounts_trigger BEFORE INSERT OR UPDATE OF unit_rate, quantity, currency_type, currency_rate, delivery_price_type, delivery_amount ON public.boq_items FOR EACH ROW EXECUTE FUNCTION calculate_boq_amounts()
 
 -- Trigger: recalculate_position_totals_trigger on public.boq_items
--- Description: Automatically recalculates total_materials_cost and total_works_cost in client_positions table when BOQ items are modified
-CREATE TRIGGER recalculate_position_totals_trigger AFTER INSERT OR DELETE OR UPDATE OF total_amount, quantity, unit_rate, item_type, client_position_id ON public.boq_items FOR EACH ROW EXECUTE FUNCTION recalculate_client_position_totals()
+CREATE TRIGGER recalculate_position_totals_trigger AFTER INSERT OR DELETE OR UPDATE ON public.boq_items FOR EACH ROW EXECUTE FUNCTION recalculate_client_position_totals()
 
 -- Trigger: update_commercial_costs_trigger on public.boq_items
 CREATE TRIGGER update_commercial_costs_trigger AFTER INSERT OR DELETE OR UPDATE ON public.boq_items FOR EACH ROW EXECUTE FUNCTION trigger_update_commercial_costs_by_category()
@@ -10623,8 +10821,15 @@ CREATE TRIGGER tenders_currency_rates_update AFTER UPDATE ON public.tenders FOR 
 -- Trigger: check_work_material_types_trigger on public.work_material_links
 CREATE TRIGGER check_work_material_types_trigger BEFORE INSERT OR UPDATE ON public.work_material_links FOR EACH ROW EXECUTE FUNCTION check_work_material_types()
 
+-- Trigger: recalc_position_totals_on_wml_change on public.work_material_links
+-- Description: Автоматически пересчитывает totals в client_positions при изменении work_material_links (INSERT/UPDATE/DELETE). Предотвращает устаревание данных при копировании позиций с links.
+CREATE TRIGGER recalc_position_totals_on_wml_change AFTER INSERT OR DELETE OR UPDATE ON public.work_material_links FOR EACH ROW EXECUTE FUNCTION trigger_recalc_position_on_wml_change()
+
 -- Trigger: trigger_check_delivery_price on public.work_material_links
 CREATE TRIGGER trigger_check_delivery_price BEFORE INSERT OR UPDATE ON public.work_material_links FOR EACH ROW EXECUTE FUNCTION check_delivery_price_consistency()
+
+-- Trigger: update_material_total_on_link_change on public.work_material_links
+CREATE TRIGGER update_material_total_on_link_change AFTER INSERT OR UPDATE ON public.work_material_links FOR EACH ROW EXECUTE FUNCTION update_linked_material_total_amount()
 
 -- Trigger: work_material_templates_updated_at_trigger on public.work_material_templates
 CREATE TRIGGER work_material_templates_updated_at_trigger BEFORE UPDATE ON public.work_material_templates FOR EACH ROW EXECUTE FUNCTION update_work_material_templates_updated_at()
@@ -11131,6 +11336,24 @@ CREATE INDEX idx_work_names_name ON public.work_names USING btree (name);
 
 -- Index on public.work_names
 CREATE UNIQUE INDEX work_names_name_key ON public.work_names USING btree (name);
+
+-- Index on realtime.messages
+CREATE INDEX messages_inserted_at_topic_index ON ONLY realtime.messages USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+-- Index on realtime.messages_2025_09_29
+CREATE INDEX messages_2025_09_29_inserted_at_topic_idx ON realtime.messages_2025_09_29 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+-- Index on realtime.messages_2025_09_30
+CREATE INDEX messages_2025_09_30_inserted_at_topic_idx ON realtime.messages_2025_09_30 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+-- Index on realtime.messages_2025_10_01
+CREATE INDEX messages_2025_10_01_inserted_at_topic_idx ON realtime.messages_2025_10_01 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+-- Index on realtime.messages_2025_10_02
+CREATE INDEX messages_2025_10_02_inserted_at_topic_idx ON realtime.messages_2025_10_02 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+-- Index on realtime.messages_2025_10_03
+CREATE INDEX messages_2025_10_03_inserted_at_topic_idx ON realtime.messages_2025_10_03 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
 
 -- Index on realtime.subscription
 CREATE INDEX ix_realtime_subscription_entity ON realtime.subscription USING btree (entity);

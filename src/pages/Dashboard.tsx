@@ -75,8 +75,8 @@ const Dashboard: React.FC = () => {
       try {
         setLoading(true);
         
-        // Load all tenders - no limit
-        const tendersResponse = await tendersApi.getAll({});
+        // Load all tenders including versions
+        const tendersResponse = await tendersApi.getAll({ includeVersions: true });
 
         if (tendersResponse.data) {
           // Load BOQ totals and area_sp for each tender
@@ -201,11 +201,20 @@ const Dashboard: React.FC = () => {
       dataIndex: 'title',
       key: 'title',
       ellipsis: true,
+      width: 300,
       render: (text: string, record: any) => (
         <span>
           {text} {record.client_name && <span style={{ color: '#888' }}>| {record.client_name}</span>}
         </span>
       ),
+    },
+    {
+      title: <div style={{ textAlign: 'center' }}>Версия</div>,
+      dataIndex: 'version',
+      key: 'version',
+      width: 80,
+      align: 'center' as const,
+      render: (version: number | null) => version || '-',
     },
     {
       title: <div style={{ textAlign: 'center' }}>Статус дедлайна</div>,
