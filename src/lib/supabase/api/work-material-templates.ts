@@ -1,6 +1,25 @@
 import { supabase } from '../client';
 import type { Database } from '../types/database';
 
+/**
+ * Преобразует русские значения типа материала в английские для ENUM
+ * @param materialType - Тип материала из materials_library (может быть русским или английским)
+ * @returns Нормализованное английское значение для boq_items.material_type ENUM
+ */
+function normalizeMaterialType(materialType?: string | null): 'main' | 'auxiliary' {
+  if (!materialType) return 'main';
+
+  const normalized = materialType.toLowerCase().trim();
+
+  // Маппинг русских значений на английские
+  if (normalized === 'вспомогательный' || normalized === 'auxiliary') {
+    return 'auxiliary';
+  }
+
+  // Дефолт: основной материал
+  return 'main';
+}
+
 // Типы для работы с шаблонами
 export interface WorkMaterialTemplate {
   id?: string;
@@ -1295,7 +1314,7 @@ export const workMaterialTemplatesApi = {
             delivery_price_type: materialData.delivery_price_type || 'included' as const,
             delivery_amount: materialData.delivery_amount || 0,
             currency_type: materialData.currency_type || 'RUB' as const,
-            material_type: materialData.material_type || 'main' as const
+            material_type: normalizeMaterialType(materialData.material_type)
           };
           boqItems.push(materialItem);
 
@@ -1354,7 +1373,7 @@ export const workMaterialTemplatesApi = {
               delivery_price_type: materialData.delivery_price_type || 'included' as const,
               delivery_amount: materialData.delivery_amount || 0,
               currency_type: materialData.currency_type || 'RUB' as const,
-              material_type: materialData.material_type || 'main' as const,
+              material_type: normalizeMaterialType(materialData.material_type),
               base_quantity: 1 // Для несвязанных материалов
             };
             boqItems.push(materialItem);
