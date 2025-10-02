@@ -11,7 +11,8 @@ import {
   Space,
   Typography,
   Card,
-  AutoComplete
+  AutoComplete,
+  Pagination
 } from 'antd';
 import { PlusOutlined, ReloadOutlined, FolderOpenOutlined, BuildOutlined, ToolOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { clientPositionsApi, boqApi, tendersApi } from '../../lib/supabase/api';
@@ -101,6 +102,10 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
   // Search state for position autocomplete
   const [searchValue, setSearchValue] = useState<string>('');
   const positionCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 50; // Fixed page size
 
   // Sort positions by position number only (preserving Excel file order)
   const sortPositionsByNumber = useCallback((positions: ClientPositionWithStats[]): ClientPositionWithStats[] => {
@@ -250,6 +255,9 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
 
       // Set positions WITH statistics
       setPositions(positionsData);
+
+      // Reset pagination to first page when loading new positions
+      setCurrentPage(1);
 
       // Save initial total cost to prevent reset on position expand
       setInitialTotalCost(totalCost);
@@ -1013,21 +1021,39 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
     console.log('🔍 Position search selected:', value, option);
     const positionId = option.key;
 
-    // Find the position card element and scroll to it
-    const cardElement = positionCardRefs.current.get(positionId);
-    if (cardElement) {
-      cardElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Find the position in the list to determine which page it's on
+    const regularPositions = sortPositionsByNumber(
+      positions.filter(p => !p.is_additional && !p.is_orphaned)
+    );
+    const positionIndex = regularPositions.findIndex(p => p.id === positionId);
 
-      // Highlight the card briefly
-      cardElement.style.transition = 'all 0.3s ease';
-      cardElement.style.boxShadow = '0 0 20px rgba(24, 144, 255, 0.6)';
-      cardElement.style.transform = 'scale(1.02)';
+    if (positionIndex !== -1) {
+      // Calculate which page this position is on
+      const targetPage = Math.floor(positionIndex / pageSize) + 1;
 
-      setTimeout(() => {
-        cardElement.style.boxShadow = '';
-        cardElement.style.transform = '';
-      }, 1500);
+      // Navigate to the correct page if not already there
+      if (targetPage !== currentPage) {
+        setCurrentPage(targetPage);
+      }
     }
+
+    // Wait for page to update, then scroll to the position
+    setTimeout(() => {
+      const cardElement = positionCardRefs.current.get(positionId);
+      if (cardElement) {
+        cardElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Highlight the card briefly
+        cardElement.style.transition = 'all 0.3s ease';
+        cardElement.style.boxShadow = '0 0 20px rgba(24, 144, 255, 0.6)';
+        cardElement.style.transform = 'scale(1.02)';
+
+        setTimeout(() => {
+          cardElement.style.boxShadow = '';
+          cardElement.style.transform = '';
+        }, 1500);
+      }
+    }, 100);
 
     // Clear the search value after selection
     setSearchValue('');
@@ -1089,6 +1115,25 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
       loadPositions();
     }
   }, [tenderId]);
+
+  // Get paginated positions (regular positions only, excluding additional and orphaned)
+  const getPaginatedPositions = useCallback(() => {
+    const regularPositions = sortPositionsByNumber(
+      positions.filter(p => !p.is_additional && !p.is_orphaned)
+    );
+
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+
+    return regularPositions.slice(startIndex, endIndex);
+  }, [positions, currentPage, pageSize, sortPositionsByNumber]);
+
+  // Handle pagination change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Scroll to top of positions list
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <div className="space-y-4">
@@ -1168,7 +1213,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
         </Card>
       ) : (
         <div className="space-y-2">
-          {sortPositionsByNumber(positions.filter(p => !p.is_additional && !p.is_orphaned)).map(position => (
+          {getPaginatedPositions().map(position => (
             <React.Fragment key={position.id}>
               <div ref={(el) => el && positionCardRefs.current.set(position.id, el)}>
                 <ClientPositionCardStreamlined
@@ -1244,6 +1289,20 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
               ))}
             </React.Fragment>
           ))}
+
+          {/* Pagination */}
+          {positions.filter(p => !p.is_additional && !p.is_orphaned).length > pageSize && (
+            <div className="flex justify-center mt-6 mb-4">
+              <Pagination
+                current={currentPage}
+                pageSize={pageSize}
+                total={positions.filter(p => !p.is_additional && !p.is_orphaned).length}
+                onChange={handlePageChange}
+                showSizeChanger={false}
+                showTotal={(total, range) => `${range[0]}-${range[1]} из ${total} позиций`}
+              />
+            </div>
+          )}
 
           {/* Orphaned Additional Works */}
           {positions.filter(p => p.is_orphaned).length > 0 && (
