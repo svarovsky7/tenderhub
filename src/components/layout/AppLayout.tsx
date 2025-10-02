@@ -216,12 +216,6 @@ const AppLayout: React.FC = () => {
       ],
     },
     {
-      key: 'tender-markup',
-      icon: <CalculatorOutlined />,
-      label: <Link to="/tender-markup">Накрутки тендера</Link>,
-      path: '/tender-markup',
-    },
-    {
       key: 'admin',
       icon: <SettingOutlined />,
       label: 'Администрирование',
