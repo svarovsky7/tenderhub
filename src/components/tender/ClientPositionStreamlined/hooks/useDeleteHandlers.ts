@@ -36,16 +36,16 @@ export const useDeleteHandlers = ({ position, onUpdate }: UseDeleteHandlersProps
         return;
       }
 
-      const deletePromises = items.map(item => boqApi.delete(item.id));
-      const results = await Promise.all(deletePromises);
+      // Delete all items in a single query to avoid race conditions with triggers
+      console.log('🔥 Using deleteByPosition for atomic deletion');
+      const result = await boqApi.deleteByPosition(position.id);
 
-      const errors = results.filter(r => r.error);
-      if (errors.length > 0) {
-        console.error('❌ Some items failed to delete:', errors);
-        message.error(`Ошибка удаления ${errors.length} элементов`);
+      if (result.error) {
+        console.error('❌ Failed to delete items:', result.error);
+        message.error(`Ошибка удаления элементов: ${result.error}`);
       } else {
-        console.log('✅ All BOQ items deleted successfully');
-        message.success(`Удалено ${items.length} элементов`);
+        console.log(`✅ All BOQ items deleted successfully: ${result.data?.count} items`);
+        message.success(`Удалено ${result.data?.count || items.length} элементов`);
       }
 
       onUpdate();

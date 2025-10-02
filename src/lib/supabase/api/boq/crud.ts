@@ -401,6 +401,41 @@ export const boqCrudApi = {
   },
 
   /**
+   * Delete all BOQ items for a position (single DELETE query)
+   */
+  async deleteByPosition(positionId: string): Promise<ApiResponse<{ count: number }>> {
+    console.log('🚀 boqCrudApi.deleteByPosition called with position ID:', positionId);
+
+    try {
+      console.log('🔥 Deleting all items for position in single query...');
+      const { data, error, count } = await supabase
+        .from('boq_items')
+        .delete({ count: 'exact' })
+        .eq('client_position_id', positionId);
+
+      console.log('📤 Delete result:', { data, error, count });
+
+      if (error) {
+        console.error('❌ Delete failed:', error);
+        return {
+          error: handleSupabaseError(error, 'Delete BOQ items by position'),
+        };
+      }
+
+      console.log(`✅ Deleted ${count || 0} BOQ items for position:`, positionId);
+      return {
+        data: { count: count || 0 },
+        message: `Deleted ${count || 0} BOQ items successfully`,
+      };
+    } catch (error) {
+      console.error('💥 Exception in deleteByPosition:', error);
+      return {
+        error: handleSupabaseError(error, 'Delete BOQ items by position'),
+      };
+    }
+  },
+
+  /**
    * Update commercial fields (commercial_cost and commercial_markup_coefficient) for BOQ item
    */
   async updateCommercialFields(
