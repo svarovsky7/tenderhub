@@ -44,7 +44,7 @@ const InlineAddTemplateToBOQ: React.FC<InlineAddTemplateToBOQProps> = ({
     queryFn: async () => {
       if (!selectedTenderId) return [];
       console.log('📡 Loading client positions for tender:', selectedTenderId);
-      const response = await clientPositionsApi.getByTenderId(selectedTenderId);
+      const response = await clientPositionsApi.getByTenderId(selectedTenderId, {}, { limit: 1000 });
       if (response.error) throw new Error(response.error);
       console.log('✅ Client positions loaded:', response.data?.length);
       // Фильтруем только executable позиции

@@ -57,7 +57,23 @@ async function recalculatePositionTotals(tenderId?: string) {
       }
 
       if (!boqItems || boqItems.length === 0) {
-        console.log(`  No BOQ items found, skipping`);
+        // Empty position - manually set totals to 0
+        console.log(`  No BOQ items found, zeroing totals...`);
+        const { error: zeroError } = await supabase
+          .from('client_positions')
+          .update({
+            total_materials_cost: 0,
+            total_works_cost: 0,
+            total_commercial_materials_cost: 0,
+            total_commercial_works_cost: 0
+          })
+          .eq('id', position.id);
+
+        if (zeroError) {
+          console.error(`❌ Error zeroing totals for position ${position.id}:`, zeroError);
+        } else {
+          console.log(`  ✅ Zeroed totals for empty position`);
+        }
         continue;
       }
 
