@@ -835,21 +835,28 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
                   }
 
                   // Находим и удаляем отдельную запись работы, если она существует
+                  // ВАЖНО: удаляем только truly standalone работы, которые НЕ являются частью combined записей
                   console.log('🔍 Looking for standalone work record to delete:', values.linked_work_id);
                   const workItem = flattenedTemplates.find(item =>
                     (item.work_library_id === values.linked_work_id || item.sub_work_library_id === values.linked_work_id) &&
                     !item.material_library_id && !item.sub_material_library_id &&
+                    !item.is_from_combined &&  // Проверяем, что это НЕ часть combined записи
                     item.template_name === itemToEdit.template_name
                   );
 
                   if (workItem && workItem.template_item_id) {
-                    console.log('🗑️ Deleting standalone work record:', workItem.template_item_id);
+                    console.log('🗑️ Deleting standalone work record:', workItem.template_item_id, {
+                      is_from_combined: workItem.is_from_combined,
+                      has_material: !!(workItem.material_library_id || workItem.sub_material_library_id)
+                    });
                     const deleteResult = await workMaterialTemplatesApi.deleteTemplateItem(workItem.template_item_id);
                     if (deleteResult.error) {
                       console.error('❌ Failed to delete standalone work record:', deleteResult.error);
                     } else {
                       console.log('✅ Standalone work record deleted');
                     }
+                  } else {
+                    console.log('ℹ️ No standalone work record found to delete (work may be part of combined record)');
                   }
                 }
               }
