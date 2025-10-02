@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Table, InputNumber, Select, Button, Space, Tag, Tooltip, Checkbox } from 'antd';
 import { DeleteOutlined, LinkOutlined, ToolOutlined, AppstoreOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -36,9 +36,13 @@ const TemplateItemsTable: React.FC<TemplateItemsTableProps> = ({
   console.log('🚀 TemplateItemsTable render with items:', items.length);
 
   // Get available works for linking materials
-  const availableWorks = items.filter(item =>
-    item.type === 'work' || item.type === 'sub_work'
-  );
+  const availableWorks = useMemo(() => {
+    const works = items.filter(item =>
+      item.type === 'work' || item.type === 'sub_work'
+    );
+    console.log('📋 Available works for linking:', works.length, works.map(w => w.name));
+    return works;
+  }, [items]);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -100,7 +104,7 @@ const TemplateItemsTable: React.FC<TemplateItemsTableProps> = ({
     }
   };
 
-  const columns: ColumnsType<TemplateItem> = [
+  const columns: ColumnsType<TemplateItem> = useMemo(() => [
     {
       title: 'Тип',
       dataIndex: 'type',
@@ -240,7 +244,7 @@ const TemplateItemsTable: React.FC<TemplateItemsTableProps> = ({
         </Tooltip>
       )
     }
-  ];
+  ], [availableWorks, onUpdate, onDelete]);
 
   // Sort items: each work followed by its linked materials, then unlinked materials
   const sortedItems = (() => {

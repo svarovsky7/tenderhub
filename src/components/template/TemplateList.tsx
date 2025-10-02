@@ -1530,15 +1530,21 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
     const templateWorkIds = new Set<string>();
 
     // Собираем ID всех работ в текущем шаблоне
+    // ВАЖНО: проверяем все элементы, включая combined записи (материалы с привязанными работами)
     if (currentTemplate) {
       currentTemplate.materials?.forEach(item => {
-        if (item.type === 'work' && item.work_library_id) {
+        // Добавляем work_library_id если есть (работы или combined записи)
+        if (item.work_library_id) {
           templateWorkIds.add(item.work_library_id);
-        } else if (item.type === 'sub_work' && item.sub_work_library_id) {
+        }
+        // Добавляем sub_work_library_id если есть (суб-работы или combined записи)
+        if (item.sub_work_library_id) {
           templateWorkIds.add(item.sub_work_library_id);
         }
       });
     }
+
+    console.log('📋 Template work IDs for quick add:', Array.from(templateWorkIds), 'template:', templateName);
 
     const handleQuickAdd = async (values: any) => {
       console.log('🚀 Quick adding template item:', values);
@@ -1590,8 +1596,10 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
         }
 
         message.success('Элемент добавлен в шаблон');
-        quickAddForm.resetFields();
-        setAddingToTemplate(null);
+        // Сбрасываем только выбранные элементы, но сохраняем тип и настройки привязки
+        quickAddForm.resetFields(['work_id', 'material_id', 'linked_work_id']);
+        // Не закрываем форму добавления, чтобы можно было быстро добавить еще элементы
+        // setAddingToTemplate(null);
         queryClient.invalidateQueries({ queryKey: ['work-material-templates'] });
       } catch (error) {
         console.error('💥 Error adding template item:', error);
