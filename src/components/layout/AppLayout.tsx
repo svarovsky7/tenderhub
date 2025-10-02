@@ -44,6 +44,7 @@ const AppLayout: React.FC = () => {
       .ant-menu-submenu-popup {
         background-color: #ffffff !important;
         opacity: 1 !important;
+        transition: opacity 0.1s ease-out !important;
       }
       .ant-menu-submenu-popup .ant-menu {
         background-color: #ffffff !important;
@@ -76,6 +77,9 @@ const AppLayout: React.FC = () => {
       }
       .ant-menu-inline-collapsed .ant-menu-submenu-popup-hidden {
         display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
       }
       /* Disable Ant Design's fade animations for popup menus */
       .ant-menu-submenu-popup.ant-slide-up-enter,
@@ -88,6 +92,17 @@ const AppLayout: React.FC = () => {
         animation: none !important;
         opacity: 0 !important;
         pointer-events: none !important;
+        display: none !important;
+        visibility: hidden !important;
+      }
+      /* Force hide when not open */
+      .ant-menu-submenu-popup:not(.ant-menu-submenu-popup-open) {
+        display: none !important;
+      }
+      /* Cleanup stuck popups */
+      .ant-menu-submenu-popup[style*="display: none"] {
+        visibility: hidden !important;
+        opacity: 0 !important;
       }
     `;
     document.head.appendChild(style);
@@ -95,6 +110,30 @@ const AppLayout: React.FC = () => {
       document.head.removeChild(style);
     };
   }, []);
+
+  // Clean up stuck popup menus when menu state changes
+  React.useEffect(() => {
+    // Remove all stuck popup menus whenever collapsed state changes
+    const cleanupPopups = () => {
+      const popups = document.querySelectorAll('.ant-menu-submenu-popup');
+      popups.forEach(popup => {
+        // Check if popup is not actively open
+        if (!popup.classList.contains('ant-menu-submenu-popup-open')) {
+          (popup as HTMLElement).style.display = 'none';
+          (popup as HTMLElement).style.visibility = 'hidden';
+          (popup as HTMLElement).style.opacity = '0';
+        }
+      });
+    };
+
+    // Clean up immediately on state change
+    cleanupPopups();
+
+    // Also clean up after a short delay to catch any animations
+    const timer = setTimeout(cleanupPopups, 150);
+
+    return () => clearTimeout(timer);
+  }, [collapsed]);
 
   // Menu items configuration
   const menuItems: MenuItem[] = [
