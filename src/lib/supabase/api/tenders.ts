@@ -9,6 +9,7 @@ import type {
   TenderWithSummary,
 } from '../types';
 import { handleSupabaseError, applyPagination, type PaginationOptions } from './utils';
+import { calculateMarkupFinancials } from './tender-markup';
 
 // TENDER API
 export const tendersApi = {
@@ -18,14 +19,14 @@ export const tendersApi = {
     pagination: PaginationOptions = {}
   ): Promise<PaginatedResponse<TenderWithSummary>> {
     try {
-      // Get tenders with client positions for commercial cost calculation
+      // Get tenders with base costs and markup data for commercial cost calculation
       let query = supabase
         .from('tenders')
         .select(`
           *,
           client_positions (
-            total_commercial_materials_cost,
-            total_commercial_works_cost
+            total_materials_cost,
+            total_works_cost
           )
         `, { count: 'exact' });
 
@@ -85,31 +86,79 @@ export const tendersApi = {
       }
 
 
-      // Calculate total commercial value for each tender from client_positions
-      const tendersWithCommercialValue = (data || []).map(tender => {
-        const clientPositions = (tender as any).client_positions || [];
-        const totalCommercialValue = clientPositions.reduce((sum: number, position: any) => {
-          const materialsCost = parseFloat(position.total_commercial_materials_cost || 0);
-          const worksCost = parseFloat(position.total_commercial_works_cost || 0);
-          return sum + materialsCost + worksCost;
-        }, 0);
+      // Calculate total commercial value for each tender using base costs and markup percentages
+      const tendersWithCommercialValue = await Promise.all(
+        (data || []).map(async (tender) => {
+          const clientPositions = (tender as any).client_positions || [];
 
-        // Log currency rates for debugging
-        console.log('🔍 Tender currency rates:');
-        console.log('  ID:', tender.id);
-        console.log('  Title:', (tender as any).title);
-        console.log('  USD Rate:', (tender as any).usd_rate);
-        console.log('  EUR Rate:', (tender as any).eur_rate);
-        console.log('  CNY Rate:', (tender as any).cny_rate);
-        console.log('  Commercial Total:', totalCommercialValue);
+          // Calculate base costs from client_positions
+          const baseMaterials = clientPositions.reduce((sum: number, pos: any) =>
+            sum + parseFloat(pos.total_materials_cost || 0), 0);
+          const baseWorks = clientPositions.reduce((sum: number, pos: any) =>
+            sum + parseFloat(pos.total_works_cost || 0), 0);
 
-        // Remove client_positions from the result and add commercial_total_value
-        const { client_positions, ...tenderData } = tender as any;
-        return {
-          ...tenderData,
-          commercial_total_value: totalCommercialValue
-        } as TenderWithSummary;
-      });
+          // For submaterials and subworks, we need to query boq_items
+          // For performance, we'll use a separate query for each tender
+          const { data: boqItems } = await supabase
+            .from('boq_items')
+            .select('item_type, total_amount')
+            .eq('tender_id', tender.id);
+
+          let baseSubmaterials = 0;
+          let baseSubworks = 0;
+
+          if (boqItems) {
+            boqItems.forEach((item: any) => {
+              const amount = parseFloat(item.total_amount || 0);
+              if (item.item_type === 'sub_material') baseSubmaterials += amount;
+              if (item.item_type === 'sub_work') baseSubworks += amount;
+            });
+          }
+
+          // Get active markup percentages for this tender
+          const { data: markupData } = await supabase
+            .from('tender_markup_percentages')
+            .select('*')
+            .eq('tender_id', tender.id)
+            .eq('is_active', true)
+            .single();
+
+          let totalCommercialValue = 0;
+
+          if (markupData) {
+            // Calculate final commercial price using the same function as /financial page
+            const financials = calculateMarkupFinancials(
+              {
+                materials: baseMaterials,
+                works: baseWorks,
+                submaterials: baseSubmaterials,
+                subworks: baseSubworks
+              },
+              markupData
+            );
+            totalCommercialValue = financials.totalCostWithProfit || 0;
+          } else {
+            // If no markup data, use base costs sum as fallback
+            totalCommercialValue = baseMaterials + baseWorks + baseSubmaterials + baseSubworks;
+          }
+
+          // Log currency rates for debugging
+          console.log('🔍 Tender currency rates:');
+          console.log('  ID:', tender.id);
+          console.log('  Title:', (tender as any).title);
+          console.log('  USD Rate:', (tender as any).usd_rate);
+          console.log('  EUR Rate:', (tender as any).eur_rate);
+          console.log('  CNY Rate:', (tender as any).cny_rate);
+          console.log('  Commercial Total:', totalCommercialValue);
+
+          // Remove client_positions from the result and add commercial_total_value
+          const { client_positions, ...tenderData } = tender as any;
+          return {
+            ...tenderData,
+            commercial_total_value: totalCommercialValue
+          } as TenderWithSummary;
+        })
+      );
 
       const { page = 1, limit = 20 } = pagination;
       

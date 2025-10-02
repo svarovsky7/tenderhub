@@ -413,7 +413,7 @@ const TenderTable: React.FC<TenderTableProps> = ({
     {
       title: <div className="text-center">Итоговая стоимость КП</div>,
       key: 'commercial_value',
-      width: 160,
+      width: 200,
       align: 'center' as const,
       render: (_, record) => {
         // Use commercial total value from client_positions
@@ -424,7 +424,7 @@ const TenderTable: React.FC<TenderTableProps> = ({
             <DollarOutlined className="mb-1 block text-green-500" />
             {total > 0 ? (
               <Text strong className="text-sm block">
-                {total.toLocaleString('ru-RU')} ₽
+                {Math.round(total).toLocaleString('ru-RU')}
               </Text>
             ) : (
               <Text type="secondary" className="text-sm block">
@@ -439,7 +439,7 @@ const TenderTable: React.FC<TenderTableProps> = ({
     {
       title: <div className="text-center">Площадь по СП</div>,
       key: 'area_sp',
-      width: 120,
+      width: 150,
       align: 'center' as const,
       render: (_, record) => {
         const isEditing = editingKey === record.id;
@@ -453,12 +453,13 @@ const TenderTable: React.FC<TenderTableProps> = ({
                 style={{ margin: 0 }}
               >
                 <InputNumber
-                  style={{ width: '100%', maxWidth: '110px' }}
-                  placeholder="0"
+                  style={{ width: '100%', minWidth: '120px' }}
+                  placeholder="0.00"
                   suffix="м²"
                   precision={2}
                   min={0}
                   size="small"
+                  step={0.01}
                 />
               </Form.Item>
             </div>
@@ -500,12 +501,13 @@ const TenderTable: React.FC<TenderTableProps> = ({
                 style={{ margin: 0 }}
               >
                 <InputNumber
-                  style={{ width: '100%', maxWidth: '110px' }}
-                  placeholder="0"
+                  style={{ width: '100%', minWidth: '120px' }}
+                  placeholder="0.00"
                   suffix="м²"
                   precision={2}
                   min={0}
                   size="small"
+                  step={0.01}
                 />
               </Form.Item>
             </div>
@@ -546,12 +548,13 @@ const TenderTable: React.FC<TenderTableProps> = ({
                 style={{ margin: 0 }}
               >
                 <InputNumber
-                  style={{ width: '100%', maxWidth: '90px' }}
-                  placeholder="0"
+                  style={{ width: '100%', minWidth: '120px' }}
+                  placeholder="0.00"
                   prefix="$"
-                  precision={4}
+                  precision={2}
                   min={0}
                   size="small"
+                  step={0.01}
                 />
               </Form.Item>
             </div>
@@ -564,8 +567,8 @@ const TenderTable: React.FC<TenderTableProps> = ({
               value={record.usd_rate}
               type="number"
               onChange={(value) => handleInlineEdit(record.id!, 'usd_rate', value)}
-              formatter={(val) => val ? `$ ${val.toFixed(4)}` : '—'}
-              precision={4}
+              formatter={(val) => val ? `$ ${val.toFixed(2)}` : '—'}
+              precision={2}
               min={0}
               className="text-sm font-semibold text-green-600"
               showEditIcon={false}
@@ -591,12 +594,13 @@ const TenderTable: React.FC<TenderTableProps> = ({
                 style={{ margin: 0 }}
               >
                 <InputNumber
-                  style={{ width: '100%', maxWidth: '90px' }}
-                  placeholder="0"
+                  style={{ width: '100%', minWidth: '120px' }}
+                  placeholder="0.00"
                   prefix="€"
-                  precision={4}
+                  precision={2}
                   min={0}
                   size="small"
+                  step={0.01}
                 />
               </Form.Item>
             </div>
@@ -609,8 +613,8 @@ const TenderTable: React.FC<TenderTableProps> = ({
               value={record.eur_rate}
               type="number"
               onChange={(value) => handleInlineEdit(record.id!, 'eur_rate', value)}
-              formatter={(val) => val ? `€ ${val.toFixed(4)}` : '—'}
-              precision={4}
+              formatter={(val) => val ? `€ ${val.toFixed(2)}` : '—'}
+              precision={2}
               min={0}
               className="text-sm font-semibold text-blue-600"
               showEditIcon={false}
@@ -636,12 +640,13 @@ const TenderTable: React.FC<TenderTableProps> = ({
                 style={{ margin: 0 }}
               >
                 <InputNumber
-                  style={{ width: '100%', maxWidth: '90px' }}
-                  placeholder="0"
+                  style={{ width: '100%', minWidth: '120px' }}
+                  placeholder="0.00"
                   prefix="¥"
-                  precision={4}
+                  precision={2}
                   min={0}
                   size="small"
+                  step={0.01}
                 />
               </Form.Item>
             </div>
@@ -654,8 +659,8 @@ const TenderTable: React.FC<TenderTableProps> = ({
               value={record.cny_rate}
               type="number"
               onChange={(value) => handleInlineEdit(record.id!, 'cny_rate', value)}
-              formatter={(val) => val ? `¥ ${val.toFixed(4)}` : '—'}
-              precision={4}
+              formatter={(val) => val ? `¥ ${val.toFixed(2)}` : '—'}
+              precision={2}
               min={0}
               className="text-sm font-semibold text-red-600"
               showEditIcon={false}
