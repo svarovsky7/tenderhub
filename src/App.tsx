@@ -25,6 +25,7 @@ const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 const WorkMaterialsPage = React.lazy(() => import('./pages/WorkMaterialsPage'));
 const FinancialIndicatorsPage = React.lazy(() => import('./pages/FinancialIndicatorsPage'));
 const CommercialCostsPage = React.lazy(() => import('./pages/CommercialCostsPage'));
+const CostRedistributionPage = React.lazy(() => import('./pages/CostRedistributionPage'));
 const TestMarkupTable = React.lazy(() => import('./pages/admin/TestMarkupTable'));
 const MarkupTablesSetup = React.lazy(() => import('./pages/admin/MarkupTablesSetup'));
 
@@ -150,13 +151,23 @@ function App() {
             />
 
             {/* Commercial Costs route */}
-            <Route 
-              path="commercial-costs" 
+            <Route
+              path="commercial-costs"
               element={
                 <React.Suspense fallback={<div>Загрузка...</div>}>
                   <CommercialCostsPage />
                 </React.Suspense>
-              } 
+              }
+            />
+
+            {/* Cost Redistribution (Перекидка) route */}
+            <Route
+              path="cost-redistribution"
+              element={
+                <React.Suspense fallback={<div>Загрузка...</div>}>
+                  <CostRedistributionPage />
+                </React.Suspense>
+              }
             />
 
 

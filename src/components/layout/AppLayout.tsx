@@ -162,6 +162,12 @@ const AppLayout: React.FC = () => {
           path: '/commercial-costs',
         },
         {
+          key: 'cost-redistribution',
+          icon: null,
+          label: <Link to="/cost-redistribution">Перераспределение сумм</Link>,
+          path: '/cost-redistribution',
+        },
+        {
           key: 'financial',
           icon: null,
           label: <Link to="/financial">Финансовые показатели</Link>,
