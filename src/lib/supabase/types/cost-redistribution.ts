@@ -2,6 +2,15 @@
  * TypeScript типы для перераспределения коммерческих стоимостей работ
  */
 
+// Конфигурация категории для wizard (расширенная структура)
+export interface CategoryConfig {
+  cost_category_id: string;
+  cost_category_name?: string;
+  detail_cost_category_ids?: string[];
+  detail_cost_category_names?: string[];
+  percent?: number; // Только для исходных категорий
+}
+
 // Основная таблица перераспределений
 export interface CostRedistribution {
   id: string;
@@ -12,6 +21,8 @@ export interface CostRedistribution {
   updated_at: string;
   created_by: string | null;
   is_active: boolean;
+  source_config?: CategoryConfig[] | null; // Конфигурация исходных категорий
+  target_config?: CategoryConfig[] | null; // Конфигурация целевых категорий
 }
 
 // Детали перераспределения (изменения для каждого BOQ item)
@@ -47,6 +58,8 @@ export interface RedistributeWorkCostsParams {
   description?: string;
   source_withdrawals: SourceWithdrawal[];
   target_categories: string[]; // Массив UUID категорий-получателей
+  source_config?: CategoryConfig[] | null; // Конфигурация для восстановления в wizard
+  target_config?: CategoryConfig[] | null; // Конфигурация для восстановления в wizard
 }
 
 // Статистика категории для предпросмотра

@@ -11,16 +11,20 @@ import {
   Row,
   Col,
   ConfigProvider,
-  Alert
+  Alert,
+  Radio
 } from 'antd';
 import {
   SwapOutlined,
   ReloadOutlined,
   FolderOpenOutlined,
-  DashboardOutlined
+  DashboardOutlined,
+  TableOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import CostRedistributionWizard from '../components/financial/CostRedistributionWizard';
+import RedistributionResultsTable from '../components/financial/RedistributionResultsTable';
 import DeadlineStatusBar from '../components/tender/DeadlineStatusBar';
 import QuickTenderSelector from '../components/common/QuickTenderSelector';
 import { tendersApi } from '../lib/supabase/api';
@@ -29,6 +33,8 @@ import { formatQuantity } from '../utils/formatters';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
+
+type ViewMode = 'wizard' | 'results';
 
 const CostRedistributionPage: React.FC = () => {
   console.log('🚀 CostRedistributionPage rendered');
@@ -41,6 +47,7 @@ const CostRedistributionPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [tendersLoading, setTendersLoading] = useState(false);
   const [isContentVisible, setIsContentVisible] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('wizard');
 
   // Load tenders
   const loadTenders = useCallback(async () => {
@@ -188,9 +195,8 @@ const CostRedistributionPage: React.FC = () => {
 
   const handleRedistributionComplete = useCallback(() => {
     message.success('Перераспределение успешно создано!');
-    setSelectedTenderId(null);
-    setSelectedTenderName(null);
-    setIsContentVisible(false);
+    // Переключаемся на просмотр результатов
+    setViewMode('results');
   }, []);
 
   const handleRedistributionCancel = useCallback(() => {
@@ -306,6 +312,31 @@ const CostRedistributionPage: React.FC = () => {
                   </Button>
                 </div>
               </div>
+
+              {/* View Mode Selector */}
+              {selectedTenderId && (
+                <div className="mt-6 flex justify-center">
+                  <Radio.Group
+                    value={viewMode}
+                    onChange={(e) => setViewMode(e.target.value)}
+                    size="large"
+                    buttonStyle="solid"
+                  >
+                    <Radio.Button value="wizard">
+                      <Space>
+                        <SettingOutlined />
+                        Настройка перераспределения
+                      </Space>
+                    </Radio.Button>
+                    <Radio.Button value="results">
+                      <Space>
+                        <TableOutlined />
+                        Результаты перераспределения
+                      </Space>
+                    </Radio.Button>
+                  </Radio.Group>
+                </div>
+              )}
 
               {/* Tender Selection */}
               <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
@@ -459,12 +490,22 @@ const CostRedistributionPage: React.FC = () => {
               className={`p-4 lg:p-6 transition-all duration-1000 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}
             >
               <div className={`w-full transition-all duration-1000 transform ${isContentVisible ? 'translate-y-0' : 'translate-y-10'}`}>
-                <CostRedistributionWizard
-                  tenderId={selectedTenderId}
-                  tenderTitle={selectedTender?.title || ''}
-                  onComplete={handleRedistributionComplete}
-                  onCancel={handleRedistributionCancel}
-                />
+                {viewMode === 'wizard' ? (
+                  <CostRedistributionWizard
+                    tenderId={selectedTenderId}
+                    tenderTitle={selectedTender?.title || ''}
+                    onComplete={handleRedistributionComplete}
+                    onCancel={handleRedistributionCancel}
+                  />
+                ) : (
+                  <Card>
+                    <RedistributionResultsTable
+                      tenderId={selectedTenderId}
+                      tenderTitle={selectedTender?.title || ''}
+                      onRefresh={handleRefresh}
+                    />
+                  </Card>
+                )}
               </div>
             </div>
           )}

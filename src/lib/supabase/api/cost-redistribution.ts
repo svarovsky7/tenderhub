@@ -150,6 +150,8 @@ export const costRedistributionApi = {
         description: params.description || null,
         source_withdrawals: sourceWithdrawalsJson,
         target_categories: params.target_categories,
+        source_config: params.source_config,
+        target_config: params.target_config,
       });
 
       const { data, error } = await supabase.rpc('redistribute_work_costs', {
@@ -158,6 +160,8 @@ export const costRedistributionApi = {
         p_description: params.description || null,
         p_source_withdrawals: sourceWithdrawalsJson,
         p_target_categories: params.target_categories,
+        p_source_config: params.source_config || null,  // NEW
+        p_target_config: params.target_config || null,  // NEW
       });
 
       if (error) {

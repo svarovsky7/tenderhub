@@ -105,6 +105,41 @@ const CostRedistributionWizard: React.FC<CostRedistributionWizardProps> = ({
     loadCategories();
   }, [tenderId]);
 
+  // Загрузить существующую конфигурацию перераспределения
+  useEffect(() => {
+    const loadExistingConfig = async () => {
+      console.log('📡 Loading existing redistribution config for tender:', tenderId);
+
+      try {
+        const result = await costRedistributionApi.getActiveRedistribution(tenderId);
+
+        if (result.error || !result.data) {
+          console.log('⚠️ No active redistribution found');
+          return;
+        }
+
+        const activeRedistribution = result.data;
+        console.log('✅ Active redistribution found:', activeRedistribution);
+
+        // Восстановить конфигурацию если она есть
+        if (activeRedistribution.source_config && Array.isArray(activeRedistribution.source_config)) {
+          console.log('📦 Restoring source config:', activeRedistribution.source_config);
+          setSourceWithdrawals(activeRedistribution.source_config);
+        }
+
+        if (activeRedistribution.target_config && Array.isArray(activeRedistribution.target_config)) {
+          console.log('📦 Restoring target config:', activeRedistribution.target_config);
+          setTargetCategories(activeRedistribution.target_config);
+        }
+
+        console.log('✅ Configuration restored successfully');
+      } catch (error) {
+        console.error('💥 Exception loading existing config:', error);
+      }
+    };
+
+    loadExistingConfig();
+  }, [tenderId]);
 
   // Применить перераспределение с валидацией
   const handleApply = useCallback(async () => {
@@ -149,42 +184,109 @@ const CostRedistributionWizard: React.FC<CostRedistributionWizardProps> = ({
     try {
       // Преобразовать каскадную структуру в формат API
       // API ожидает: { detail_cost_category_id, percent }[]
-      const flatSourceWithdrawals: SourceWithdrawal[] = sourceWithdrawals.flatMap(sw => {
+      const flatSourceWithdrawals: SourceWithdrawal[] = [];
+
+      for (const sw of sourceWithdrawals) {
         if (sw.detail_cost_category_ids && sw.detail_cost_category_ids.length > 0) {
           // Если указаны конкретные detail categories - создаем запись для каждой
-          return sw.detail_cost_category_ids.map(detailId => ({
-            detail_cost_category_id: detailId,
-            percent: sw.percent
-          }));
+          sw.detail_cost_category_ids.forEach(detailId => {
+            flatSourceWithdrawals.push({
+              detail_cost_category_id: detailId,
+              percent: sw.percent
+            });
+          });
         } else {
-          // Если не указаны - используем все detail categories для данной cost_category
-          // (для упрощения используем cost_category_id как detail_cost_category_id)
-          return [{
-            detail_cost_category_id: sw.cost_category_id,
-            percent: sw.percent
-          }];
+          // Если не указаны - получаем все detail_cost_category_ids для данной cost_category
+          console.log('📡 Fetching detail categories for cost_category:', sw.cost_category_id);
+          const { data: detailCategories, error } = await supabase
+            .from('detail_cost_categories')
+            .select('id')
+            .eq('cost_category_id', sw.cost_category_id);
+
+          if (error) {
+            console.error('❌ Error fetching detail categories:', error);
+            message.error('Ошибка загрузки видов затрат');
+            setLoading(false);
+            return;
+          }
+
+          if (!detailCategories || detailCategories.length === 0) {
+            console.warn('⚠️ No detail categories found for cost_category:', sw.cost_category_id);
+            message.warning('Не найдены виды затрат для выбранной категории');
+            setLoading(false);
+            return;
+          }
+
+          detailCategories.forEach(dc => {
+            flatSourceWithdrawals.push({
+              detail_cost_category_id: dc.id,
+              percent: sw.percent
+            });
+          });
         }
-      });
+      }
 
       // Аналогично для целевых категорий
-      const flatTargetCategories: string[] = targetCategories.flatMap(tc => {
+      const flatTargetCategories: string[] = [];
+
+      for (const tc of targetCategories) {
         if (tc.detail_cost_category_ids && tc.detail_cost_category_ids.length > 0) {
-          return tc.detail_cost_category_ids;
+          flatTargetCategories.push(...tc.detail_cost_category_ids);
         } else {
-          // Если не указаны - используем cost_category_id
-          return [tc.cost_category_id];
+          // Если не указаны - получаем все detail_cost_category_ids для данной cost_category
+          console.log('📡 Fetching detail categories for target cost_category:', tc.cost_category_id);
+          const { data: detailCategories, error } = await supabase
+            .from('detail_cost_categories')
+            .select('id')
+            .eq('cost_category_id', tc.cost_category_id);
+
+          if (error) {
+            console.error('❌ Error fetching target detail categories:', error);
+            message.error('Ошибка загрузки видов затрат для целевых категорий');
+            setLoading(false);
+            return;
+          }
+
+          if (!detailCategories || detailCategories.length === 0) {
+            console.warn('⚠️ No detail categories found for target cost_category:', tc.cost_category_id);
+            message.warning('Не найдены виды затрат для целевой категории');
+            setLoading(false);
+            return;
+          }
+
+          flatTargetCategories.push(...detailCategories.map(dc => dc.id));
         }
+      }
+
+      console.log('📤 Flat source withdrawals (before dedup):', flatSourceWithdrawals);
+      console.log('📤 Flat target categories (before dedup):', flatTargetCategories);
+
+      // Дедуплицировать и объединить проценты для одинаковых detail_cost_category_id
+      const sourceMap = new Map<string, number>();
+      flatSourceWithdrawals.forEach(sw => {
+        const existingPercent = sourceMap.get(sw.detail_cost_category_id) || 0;
+        sourceMap.set(sw.detail_cost_category_id, existingPercent + sw.percent);
       });
 
-      console.log('📤 Flat source withdrawals:', flatSourceWithdrawals);
-      console.log('📤 Flat target categories:', flatTargetCategories);
+      const deduplicatedSources: SourceWithdrawal[] = Array.from(sourceMap.entries()).map(([id, percent]) => ({
+        detail_cost_category_id: id,
+        percent
+      }));
+
+      // Дедуплицировать целевые категории
+      const deduplicatedTargets = Array.from(new Set(flatTargetCategories));
+
+      console.log('📤 Flat source withdrawals (after dedup):', deduplicatedSources);
+      console.log('📤 Flat target categories (after dedup):', deduplicatedTargets);
 
       const result = await costRedistributionApi.createRedistribution({
         tender_id: tenderId,
         redistribution_name: `Перераспределение для "${tenderTitle}"`,
         description: `Создано: ${new Date().toLocaleString('ru-RU')}`,
-        source_withdrawals: flatSourceWithdrawals,
-        target_categories: flatTargetCategories
+        source_withdrawals: deduplicatedSources,
+        target_categories: deduplicatedTargets,
+        source_config: sourceWithdrawals,  // Сохранить конфигурацию wizard
+        target_config: targetCategories    // Сохранить конфигурацию wizard
       });
 
       if (result.error) {
