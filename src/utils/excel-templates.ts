@@ -459,6 +459,7 @@ export const exportBOQToExcel = async (
   const exportData: any[] = [];
   const rowStyles: Map<number, string> = new Map(); // Store styles for each row with proper indexing
   const unpricedExecutableRows: Set<number> = new Set(); // Track unpriced executable positions
+  const rowToBoqItemMap: Map<number, string> = new Map(); // Map row index to BOQ item ID
   let workLinksCache = new Map<string, any[]>(); // Cache for work-material links by position
   let boqItemsCache = boqItemsMap || new Map<string, any[]>(); // Use provided map or create new
 
@@ -688,7 +689,9 @@ export const exportBOQToExcel = async (
       });
 
       // Track row index and type for styling (use current length - 1 as the row was just added)
-      rowStyles.set(exportData.length - 1, item.item_type);
+      const rowIndex = exportData.length - 1;
+      rowStyles.set(rowIndex, item.item_type);
+      rowToBoqItemMap.set(rowIndex, item.id); // Map row to BOQ item ID
     });
 
     // Add additional positions (ДОП) from the position's additional_works property
@@ -748,35 +751,55 @@ export const exportBOQToExcel = async (
   console.log('🔄 [exportBOQToExcel] Applying cost categories from cache...');
 
   if (categoriesCache) {
-    exportData.forEach((row) => {
-      // Check if this row has a BOQ item with detail_cost_category_id
-      const boqItem = Array.from(boqItemsCache.values())
-        .flat()
-        .find(item => item.description === row['Наименование']?.trim());
+    // Create a flat map of all BOQ items by ID for faster lookup
+    const boqItemsById = new Map<string, any>();
+    Array.from(boqItemsCache.values()).flat().forEach(item => {
+      boqItemsById.set(item.id, item);
+    });
 
-      if (boqItem?.detail_cost_category_id) {
-        // Get category display using cached data
-        const detailCategory = categoriesCache.detailCategoryMap.get(boqItem.detail_cost_category_id);
-        const category = detailCategory?.category_id ?
-          categoriesCache.categoryMap.get(detailCategory.category_id) : null;
-        const location = boqItem.location_id ?
-          categoriesCache.locationMap.get(boqItem.location_id) : null;
+    console.log(`📊 [exportBOQToExcel] Processing ${exportData.length} rows, ${rowToBoqItemMap.size} BOQ item mappings`);
 
-        // Build display string (matching getDetailCategoryDisplay format)
-        let display = '';
-        if (category) display += category.name;
-        if (detailCategory) {
-          if (display) display += ' / ';
-          display += detailCategory.name;
-        }
-        if (location) {
-          if (display) display += ' / ';
-          display += location.name;
-        }
+    let categoriesAssigned = 0;
+    exportData.forEach((row, rowIndex) => {
+      // Get BOQ item ID from row mapping
+      const boqItemId = rowToBoqItemMap.get(rowIndex);
+      if (!boqItemId) return;
 
+      const boqItem = boqItemsById.get(boqItemId);
+      if (!boqItem?.detail_cost_category_id) {
+        console.log(`⚠️ Row ${rowIndex}: BOQ item ${boqItemId} has no detail_cost_category_id`);
+        return;
+      }
+
+      // Get category display using cached data
+      const detailCategory = categoriesCache.detailCategoryMap.get(boqItem.detail_cost_category_id);
+      const category = detailCategory?.cost_category_id ?
+        categoriesCache.categoryMap.get(detailCategory.cost_category_id) : null;
+      const location = detailCategory?.location_id ?
+        categoriesCache.locationMap.get(detailCategory.location_id) : null;
+
+      // Build display string (matching getDetailCategoryDisplay format)
+      let display = '';
+      if (category) display += category.name;
+      if (detailCategory) {
+        if (display) display += ' / ';
+        display += detailCategory.name;
+      }
+      if (location) {
+        if (display) display += ' / ';
+        display += location.country; // В таблице location поле называется country
+      }
+
+      if (display) {
         row['Категория затрат'] = display;
+        categoriesAssigned++;
+        if (categoriesAssigned <= 3) {
+          console.log(`✅ Row ${rowIndex} (${row['Наименование']?.substring(0, 30)}...): "${display}"`);
+        }
       }
     });
+
+    console.log(`✅ [exportBOQToExcel] Assigned categories to ${categoriesAssigned} rows`);
   } else {
     console.log('⚠️ [exportBOQToExcel] No categories cache available, skipping category assignment');
   }

@@ -15,6 +15,7 @@ import {
 import { LinkOutlined, DeleteOutlined, CopyOutlined, SnippetsOutlined } from '@ant-design/icons';
 import { PositionSummary } from './PositionSummary';
 import { clientPositionsApi } from '../../../../lib/supabase/api';
+import { formatQuantity } from '../../../../utils/formatters';
 
 const { Title, Text } = Typography;
 
@@ -399,6 +400,8 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
                       }
                     }}
                     style={{ fontSize: '13px' }}
+                    decimalSeparator=","
+                    parser={(value) => value?.replace(',', '.') as any}
                   />
                   <Select
                     size="small"
@@ -452,7 +455,7 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
                     <Text className="text-sm text-gray-500 font-semibold">Объем ГП:</Text>
                     {position.manual_volume && (
                       <Text className="text-sm text-green-600">
-                        <strong>{position.manual_volume}</strong>
+                        <strong>{formatQuantity(position.manual_volume, 2)}</strong>
                       </Text>
                     )}
                     {position.unit && (
@@ -482,6 +485,8 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
                         }
                       }}
                       style={{ fontSize: '14px' }}
+                      decimalSeparator=","
+                      parser={(value) => value?.replace(',', '.') as any}
                     />
                     {position.unit && (
                       <Text className="text-sm text-gray-600 ml-1">
@@ -494,7 +499,7 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
                     <div className="flex items-center gap-1">
                       <Text className="text-sm text-gray-500 font-semibold">Кол-во ГП:</Text>
                       <Text className="text-sm text-green-600">
-                        <strong>{position.manual_volume}</strong>
+                        <strong>{formatQuantity(position.manual_volume, 2)}</strong>
                       </Text>
                       {position.unit && (
                         <Text className="text-sm text-green-600 ml-1">
