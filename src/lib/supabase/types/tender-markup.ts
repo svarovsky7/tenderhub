@@ -22,7 +22,11 @@ export interface TenderMarkupPercentages {
   notes?: string;                    // Примечания
   is_active: boolean;                // Активность записи
   template_id?: string;              // Ссылка на шаблон (опционально)
-  
+
+  // Итоговая коммерческая стоимость
+  commercial_total_value?: number;              // Рассчитанная итоговая коммерческая стоимость КП
+  commercial_total_calculated_at?: string;      // Дата и время последнего расчета
+
   // Метки времени
   created_at: string;
   updated_at: string;
@@ -92,6 +96,8 @@ export interface UpdateTenderMarkupPercentages {
   general_costs_without_subcontract?: number;
   profit_own_forces?: number;
   profit_subcontract?: number;
+  commercial_total_value?: number;
+  commercial_total_calculated_at?: string;
   notes?: string;
   is_active?: boolean;
   template_id?: string;
@@ -139,20 +145,20 @@ export interface UpdateMarkupTemplate {
 
 // Значения по умолчанию
 export const DEFAULT_MARKUP_PERCENTAGES: Omit<TenderMarkupPercentages, 'id' | 'tender_id' | 'created_at' | 'updated_at'> = {
-  works_16_markup: 160,
+  works_16_markup: 60,                          // Работы 1,6 - 60%
   mechanization_service: 0.00,
   mbp_gsm: 0.00,
   warranty_period: 0.00,
-  works_cost_growth: 5.00,
-  materials_cost_growth: 3.00,
-  subcontract_works_cost_growth: 7.00,
-  subcontract_materials_cost_growth: 4.00,
-  contingency_costs: 2.00,
-  overhead_own_forces: 8.00,
-  overhead_subcontract: 6.00,
-  general_costs_without_subcontract: 5.00,
-  profit_own_forces: 12.00,
-  profit_subcontract: 8.00,
+  works_cost_growth: 10.00,                     // Рост стоимости работ - 10%
+  materials_cost_growth: 10.00,                 // Рост стоимости материалов - 10%
+  subcontract_works_cost_growth: 10.00,         // Рост стоимости работ субподряда - 10%
+  subcontract_materials_cost_growth: 10.00,     // Рост стоимости материалов субподряда - 10%
+  contingency_costs: 3.00,                      // Непредвиденные затраты - 3%
+  overhead_own_forces: 10.00,                   // ООЗ собств. силы - 10%
+  overhead_subcontract: 10.00,                  // ООЗ субподряд - 10%
+  general_costs_without_subcontract: 20.00,     // ОФЗ (без субподряда) - 20%
+  profit_own_forces: 10.00,                     // Прибыль собств. силы - 10%
+  profit_subcontract: 16.00,                    // Прибыль субподряд - 16%
   notes: '',
   is_active: true
 };

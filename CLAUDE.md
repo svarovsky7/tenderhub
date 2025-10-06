@@ -13,21 +13,28 @@ TenderHub is a construction tender management portal built with React 18, TypeSc
 ## Development Commands
 
 ```bash
+# Core development
 npm install          # Install dependencies
 npm run dev          # Start dev server (http://localhost:5173, auto-assigns port if busy)
 npm run build        # Production build (Vite only, NO TypeScript checking for faster builds)
 npm run build:check  # Production build WITH TypeScript type checking (use for validation)
 npm run preview      # Preview production build locally
 npm run lint         # Run ESLint checks (flat config)
+
+# Database management
 npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 
 # Database verification scripts
-node src/scripts/checkPositionTotals.ts    # Verify position totals match calculated values
-node src/scripts/applyPositionTotalsTrigger.ts  # Apply position totals trigger migration
-node src/scripts/updateCommercialCostsFunction.ts  # Update commercial costs function
+node src/scripts/checkPositionTotals.ts           # Verify position totals match calculated values
+node src/scripts/applyPositionTotalsTrigger.ts    # Apply position totals trigger migration
+node src/scripts/updateCommercialCostsFunction.ts # Update commercial costs function
 node src/scripts/recalculatePositionTotals.ts [tenderId]  # Force recalculate position totals (optional tender ID)
+npx tsx src/scripts/updateDefaultMarkupPercentages.ts     # Update existing markup percentages to new defaults
+npx tsx src/scripts/recalculateCommercialCosts.ts        # Recalculate commercial costs with correct formulas
+npx tsx src/scripts/fixCommercialCosts.ts                # Fix astronomical commercial costs in database
+npx tsx src/scripts/checkPosition8.ts                    # Check position 8 calculation details
 
-# Deployment (Vercel)
+# Deployment
 vercel --prod        # Deploy to production (requires VERCEL_TOKEN env var or login)
 ```
 
@@ -70,7 +77,7 @@ NEVER trust TypeScript types over prod.sql
 ALWAYS verify schema before ANY database work
 ```
 
-**⚠️ If `prod.sql` is empty (0 bytes), run `npm run db:schema` first**
+**⚠️ IMPORTANT**: If `prod.sql` is empty (0 bytes), run `npm run db:schema` IMMEDIATELY before any database work
 
 ## High-Level Architecture
 
@@ -216,11 +223,18 @@ Environment variables must be configured in Vercel dashboard:
 
 **Important**: Both local and Vercel use the SAME production Supabase database. Data changes are synchronized, but code updates require redeployment.
 
+**Vercel Configuration** (`vercel.json`):
+- SPA routing: All routes rewritten to `/index.html`
+- Security headers: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection
+
 ## Configuration Files
 
 ### Vite Configuration
 - Dev server: port 5173 (auto-assigns if busy), host enabled
 - HMR: overlay disabled, 5s timeout
+- **Optimize Dependencies**:
+  - Excluded: `lucide-react` (to avoid pre-bundling issues)
+  - Included: `lodash-es`, `antd`, `react`, `react-dom` (for faster dev startup)
 - **Manual chunking**: Simplified to avoid circular dependencies
   - `vendor` chunk: All node_modules (except xlsx)
   - `xlsx` chunk: Separate due to large size (869KB)
@@ -230,10 +244,11 @@ Environment variables must be configured in Vercel dashboard:
 
 ### TypeScript Configuration
 - Project references: tsconfig.app.json and tsconfig.node.json
-- Strict mode enabled
+- Strict mode enabled with `noUnusedLocals` and `noUnusedParameters`
 - Target: ES2022 with ESNext modules
+- Module resolution: bundler mode with `allowImportingTsExtensions`
 - Build info: `.tsbuildinfo` in `node_modules/.tmp/`
-- Path aliases: `@/*` maps to `./src/*`
+- **Note**: No path aliases configured - use relative imports
 
 ### ESLint Configuration
 - Flat config format (ESLint 9)

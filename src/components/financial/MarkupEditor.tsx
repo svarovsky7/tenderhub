@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, Form, InputNumber, Input, Button, message, Space, Typography, Row, Col, Progress, Statistic, Table, Tooltip } from 'antd';
-import { ReloadOutlined, InfoCircleOutlined, SettingOutlined, CalculatorOutlined } from '@ant-design/icons';
-import { 
-  getActiveTenderMarkup, 
-  updateTenderMarkup, 
-  calculateMarkupFinancials 
+import { ReloadOutlined, InfoCircleOutlined, SettingOutlined, CalculatorOutlined, SaveOutlined } from '@ant-design/icons';
+import {
+  getActiveTenderMarkup,
+  updateTenderMarkup,
+  calculateMarkupFinancials
 } from '../../lib/supabase/api/tender-markup';
 import type { TenderMarkupPercentages, UpdateTenderMarkupPercentages } from '../../lib/supabase/types/tender-markup';
 
@@ -214,24 +214,16 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [autoSaving, setAutoSaving] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [markupData, setMarkupData] = useState<TenderMarkupPercentages | null>(null);
   const [calculatedFinancials, setCalculatedFinancials] = useState<any>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     if (tenderId) {
       loadMarkupData();
     }
   }, [tenderId]);
-
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, []);
 
   const loadMarkupData = async () => {
     setLoading(true);
@@ -442,52 +434,69 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
     }, 0);
   };
 
-  const handleFormChange = () => {
-    const values = form.getFieldsValue();
-    if (markupData && values) {
+  const handleFormChange = (changedValues: any, allValues: any) => {
+    // Отмечаем что есть несохраненные изменения
+    setHasUnsavedChanges(true);
+
+    if (markupData && allValues) {
       // Update markup data with new values for calculations
-      const tempMarkupData = { ...markupData, ...values };
-      
+      const tempMarkupData = { ...markupData, ...allValues };
+
       // Calculate and notify parent immediately with form changes
       const financials = calculateMarkupFinancials(baseCosts, tempMarkupData);
       setCalculatedFinancials(financials);
-      
+
       if (onMarkupChange) {
         // Вычисляем итоговую коммерческую стоимость используя ту же логику что и для отображения
-        const totalCommercialPrice = calculateTotalCosts(markupFields, values);
+        const totalCommercialPrice = calculateTotalCosts(markupFields, allValues);
 
         onMarkupChange({
           ...financials,
           totalCommercialPrice
         });
       }
+    }
+  };
 
-      // Автоматическое сохранение с задержкой 2 секунды
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      
-      saveTimeoutRef.current = setTimeout(async () => {
-        try {
-          setAutoSaving(true);
-          console.log('🚀 [MarkupEditor] Auto-saving markup changes. ID:', markupData.id, 'Values:', values);
-          
-          if (!markupData.id) {
-            console.error('❌ [MarkupEditor] No ID for auto-save, markupData:', markupData);
-            return;
-          }
-          
-          const updateData: UpdateTenderMarkupPercentages = values;
-          const updatedData = await updateTenderMarkup(markupData.id, updateData);
-          // Don't call setMarkupData here to avoid triggering the useEffect
-          console.log('✅ [MarkupEditor] Auto-save successful:', updatedData);
-        } catch (error) {
-          console.error('❌ [MarkupEditor] Auto-save error:', error);
-          message.error('Ошибка автосохранения');
-        } finally {
-          setAutoSaving(false);
-        }
-      }, 2000);
+  // Единая функция сохранения всех процентов и итоговой суммы
+  const handleSaveAll = async () => {
+    if (!markupData || !markupData.id) {
+      message.error('Нет данных для сохранения');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const values = form.getFieldsValue();
+
+      // Вычисляем итоговую коммерческую стоимость
+      const totalCommercialPrice = calculateTotalCosts(markupFields, values);
+
+      console.log('🚀 [MarkupEditor] Saving all percentages and total:', {
+        values,
+        totalCommercialPrice
+      });
+
+      // Сохраняем все проценты и итоговую сумму
+      const updateData: UpdateTenderMarkupPercentages = {
+        ...values,
+        commercial_total_value: totalCommercialPrice,
+        commercial_total_calculated_at: new Date().toISOString()
+      };
+
+      const updatedData = await updateTenderMarkup(markupData.id, updateData);
+
+      // Обновляем локальное состояние
+      setMarkupData(updatedData);
+      setHasUnsavedChanges(false);
+
+      console.log('✅ [MarkupEditor] All data saved successfully including commercial_total_value:', totalCommercialPrice);
+      message.success('Все проценты и итоговая сумма сохранены');
+    } catch (error) {
+      console.error('❌ [MarkupEditor] Error saving data:', error);
+      message.error('Ошибка сохранения данных');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -559,13 +568,13 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
       title: 'Значение',
       dataIndex: 'currentValue',
       key: 'value',
-      width: 50,
+      width: 80,
       render: (value: number, record: any) => {
         // Для строк базовой информации не показываем поле ввода
         if (record.isBaseInfo) {
           return <div style={{ height: '32px' }}></div>;
         }
-        
+
         return (
           <Form.Item
             name={record.name}
@@ -714,9 +723,9 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
         <Title level={4} style={{ margin: 0, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
           <SettingOutlined style={{ color: '#1890ff' }} />
           Редактирование процентов затрат
-          {autoSaving && (
-            <Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
-              • автосохранение...
+          {hasUnsavedChanges && (
+            <Text type="warning" style={{ fontSize: 12, fontWeight: 'normal' }}>
+              (есть несохраненные изменения)
             </Text>
           )}
         </Title>
@@ -803,13 +812,25 @@ export const MarkupEditor: React.FC<MarkupEditorProps> = ({
         />
 
         <Row justify="center" style={{ marginTop: 20 }}>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={handleRefreshCalculation}
-            type="primary"
-          >
-            Обновить расчет
-          </Button>
+          <Space size="large">
+            <Button
+              icon={<SaveOutlined />}
+              onClick={handleSaveAll}
+              type="primary"
+              size="large"
+              loading={saving}
+              disabled={!markupData || !markupData.id}
+            >
+              Сохранить все проценты и итоговую сумму
+            </Button>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={handleRefreshCalculation}
+              type="default"
+            >
+              Обновить расчет
+            </Button>
+          </Space>
         </Row>
       </Form>
 
