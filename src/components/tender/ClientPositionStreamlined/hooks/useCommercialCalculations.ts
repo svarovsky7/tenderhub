@@ -105,6 +105,27 @@ export const useCommercialCalculations = ({
           commercialCost = result.materialCost + result.workMarkup; // Полная коммерческая стоимость
         }
         break;
+      default:
+        // Если тип не определен, пытаемся определить по названию
+        console.warn(`⚠️ Unknown item_type: ${record.item_type} for item ${record.description}`);
+
+        // Определяем тип по ключевым словам в названии
+        const description = (record.description || '').toLowerCase();
+        if (description.includes('суб-раб') || description.includes('субподряд') ||
+            description.includes('монтаж') || description.includes('демонтаж') ||
+            description.includes('устройство') || description.includes('разработка грунта')) {
+          commercialCost = calculateSubcontractWorkCommercialCost(baseCost, tenderMarkup);
+        } else if (description.includes('суб-мат') || description.includes('субподрядные материалы')) {
+          const result = calculateSubcontractMaterialCommercialCost(baseCost, tenderMarkup);
+          commercialCost = result.materialCost + result.workMarkup;
+        } else if (description.includes('работ') || description.includes('услуг')) {
+          commercialCost = calculateWorkCommercialCost(baseCost, tenderMarkup);
+        } else {
+          // По умолчанию считаем материалом
+          const result = calculateMainMaterialCommercialCost(baseCost, tenderMarkup);
+          commercialCost = result.materialCost + result.workMarkup;
+        }
+        break;
     }
 
     return commercialCost;

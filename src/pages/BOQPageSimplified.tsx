@@ -22,7 +22,8 @@ import {
   DashboardOutlined,
   FolderOutlined,
   LinkOutlined,
-  FormOutlined
+  FormOutlined,
+  ArrowLeftOutlined
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TenderBOQManagerLazy from '../components/tender/TenderBOQManagerLazy';
@@ -204,6 +205,20 @@ const BOQPageSimplified: React.FC = () => {
     }, 300);
   }, [selectedTenderId]);
 
+  // Reset tender selection
+  const handleResetSelection = useCallback(() => {
+    setSelectedTenderId(null);
+    setSelectedTenderName(null);
+    setIsContentVisible(false);
+    setBOQStats({
+      totalWorks: 0,
+      totalMaterials: 0,
+      totalCost: 0,
+      positionsCount: 0
+    });
+    message.info('Выбор тендера сброшен');
+  }, []);
+
   const handleNavigateToTender = useCallback(() => {
     if (selectedTenderId) {
       console.log('🚀 Navigating to tender details:', selectedTenderId);
@@ -326,7 +341,21 @@ const BOQPageSimplified: React.FC = () => {
                 <div className="boq-action-buttons">
                   <Button
                     className="boq-action-btn"
-                    style={{ 
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      color: 'white',
+                      borderColor: 'rgba(255, 255, 255, 0.3)',
+                      fontWeight: 500
+                    }}
+                    size="large"
+                    icon={<FolderOpenOutlined />}
+                    onClick={() => navigate('/tenders')}
+                  >
+                    К тендерам
+                  </Button>
+                  <Button
+                    className="boq-action-btn"
+                    style={{
                       background: 'rgba(255, 255, 255, 0.2)',
                       color: 'white',
                       borderColor: 'rgba(255, 255, 255, 0.3)',
@@ -340,7 +369,7 @@ const BOQPageSimplified: React.FC = () => {
                   </Button>
                   <Button
                     className="boq-action-btn"
-                    style={{ 
+                    style={{
                       background: 'rgba(255, 255, 255, 0.95)',
                       color: '#1890ff',
                       borderColor: 'rgba(255, 255, 255, 0.3)',
@@ -353,6 +382,22 @@ const BOQPageSimplified: React.FC = () => {
                   >
                     Обновить
                   </Button>
+                  {selectedTenderId && (
+                    <Button
+                      className="boq-action-btn"
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.2)',
+                        color: 'white',
+                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                        fontWeight: 600
+                      }}
+                      size="large"
+                      icon={<ArrowLeftOutlined />}
+                      onClick={handleResetSelection}
+                    >
+                      Назад к выбору
+                    </Button>
+                  )}
                 </div>
               </div>
 

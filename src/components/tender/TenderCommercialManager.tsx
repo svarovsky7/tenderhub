@@ -87,9 +87,9 @@ interface ClientPositionWithCommercial {
   };
 }
 
-const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({ 
+const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
   tenderId,
-  onStatsUpdate 
+  onStatsUpdate
 }) => {
   console.log('🚀 TenderCommercialManager MOUNTED/RENDERED for tender:', tenderId, 'at', new Date().toISOString());
 
@@ -98,6 +98,8 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
   const [tenderName, setTenderName] = useState<string>('');
   const [tenderVersion, setTenderVersion] = useState<number>(1);
   const [markups, setMarkups] = useState<TenderMarkupPercentages | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   
   // Sort positions by position number
   const sortPositionsByNumber = useCallback((positions: ClientPositionWithCommercial[]): ClientPositionWithCommercial[] => {
@@ -132,6 +134,7 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
     console.log('📡 Loading commercial positions for tender:', tenderId);
     console.log('🔍 TENDER ID FOR DISPLAY:', tenderId);
     setLoading(true);
+    setCurrentPage(1); // Reset to first page when loading new data
     try {
       // Загружаем информацию о тендере
       const tenderResult = await tendersApi.getById(tenderId);
@@ -977,7 +980,26 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
           dataSource={sortPositionsByNumber(positions)}
           columns={columns}
           rowKey="id"
-          pagination={false}
+          pagination={{
+            current: currentPage,
+            pageSize: pageSize,
+            total: positions.length,
+            onChange: (page, newPageSize) => {
+              console.log('🔄 Pagination changed:', { page, newPageSize });
+              setCurrentPage(page);
+              if (newPageSize) setPageSize(newPageSize);
+            },
+            onShowSizeChange: (current, size) => {
+              console.log('🔄 Page size changed:', { current, size });
+              setPageSize(size);
+              setCurrentPage(1);
+            },
+            showSizeChanger: true,
+            pageSizeOptions: ['20', '50', '100', '200'],
+            showTotal: (total, range) => `${range[0]}-${range[1]} из ${total} позиций`,
+            position: ['bottomCenter'],
+            className: 'mt-4'
+          }}
           scroll={{ x: 1620 }}
           size="small"
           bordered

@@ -154,6 +154,16 @@ const FinancialIndicatorsPage: React.FC = () => {
     }, 300);
   }, [selectedTenderId]);
 
+  // Reset tender selection
+  const handleResetSelection = useCallback(() => {
+    setSelectedTenderId(null);
+    setSelectedTenderName(null);
+    setSelectedTender(null);
+    setIsContentVisible(false);
+    setFinancialStats(null);
+    message.info('Выбор тендера сброшен');
+  }, []);
+
   // Handle quick tender selection
   const handleQuickTenderSelect = useCallback((tender: Tender) => {
     console.log('🚀 Quick tender selected for financial indicators:', tender.id, tender.title);

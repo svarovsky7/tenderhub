@@ -40,6 +40,7 @@ export interface TenderWithSummary extends Tender {
   total_items?: number;
   boq_total_value?: number;
   commercial_total_value?: number;
+  commercial_total_calculated_at?: string;
 }
 
 // Hierarchy types

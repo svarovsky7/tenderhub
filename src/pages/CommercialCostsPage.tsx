@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Card, 
-  Button, 
-  Typography, 
-  Space, 
+import {
+  Card,
+  Button,
+  Typography,
+  Space,
   Select,
   Spin,
   message,
@@ -14,13 +14,14 @@ import {
   ConfigProvider,
   Alert
 } from 'antd';
-import { 
-  PlusOutlined, 
+import {
+  PlusOutlined,
   DollarOutlined,
   ReloadOutlined,
   FolderOpenOutlined,
   DashboardOutlined,
-  PercentageOutlined
+  PercentageOutlined,
+  ArrowLeftOutlined
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TenderCommercialManager from '../components/tender/TenderCommercialManager';
@@ -176,6 +177,20 @@ const CommercialCostsPage: React.FC = () => {
     }, 300);
   }, [selectedTenderId]);
 
+  // Reset tender selection
+  const handleResetSelection = useCallback(() => {
+    setSelectedTenderId(null);
+    setSelectedTenderName(null);
+    setIsContentVisible(false);
+    setCommercialStats({
+      totalBaseCost: 0,
+      totalCommercialCost: 0,
+      totalMarkup: 0,
+      positions: 0,
+      markupPercentage: 0
+    });
+    message.info('Выбор тендера сброшен');
+  }, []);
 
   const handleNavigateToTender = useCallback(() => {
     if (selectedTenderId) {
@@ -306,7 +321,7 @@ const CommercialCostsPage: React.FC = () => {
                 <div className="commercial-action-buttons">
                   <Button
                     className="commercial-action-btn"
-                    style={{ 
+                    style={{
                       background: 'rgba(255, 255, 255, 0.2)',
                       color: 'white',
                       borderColor: 'rgba(255, 255, 255, 0.3)',
@@ -320,7 +335,7 @@ const CommercialCostsPage: React.FC = () => {
                   </Button>
                   <Button
                     className="commercial-action-btn"
-                    style={{ 
+                    style={{
                       background: 'rgba(255, 255, 255, 0.95)',
                       color: '#1890ff',
                       borderColor: 'rgba(255, 255, 255, 0.3)',
@@ -333,6 +348,22 @@ const CommercialCostsPage: React.FC = () => {
                   >
                     Обновить
                   </Button>
+                  {selectedTenderId && (
+                    <Button
+                      className="commercial-action-btn"
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.2)',
+                        color: 'white',
+                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                        fontWeight: 600
+                      }}
+                      size="large"
+                      icon={<ArrowLeftOutlined />}
+                      onClick={handleResetSelection}
+                    >
+                      Назад к выбору
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -520,13 +551,13 @@ const CommercialCostsPage: React.FC = () => {
         )}
         
         {selectedTenderId && (
-          <div 
+          <div
             id="tender-content-section"
             className={`p-4 lg:p-6 transition-all duration-1000 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}
           >
             <div className={`w-full transition-all duration-1000 transform ${isContentVisible ? 'translate-y-0' : 'translate-y-10'}`}>
-              <TenderCommercialManager 
-                tenderId={selectedTenderId} 
+              <TenderCommercialManager
+                tenderId={selectedTenderId}
                 key={selectedTenderId}
                 onStatsUpdate={handleUpdateStats}
               />

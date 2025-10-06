@@ -36,7 +36,8 @@ import {
   FileTextOutlined,
   FormOutlined,
   CopyOutlined,
-  BranchesOutlined
+  BranchesOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -416,16 +417,30 @@ const TenderTable: React.FC<TenderTableProps> = ({
       width: 200,
       align: 'center' as const,
       render: (_, record) => {
-        // Use commercial total value from client_positions
         const total = record.commercial_total_value || 0;
+        const hasCalculatedDate = record.commercial_total_calculated_at;
 
         return (
           <div className="text-center">
             <DollarOutlined className="mb-1 block text-green-500" />
             {total > 0 ? (
-              <Text strong className="text-sm block">
-                {Math.round(total).toLocaleString('ru-RU')}
-              </Text>
+              <>
+                <Text strong className="text-sm block">
+                  {Math.round(total).toLocaleString('ru-RU')}
+                </Text>
+                {hasCalculatedDate && (
+                  <Tooltip title={`Рассчитано: ${new Date(hasCalculatedDate).toLocaleString('ru-RU')}`}>
+                    <Text type="secondary" className="text-xs">
+                      <CheckCircleOutlined style={{ color: '#52c41a', fontSize: '10px' }} /> сохранено
+                    </Text>
+                  </Tooltip>
+                )}
+                {!hasCalculatedDate && total > 0 && (
+                  <Text type="secondary" className="text-xs">
+                    базовая стоимость
+                  </Text>
+                )}
+              </>
             ) : (
               <Text type="secondary" className="text-sm block">
                 Не рассчитано

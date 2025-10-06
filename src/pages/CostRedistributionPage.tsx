@@ -20,7 +20,8 @@ import {
   FolderOpenOutlined,
   DashboardOutlined,
   TableOutlined,
-  SettingOutlined
+  SettingOutlined,
+  ArrowLeftOutlined
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import CostRedistributionWizard from '../components/financial/CostRedistributionWizard';
@@ -168,6 +169,15 @@ const CostRedistributionPage: React.FC = () => {
     }, 300);
   }, [selectedTenderId]);
 
+  // Reset tender selection
+  const handleResetSelection = useCallback(() => {
+    setSelectedTenderId(null);
+    setSelectedTenderName(null);
+    setIsContentVisible(false);
+    setViewMode('wizard');
+    message.info('Выбор тендера сброшен');
+  }, []);
+
   const handleNavigateToTender = useCallback(() => {
     if (selectedTenderId) {
       console.log('🚀 Navigating to tender details:', selectedTenderId);
@@ -210,7 +220,7 @@ const CostRedistributionPage: React.FC = () => {
       <style>
         {`
           .redistribution-page-header {
-            background: linear-gradient(135deg, #7c3aed 0%, #db2777 50%, #f97316 100%);
+            background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
             border-radius: 16px 16px 0 0;
             margin-bottom: 0;
             padding: 32px;
@@ -255,7 +265,7 @@ const CostRedistributionPage: React.FC = () => {
         theme={{
           token: {
             borderRadius: 8,
-            colorPrimary: '#7c3aed'
+            colorPrimary: '#1890ff'
           }
         }}
       >
@@ -299,7 +309,7 @@ const CostRedistributionPage: React.FC = () => {
                     className="redistribution-action-btn"
                     style={{
                       background: 'rgba(255, 255, 255, 0.95)',
-                      color: '#7c3aed',
+                      color: '#1890ff',
                       borderColor: 'rgba(255, 255, 255, 0.3)',
                       fontWeight: 600
                     }}
@@ -310,6 +320,22 @@ const CostRedistributionPage: React.FC = () => {
                   >
                     Обновить
                   </Button>
+                  {selectedTenderId && (
+                    <Button
+                      className="redistribution-action-btn"
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.2)',
+                        color: 'white',
+                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                        fontWeight: 600
+                      }}
+                      size="large"
+                      icon={<ArrowLeftOutlined />}
+                      onClick={handleResetSelection}
+                    >
+                      Назад к выбору
+                    </Button>
+                  )}
                 </div>
               </div>
 
