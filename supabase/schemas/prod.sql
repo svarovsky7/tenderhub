@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2025-10-03T09:44:54.478919
+-- Generated: 2025-10-07T11:33:57.110214
 -- Database: postgres
 -- Host: aws-0-eu-central-1.pooler.supabase.com
 
@@ -511,6 +511,50 @@ CREATE TABLE IF NOT EXISTS public.cost_nodes (
     CONSTRAINT uq_cost_nodes_sibling UNIQUE (parent_id)
 );
 
+-- Table: public.cost_redistribution_details
+-- Description: Детализация изменений коммерческих стоимостей для каждого BOQ элемента
+CREATE TABLE IF NOT EXISTS public.cost_redistribution_details (
+    id uuid NOT NULL DEFAULT uuid_generate_v4(),
+    redistribution_id uuid NOT NULL,
+    boq_item_id uuid NOT NULL,
+    original_commercial_cost numeric(15,2) NOT NULL,
+    redistributed_commercial_cost numeric(15,2) NOT NULL,
+    adjustment_amount numeric(15,2) NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT cost_redistribution_details_boq_item_id_fkey FOREIGN KEY (boq_item_id) REFERENCES None.None(None),
+    CONSTRAINT cost_redistribution_details_pkey PRIMARY KEY (id),
+    CONSTRAINT cost_redistribution_details_redistribution_id_fkey FOREIGN KEY (redistribution_id) REFERENCES None.None(None),
+    CONSTRAINT unique_item_per_redistribution UNIQUE (boq_item_id),
+    CONSTRAINT unique_item_per_redistribution UNIQUE (redistribution_id)
+);
+COMMENT ON TABLE public.cost_redistribution_details IS 'Детализация изменений коммерческих стоимостей для каждого BOQ элемента';
+COMMENT ON COLUMN public.cost_redistribution_details.original_commercial_cost IS 'Исходная коммерческая стоимость';
+COMMENT ON COLUMN public.cost_redistribution_details.redistributed_commercial_cost IS 'Коммерческая стоимость после перераспределения';
+COMMENT ON COLUMN public.cost_redistribution_details.adjustment_amount IS 'Величина корректировки (положительная = добавление, отрицательная = вычитание)';
+
+-- Table: public.cost_redistributions
+-- Description: Перераспределения коммерческих стоимостей работ для тендеров (версионные)
+CREATE TABLE IF NOT EXISTS public.cost_redistributions (
+    id uuid NOT NULL DEFAULT uuid_generate_v4(),
+    tender_id uuid NOT NULL,
+    name character varying(255) NOT NULL,
+    description text,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    created_by uuid,
+    is_active boolean NOT NULL DEFAULT false,
+    source_config jsonb,
+    target_config jsonb,
+    CONSTRAINT cost_redistributions_pkey PRIMARY KEY (id),
+    CONSTRAINT cost_redistributions_tender_id_fkey FOREIGN KEY (tender_id) REFERENCES None.None(None)
+);
+COMMENT ON TABLE public.cost_redistributions IS 'Перераспределения коммерческих стоимостей работ для тендеров (версионные)';
+COMMENT ON COLUMN public.cost_redistributions.tender_id IS 'ID тендера (версии) к которому применяется перераспределение';
+COMMENT ON COLUMN public.cost_redistributions.name IS 'Название перераспределения';
+COMMENT ON COLUMN public.cost_redistributions.is_active IS 'Активное перераспределение (только одно на тендер)';
+COMMENT ON COLUMN public.cost_redistributions.source_config IS 'Конфигурация исходных категорий: массив объектов [{cost_category_id, cost_category_name, detail_cost_category_ids[], detail_cost_category_names[], percent}]';
+COMMENT ON COLUMN public.cost_redistributions.target_config IS 'Конфигурация целевых категорий: массив объектов [{cost_category_id, cost_category_name, detail_cost_category_ids[], detail_cost_category_names[]}]';
+
 -- Table: public.detail_cost_categories
 CREATE TABLE IF NOT EXISTS public.detail_cost_categories (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -644,6 +688,8 @@ CREATE TABLE IF NOT EXISTS public.tender_markup_percentages (
     mechanization_service numeric(5,2) DEFAULT 0.00,
     mbp_gsm numeric(5,2) DEFAULT 0.00,
     warranty_period numeric(5,2) DEFAULT 0.00,
+    commercial_total_value numeric(15,2),
+    commercial_total_calculated_at timestamp with time zone,
     CONSTRAINT tender_markup_percentages_new_pkey PRIMARY KEY (id),
     CONSTRAINT tender_markup_percentages_tender_id_fkey FOREIGN KEY (tender_id) REFERENCES None.None(None)
 );
@@ -662,6 +708,8 @@ COMMENT ON COLUMN public.tender_markup_percentages.profit_subcontract IS 'Profit
 COMMENT ON COLUMN public.tender_markup_percentages.mechanization_service IS 'Служба механизации раб (бурильщики, автотехника, электрики)';
 COMMENT ON COLUMN public.tender_markup_percentages.mbp_gsm IS 'МБП+ГСМ (топливо+масло)';
 COMMENT ON COLUMN public.tender_markup_percentages.warranty_period IS 'Гарантийный период 5 лет';
+COMMENT ON COLUMN public.tender_markup_percentages.commercial_total_value IS 'Рассчитанная итоговая коммерческая стоимость КП';
+COMMENT ON COLUMN public.tender_markup_percentages.commercial_total_calculated_at IS 'Дата и время последнего расчета коммерческой стоимости';
 
 -- Table: public.tender_version_history
 -- Description: История операций версионирования тендеров
@@ -1452,7 +1500,7 @@ $function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea)
+CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1460,7 +1508,7 @@ AS '$libdir/pgcrypto', $function$pg_armor$function$
 
 
 -- Function: extensions.armor
-CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
+CREATE OR REPLACE FUNCTION extensions.armor(bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1707,7 +1755,7 @@ $function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1715,7 +1763,7 @@ AS '$libdir/pgcrypto', $function$pg_hmac$function$
 
 
 -- Function: extensions.hmac
-CREATE OR REPLACE FUNCTION extensions.hmac(text, text, text)
+CREATE OR REPLACE FUNCTION extensions.hmac(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1763,7 +1811,7 @@ AS '$libdir/pgcrypto', $function$pgp_key_id_w$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1779,11 +1827,19 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea)
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt(bytea, bytea, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$
+
+
+-- Function: extensions.pgp_pub_decrypt_bytea
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 
 -- Function: extensions.pgp_pub_decrypt_bytea
@@ -1796,14 +1852,6 @@ AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
 
 -- Function: extensions.pgp_pub_decrypt_bytea
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea, text)
- RETURNS bytea
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$
-
-
--- Function: extensions.pgp_pub_decrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_decrypt_bytea(bytea, bytea)
  RETURNS bytea
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1827,14 +1875,6 @@ AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$
 
 
 -- Function: extensions.pgp_pub_encrypt_bytea
-CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea)
- RETURNS bytea
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_bytea$function$
-
-
--- Function: extensions.pgp_pub_encrypt_bytea
 CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)
  RETURNS bytea
  LANGUAGE c
@@ -1842,8 +1882,16 @@ CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea, text)
 AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_bytea$function$
 
 
+-- Function: extensions.pgp_pub_encrypt_bytea
+CREATE OR REPLACE FUNCTION extensions.pgp_pub_encrypt_bytea(bytea, bytea)
+ RETURNS bytea
+ LANGUAGE c
+ PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pgp_pub_encrypt_bytea$function$
+
+
 -- Function: extensions.pgp_sym_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt(bytea, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt(bytea, text, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -1851,7 +1899,7 @@ AS '$libdir/pgcrypto', $function$pgp_sym_decrypt_text$function$
 
 
 -- Function: extensions.pgp_sym_decrypt
-CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt(bytea, text, text)
+CREATE OR REPLACE FUNCTION extensions.pgp_sym_decrypt(bytea, text)
  RETURNS text
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -3058,6 +3106,38 @@ END;
 $function$
 
 
+-- Function: public.calculate_work_portion
+-- Description: Рассчитывает долю работ в коммерческой стоимости BOQ элемента
+CREATE OR REPLACE FUNCTION public.calculate_work_portion(p_item_type boq_item_type, p_material_type material_type, p_commercial_cost numeric, p_total_amount numeric)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+BEGIN
+  -- Для работ: вся commercial_cost - это работы
+  IF p_item_type IN ('work', 'sub_work') THEN
+    RETURN p_commercial_cost;
+  END IF;
+
+  -- Для материалов: зависит от material_type
+  IF p_item_type IN ('material', 'sub_material') THEN
+    -- Основной материал: работы = commercial_cost - total_amount (наценка)
+    IF p_material_type = 'main' THEN
+      RETURN p_commercial_cost - p_total_amount;
+    END IF;
+
+    -- Вспомогательный материал: вся commercial_cost - это работы
+    IF p_material_type = 'auxiliary' THEN
+      RETURN p_commercial_cost;
+    END IF;
+  END IF;
+
+  -- По умолчанию возвращаем 0
+  RETURN 0;
+END;
+$function$
+
+
 -- Function: public.check_boq_item_delivery_consistency
 CREATE OR REPLACE FUNCTION public.check_boq_item_delivery_consistency()
  RETURNS trigger
@@ -4034,6 +4114,43 @@ END;
 $function$
 
 
+-- Function: public.get_categories_with_work_costs
+-- Description: Возвращает категории затрат с текущей стоимостью работ для тендера
+CREATE OR REPLACE FUNCTION public.get_categories_with_work_costs(p_tender_id uuid)
+ RETURNS TABLE(id uuid, name text, current_works_cost numeric, items_count bigint)
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
+BEGIN
+  RETURN QUERY
+  SELECT
+    dc.id,
+    dc.name,
+    COALESCE(SUM(
+      calculate_work_portion(
+        bi.item_type,
+        bi.material_type,
+        bi.commercial_cost,
+        bi.total_amount
+      ) * bi.quantity
+    ), 0) AS current_works_cost,
+    COUNT(bi.id) AS items_count
+  FROM detail_cost_categories dc
+  LEFT JOIN boq_items bi ON bi.detail_cost_category_id = dc.id
+    AND bi.tender_id = p_tender_id
+    AND bi.commercial_cost > 0
+  GROUP BY dc.id, dc.name
+  HAVING COUNT(bi.id) > 0 OR dc.id IN (
+    SELECT DISTINCT detail_cost_category_id
+    FROM boq_items
+    WHERE tender_id = p_tender_id
+      AND detail_cost_category_id IS NOT NULL
+  )
+  ORDER BY dc.name;
+END;
+$function$
+
+
 -- Function: public.get_client_positions_count
 CREATE OR REPLACE FUNCTION public.get_client_positions_count(p_tender_id uuid, p_search_query text DEFAULT NULL::text, p_category_filter text[] DEFAULT NULL::text[])
  RETURNS integer
@@ -4894,7 +5011,7 @@ $function$
 
 
 -- Function: public.index
-CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
  RETURNS integer
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4902,7 +5019,7 @@ AS '$libdir/ltree', $function$ltree_index$function$
 
 
 -- Function: public.index
-CREATE OR REPLACE FUNCTION public.index(ltree, ltree, integer)
+CREATE OR REPLACE FUNCTION public.index(ltree, ltree)
  RETURNS integer
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4939,15 +5056,7 @@ AS $function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
- RETURNS ltree
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/ltree', $function$lca$function$
-
-
--- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4960,6 +5069,14 @@ CREATE OR REPLACE FUNCTION public.lca(ltree[])
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/ltree', $function$_lca$function$
+
+
+-- Function: public.lca
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
+ RETURNS ltree
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
@@ -4979,7 +5096,7 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -4987,7 +5104,7 @@ AS '$libdir/ltree', $function$lca$function$
 
 
 -- Function: public.lca
-CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree)
+CREATE OR REPLACE FUNCTION public.lca(ltree, ltree, ltree, ltree, ltree, ltree)
  RETURNS ltree
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
@@ -5513,6 +5630,417 @@ BEGIN
         last_calculation_date = NOW()
     WHERE tender_id = p_tender_id;
 
+END;
+$function$
+
+
+-- Function: public.redistribute_work_costs
+-- Description: Перераспределяет коммерческую стоимость работ между категориями затрат для тендера (с обработкой дубликатов)
+CREATE OR REPLACE FUNCTION public.redistribute_work_costs(p_tender_id uuid, p_redistribution_name text, p_description text, p_source_withdrawals jsonb, p_target_categories uuid[])
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_redistribution_id UUID;
+  v_source_withdrawal JSONB;
+  v_category_id UUID;
+  v_percent NUMERIC;
+  v_total_withdrawn NUMERIC := 0;
+  v_total_target_works_cost NUMERIC := 0;
+  v_boq_item RECORD;
+  v_work_portion NUMERIC;
+  v_withdrawal_amount NUMERIC;
+  v_item_weight NUMERIC;
+  v_addition_amount NUMERIC;
+  v_new_commercial_cost NUMERIC;
+BEGIN
+  RAISE NOTICE '🚀 redistribute_work_costs started for tender: %, name: %', p_tender_id, p_redistribution_name;
+
+  -- Деактивировать все существующие активные перераспределения для этого тендера
+  UPDATE public.cost_redistributions
+  SET is_active = false,
+      updated_at = NOW()
+  WHERE tender_id = p_tender_id AND is_active = true;
+
+  RAISE NOTICE '✅ Deactivated existing redistributions';
+
+  -- Создать новую запись перераспределения
+  INSERT INTO public.cost_redistributions (
+    tender_id,
+    name,
+    description,
+    is_active
+  ) VALUES (
+    p_tender_id,
+    p_redistribution_name,
+    p_description,
+    true
+  ) RETURNING id INTO v_redistribution_id;
+
+  RAISE NOTICE '✅ Created new redistribution with ID: %', v_redistribution_id;
+
+  -- ШАГ 1: Вычитание из исходных категорий
+  FOR v_source_withdrawal IN SELECT * FROM jsonb_array_elements(p_source_withdrawals)
+  LOOP
+    v_category_id := (v_source_withdrawal->>'detail_cost_category_id')::UUID;
+    v_percent := (v_source_withdrawal->>'percent')::NUMERIC;
+
+    RAISE NOTICE '📊 Processing source category: %, percent: %', v_category_id, v_percent;
+
+    -- Обработать каждый BOQ item в этой категории
+    FOR v_boq_item IN
+      SELECT
+        id,
+        item_type,
+        material_type,
+        commercial_cost,
+        total_amount,
+        description
+      FROM public.boq_items
+      WHERE tender_id = p_tender_id
+        AND detail_cost_category_id = v_category_id
+        AND commercial_cost > 0
+    LOOP
+      -- Рассчитать workPortion
+      v_work_portion := calculate_work_portion(
+        v_boq_item.item_type,
+        v_boq_item.material_type,
+        v_boq_item.commercial_cost,
+        v_boq_item.total_amount
+      );
+
+      -- Вычислить сумму вычитания
+      v_withdrawal_amount := v_work_portion * (v_percent / 100);
+
+      -- Накопить общую вычтенную сумму
+      v_total_withdrawn := v_total_withdrawn + v_withdrawal_amount;
+
+      -- Новая коммерческая стоимость
+      v_new_commercial_cost := v_boq_item.commercial_cost - v_withdrawal_amount;
+
+      -- Сохранить в details с обработкой конфликтов (если элемент уже был добавлен)
+      INSERT INTO public.cost_redistribution_details (
+        redistribution_id,
+        boq_item_id,
+        original_commercial_cost,
+        redistributed_commercial_cost,
+        adjustment_amount
+      ) VALUES (
+        v_redistribution_id,
+        v_boq_item.id,
+        v_boq_item.commercial_cost,
+        v_new_commercial_cost,
+        -v_withdrawal_amount  -- Отрицательное значение = вычитание
+      )
+      ON CONFLICT (redistribution_id, boq_item_id) DO UPDATE SET
+        redistributed_commercial_cost = cost_redistribution_details.redistributed_commercial_cost - v_withdrawal_amount,
+        adjustment_amount = cost_redistribution_details.adjustment_amount - v_withdrawal_amount;
+
+      RAISE NOTICE '➖ Withdrawn from item %: % (workPortion: %, percent: %)',
+        v_boq_item.description, v_withdrawal_amount, v_work_portion, v_percent;
+    END LOOP;
+  END LOOP;
+
+  RAISE NOTICE '✅ Total withdrawn: %', v_total_withdrawn;
+
+  -- Проверка: должно быть вычтено что-то
+  IF v_total_withdrawn <= 0 THEN
+    RAISE EXCEPTION 'No amounts were withdrawn. Check source categories and percentages.';
+  END IF;
+
+  -- ШАГ 2: Рассчитать общую стоимость работ в целевых категориях
+  FOR v_boq_item IN
+    SELECT
+      id,
+      item_type,
+      material_type,
+      commercial_cost,
+      total_amount
+    FROM public.boq_items
+    WHERE tender_id = p_tender_id
+      AND detail_cost_category_id = ANY(p_target_categories)
+      AND commercial_cost > 0
+  LOOP
+    v_work_portion := calculate_work_portion(
+      v_boq_item.item_type,
+      v_boq_item.material_type,
+      v_boq_item.commercial_cost,
+      v_boq_item.total_amount
+    );
+
+    v_total_target_works_cost := v_total_target_works_cost + v_work_portion;
+  END LOOP;
+
+  RAISE NOTICE '✅ Total target works cost: %', v_total_target_works_cost;
+
+  -- Проверка: должны быть целевые категории
+  IF v_total_target_works_cost <= 0 THEN
+    RAISE EXCEPTION 'No target items found or total target works cost is zero';
+  END IF;
+
+  -- ШАГ 3: Распределение на целевые категории
+  FOR v_boq_item IN
+    SELECT
+      id,
+      item_type,
+      material_type,
+      commercial_cost,
+      total_amount,
+      description
+    FROM public.boq_items
+    WHERE tender_id = p_tender_id
+      AND detail_cost_category_id = ANY(p_target_categories)
+      AND commercial_cost > 0
+  LOOP
+    -- Рассчитать workPortion
+    v_work_portion := calculate_work_portion(
+      v_boq_item.item_type,
+      v_boq_item.material_type,
+      v_boq_item.commercial_cost,
+      v_boq_item.total_amount
+    );
+
+    -- Рассчитать вес элемента
+    v_item_weight := v_work_portion / v_total_target_works_cost;
+
+    -- Рассчитать сумму добавления
+    v_addition_amount := v_total_withdrawn * v_item_weight;
+
+    -- Новая коммерческая стоимость
+    v_new_commercial_cost := v_boq_item.commercial_cost + v_addition_amount;
+
+    -- Сохранить в details
+    INSERT INTO public.cost_redistribution_details (
+      redistribution_id,
+      boq_item_id,
+      original_commercial_cost,
+      redistributed_commercial_cost,
+      adjustment_amount
+    ) VALUES (
+      v_redistribution_id,
+      v_boq_item.id,
+      v_boq_item.commercial_cost,
+      v_new_commercial_cost,
+      v_addition_amount  -- Положительное значение = добавление
+    )
+    ON CONFLICT (redistribution_id, boq_item_id) DO UPDATE SET
+      redistributed_commercial_cost = cost_redistribution_details.redistributed_commercial_cost + v_addition_amount,
+      adjustment_amount = cost_redistribution_details.adjustment_amount + v_addition_amount;
+
+    RAISE NOTICE '➕ Added to item %: % (weight: %)',
+      v_boq_item.description, v_addition_amount, v_item_weight;
+  END LOOP;
+
+  RAISE NOTICE '✅ Redistribution completed successfully. ID: %', v_redistribution_id;
+
+  RETURN v_redistribution_id;
+END;
+$function$
+
+
+-- Function: public.redistribute_work_costs
+CREATE OR REPLACE FUNCTION public.redistribute_work_costs(p_tender_id uuid, p_redistribution_name text, p_description text, p_source_withdrawals jsonb, p_target_categories uuid[], p_source_config jsonb DEFAULT NULL::jsonb, p_target_config jsonb DEFAULT NULL::jsonb)
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_redistribution_id UUID;
+  v_source_withdrawal JSONB;
+  v_category_id UUID;
+  v_percent NUMERIC;
+  v_total_withdrawn NUMERIC := 0;
+  v_total_target_works_cost NUMERIC := 0;
+  v_boq_item RECORD;
+  v_work_portion NUMERIC;
+  v_withdrawal_amount NUMERIC;
+  v_item_weight NUMERIC;
+  v_addition_amount NUMERIC;
+  v_new_commercial_cost NUMERIC;
+BEGIN
+  RAISE NOTICE '🚀 redistribute_work_costs started for tender: %, name: %', p_tender_id, p_redistribution_name;
+
+  -- Деактивировать все существующие активные перераспределения для этого тендера
+  UPDATE public.cost_redistributions
+  SET is_active = false,
+      updated_at = NOW()
+  WHERE tender_id = p_tender_id AND is_active = true;
+
+  RAISE NOTICE '✅ Deactivated existing redistributions';
+
+  -- Создать новую запись перераспределения (WITH CONFIG)
+  INSERT INTO public.cost_redistributions (
+    tender_id,
+    name,
+    description,
+    is_active,
+    source_config,  -- NEW
+    target_config   -- NEW
+  ) VALUES (
+    p_tender_id,
+    p_redistribution_name,
+    p_description,
+    true,
+    p_source_config,  -- NEW
+    p_target_config   -- NEW
+  ) RETURNING id INTO v_redistribution_id;
+
+  RAISE NOTICE '✅ Created new redistribution with ID: %', v_redistribution_id;
+
+  -- ШАГ 1: Вычитание из исходных категорий
+  FOR v_source_withdrawal IN SELECT * FROM jsonb_array_elements(p_source_withdrawals)
+  LOOP
+    v_category_id := (v_source_withdrawal->>'detail_cost_category_id')::UUID;
+    v_percent := (v_source_withdrawal->>'percent')::NUMERIC;
+
+    RAISE NOTICE '📊 Processing source category: %, percent: %', v_category_id, v_percent;
+
+    -- Обработать каждый BOQ item в этой категории
+    FOR v_boq_item IN
+      SELECT
+        id,
+        item_type,
+        material_type,
+        commercial_cost,
+        total_amount,
+        description
+      FROM public.boq_items
+      WHERE tender_id = p_tender_id
+        AND detail_cost_category_id = v_category_id
+        AND commercial_cost > 0
+    LOOP
+      -- Рассчитать workPortion
+      v_work_portion := calculate_work_portion(
+        v_boq_item.item_type,
+        v_boq_item.material_type,
+        v_boq_item.commercial_cost,
+        v_boq_item.total_amount
+      );
+
+      -- Вычислить сумму вычитания
+      v_withdrawal_amount := v_work_portion * (v_percent / 100);
+
+      -- Накопить общую вычтенную сумму
+      v_total_withdrawn := v_total_withdrawn + v_withdrawal_amount;
+
+      -- Новая коммерческая стоимость
+      v_new_commercial_cost := v_boq_item.commercial_cost - v_withdrawal_amount;
+
+      -- Сохранить в details
+      INSERT INTO public.cost_redistribution_details (
+        redistribution_id,
+        boq_item_id,
+        original_commercial_cost,
+        redistributed_commercial_cost,
+        adjustment_amount
+      ) VALUES (
+        v_redistribution_id,
+        v_boq_item.id,
+        v_boq_item.commercial_cost,
+        v_new_commercial_cost,
+        -v_withdrawal_amount  -- Отрицательное значение = вычитание
+      )
+      ON CONFLICT (redistribution_id, boq_item_id) DO UPDATE SET
+        redistributed_commercial_cost = cost_redistribution_details.redistributed_commercial_cost - v_withdrawal_amount,
+        adjustment_amount = cost_redistribution_details.adjustment_amount - v_withdrawal_amount;
+
+      RAISE NOTICE '➖ Withdrawn from item %: % (workPortion: %, percent: %)',
+        v_boq_item.description, v_withdrawal_amount, v_work_portion, v_percent;
+    END LOOP;
+  END LOOP;
+
+  RAISE NOTICE '✅ Total withdrawn: %', v_total_withdrawn;
+
+  -- Проверка: должно быть вычтено что-то
+  IF v_total_withdrawn <= 0 THEN
+    RAISE EXCEPTION 'No amounts were withdrawn. Check source categories and percentages.';
+  END IF;
+
+  -- ШАГ 2: Рассчитать общую стоимость работ в целевых категориях
+  FOR v_boq_item IN
+    SELECT
+      id,
+      item_type,
+      material_type,
+      commercial_cost,
+      total_amount
+    FROM public.boq_items
+    WHERE tender_id = p_tender_id
+      AND detail_cost_category_id = ANY(p_target_categories)
+      AND commercial_cost > 0
+  LOOP
+    v_work_portion := calculate_work_portion(
+      v_boq_item.item_type,
+      v_boq_item.material_type,
+      v_boq_item.commercial_cost,
+      v_boq_item.total_amount
+    );
+
+    v_total_target_works_cost := v_total_target_works_cost + v_work_portion;
+  END LOOP;
+
+  RAISE NOTICE '✅ Total target works cost: %', v_total_target_works_cost;
+
+  -- Проверка: должны быть целевые категории
+  IF v_total_target_works_cost <= 0 THEN
+    RAISE EXCEPTION 'No target items found or total target works cost is zero';
+  END IF;
+
+  -- ШАГ 3: Распределение на целевые категории
+  FOR v_boq_item IN
+    SELECT
+      id,
+      item_type,
+      material_type,
+      commercial_cost,
+      total_amount,
+      description
+    FROM public.boq_items
+    WHERE tender_id = p_tender_id
+      AND detail_cost_category_id = ANY(p_target_categories)
+      AND commercial_cost > 0
+  LOOP
+    -- Рассчитать workPortion
+    v_work_portion := calculate_work_portion(
+      v_boq_item.item_type,
+      v_boq_item.material_type,
+      v_boq_item.commercial_cost,
+      v_boq_item.total_amount
+    );
+
+    -- Рассчитать вес элемента
+    v_item_weight := v_work_portion / v_total_target_works_cost;
+
+    -- Рассчитать сумму добавления
+    v_addition_amount := v_total_withdrawn * v_item_weight;
+
+    -- Новая коммерческая стоимость
+    v_new_commercial_cost := v_boq_item.commercial_cost + v_addition_amount;
+
+    -- Сохранить в details
+    INSERT INTO public.cost_redistribution_details (
+      redistribution_id,
+      boq_item_id,
+      original_commercial_cost,
+      redistributed_commercial_cost,
+      adjustment_amount
+    ) VALUES (
+      v_redistribution_id,
+      v_boq_item.id,
+      v_boq_item.commercial_cost,
+      v_new_commercial_cost,
+      v_addition_amount  -- Положительное значение = добавление
+    )
+    ON CONFLICT (redistribution_id, boq_item_id) DO UPDATE SET
+      redistributed_commercial_cost = cost_redistribution_details.redistributed_commercial_cost + v_addition_amount,
+      adjustment_amount = cost_redistribution_details.adjustment_amount + v_addition_amount;
+
+    RAISE NOTICE '➕ Added to item %: % (weight: %)',
+      v_boq_item.description, v_addition_amount, v_item_weight;
+  END LOOP;
+
+  RAISE NOTICE '✅ Redistribution completed successfully. ID: %', v_redistribution_id;
+
+  RETURN v_redistribution_id;
 END;
 $function$
 
@@ -9025,6 +9553,18 @@ AS $function$
   $function$
 
 
+-- Function: public.update_cost_redistribution_updated_at
+CREATE OR REPLACE FUNCTION public.update_cost_redistribution_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$function$
+
+
 -- Function: public.update_detail_cost_categories_updated_at
 CREATE OR REPLACE FUNCTION public.update_detail_cost_categories_updated_at()
  RETURNS trigger
@@ -11113,6 +11653,9 @@ CREATE TRIGGER tr_cost_nodes_set_path BEFORE INSERT OR UPDATE OF parent_id, sort
 -- Trigger: tr_cost_nodes_ts on public.cost_nodes
 CREATE TRIGGER tr_cost_nodes_ts BEFORE INSERT OR UPDATE ON public.cost_nodes FOR EACH ROW EXECUTE FUNCTION cost_nodes_set_timestamps()
 
+-- Trigger: trigger_cost_redistribution_updated_at on public.cost_redistributions
+CREATE TRIGGER trigger_cost_redistribution_updated_at BEFORE UPDATE ON public.cost_redistributions FOR EACH ROW EXECUTE FUNCTION update_cost_redistribution_updated_at()
+
 -- Trigger: update_material_names_updated_at on public.material_names
 CREATE TRIGGER update_material_names_updated_at BEFORE UPDATE ON public.material_names FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
 
@@ -11480,6 +12023,24 @@ CREATE INDEX ix_cost_nodes_search_gin ON public.cost_nodes USING gin (to_tsvecto
 -- Index on public.cost_nodes
 CREATE UNIQUE INDEX uq_cost_nodes_sibling ON public.cost_nodes USING btree (parent_id, name);
 
+-- Index on public.cost_redistribution_details
+CREATE INDEX idx_redistribution_details_item ON public.cost_redistribution_details USING btree (boq_item_id);
+
+-- Index on public.cost_redistribution_details
+CREATE INDEX idx_redistribution_details_redistribution ON public.cost_redistribution_details USING btree (redistribution_id);
+
+-- Index on public.cost_redistribution_details
+CREATE UNIQUE INDEX unique_item_per_redistribution ON public.cost_redistribution_details USING btree (redistribution_id, boq_item_id);
+
+-- Index on public.cost_redistributions
+CREATE INDEX idx_cost_redistributions_active ON public.cost_redistributions USING btree (tender_id, is_active) WHERE (is_active = true);
+
+-- Index on public.cost_redistributions
+CREATE INDEX idx_cost_redistributions_tender ON public.cost_redistributions USING btree (tender_id);
+
+-- Index on public.cost_redistributions
+CREATE UNIQUE INDEX unique_active_per_tender ON public.cost_redistributions USING btree (tender_id) WHERE (is_active = true);
+
 -- Index on public.detail_cost_categories
 CREATE INDEX detail_cost_categories_cost_category_id_idx ON public.detail_cost_categories USING btree (cost_category_id);
 
@@ -11532,7 +12093,13 @@ CREATE INDEX ix_tender_items_node ON public.tender_items USING btree (node_id);
 CREATE INDEX ix_tender_items_tender ON public.tender_items USING btree (tender_id);
 
 -- Index on public.tender_markup_percentages
+CREATE INDEX idx_tender_markup_tender_active ON public.tender_markup_percentages USING btree (tender_id, is_active) WHERE (is_active = true);
+
+-- Index on public.tender_markup_percentages
 CREATE INDEX tender_markup_percentages_tender_id_idx ON public.tender_markup_percentages USING btree (tender_id);
+
+-- Index on public.tender_markup_percentages
+CREATE UNIQUE INDEX unique_active_markup_per_tender ON public.tender_markup_percentages USING btree (tender_id) WHERE (is_active = true);
 
 -- Index on public.tender_version_history
 CREATE INDEX idx_version_history_action ON public.tender_version_history USING btree (action);

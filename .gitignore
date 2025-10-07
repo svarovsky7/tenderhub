@@ -40,3 +40,25 @@ dist-ssr
 
 # Vercel
 .vercel
+# Temporary files
+nul
+*.log
+playwright-report/
+test-results/
+temp_*.txt
+
+# Testing scripts (keep in repo but don't include in commits)
+src/scripts/analyzeBoqItem.ts
+src/scripts/calculateCorrectCommercial.ts
+src/scripts/checkColumnDefinition.ts
+src/scripts/checkCurrentColumnType.ts
+src/scripts/finalFixItem.ts
+src/scripts/findItemsWithoutMarkup.ts
+src/scripts/findMaxValue.ts
+src/scripts/fixSpecificItem.ts
+src/scripts/fixSpecificItemRounded.ts
+src/scripts/fixViaRpc.ts
+src/scripts/updateAsInteger.ts
+src/scripts/updateOnlyCommercialCost.ts
+src/scripts/verifyPositionTotals.ts
+src/scripts/verifyRecalculation.ts
