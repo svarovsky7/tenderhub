@@ -388,24 +388,6 @@ const FinancialIndicatorsPage: React.FC = () => {
     setMarkupData(calculatedFinancials);
   };
 
-  // Reset tender selection - возврат к выбору тендера
-  const handleResetSelection = useCallback(() => {
-    console.log('🔄 Resetting tender selection');
-    setSelectedTenderId(null);
-    setSelectedTenderName(null);
-    setSelectedTender(null);
-    setIsContentVisible(false);
-    setCommercialTotal(0);
-    setMarkupData(null);
-    setStats({
-      actualTotalMaterials: 0,
-      actualTotalWorks: 0,
-      actualTotalSubmaterials: 0,
-      actualTotalSubworks: 0,
-      actualTotalCost: 0
-    });
-    message.info('Возврат к выбору тендера');
-  }, []);
 
   return (
     <div className="w-full min-h-full bg-gray-50">
