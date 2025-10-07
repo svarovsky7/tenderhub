@@ -28,6 +28,7 @@ const CommercialCostsPage = React.lazy(() => import('./pages/CommercialCostsPage
 const CostRedistributionPage = React.lazy(() => import('./pages/CostRedistributionPage'));
 const TestMarkupTable = React.lazy(() => import('./pages/admin/TestMarkupTable'));
 const MarkupTablesSetup = React.lazy(() => import('./pages/admin/MarkupTablesSetup'));
+const TenderMaterialsWorksPage = React.lazy(() => import('./pages/TenderMaterialsWorksPage'));
 
 function App() {
   // Initialize connection monitoring on app start
@@ -57,21 +58,31 @@ function App() {
             />
 
             {/* BOQ Management */}
-            <Route 
-              path="boq" 
+            <Route
+              path="boq"
               element={
                 <React.Suspense fallback={<div>Загрузка...</div>}>
                   <BOQPageSimplified />
                 </React.Suspense>
-              } 
+              }
             />
-            <Route 
-              path="tender/:tenderId/boq" 
+            <Route
+              path="tender/:tenderId/boq"
               element={
                 <React.Suspense fallback={<div>Загрузка...</div>}>
                   <TenderBoq />
                 </React.Suspense>
-              } 
+              }
+            />
+
+            {/* Materials and Works */}
+            <Route
+              path="materials-works"
+              element={
+                <React.Suspense fallback={<div>Загрузка...</div>}>
+                  <TenderMaterialsWorksPage />
+                </React.Suspense>
+              }
             />
 
             {/* Libraries */}

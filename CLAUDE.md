@@ -137,6 +137,7 @@ src/components/financial/  # Financial components
 - `/tender/:tenderId/construction-costs` - Construction costs
 - `/tender/:tenderId/commercial-costs` - Commercial costs calculation
 - `/boq` - Simplified BOQ interface (uses TenderBOQManagerLazy)
+- `/materials-works` - Materials and works list for selected tender (grouped view with statistics)
 - `/libraries/materials`, `/libraries/works` - Resource libraries
 - `/libraries/work-materials` - Template management
 - `/construction-costs/tender` - Tender construction costs page

@@ -150,6 +150,12 @@ const AppLayout: React.FC = () => {
       path: '/boq',
     },
     {
+      key: 'materials-works',
+      icon: <BookOutlined />,
+      label: <Link to="/materials-works">Материалы и работы</Link>,
+      path: '/materials-works',
+    },
+    {
       key: 'commerce',
       icon: <ShopOutlined />,
       label: 'Коммерция',
@@ -363,6 +369,9 @@ const AppLayout: React.FC = () => {
           break;
         case 'boq':
           breadcrumbItems.push({ title: <span>BOQ Управление</span> });
+          break;
+        case 'materials-works':
+          breadcrumbItems.push({ title: <span>Материалы и работы</span> });
           break;
         case 'libraries':
           breadcrumbItems.push({ title: <span>Библиотеки</span> });
