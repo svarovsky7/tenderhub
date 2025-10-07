@@ -9,7 +9,6 @@ import './App.css';
 
 // Lazy load pages for better performance
 const TendersPage = React.lazy(() => import('./pages/TendersPage'));
-const TenderBoq = React.lazy(() => import('./pages/TenderBoq'));
 const BOQPageSimplified = React.lazy(() => import('./pages/BOQPageSimplified'));
 const MaterialsPage = React.lazy(() => import('./pages/MaterialsPage'));
 const WorksPage = React.lazy(() => import('./pages/WorksPage'));
@@ -66,24 +65,6 @@ function App() {
                 </React.Suspense>
               }
             />
-            <Route
-              path="tender/:tenderId/boq"
-              element={
-                <React.Suspense fallback={<div>Загрузка...</div>}>
-                  <TenderBoq />
-                </React.Suspense>
-              }
-            />
-
-            {/* Materials and Works */}
-            <Route
-              path="materials-works"
-              element={
-                <React.Suspense fallback={<div>Загрузка...</div>}>
-                  <TenderMaterialsWorksPage />
-                </React.Suspense>
-              }
-            />
 
             {/* Libraries */}
             <Route path="libraries">
@@ -101,15 +82,23 @@ function App() {
                   <React.Suspense fallback={<div>Загрузка...</div>}>
                     <WorksPage />
                   </React.Suspense>
-                } 
+                }
               />
-              <Route 
-                path="work-materials" 
+              <Route
+                path="work-materials"
                 element={
                   <React.Suspense fallback={<div>Загрузка...</div>}>
                     <WorkMaterialsPage />
                   </React.Suspense>
-                } 
+                }
+              />
+              <Route
+                path="tender-materials-works"
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <TenderMaterialsWorksPage />
+                  </React.Suspense>
+                }
               />
             </Route>
 

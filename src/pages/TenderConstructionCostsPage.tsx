@@ -1614,19 +1614,6 @@ const TenderConstructionCostsPage: React.FC = () => {
                         ))}
                       </Select>
                     </div>
-                    {selectedTender && (
-                      <div className={`transition-all duration-700 ${!isContentVisible ? 'opacity-0' : 'opacity-100'}`}>
-                        <Button 
-                          type="link"
-                          onClick={handleNavigateToTender}
-                          icon={<DashboardOutlined />}
-                          size="small"
-                          className="whitespace-nowrap"
-                        >
-                          Детали тендера
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 </Col>
                 {selectedTender && (

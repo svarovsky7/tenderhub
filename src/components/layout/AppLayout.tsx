@@ -104,6 +104,36 @@ const AppLayout: React.FC = () => {
         visibility: hidden !important;
         opacity: 0 !important;
       }
+      /* Fix phantom letters bug during sidebar collapse/expand animation */
+      .ant-layout-sider {
+        overflow: hidden !important;
+      }
+      .ant-layout-sider-children {
+        overflow: hidden !important;
+      }
+      /* Hide menu item text during collapse animation to prevent phantom letters */
+      .ant-layout-sider-collapsed .ant-menu-item .ant-menu-title-content,
+      .ant-layout-sider-collapsed .ant-menu-submenu-title .ant-menu-title-content {
+        opacity: 0 !important;
+        width: 0 !important;
+        transition: opacity 0.1s ease-out, width 0.1s ease-out !important;
+      }
+      /* Show text smoothly when expanded */
+      .ant-layout-sider:not(.ant-layout-sider-collapsed) .ant-menu-item .ant-menu-title-content,
+      .ant-layout-sider:not(.ant-layout-sider-collapsed) .ant-menu-submenu-title .ant-menu-title-content {
+        opacity: 1 !important;
+        width: auto !important;
+        transition: opacity 0.2s ease-in 0.1s, width 0.2s ease-in 0.1s !important;
+      }
+      /* Prevent text overflow during animation */
+      .ant-menu-item, .ant-menu-submenu-title {
+        overflow: hidden !important;
+      }
+      .ant-menu-title-content {
+        overflow: hidden !important;
+        text-overflow: clip !important;
+        white-space: nowrap !important;
+      }
     `;
     document.head.appendChild(style);
     return () => {
@@ -148,12 +178,6 @@ const AppLayout: React.FC = () => {
       icon: <TableOutlined />,
       label: <Link to="/boq">Позиции заказчика</Link>,
       path: '/boq',
-    },
-    {
-      key: 'materials-works',
-      icon: <BookOutlined />,
-      label: <Link to="/materials-works">Материалы и работы</Link>,
-      path: '/materials-works',
     },
     {
       key: 'commerce',
@@ -204,6 +228,12 @@ const AppLayout: React.FC = () => {
           icon: null,
           label: <Link to="/libraries/work-materials">Шаблоны</Link>,
           path: '/libraries/work-materials',
+        },
+        {
+          key: 'tender-materials-works',
+          icon: null,
+          label: <Link to="/libraries/tender-materials-works">БСМ</Link>,
+          path: '/libraries/tender-materials-works',
         },
       ],
     },
@@ -380,7 +410,9 @@ const AppLayout: React.FC = () => {
           } else if (pathSegments[1] === 'works') {
             breadcrumbItems.push({ title: <span>Работы</span> });
           } else if (pathSegments[1] === 'work-materials') {
-            breadcrumbItems.push({ title: <span>Работы и Материалы</span> });
+            breadcrumbItems.push({ title: <span>Шаблоны</span> });
+          } else if (pathSegments[1] === 'tender-materials-works') {
+            breadcrumbItems.push({ title: <span>БСМ</span> });
           }
           break;
         case 'construction-costs':

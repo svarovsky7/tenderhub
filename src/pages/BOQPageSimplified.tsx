@@ -221,8 +221,8 @@ const BOQPageSimplified: React.FC = () => {
 
   const handleNavigateToTender = useCallback(() => {
     if (selectedTenderId) {
-      console.log('🚀 Navigating to tender details:', selectedTenderId);
-      navigate(`/tender/${selectedTenderId}/boq`);
+      console.log('🚀 Navigating to tender materials and works:', selectedTenderId);
+      navigate(`/libraries/tender-materials-works?tender=${selectedTenderId}`);
     }
   }, [selectedTenderId, navigate]);
 
