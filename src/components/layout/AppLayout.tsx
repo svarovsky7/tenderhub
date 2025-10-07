@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Avatar, Dropdown, Button, Typography, Breadcrumb } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Button, Typography, Breadcrumb, Switch, Tooltip } from 'antd';
 import '../../layout/Layout.css';
 import {
   MenuFoldOutlined,
@@ -16,9 +16,12 @@ import {
   LineChartOutlined,
   CalculatorOutlined,
   ShopOutlined,
+  BulbOutlined,
+  BulbFilled,
 } from '@ant-design/icons';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import ConnectionStatus from './ConnectionStatus';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -36,30 +39,33 @@ const AppLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [openKeys, setOpenKeys] = useState<string[]>(['libraries', 'construction-costs', 'admin']);
   const location = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   // Add styles for dropdown menus when collapsed and smooth animations
   React.useEffect(() => {
     const style = document.createElement('style');
+    const isDark = theme === 'dark';
     style.textContent = `
       .ant-menu-submenu-popup {
-        background-color: #ffffff !important;
+        background-color: ${isDark ? '#1f1f1f' : '#ffffff'} !important;
         opacity: 1 !important;
-        transition: opacity 0.1s ease-out !important;
+        transition: opacity 0.1s ease-out, background-color 0.3s ease !important;
       }
       .ant-menu-submenu-popup .ant-menu {
-        background-color: #ffffff !important;
+        background-color: ${isDark ? '#1f1f1f' : '#ffffff'} !important;
         opacity: 1 !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, ${isDark ? '0.45' : '0.15'}) !important;
       }
       .ant-menu-submenu-popup .ant-menu-item {
         opacity: 1 !important;
+        color: ${isDark ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.85)'} !important;
       }
       .ant-menu-vertical.ant-menu-sub {
-        background-color: #ffffff !important;
+        background-color: ${isDark ? '#1f1f1f' : '#ffffff'} !important;
         opacity: 1 !important;
       }
       .ant-menu-sub.ant-menu-inline {
-        background-color: #ffffff !important;
+        background-color: ${isDark ? '#1f1f1f' : '#ffffff'} !important;
       }
       /* Override Ant Design's default slow animations */
       .ant-motion-collapse {
@@ -139,7 +145,7 @@ const AppLayout: React.FC = () => {
     return () => {
       document.head.removeChild(style);
     };
-  }, []);
+  }, [theme]);
 
   // Clean up stuck popup menus when menu state changes
   React.useEffect(() => {
@@ -468,26 +474,44 @@ const AppLayout: React.FC = () => {
   ];
 
   return (
-    <Layout className="layout">
-      <Sider 
-        trigger={null} 
-        collapsible 
+    <Layout
+      className="layout"
+      style={{
+        minHeight: '100vh',
+        backgroundColor: theme === 'dark' ? '#141414' : '#f0f2f5'
+      }}
+    >
+      <Sider
+        trigger={null}
+        collapsible
         collapsed={collapsed}
         theme="light"
         width={250}
         className={`sidebar ${collapsed ? 'collapsed' : ''}`}
         style={{
           boxShadow: '2px 0 6px rgba(0,21,41,.1)',
+          backgroundColor: theme === 'dark' ? '#1f1f1f' : '#ffffff',
         }}
       >
-        <div className="p-4 border-b border-gray-200">
+        <div
+          className="p-4"
+          style={{
+            borderBottom: theme === 'dark' ? '1px solid #424242' : '1px solid #e5e7eb'
+          }}
+        >
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <FileTextOutlined className="text-white text-lg" />
             </div>
             {!collapsed && (
               <div>
-                <Title level={4} className="m-0 text-gray-800">
+                <Title
+                  level={4}
+                  className="m-0"
+                  style={{
+                    color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : '#1f2937'
+                  }}
+                >
                   TenderHub
                 </Title>
               </div>
@@ -521,12 +545,18 @@ const AppLayout: React.FC = () => {
         />
       </Sider>
 
-      <Layout className={`page ${collapsed ? 'collapsed' : ''}`}>
-        <Header 
+      <Layout
+        className={`page ${collapsed ? 'collapsed' : ''}`}
+        style={{
+          backgroundColor: theme === 'dark' ? '#141414' : '#f0f2f5'
+        }}
+      >
+        <Header
           className={`page__header ${collapsed ? 'collapsed' : ''}`}
-          style={{ 
-            padding: 0, 
-            background: '#fff',
+          style={{
+            padding: 0,
+            background: theme === 'dark' ? '#1f1f1f' : '#fff',
+            borderBottom: theme === 'dark' ? '1px solid #424242' : '1px solid #f0f0f0',
           }}
         >
           <div className="flex items-center justify-between h-full px-6">
@@ -549,29 +579,64 @@ const AppLayout: React.FC = () => {
                 icon={<SearchOutlined />}
                 className="text-gray-600 hover:text-blue-600"
               />
-              
+
               <Button
                 type="text"
                 icon={<BellOutlined />}
                 className="text-gray-600 hover:text-blue-600"
               />
 
+              {/* Theme Toggle */}
+              <Tooltip title={theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на тёмную тему'}>
+                <div className="flex items-center space-x-2 px-3 py-2">
+                  <BulbOutlined style={{ color: theme === 'dark' ? '#ffd666' : '#8c8c8c', fontSize: '18px' }} />
+                  <Switch
+                    checked={theme === 'dark'}
+                    onChange={toggleTheme}
+                    checkedChildren={<span style={{ fontSize: '14px' }}>🌙</span>}
+                    unCheckedChildren={<span style={{ fontSize: '14px' }}>☀️</span>}
+                    style={{ minWidth: '50px' }}
+                  />
+                </div>
+              </Tooltip>
+
               <Dropdown
                 menu={{ items: userMenuItems }}
                 placement="bottomRight"
                 arrow
               >
-                <div className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors">
+                <div
+                  className="flex items-center space-x-3 cursor-pointer rounded-lg px-3 py-2 transition-colors"
+                  style={{
+                    backgroundColor: 'transparent'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = theme === 'dark' ? '#262626' : '#f9fafb';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
                   <div className="text-right">
-                    <div className="text-sm font-medium text-gray-900">
+                    <div
+                      className="text-sm font-medium"
+                      style={{
+                        color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : '#111827'
+                      }}
+                    >
                       Пользователь
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div
+                      className="text-xs"
+                      style={{
+                        color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : '#6b7280'
+                      }}
+                    >
                       Администратор
                     </div>
                   </div>
-                  <Avatar 
-                    icon={<UserOutlined />} 
+                  <Avatar
+                    icon={<UserOutlined />}
                     className="bg-blue-600"
                   />
                 </div>
@@ -580,18 +645,34 @@ const AppLayout: React.FC = () => {
           </div>
         </Header>
 
-        <Content className="page__content">
+        <Content
+          className="page__content"
+          style={{
+            backgroundColor: theme === 'dark' ? '#141414' : '#f0f2f5'
+          }}
+        >
           <div className="page__inner">
-            <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
+            <div
+              className="px-6 py-4 flex-shrink-0"
+              style={{
+                backgroundColor: theme === 'dark' ? '#1f1f1f' : '#ffffff',
+                borderBottom: theme === 'dark' ? '1px solid #424242' : '1px solid #e5e7eb'
+              }}
+            >
               <Breadcrumb items={getBreadcrumbItems()} />
             </div>
-            
-            <div className="page__content-inner">
+
+            <div
+              className="page__content-inner"
+              style={{
+                backgroundColor: theme === 'dark' ? '#141414' : '#f0f2f5'
+              }}
+            >
               {/* Connection status bar */}
               <div className="mb-4">
                 <ConnectionStatus />
               </div>
-              
+
               <Outlet />
             </div>
           </div>

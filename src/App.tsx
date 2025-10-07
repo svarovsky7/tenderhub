@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, theme as antdTheme } from 'antd';
 import ruRU from 'antd/locale/ru_RU';
 import AppLayout from './components/layout/AppLayout';
 import Dashboard from './pages/Dashboard';
 import { initConnectionMonitoring } from './lib/supabase/connection-status';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import './App.css';
 
 // Lazy load pages for better performance
@@ -29,15 +30,40 @@ const TestMarkupTable = React.lazy(() => import('./pages/admin/TestMarkupTable')
 const MarkupTablesSetup = React.lazy(() => import('./pages/admin/MarkupTablesSetup'));
 const TenderMaterialsWorksPage = React.lazy(() => import('./pages/TenderMaterialsWorksPage'));
 
-function App() {
+// Inner component that uses theme
+const AppContent: React.FC = () => {
+  const { theme } = useTheme();
+
   // Initialize connection monitoring on app start
   useEffect(() => {
     console.log('🚀 TenderHub App starting...');
     initConnectionMonitoring();
   }, []);
 
+  // Configure Ant Design theme
+  const antdConfig = {
+    locale: ruRU,
+    theme: {
+      algorithm: theme === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+      token: {
+        colorPrimary: '#1890ff',
+        borderRadius: 8,
+        // Custom tokens for better dark mode
+        ...(theme === 'dark' ? {
+          colorBgContainer: '#1f1f1f',
+          colorBgElevated: '#262626',
+          colorBgLayout: '#141414',
+          colorBorder: '#424242',
+          colorText: 'rgba(255, 255, 255, 0.85)',
+          colorTextSecondary: 'rgba(255, 255, 255, 0.65)',
+          colorTextTertiary: 'rgba(255, 255, 255, 0.45)',
+        } : {}),
+      },
+    },
+  };
+
   return (
-    <ConfigProvider locale={ruRU}>
+    <ConfigProvider {...antdConfig}>
       <BrowserRouter>
         <Routes>
           {/* All routes with layout */}
@@ -255,6 +281,14 @@ function App() {
         </Routes>
       </BrowserRouter>
     </ConfigProvider>
+  );
+};
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
 

@@ -35,6 +35,7 @@ import dayjs from 'dayjs';
 // Removed auth imports - no authentication needed
 // TenderStatus import removed - status field no longer exists in schema
 import { supabase } from '../lib/supabase/client';
+import { useTheme } from '../contexts/ThemeContext';
 
 const { Title, Text } = Typography;
 // Option removed since status Select was removed
@@ -53,6 +54,7 @@ interface DashboardStats {
 }
 
 const Dashboard: React.FC = () => {
+  const { theme } = useTheme();
   const [loading, setLoading] = useState(true);
   const [tenders, setTenders] = useState<TenderWithSummary[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
@@ -453,18 +455,18 @@ const Dashboard: React.FC = () => {
             margin-top: 24px;
           }
           .dashboard-stats-container .ant-card {
-            background: rgba(255, 255, 255, 0.75);
+            background: ${theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.75)'};
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            border: 1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.3)'};
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
           }
           .dashboard-stats-container .ant-statistic-title {
-            color: rgba(0, 0, 0, 0.65);
+            color: ${theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.65)'};
             font-weight: 500;
           }
           .dashboard-stats-container .ant-statistic-content {
-            color: rgba(0, 0, 0, 0.85);
+            color: ${theme === 'dark' ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.85)'};
           }
 
           /* Expired tender - light green background */
@@ -478,6 +480,17 @@ const Dashboard: React.FC = () => {
           .tender-row-expired:hover {
             background: rgba(52, 211, 153, 0.12) !important;
           }
+
+          /* Fix search input appearance in dark mode */
+          .ant-input-affix-wrapper:focus,
+          .ant-input-affix-wrapper-focused {
+            box-shadow: none !important;
+            outline: none !important;
+          }
+          .ant-input:focus {
+            box-shadow: none !important;
+            outline: none !important;
+          }
         `}
       </style>
       <div className="w-full min-h-full bg-gray-50">
@@ -488,15 +501,15 @@ const Dashboard: React.FC = () => {
               <div className="flex items-center gap-4">
                 <div
                   className="w-16 h-16 rounded-full flex items-center justify-center"
-                  style={{ background: 'rgba(255,255,255,0.2)' }}
+                  style={{ background: theme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.2)' }}
                 >
-                  <DashboardOutlined style={{ fontSize: 32, color: 'white' }} />
+                  <DashboardOutlined style={{ fontSize: 32, color: theme === 'dark' ? 'rgba(255,255,255,0.95)' : 'white' }} />
                 </div>
                 <div>
-                  <Title level={2} style={{ margin: 0, color: 'white', fontSize: 28 }}>
+                  <Title level={2} style={{ margin: 0, color: theme === 'dark' ? 'rgba(255,255,255,0.95)' : 'white', fontSize: 28 }}>
                     Дашборд TenderHub
                   </Title>
-                  <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>
+                  <Text style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.8)', fontSize: 16 }}>
                     Обзор ваших тендеров и основных показателей
                   </Text>
                 </div>

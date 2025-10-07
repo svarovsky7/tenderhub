@@ -48,8 +48,8 @@
   right: 0;
   left: 250px;
   z-index: 1;
-  transition: left 0.2s;
-  background: #fff;
+  transition: left 0.2s, background-color 0.3s ease;
+  background: var(--bg-primary);
   box-shadow: 0 1px 4px rgba(0,21,41,.08);
 }
 
@@ -88,6 +88,8 @@
   width: 100%;
   max-width: none;
   padding: 24px;
+  background-color: var(--bg-secondary);
+  transition: background-color 0.3s ease;
 }
 
 .main-content.no-padding {
@@ -192,10 +194,10 @@
 .ant-menu-submenu-popup-placement-rightBottom,
 .ant-menu-inline-collapsed .ant-menu-submenu > .ant-menu-submenu-popup,
 .ant-menu-inline-collapsed + .ant-menu-submenu-popup {
-  background: #ffffff !important;
-  background-color: #ffffff !important;
+  background: var(--bg-primary) !important;
+  background-color: var(--bg-primary) !important;
   opacity: 1 !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  box-shadow: var(--shadow-md) !important;
   animation: none !important;
 }
 
@@ -203,8 +205,8 @@
 .ant-menu-submenu-popup .ant-menu-sub,
 .ant-menu-submenu-popup .ant-menu-vertical,
 .ant-menu-inline-collapsed .ant-menu-submenu-popup .ant-menu {
-  background: #ffffff !important;
-  background-color: #ffffff !important;
+  background: var(--bg-primary) !important;
+  background-color: var(--bg-primary) !important;
   opacity: 1 !important;
   animation: none !important;
 }
@@ -214,12 +216,12 @@
 .ant-menu-submenu-popup .ant-menu-item-only-child {
   background: transparent !important;
   opacity: 1 !important;
-  color: rgba(0, 0, 0, 0.85) !important;
+  color: var(--text-primary) !important;
 }
 
 .ant-menu-submenu-popup .ant-menu-item:hover {
-  background: #f5f5f5 !important;
-  background-color: #f5f5f5 !important;
+  background: var(--bg-tertiary) !important;
+  background-color: var(--bg-tertiary) !important;
 }
 
 .ant-menu-submenu-popup .ant-menu-item-selected,
@@ -227,6 +229,14 @@
   background: #e6f4ff !important;
   background-color: #e6f4ff !important;
   color: #1890ff !important;
+}
+
+/* Dark theme dropdown menu colors */
+:root.dark .ant-menu-submenu-popup .ant-menu-item-selected,
+:root.dark .ant-menu-submenu-popup .ant-menu-item-selected a {
+  background: #15395b !important;
+  background-color: #15395b !important;
+  color: #4da8ff !important;
 }
 
 /* Force opacity on all children */
@@ -241,8 +251,34 @@
 
 /* Additional specificity for Ant Design Menu */
 .ant-layout-sider-collapsed .ant-menu-submenu-vertical > .ant-menu-submenu-popup {
-  background-color: #ffffff !important;
+  background-color: var(--bg-primary) !important;
   opacity: 1 !important;
+}
+
+/* Dark theme specific layout styles */
+:root.dark .layout {
+  background-color: var(--bg-secondary);
+}
+
+:root.dark .sidebar {
+  background-color: var(--bg-primary);
+}
+
+:root.dark .page {
+  background-color: var(--bg-secondary);
+}
+
+:root.dark .page__header {
+  background: var(--bg-primary);
+  border-bottom-color: var(--border-color);
+}
+
+:root.dark .page__content {
+  background-color: var(--bg-secondary);
+}
+
+:root.dark .page__content-inner {
+  background-color: var(--bg-secondary);
 }
 
 /* Responsive adjustments */

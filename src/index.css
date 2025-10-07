@@ -16,11 +16,17 @@
   font-weight: 400;
   color: #213547;
   background-color: #ffffff;
-  
+
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Dark theme root styles */
+:root.dark {
+  color: rgba(255, 255, 255, 0.85);
+  background-color: #141414;
 }
 
 * {
@@ -31,10 +37,12 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 #root {
   min-height: 100vh;
+  transition: background-color 0.3s ease;
 }
 
 /* Custom scrollbar */
@@ -56,18 +64,34 @@ body {
   background: #a8a8a8;
 }
 
+/* Dark theme scrollbar */
+:root.dark ::-webkit-scrollbar-track {
+  background: #1f1f1f;
+}
+
+:root.dark ::-webkit-scrollbar-thumb {
+  background: #424242;
+}
+
+:root.dark ::-webkit-scrollbar-thumb:hover {
+  background: #595959;
+}
+
 /* Ant Design customizations */
 .ant-layout {
   background: #ffffff;
+  transition: background-color 0.3s ease;
 }
 
 .ant-layout-sider {
   background: #ffffff !important;
+  transition: background-color 0.3s ease !important;
 }
 
 .ant-layout-header {
   background: #ffffff !important;
   border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.3s ease, border-color 0.3s ease !important;
 }
 
 .ant-menu {
@@ -85,6 +109,715 @@ body {
 
 .ant-menu-submenu-selected > .ant-menu-submenu-title {
   color: #1890ff !important;
+}
+
+/* Dark theme Ant Design overrides */
+:root.dark .ant-layout {
+  background: #141414;
+}
+
+:root.dark .ant-layout-sider {
+  background: #1f1f1f !important;
+}
+
+:root.dark .ant-layout-header {
+  background: #1f1f1f !important;
+  border-bottom-color: #424242;
+}
+
+:root.dark .ant-menu {
+  background: transparent !important;
+}
+
+:root.dark .ant-menu-item,
+:root.dark .ant-menu-submenu-title {
+  color: rgba(255, 255, 255, 0.85);
+  background: transparent !important;
+}
+
+:root.dark .ant-menu-submenu-title:hover,
+:root.dark .ant-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root.dark .ant-menu-item-selected {
+  background-color: #15395b !important;
+}
+
+:root.dark .ant-menu-item-selected a {
+  color: #4da8ff !important;
+}
+
+:root.dark .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  color: #4da8ff !important;
+  background: transparent !important;
+}
+
+/* Fix Ant Design component backgrounds in dark mode */
+:root.dark .ant-table {
+  background: #1f1f1f;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:root.dark .ant-table-thead > tr > th {
+  background: #262626;
+  color: rgba(255, 255, 255, 0.85);
+  border-bottom: 1px solid #424242;
+}
+
+:root.dark .ant-table-tbody > tr {
+  background: #1f1f1f;
+}
+
+/* Dark theme table row hover - darker background */
+:root.dark .ant-table-tbody > tr:hover > td {
+  background: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.dark .ant-table-tbody > tr > td {
+  border-bottom: 1px solid #303030;
+  color: rgba(255, 255, 255, 0.98) !important;
+}
+
+:root.dark .ant-card {
+  background: #1f1f1f;
+  border-color: #424242;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:root.dark .ant-card-head {
+  background: #262626;
+  border-bottom-color: #424242;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:root.dark .ant-modal-content {
+  background: #1f1f1f;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:root.dark .ant-modal-header {
+  background: #262626;
+  border-bottom-color: #424242;
+}
+
+:root.dark .ant-modal-title {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:root.dark .ant-modal-close {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+:root.dark .ant-modal-close:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:root.dark .ant-input,
+:root.dark .ant-input-number,
+:root.dark .ant-input-affix-wrapper,
+:root.dark .ant-select-selector {
+  background: #141414 !important;
+  border-color: #424242 !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Fix for input wrapper to match input background */
+:root.dark .ant-input-affix-wrapper .ant-input {
+  background: #141414 !important;
+}
+
+:root.dark .ant-input::placeholder,
+:root.dark .ant-input-number::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+:root.dark .ant-select-arrow,
+:root.dark .ant-picker-suffix {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+:root.dark .ant-select-dropdown,
+:root.dark .ant-picker-dropdown {
+  background: #1f1f1f;
+  border-color: #424242;
+}
+
+:root.dark .ant-select-item {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:root.dark .ant-select-item-option-selected {
+  background: #15395b;
+}
+
+:root.dark .ant-select-item-option-active {
+  background: #262626;
+}
+
+/* Global dark theme button styles - applied to ALL buttons */
+:root.dark .ant-btn {
+  background: #1f1f1f !important;
+  border-color: rgba(255,255,255,0.2) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+:root.dark .ant-btn:hover {
+  background: #262626 !important;
+  border-color: #4da8ff !important;
+  color: #4da8ff !important;
+}
+
+:root.dark .ant-btn-default {
+  background: #1f1f1f !important;
+  border-color: rgba(255,255,255,0.2) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+:root.dark .ant-btn-default:hover {
+  background: #262626 !important;
+  border-color: #4da8ff !important;
+  color: #4da8ff !important;
+}
+
+:root.dark .ant-btn-primary {
+  background: #1f1f1f !important;
+  border-color: rgba(255,255,255,0.2) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+:root.dark .ant-btn-primary:hover {
+  background: #262626 !important;
+  border-color: #4da8ff !important;
+  color: #4da8ff !important;
+}
+
+/* Link buttons should maintain transparent background */
+:root.dark .ant-btn-link {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: #4da8ff !important;
+}
+
+:root.dark .ant-btn-link:hover {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: #69c0ff !important;
+}
+
+/* Text buttons should maintain transparent background */
+:root.dark .ant-btn-text {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+:root.dark .ant-btn-text:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: transparent !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Danger buttons */
+:root.dark .ant-btn-dangerous {
+  background: #1f1f1f !important;
+  border-color: #ff4d4f !important;
+  color: #ff7875 !important;
+}
+
+:root.dark .ant-btn-dangerous:hover {
+  background: #262626 !important;
+  border-color: #ff7a45 !important;
+  color: #ff9c6e !important;
+}
+
+/* Dashed buttons */
+:root.dark .ant-btn-dashed {
+  background: #1f1f1f !important;
+  border-color: rgba(255,255,255,0.2) !important;
+  border-style: dashed !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+:root.dark .ant-btn-dashed:hover {
+  background: #262626 !important;
+  border-color: #4da8ff !important;
+  color: #4da8ff !important;
+}
+
+/* Disabled buttons */
+:root.dark .ant-btn:disabled,
+:root.dark .ant-btn[disabled] {
+  background: #141414 !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  color: rgba(255, 255, 255, 0.25) !important;
+  cursor: not-allowed !important;
+}
+
+:root.dark .ant-btn:disabled:hover,
+:root.dark .ant-btn[disabled]:hover {
+  background: #141414 !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  color: rgba(255, 255, 255, 0.25) !important;
+}
+
+:root.dark .ant-breadcrumb a {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+:root.dark .ant-breadcrumb a:hover {
+  color: #4da8ff;
+}
+
+:root.dark .ant-breadcrumb-separator {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+:root.dark .ant-divider {
+  border-color: #424242;
+}
+
+:root.dark .ant-tag {
+  border-color: #424242;
+}
+
+/* Fix specific tag colors for better contrast in dark mode */
+:root.dark .ant-tag-purple {
+  background: #2a1a3f;
+  border-color: #5a3d7a;
+  color: #d3adf7 !important;
+}
+
+:root.dark .ant-tag-blue {
+  background: #112545;
+  border-color: #15395b;
+  color: #91caff !important;
+}
+
+:root.dark .ant-tag-green {
+  background: #1f3a1a;
+  border-color: #2f5a2a;
+  color: #b7eb8f !important;
+}
+
+:root.dark .ant-tag-red {
+  background: #3a1a1a;
+  border-color: #5a2a2a;
+  color: #ffa39e !important;
+}
+
+:root.dark .ant-tag-orange {
+  background: #3a2a1a;
+  border-color: #5a4a2a;
+  color: #ffd591 !important;
+}
+
+/* Fix Tailwind utility classes in dark mode */
+:root.dark .bg-gray-50 {
+  background-color: #141414 !important;
+}
+
+:root.dark .bg-white {
+  background-color: #1f1f1f !important;
+}
+
+:root.dark .bg-blue-50 {
+  background-color: #112545 !important;
+}
+
+/* Table row colored backgrounds in dark mode */
+:root.dark .bg-orange-100\\/90,
+:root.dark .bg-orange-100 {
+  background-color: rgba(254, 215, 170, 0.15) !important;
+}
+
+:root.dark .bg-purple-100 {
+  background-color: rgba(233, 213, 255, 0.15) !important;
+}
+
+:root.dark .bg-blue-100 {
+  background-color: rgba(191, 219, 254, 0.15) !important;
+}
+
+:root.dark .bg-blue-100\\/60 {
+  background-color: rgba(219, 234, 254, 0.1) !important;
+}
+
+:root.dark .bg-green-100\\/80,
+:root.dark .bg-green-100 {
+  background-color: rgba(187, 247, 208, 0.15) !important;
+}
+
+/* Global text colors for dark theme - maximum contrast */
+:root.dark {
+  color: rgba(255, 255, 255, 0.98) !important;
+}
+
+/* Menu items in dark theme */
+:root.dark .ant-menu-item,
+:root.dark .ant-menu-title-content {
+  color: rgba(255, 255, 255, 0.98) !important;
+}
+
+:root.dark .text-gray-600 {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+:root.dark .text-gray-700 {
+  color: rgba(255, 255, 255, 0.98) !important;
+}
+
+:root.dark .text-gray-900 {
+  color: rgba(255, 255, 255, 1) !important;
+}
+
+:root.dark .border-gray-200 {
+  border-color: #424242 !important;
+}
+
+:root.dark .border-gray-300 {
+  border-color: #595959 !important;
+}
+
+/* Fix inline style rgba backgrounds in dark mode */
+:root.dark [style*="rgba(255,255,255,0.2)"],
+:root.dark [style*="rgba(255, 255, 255, 0.2)"] {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Additional dark theme overrides for gradient header elements */
+:root.dark [style*="rgba(255,255,255,0.95)"][class*="rounded-lg"] {
+  background: rgba(31,31,31,0.95) !important;
+}
+
+:root.dark [style*="rgba(255,255,255,0.15)"][class*="rounded-lg"] {
+  background: rgba(31,31,31,0.95) !important;
+}
+
+/* Base button styles */
+.dashboard-action-btn,
+.boq-action-btn {
+  height: 42px !important;
+  padding: 0 24px !important;
+  border-radius: 8px !important;
+  font-size: 15px !important;
+  transition: all 0.3s ease !important;
+}
+
+/* Transparent button styles - override global ant-btn styles */
+.boq-action-btn-transparent,
+:root.dark .boq-action-btn-transparent,
+:root:not(.dark) .boq-action-btn-transparent {
+  background: transparent !important;
+  color: white !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  font-weight: 500 !important;
+}
+
+/* Light theme hover - blue text and border like commercial-costs */
+:root:not(.dark) .boq-action-btn-transparent:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  border-color: #1890ff !important;
+  color: #1890ff !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Dark theme hover - blue text and border like commercial-costs */
+:root.dark .boq-action-btn-transparent:hover {
+  background: #262626 !important;
+  border-color: #4da8ff !important;
+  color: #4da8ff !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Primary button - Light theme: white background, blue text */
+.boq-action-btn-primary,
+:root:not(.dark) .boq-action-btn-primary {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #1890ff !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  font-weight: 600 !important;
+}
+
+.boq-action-btn-primary:hover,
+:root:not(.dark) .boq-action-btn-primary:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  border-color: #1890ff !important;
+  color: #1890ff !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4) !important;
+}
+
+/* Primary button - Dark theme: same as light theme (white background, blue text) */
+:root.dark .boq-action-btn-primary {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #1890ff !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  font-weight: 600 !important;
+}
+
+:root.dark .boq-action-btn-primary:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  border-color: #1890ff !important;
+  color: #1890ff !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4) !important;
+}
+
+/* Primary action button (white background, blue text) - Light theme */
+.action-btn-primary {
+  height: 42px !important;
+  padding: 0 24px !important;
+  border-radius: 8px !important;
+  font-size: 15px !important;
+  transition: all 0.3s ease !important;
+  font-weight: 600 !important;
+}
+
+:root:not(.dark) .action-btn-primary {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #1890ff !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+:root:not(.dark) .action-btn-primary:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  border-color: #1890ff !important;
+  color: #1890ff !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4) !important;
+}
+
+/* Primary action button - Dark theme */
+:root.dark .action-btn-primary {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #1890ff !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+:root.dark .action-btn-primary:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  border-color: #4da8ff !important;
+  color: #4da8ff !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(77, 168, 255, 0.4) !important;
+}
+
+/* Customer Position Cards - Dark Theme Support */
+/* Override position card backgrounds in dark mode */
+:root.dark .ant-card[style*="background: rgb(255, 255, 255)"],
+:root.dark .ant-card[style*="background: #ffffff"] {
+  background: #1f1f1f !important;
+}
+
+/* Override ALL card text colors in dark mode - maximum contrast */
+:root.dark .ant-card {
+  color: rgba(255, 255, 255, 1) !important;
+}
+
+/* Override specific text elements in cards */
+:root.dark .ant-card span:not([class*="ant-btn"]):not([class*="anticon"]),
+:root.dark .ant-card div:not([class*="ant-btn"]):not([class*="ant-input"]),
+:root.dark .ant-card p,
+:root.dark .ant-card h1,
+:root.dark .ant-card h2,
+:root.dark .ant-card h3,
+:root.dark .ant-card h4,
+:root.dark .ant-card h5,
+:root.dark .ant-card .ant-card-head-title {
+  color: rgba(255, 255, 255, 1) !important;
+}
+
+/* IMPORTANT: Color accents MUST come after white color rules to override them */
+/* Preserve ALL Tailwind color classes in dark theme - slightly brighter for visibility */
+
+/* Blue colors - for materials count and other blue accents */
+:root.dark .text-blue-400,
+:root.dark .text-blue-500,
+:root.dark .text-blue-600,
+:root.dark .text-blue-700,
+:root.dark .text-blue-800,
+:root.dark .ant-card .text-blue-400,
+:root.dark .ant-card .text-blue-500,
+:root.dark .ant-card .text-blue-600,
+:root.dark .ant-card .text-blue-700,
+:root.dark .ant-card .text-blue-800,
+:root.dark .ant-card span.text-blue-600,
+:root.dark .ant-card div.text-blue-600,
+:root.dark .ant-card .ant-typography.text-blue-400,
+:root.dark .ant-card .ant-typography.text-blue-500,
+:root.dark .ant-card .ant-typography.text-blue-600,
+:root.dark .ant-card .ant-typography.text-blue-700,
+:root.dark .ant-card .ant-typography.text-blue-800,
+:root.dark .ant-card span.ant-typography.text-blue-600,
+:root.dark .ant-card strong.text-blue-600 {
+  color: #4da8ff !important;
+}
+
+/* Red colors */
+:root.dark .text-red-400,
+:root.dark .text-red-500,
+:root.dark .text-red-600,
+:root.dark .text-red-700,
+:root.dark .text-red-800,
+:root.dark .ant-card .text-red-400,
+:root.dark .ant-card .text-red-500,
+:root.dark .ant-card .text-red-600,
+:root.dark .ant-card .text-red-700,
+:root.dark .ant-card .text-red-800 {
+  color: #ff7875 !important;
+}
+
+/* Green colors - for works count and total cost */
+:root.dark .text-green-400,
+:root.dark .text-green-500,
+:root.dark .text-green-600,
+:root.dark .text-green-700,
+:root.dark .text-green-800,
+:root.dark .ant-card .text-green-400,
+:root.dark .ant-card .text-green-500,
+:root.dark .ant-card .text-green-600,
+:root.dark .ant-card .text-green-700,
+:root.dark .ant-card .text-green-800,
+:root.dark .ant-card span.text-green-600,
+:root.dark .ant-card div.text-green-600,
+:root.dark .ant-card span.text-green-700,
+:root.dark .ant-card div.text-green-700,
+:root.dark .ant-card .ant-typography.text-green-400,
+:root.dark .ant-card .ant-typography.text-green-500,
+:root.dark .ant-card .ant-typography.text-green-600,
+:root.dark .ant-card .ant-typography.text-green-700,
+:root.dark .ant-card .ant-typography.text-green-800,
+:root.dark .ant-card span.ant-typography.text-green-600,
+:root.dark .ant-card span.ant-typography.text-green-700,
+:root.dark .ant-card strong.text-green-600,
+:root.dark .ant-card strong.text-green-700 {
+  color: #95de64 !important;
+}
+
+/* Orange colors */
+:root.dark .text-orange-400,
+:root.dark .text-orange-500,
+:root.dark .text-orange-600,
+:root.dark .text-orange-700,
+:root.dark .text-orange-800,
+:root.dark .ant-card .text-orange-400,
+:root.dark .ant-card .text-orange-500,
+:root.dark .ant-card .text-orange-600,
+:root.dark .ant-card .text-orange-700,
+:root.dark .ant-card .text-orange-800 {
+  color: #ffa940 !important;
+}
+
+/* Yellow colors */
+:root.dark .text-yellow-400,
+:root.dark .text-yellow-500,
+:root.dark .text-yellow-600,
+:root.dark .text-yellow-700,
+:root.dark .text-yellow-800,
+:root.dark .ant-card .text-yellow-400,
+:root.dark .ant-card .text-yellow-500,
+:root.dark .ant-card .text-yellow-600,
+:root.dark .ant-card .text-yellow-700,
+:root.dark .ant-card .text-yellow-800 {
+  color: #ffc53d !important;
+}
+
+/* Purple colors */
+:root.dark .text-purple-400,
+:root.dark .text-purple-500,
+:root.dark .text-purple-600,
+:root.dark .text-purple-700,
+:root.dark .text-purple-800,
+:root.dark .ant-card .text-purple-400,
+:root.dark .ant-card .text-purple-500,
+:root.dark .ant-card .text-purple-600,
+:root.dark .ant-card .text-purple-700,
+:root.dark .ant-card .text-purple-800 {
+  color: #b37feb !important;
+}
+
+/* Ensure expanded card inner content area is dark */
+:root.dark .ant-card .bg-gray-50 {
+  background-color: #141414 !important;
+}
+
+/* Position card borders in dark mode - preserve colored left border, update other borders */
+:root.dark .ant-card[style*="border-top: 1px solid"] {
+  border-top-color: #424242 !important;
+  border-right-color: #424242 !important;
+  border-bottom-color: #424242 !important;
+}
+
+/* Expanded position card ring effect in dark mode */
+:root.dark .ring-2.ring-blue-200 {
+  --tw-ring-color: rgba(59, 130, 246, 0.3);
+}
+
+/* Position card header text in dark mode - maximum contrast */
+:root.dark .ant-card .text-gray-800,
+:root.dark .ant-card .text-gray-900 {
+  color: rgba(255, 255, 255, 1) !important;
+}
+
+:root.dark .ant-card .text-gray-600,
+:root.dark .ant-card .text-gray-700 {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Position card table styles in dark mode - maximum contrast */
+:root.dark .custom-table .ant-table-thead > tr > th {
+  background-color: #262626 !important;
+  color: rgba(255, 255, 255, 1) !important;
+  border-bottom-color: #424242 !important;
+}
+
+:root.dark .custom-table .ant-table-tbody > tr > td {
+  border-bottom-color: #303030 !important;
+  color: rgba(255, 255, 255, 0.98) !important;
+}
+
+/* Ensure all text elements in table cells are highly visible */
+:root.dark .custom-table .ant-table-tbody > tr > td span,
+:root.dark .custom-table .ant-table-tbody > tr > td div,
+:root.dark .custom-table .ant-table-tbody > tr > td p {
+  color: rgba(255, 255, 255, 0.98) !important;
+}
+
+/* Hover effects for all row types in dark mode - darker background (override PositionStyles.tsx) */
+/* IMPORTANT: These must override the inline <style jsx> from PositionStyles.tsx which uses light colors */
+:root.dark .custom-table .ant-table-tbody > tr.bg-orange-100\\/90:hover > td,
+:root.dark .custom-table .ant-table-tbody > tr.bg-purple-100:hover > td,
+:root.dark .custom-table .ant-table-tbody > tr.bg-blue-100:hover > td,
+:root.dark .custom-table .ant-table-tbody > tr.bg-blue-100\\/60:hover > td,
+:root.dark .custom-table .ant-table-tbody > tr.bg-green-100\\/80:hover > td {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Override specific hover effects from PositionStyles.tsx for dark theme */
+:root.dark .custom-table .ant-table-tbody > tr:hover > td {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Input fields within position card tables in dark mode */
+:root.dark .custom-table .ant-input-number,
+:root.dark .custom-table .ant-input {
+  color: rgba(255, 255, 255, 0.98) !important;
+}
+
+:root.dark .custom-table .ant-input-number:hover,
+:root.dark .custom-table .ant-input:hover {
+  background-color: #262626 !important;
+  color: rgba(255, 255, 255, 0.98) !important;
+}
+
+:root.dark .custom-table .ant-input-number:focus,
+:root.dark .custom-table .ant-input:focus {
+  background-color: #1f1f1f !important;
+  color: rgba(255, 255, 255, 0.98) !important;
+  box-shadow: 0 0 0 2px rgba(77, 168, 255, 0.3) !important;
 }
 
 /* Loading animations */

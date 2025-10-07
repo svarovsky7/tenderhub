@@ -1,3 +1,93 @@
+/* CSS Custom Properties for Theme Support */
+:root {
+  /* Light theme colors (default) */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f0f2f5;
+  --bg-tertiary: #fafafa;
+  --bg-elevated: #ffffff;
+
+  --text-primary: rgba(0, 0, 0, 0.85);
+  --text-secondary: rgba(0, 0, 0, 0.65);
+  --text-tertiary: rgba(0, 0, 0, 0.45);
+  --text-disabled: rgba(0, 0, 0, 0.25);
+
+  --border-color: #d9d9d9;
+  --border-color-light: #f0f0f0;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 6px 16px 0 rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 6px 16px -8px rgba(0, 0, 0, 0.08), 0 9px 28px 0 rgba(0, 0, 0, 0.05);
+
+  /* Gradient backgrounds */
+  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-success: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
+  --gradient-warning: linear-gradient(135deg, #fa8c16 0%, #d46b08 100%);
+  --gradient-danger: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%);
+  --gradient-info: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+
+  /* Work type colors */
+  --work-type-repair: #ff7a45;
+  --work-type-construction: #9254de;
+  --work-type-technical: #1890ff;
+  --work-type-installation: #52c41a;
+
+  /* Material type colors */
+  --material-type-main: #13c2c2;
+  --material-type-auxiliary: #faad14;
+
+  /* Status colors */
+  --status-success: #52c41a;
+  --status-warning: #faad14;
+  --status-error: #ff4d4f;
+  --status-info: #1890ff;
+  --status-processing: #1890ff;
+}
+
+/* Dark theme colors */
+:root.dark {
+  --bg-primary: #1f1f1f;
+  --bg-secondary: #141414;
+  --bg-tertiary: #262626;
+  --bg-elevated: #262626;
+
+  --text-primary: rgba(255, 255, 255, 0.85);
+  --text-secondary: rgba(255, 255, 255, 0.65);
+  --text-tertiary: rgba(255, 255, 255, 0.45);
+  --text-disabled: rgba(255, 255, 255, 0.25);
+
+  --border-color: #424242;
+  --border-color-light: #303030;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.16);
+  --shadow-md: 0 3px 6px -4px rgba(0, 0, 0, 0.48), 0 6px 16px 0 rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 6px 16px -8px rgba(0, 0, 0, 0.32), 0 9px 28px 0 rgba(0, 0, 0, 0.20);
+
+  /* Dark mode gradients - slightly muted */
+  --gradient-primary: linear-gradient(135deg, #5a6fc7 0%, #6a4189 100%);
+  --gradient-success: linear-gradient(135deg, #4aa717 0%, #2e7d0b 100%);
+  --gradient-warning: linear-gradient(135deg, #d87414 0%, #b55d08 100%);
+  --gradient-danger: linear-gradient(135deg, #d93d3f 0%, #b01520 100%);
+  --gradient-info: linear-gradient(135deg, #177ddc 0%, #085db7 100%);
+
+  /* Work type colors - adjusted for dark mode */
+  --work-type-repair: #ff9668;
+  --work-type-construction: #ab78e7;
+  --work-type-technical: #4da8ff;
+  --work-type-installation: #73d13d;
+
+  /* Material type colors - adjusted for dark mode */
+  --material-type-main: #36cfc9;
+  --material-type-auxiliary: #ffc53d;
+
+  /* Status colors - adjusted for dark mode */
+  --status-success: #73d13d;
+  --status-warning: #ffc53d;
+  --status-error: #ff7875;
+  --status-info: #4da8ff;
+  --status-processing: #4da8ff;
+}
+
+/* Base styles */
 #root {
   width: 100%;
   max-width: none;
@@ -6,15 +96,96 @@
   text-align: left;
 }
 
+body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Gradient helper classes */
+.gradient-header {
+  background: var(--gradient-primary);
+  color: white;
+  transition: background 0.3s ease;
+}
+
+.gradient-success-header {
+  background: var(--gradient-success);
+  color: white;
+  transition: background 0.3s ease;
+}
+
+.gradient-warning-header {
+  background: var(--gradient-warning);
+  color: white;
+  transition: background 0.3s ease;
+}
+
+.gradient-danger-header {
+  background: var(--gradient-danger);
+  color: white;
+  transition: background 0.3s ease;
+}
+
+.gradient-info-header {
+  background: var(--gradient-info);
+  color: white;
+  transition: background 0.3s ease;
+}
+
+/* Work type color classes */
+.work-type-repair {
+  color: var(--work-type-repair);
+}
+
+.work-type-construction {
+  color: var(--work-type-construction);
+}
+
+.work-type-technical {
+  color: var(--work-type-technical);
+}
+
+.work-type-installation {
+  color: var(--work-type-installation);
+}
+
+/* Material type color classes */
+.material-type-main {
+  color: var(--material-type-main);
+}
+
+.material-type-auxiliary {
+  color: var(--material-type-auxiliary);
+}
+
+/* Status color classes */
+.status-success {
+  color: var(--status-success);
+}
+
+.status-warning {
+  color: var(--status-warning);
+}
+
+.status-error {
+  color: var(--status-error);
+}
+
+.status-info {
+  color: var(--status-info);
+}
+
+/* Legacy styles */
 .logo {
   height: 6em;
   padding: 1.5em;
   will-change: filter;
   transition: filter 300ms;
 }
+
 .logo:hover {
   filter: drop-shadow(0 0 2em #646cffaa);
 }
+
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
@@ -39,5 +210,42 @@
 }
 
 .read-the-docs {
-  color: #888;
+  color: var(--text-tertiary);
+}
+
+/* Dark mode specific overrides */
+:root.dark .ant-layout {
+  background: var(--bg-secondary);
+}
+
+:root.dark .ant-layout-header {
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+:root.dark .ant-layout-sider {
+  background: var(--bg-primary);
+}
+
+:root.dark .ant-menu-light {
+  background: var(--bg-primary);
+}
+
+:root.dark .ant-card {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+}
+
+/* Smooth transitions for theme switching */
+* {
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.3s;
+  transition-timing-function: ease;
+}
+
+/* Preserve transitions for interactive elements */
+button, a, input, select, textarea {
+  transition-property: background-color, border-color, color, transform, opacity;
+  transition-duration: 0.3s;
+  transition-timing-function: ease;
 }

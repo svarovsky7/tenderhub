@@ -30,6 +30,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { boqApi, tendersApi } from '../lib/supabase/api';
 import type { BOQItem, Tender } from '../lib/supabase/types';
 import { formatCurrency, formatQuantity } from '../utils/formatters';
+import { useTheme } from '../contexts/ThemeContext';
 import QuickTenderSelector from '../components/common/QuickTenderSelector';
 import * as XLSX from 'xlsx-js-style';
 
@@ -51,6 +52,7 @@ interface GroupedItem {
 }
 
 const TenderMaterialsWorksPage: React.FC = () => {
+  const { theme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [tendersLoading, setTendersLoading] = useState(false);
   const [tenders, setTenders] = useState<Tender[]>([]);
@@ -526,13 +528,13 @@ const TenderMaterialsWorksPage: React.FC = () => {
           <div className="mt-6" style={{ position: 'relative', zIndex: 0 }}>
             <div
               className="rounded-lg p-4 transition-all duration-700 transform shadow-lg"
-              style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', position: 'relative' }}
+              style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', position: 'relative' }}
             >
               <Row gutter={[16, 16]} align="middle">
                 <Col xs={24} lg={selectedTenderId ? 14 : 24}>
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Text strong className="whitespace-nowrap" style={{ color: 'white', cursor: 'default' }}>Тендер:</Text>
+                      <Text strong className="whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.95)' : 'white', cursor: 'default' }}>Тендер:</Text>
                       <Select
                         value={selectedTenderName}
                         onChange={handleTenderNameChange}
@@ -573,19 +575,19 @@ const TenderMaterialsWorksPage: React.FC = () => {
                   <Col xs={24} lg={10} className="transition-all duration-700 opacity-100 translate-x-0">
                     <div className="flex flex-col justify-center gap-2">
                       <div className="flex flex-wrap items-center justify-end gap-3">
-                        <span className="text-sm whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.95)', cursor: 'default' }}>
+                        <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.95)', cursor: 'default' }}>
                           <strong>Название:</strong> {selectedTender.title}
                         </span>
-                        <span style={{ color: 'rgba(255,255,255,0.5)', cursor: 'default' }}>|</span>
-                        <span className="text-sm whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.95)', cursor: 'default' }}>
+                        <span style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.5)', cursor: 'default' }}>|</span>
+                        <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.95)', cursor: 'default' }}>
                           <strong>Заказчик:</strong> {selectedTender.client_name}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center justify-end gap-3">
-                        <span className="text-sm whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.95)', cursor: 'default' }}>
+                        <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.95)', cursor: 'default' }}>
                           <strong>Площадь по СП:</strong> {selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}
                         </span>
-                        <span className="text-sm whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.95)', cursor: 'default' }}>
+                        <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.95)', cursor: 'default' }}>
                           <strong>Площадь Заказчика:</strong> {selectedTender.area_client ? formatQuantity(selectedTender.area_client, 0) + ' м²' : '—'}
                         </span>
                       </div>

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Card, 
-  Button, 
-  Typography, 
-  Space, 
+import {
+  Card,
+  Button,
+  Typography,
+  Space,
   Select,
   Spin,
   message,
@@ -30,6 +30,7 @@ import TenderBOQManagerLazy from '../components/tender/TenderBOQManagerLazy';
 import DeadlineStatusBar from '../components/tender/DeadlineStatusBar';
 import QuickTenderSelector from '../components/common/QuickTenderSelector';
 import { tendersApi } from '../lib/supabase/api';
+import { useTheme } from '../contexts/ThemeContext';
 import type { Tender } from '../lib/supabase/types';
 import { formatQuantity } from '../utils/formatters';
 import dayjs from 'dayjs';
@@ -39,7 +40,8 @@ const { Option } = Select;
 
 const BOQPageSimplified: React.FC = () => {
   console.log('🚀 BOQPageSimplified component rendered');
-  
+
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [tenders, setTenders] = useState<Tender[]>([]);
@@ -307,6 +309,7 @@ const BOQPageSimplified: React.FC = () => {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           }
+
         `}
       </style>
       <ConfigProvider
@@ -340,27 +343,7 @@ const BOQPageSimplified: React.FC = () => {
                 </div>
                 <div className="boq-action-buttons">
                   <Button
-                    className="boq-action-btn"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      color: 'white',
-                      borderColor: 'rgba(255, 255, 255, 0.3)',
-                      fontWeight: 500
-                    }}
-                    size="large"
-                    icon={<FolderOpenOutlined />}
-                    onClick={() => navigate('/tenders')}
-                  >
-                    К тендерам
-                  </Button>
-                  <Button
-                    className="boq-action-btn"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      color: 'white',
-                      borderColor: 'rgba(255, 255, 255, 0.3)',
-                      fontWeight: 500
-                    }}
+                    className="boq-action-btn boq-action-btn-transparent"
                     size="large"
                     icon={<DashboardOutlined />}
                     onClick={() => navigate('/dashboard')}
@@ -368,13 +351,7 @@ const BOQPageSimplified: React.FC = () => {
                     К дашборду
                   </Button>
                   <Button
-                    className="boq-action-btn"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.95)',
-                      color: '#1890ff',
-                      borderColor: 'rgba(255, 255, 255, 0.3)',
-                      fontWeight: 600
-                    }}
+                    className="boq-action-btn boq-action-btn-primary"
                     size="large"
                     icon={<ReloadOutlined />}
                     onClick={handleRefresh}
@@ -384,13 +361,7 @@ const BOQPageSimplified: React.FC = () => {
                   </Button>
                   {selectedTenderId && (
                     <Button
-                      className="boq-action-btn"
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.2)',
-                        color: 'white',
-                        borderColor: 'rgba(255, 255, 255, 0.3)',
-                        fontWeight: 600
-                      }}
+                      className="boq-action-btn boq-action-btn-transparent"
                       size="large"
                       icon={<ArrowLeftOutlined />}
                       onClick={handleResetSelection}
@@ -404,12 +375,12 @@ const BOQPageSimplified: React.FC = () => {
               {/* Tender Selection and Total Cost */}
               <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
                 {/* Tender Selection - Left Side */}
-                <div className={`rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
+                <div className={`rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
                   <Row gutter={[16, 16]} align="middle">
                     <Col xs={24} lg={selectedTenderId ? 14 : 24}>
                       <div className="flex flex-col gap-2">
                         <div className={`flex flex-wrap items-center gap-2 transition-all duration-700 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
-                          <Text strong className="whitespace-nowrap" style={{ color: '#262626', cursor: 'default' }}>Тендер:</Text>
+                          <Text strong className="whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.95)' : '#262626', cursor: 'default' }}>Тендер:</Text>
                           <Select
                             value={selectedTenderName}
                             onChange={handleTenderNameChange}
@@ -463,19 +434,19 @@ const BOQPageSimplified: React.FC = () => {
                       <Col xs={24} lg={10} className={`transition-all duration-700 ${isContentVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
                         <div className="flex flex-col justify-center gap-2">
                           <div className="flex flex-wrap items-center justify-end gap-3">
-                            <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                            <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                               <strong>Название:</strong> {selectedTender.title}
                             </span>
-                            <span className="text-gray-400" style={{ cursor: 'default' }}>|</span>
-                            <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                            <span style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)', cursor: 'default' }}>|</span>
+                            <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                               <strong>Заказчик:</strong> {selectedTender.client_name}
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-3">
-                            <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                            <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                               <strong>Площадь по СП:</strong> {selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}
                             </span>
-                            <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                            <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                               <strong>Площадь Заказчика:</strong> {selectedTender.area_client ? formatQuantity(selectedTender.area_client, 0) + ' м²' : '—'}
                             </span>
                           </div>
@@ -544,9 +515,9 @@ const BOQPageSimplified: React.FC = () => {
                 
                 {/* Total Cost - Right Side */}
                 {selectedTenderId && (
-                  <div className={`flex flex-col justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
+                  <div className={`flex flex-col justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
                     <div>
-                      <Text className="text-sm text-gray-600 block mb-1" style={{ cursor: 'default' }}>Общая стоимость</Text>
+                      <Text className="text-sm block mb-1" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.65)', cursor: 'default' }}>Общая стоимость</Text>
                       <div className="text-3xl font-bold text-green-700" style={{ cursor: 'default' }}>
                         {Math.round(boqStats.totalCost).toLocaleString('ru-RU')} ₽
                       </div>
@@ -589,13 +560,19 @@ const BOQPageSimplified: React.FC = () => {
                 description={
                   <div className="space-y-3">
                     <div>
-                      <Text className="text-xl font-semibold text-gray-800 block">
+                      <Text
+                        className="text-xl font-semibold block"
+                        style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#1f2937' }}
+                      >
                         {tendersLoading ? "Загрузка тендеров..." : "Выберите тендер для начала работы"}
                       </Text>
                     </div>
                     {!tendersLoading && (
                       <div>
-                        <Text className="text-base text-gray-500 block">
+                        <Text
+                          className="text-base block"
+                          style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : '#6b7280' }}
+                        >
                           Выберите тендер из списка выше или используйте селектор
                         </Text>
                       </div>
