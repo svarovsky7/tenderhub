@@ -550,20 +550,20 @@ body {
   box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4) !important;
 }
 
-/* Primary button - Dark theme: same as light theme (white background, blue text) */
+/* Primary button - Dark theme: dark background with blue text like commercial-costs */
 :root.dark .boq-action-btn-primary {
-  background: rgba(255, 255, 255, 0.95) !important;
-  color: #1890ff !important;
-  border-color: rgba(255, 255, 255, 0.3) !important;
+  background: #1f1f1f !important;
+  color: #4da8ff !important;
+  border-color: #4da8ff !important;
   font-weight: 600 !important;
 }
 
 :root.dark .boq-action-btn-primary:hover {
-  background: rgba(255, 255, 255, 1) !important;
-  border-color: #1890ff !important;
-  color: #1890ff !important;
+  background: #262626 !important;
+  border-color: #4da8ff !important;
+  color: #4da8ff !important;
   transform: translateY(-2px) !important;
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4) !important;
+  box-shadow: 0 4px 12px rgba(77, 168, 255, 0.4) !important;
 }
 
 /* Primary action button (white background, blue text) - Light theme */
@@ -615,6 +615,11 @@ body {
 /* Override ALL card text colors in dark mode - maximum contrast */
 :root.dark .ant-card {
   color: rgba(255, 255, 255, 1) !important;
+}
+
+/* Override card header hover effect in dark theme - make it darker, not lighter */
+:root.dark .ant-card .hover\:bg-gray-50:hover {
+  background-color: rgba(0, 0, 0, 0.3) !important;
 }
 
 /* Override specific text elements in cards */
@@ -744,6 +749,56 @@ body {
   background-color: #141414 !important;
 }
 
+/* Table summary row in dark theme - override inline background */
+:root.dark .ant-table-summary tr {
+  background-color: #1f1f1f !important;
+}
+
+/* BOQ Items Table Row Colors in Dark Theme - Works, Materials, Sub-materials */
+/* Work rows - orange tint */
+:root.dark .boq-items-table .bg-orange-100\/90,
+:root.dark .boq-items-table tr.bg-orange-100\/90 {
+  background-color: rgba(251, 146, 60, 0.15) !important;
+}
+:root.dark .boq-items-table .bg-orange-100\/90:hover,
+:root.dark .boq-items-table tr.bg-orange-100\/90:hover {
+  background-color: rgba(251, 146, 60, 0.25) !important;
+}
+
+/* Sub-work rows - purple tint */
+:root.dark .boq-items-table .bg-purple-100,
+:root.dark .boq-items-table tr.bg-purple-100 {
+  background-color: rgba(168, 85, 247, 0.15) !important;
+}
+:root.dark .boq-items-table .bg-purple-100:hover,
+:root.dark .boq-items-table tr.bg-purple-100:hover {
+  background-color: rgba(168, 85, 247, 0.25) !important;
+}
+
+/* Material rows - blue tint */
+:root.dark .boq-items-table .bg-blue-100,
+:root.dark .boq-items-table tr.bg-blue-100,
+:root.dark .boq-items-table .bg-blue-100\/60,
+:root.dark .boq-items-table tr.bg-blue-100\/60 {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+:root.dark .boq-items-table .bg-blue-100:hover,
+:root.dark .boq-items-table tr.bg-blue-100:hover,
+:root.dark .boq-items-table .bg-blue-200\/80:hover,
+:root.dark .boq-items-table tr.bg-blue-200\/80:hover {
+  background-color: rgba(59, 130, 246, 0.25) !important;
+}
+
+/* Sub-material rows - green tint */
+:root.dark .boq-items-table .bg-green-100\/80,
+:root.dark .boq-items-table tr.bg-green-100\/80 {
+  background-color: rgba(34, 197, 94, 0.15) !important;
+}
+:root.dark .boq-items-table .bg-green-100\/80:hover,
+:root.dark .boq-items-table tr.bg-green-100\/80:hover {
+  background-color: rgba(34, 197, 94, 0.25) !important;
+}
+
 /* Position card borders in dark mode - preserve colored left border, update other borders */
 :root.dark .ant-card[style*="border-top: 1px solid"] {
   border-top-color: #424242 !important;
@@ -762,6 +817,7 @@ body {
   color: rgba(255, 255, 255, 1) !important;
 }
 
+/* Position card header text in dark mode - maximum contrast */
 :root.dark .ant-card .text-gray-600,
 :root.dark .ant-card .text-gray-700 {
   color: rgba(255, 255, 255, 0.95) !important;

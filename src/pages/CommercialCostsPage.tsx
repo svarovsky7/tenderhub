@@ -319,6 +319,22 @@ const CommercialCostsPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="commercial-action-buttons">
+                  {selectedTenderId && (
+                    <Button
+                      className="commercial-action-btn"
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.2)',
+                        color: 'white',
+                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                        fontWeight: 600
+                      }}
+                      size="large"
+                      icon={<ArrowLeftOutlined />}
+                      onClick={handleResetSelection}
+                    >
+                      Назад к выбору
+                    </Button>
+                  )}
                   <Button
                     className="commercial-action-btn"
                     style={{
@@ -348,22 +364,6 @@ const CommercialCostsPage: React.FC = () => {
                   >
                     Обновить
                   </Button>
-                  {selectedTenderId && (
-                    <Button
-                      className="commercial-action-btn"
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.2)',
-                        color: 'white',
-                        borderColor: 'rgba(255, 255, 255, 0.3)',
-                        fontWeight: 600
-                      }}
-                      size="large"
-                      icon={<ArrowLeftOutlined />}
-                      onClick={handleResetSelection}
-                    >
-                      Назад к выбору
-                    </Button>
-                  )}
                 </div>
               </div>
 

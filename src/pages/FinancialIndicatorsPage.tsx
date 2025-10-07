@@ -461,9 +461,25 @@ const FinancialIndicatorsPage: React.FC = () => {
               </Text>
             </div>
             <div className="financial-action-buttons">
+              {selectedTenderId && (
+                <Button
+                  className="financial-action-btn"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    color: 'white',
+                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                    fontWeight: 600
+                  }}
+                  size="large"
+                  icon={<ArrowLeftOutlined />}
+                  onClick={handleResetSelection}
+                >
+                  Назад к выбору
+                </Button>
+              )}
               <Button
                 className="financial-action-btn"
-                style={{ 
+                style={{
                   background: 'rgba(255, 255, 255, 0.2)',
                   color: 'white',
                   borderColor: 'rgba(255, 255, 255, 0.3)',
@@ -477,7 +493,7 @@ const FinancialIndicatorsPage: React.FC = () => {
               </Button>
               <Button
                 className="financial-action-btn"
-                style={{ 
+                style={{
                   background: 'rgba(255, 255, 255, 0.95)',
                   color: '#1890ff',
                   borderColor: 'rgba(255, 255, 255, 0.3)',
@@ -490,22 +506,6 @@ const FinancialIndicatorsPage: React.FC = () => {
               >
                 Обновить
               </Button>
-              {selectedTenderId && (
-                <Button
-                  className="financial-action-btn"
-                  style={{ 
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    color: 'white',
-                    borderColor: 'rgba(255, 255, 255, 0.3)',
-                    fontWeight: 600
-                  }}
-                  size="large"
-                  icon={<ArrowLeftOutlined />}
-                  onClick={handleResetSelection}
-                >
-                  Назад к выбору
-                </Button>
-              )}
             </div>
           </div>
 

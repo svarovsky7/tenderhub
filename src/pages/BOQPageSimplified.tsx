@@ -342,23 +342,6 @@ const BOQPageSimplified: React.FC = () => {
                   </div>
                 </div>
                 <div className="boq-action-buttons">
-                  <Button
-                    className="boq-action-btn boq-action-btn-transparent"
-                    size="large"
-                    icon={<DashboardOutlined />}
-                    onClick={() => navigate('/dashboard')}
-                  >
-                    К дашборду
-                  </Button>
-                  <Button
-                    className="boq-action-btn boq-action-btn-primary"
-                    size="large"
-                    icon={<ReloadOutlined />}
-                    onClick={handleRefresh}
-                    loading={loading}
-                  >
-                    Обновить
-                  </Button>
                   {selectedTenderId && (
                     <Button
                       className="boq-action-btn boq-action-btn-transparent"
@@ -369,6 +352,29 @@ const BOQPageSimplified: React.FC = () => {
                       Назад к выбору
                     </Button>
                   )}
+                  <Button
+                    className="boq-action-btn boq-action-btn-transparent"
+                    size="large"
+                    icon={<DashboardOutlined />}
+                    onClick={() => navigate('/dashboard')}
+                  >
+                    К дашборду
+                  </Button>
+                  <Button
+                    className="boq-action-btn"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.95)',
+                      color: '#1890ff',
+                      borderColor: 'rgba(255, 255, 255, 0.3)',
+                      fontWeight: 600
+                    }}
+                    size="large"
+                    icon={<ReloadOutlined />}
+                    onClick={handleRefresh}
+                    loading={loading}
+                  >
+                    Обновить
+                  </Button>
                 </div>
               </div>
 
