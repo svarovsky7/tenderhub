@@ -106,7 +106,7 @@ const BOQPageSimplified: React.FC = () => {
     console.log('🔄 Tender name selection changed:', value);
     setSelectedTenderName(value);
     setSelectedTenderId(null); // Reset tender ID when name changes
-    setIsContentVisible(false); // Hide content when changing tender name
+    // Don't hide content - keep current view while user selects version
   }, []);
 
   // Handle version selection (second step)
@@ -279,6 +279,9 @@ const BOQPageSimplified: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
+          .boq-page-header.dark {
+            background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
+          }
           .boq-page-header::before {
             content: '';
             position: absolute;
@@ -323,7 +326,7 @@ const BOQPageSimplified: React.FC = () => {
         <div className="w-full min-h-full bg-gray-50">
           <div className="p-6">
             {/* Beautiful Gradient Header */}
-            <div className="boq-page-header" style={{ borderRadius: '16px' }}>
+            <div className={`boq-page-header ${theme === 'dark' ? 'dark' : ''}`} style={{ borderRadius: '16px' }}>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-4">
                   <div
@@ -524,18 +527,18 @@ const BOQPageSimplified: React.FC = () => {
                   <div className={`flex flex-col justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
                     <div>
                       <Text className="text-sm block mb-1" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.65)', cursor: 'default' }}>Общая стоимость</Text>
-                      <div className="text-3xl font-bold text-green-700" style={{ cursor: 'default' }}>
+                      <div className="text-3xl font-bold" style={{ cursor: 'default', color: theme === 'dark' ? '#52c41a' : 'rgba(0,0,0,0.85)' }}>
                         {Math.round(boqStats.totalCost).toLocaleString('ru-RU')} ₽
                       </div>
                     </div>
                   </div>
                 )}
               </div>
-              
+
               {/* Quick Tender Selection - moved to header */}
-              {!selectedTenderId && (
+              {!selectedTenderId && !selectedTenderName && (
                 <div className="mt-6">
-                  <QuickTenderSelector 
+                  <QuickTenderSelector
                     tenders={tenders}
                     loading={tendersLoading}
                     onTenderSelect={handleQuickTenderSelect}
@@ -558,7 +561,7 @@ const BOQPageSimplified: React.FC = () => {
           </div>
 
         {/* Main Content */}
-        {!selectedTenderId && (
+        {!selectedTenderId && !selectedTenderName && (
           <div className="p-4 lg:p-6">
             {/* Empty State */}
             <Card className="text-center max-w-2xl mx-auto shadow-lg">
@@ -600,7 +603,37 @@ const BOQPageSimplified: React.FC = () => {
             </Card>
           </div>
         )}
-        
+
+        {/* Intermediate state: tender name selected, waiting for version */}
+        {!selectedTenderId && selectedTenderName && (
+          <div className="p-4 lg:p-6">
+            <Card className="text-center max-w-2xl mx-auto shadow-lg">
+              <Empty
+                description={
+                  <div className="space-y-3">
+                    <div>
+                      <Text
+                        className="text-xl font-semibold block"
+                        style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#1f2937' }}
+                      >
+                        Выберите версию тендера
+                      </Text>
+                    </div>
+                    <div>
+                      <Text
+                        className="text-base"
+                        style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : '#6b7280' }}
+                      >
+                        Используйте селектор "Версия" в шапке страницы
+                      </Text>
+                    </div>
+                  </div>
+                }
+              />
+            </Card>
+          </div>
+        )}
+
         {selectedTenderId && (
           <div 
             id="boq-content-section"

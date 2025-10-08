@@ -470,23 +470,56 @@ const Dashboard: React.FC = () => {
             font-weight: 500;
           }
           /* Dark theme - white titles */
-          :root.dark .dashboard-stats-container.theme-dark .ant-statistic-title {
+          .dashboard-stats-container.theme-dark .ant-statistic-title {
             color: rgba(255,255,255,0.85) !important;
             font-weight: 500;
           }
-          /* Dark theme - colored values (numbers) */
-          :root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(1) .ant-statistic-content {
+          /* Dark theme - colored values with custom classes */
+          .dashboard-stats-container.theme-dark .stat-blue .ant-statistic-content,
+          .dashboard-stats-container.theme-dark .stat-blue .ant-statistic-content-value,
+          .dashboard-stats-container.theme-dark .stat-blue .ant-statistic-content-value-int,
+          .dashboard-stats-container.theme-dark .stat-blue .ant-statistic-content-prefix,
+          .dashboard-stats-container.theme-dark .stat-blue .anticon {
             color: #1890ff !important;
           }
-          :root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(2) .ant-statistic-content {
+          .dashboard-stats-container.theme-dark .stat-green .ant-statistic-content,
+          .dashboard-stats-container.theme-dark .stat-green .ant-statistic-content-value,
+          .dashboard-stats-container.theme-dark .stat-green .ant-statistic-content-value-int,
+          .dashboard-stats-container.theme-dark .stat-green .ant-statistic-content-prefix,
+          .dashboard-stats-container.theme-dark .stat-green .anticon {
             color: #52c41a !important;
           }
-          :root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(3) .ant-statistic-content {
+          .dashboard-stats-container.theme-dark .stat-purple .ant-statistic-content,
+          .dashboard-stats-container.theme-dark .stat-purple .ant-statistic-content-value,
+          .dashboard-stats-container.theme-dark .stat-purple .ant-statistic-content-value-int,
+          .dashboard-stats-container.theme-dark .stat-purple .ant-statistic-content-prefix,
+          .dashboard-stats-container.theme-dark .stat-purple .anticon {
             color: #722ed1 !important;
           }
-          /* Light theme - default content colors */
-          .dashboard-stats-container.theme-light .ant-statistic-content {
-            color: rgba(0,0,0,0.85);
+          /* Light theme - only icons colored, text is black */
+          .dashboard-stats-container.theme-light .stat-blue .ant-statistic-content,
+          .dashboard-stats-container.theme-light .stat-blue .ant-statistic-content-value,
+          .dashboard-stats-container.theme-light .stat-blue .ant-statistic-content-value-int {
+            color: rgba(0,0,0,0.85) !important;
+          }
+          .dashboard-stats-container.theme-light .stat-blue .anticon {
+            color: #1890ff !important;
+          }
+          .dashboard-stats-container.theme-light .stat-green .ant-statistic-content,
+          .dashboard-stats-container.theme-light .stat-green .ant-statistic-content-value,
+          .dashboard-stats-container.theme-light .stat-green .ant-statistic-content-value-int {
+            color: rgba(0,0,0,0.85) !important;
+          }
+          .dashboard-stats-container.theme-light .stat-green .anticon {
+            color: #52c41a !important;
+          }
+          .dashboard-stats-container.theme-light .stat-purple .ant-statistic-content,
+          .dashboard-stats-container.theme-light .stat-purple .ant-statistic-content-value,
+          .dashboard-stats-container.theme-light .stat-purple .ant-statistic-content-value-int {
+            color: rgba(0,0,0,0.85) !important;
+          }
+          .dashboard-stats-container.theme-light .stat-purple .anticon {
+            color: #722ed1 !important;
           }
 
           /* Expired tender - light green background */
@@ -541,6 +574,7 @@ const Dashboard: React.FC = () => {
               <Row gutter={[16, 16]}>
                 <Col xs={24} sm={12} lg={8}>
                   <Card
+                    className="stat-blue"
                     style={{
                       background: theme === 'dark' ? '#1f1f1f' : 'rgba(255, 255, 255, 0.95)',
                       borderColor: theme === 'dark' ? '#434343' : undefined
@@ -550,12 +584,12 @@ const Dashboard: React.FC = () => {
                       title="Всего тендеров"
                       value={stats.totalTenders}
                       prefix={<FileTextOutlined />}
-                      valueStyle={{ color: '#1890ff' }}
                     />
                   </Card>
                 </Col>
                 <Col xs={24} sm={12} lg={8}>
                   <Card
+                    className="stat-green"
                     style={{
                       background: theme === 'dark' ? '#1f1f1f' : 'rgba(255, 255, 255, 0.95)',
                       borderColor: theme === 'dark' ? '#434343' : undefined
@@ -565,12 +599,12 @@ const Dashboard: React.FC = () => {
                       title="Активные тендеры"
                       value={stats.activeTenders}
                       prefix={<ClockCircleOutlined />}
-                      valueStyle={{ color: '#52c41a' }}
                     />
                   </Card>
                 </Col>
                 <Col xs={24} sm={12} lg={8}>
                   <Card
+                    className="stat-purple"
                     style={{
                       background: theme === 'dark' ? '#1f1f1f' : 'rgba(255, 255, 255, 0.95)',
                       borderColor: theme === 'dark' ? '#434343' : undefined
@@ -581,7 +615,6 @@ const Dashboard: React.FC = () => {
                       value={stats.totalValue}
                       prefix={<DollarOutlined />}
                       formatter={(value) => formatCurrency(Number(value))}
-                      valueStyle={{ color: '#722ed1' }}
                     />
                   </Card>
                 </Col>

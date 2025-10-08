@@ -95,7 +95,7 @@ const CostRedistributionPage: React.FC = () => {
     console.log('🔄 Tender name selection changed:', value);
     setSelectedTenderName(value);
     setSelectedTenderId(null);
-    setIsContentVisible(false);
+    // Don't hide content - keep current view while user selects version
   }, []);
 
   // Handle version selection
@@ -264,6 +264,16 @@ const CostRedistributionPage: React.FC = () => {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           }
+          .materials-works-action-btn-transparent {
+            background: transparent !important;
+            color: rgba(255, 255, 255, 0.95) !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
+          }
+          .materials-works-action-btn-transparent:hover {
+            background: rgba(255, 255, 255, 0.1) !important;
+            color: white !important;
+            border-color: rgba(255, 255, 255, 0.5) !important;
+          }
         `}
       </style>
       <ConfigProvider
@@ -410,7 +420,7 @@ const CostRedistributionPage: React.FC = () => {
               </div>
 
               {/* Quick Tender Selector */}
-              {!selectedTenderId && (
+              {!selectedTenderId && !selectedTenderName && (
                 <div className="mt-6">
                   <QuickTenderSelector
                     tenders={tenders}
@@ -460,7 +470,7 @@ const CostRedistributionPage: React.FC = () => {
           </div>
 
           {/* Main Content */}
-          {!selectedTenderId && (
+          {!selectedTenderId && !selectedTenderName && (
             <div className="p-4 lg:p-6">
               <Card className="text-center max-w-2xl mx-auto shadow-lg">
                 <Empty
@@ -492,6 +502,31 @@ const CostRedistributionPage: React.FC = () => {
                     </Button>
                   )}
                 </Empty>
+              </Card>
+            </div>
+          )}
+
+          {/* Intermediate state: tender name selected, waiting for version */}
+          {!selectedTenderId && selectedTenderName && (
+            <div className="p-4 lg:p-6">
+              <Card className="text-center max-w-2xl mx-auto shadow-lg">
+                <Empty
+                  description={
+                    <div className="space-y-3">
+                      <div>
+                        <Text className="text-xl font-semibold text-gray-800 block">
+                          Выберите версию тендера
+                        </Text>
+                      </div>
+                      <div>
+                        <Text className="text-base text-gray-500 block">
+                          Используйте селектор "Версия" в шапке страницы
+                        </Text>
+                      </div>
+                    </div>
+                  }
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                />
               </Card>
             </div>
           )}

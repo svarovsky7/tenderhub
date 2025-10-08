@@ -24,6 +24,12 @@ npm run lint         # Run ESLint checks (flat config)
 # Database management
 npm run db:schema    # Export production schema to supabase/schemas/prod.sql
 
+# Testing (Playwright)
+npm run test         # Run all Playwright tests
+npm run test:ui      # Run tests with Playwright UI
+npm run test:headed  # Run tests in headed mode (visible browser)
+npm run test:debug   # Run tests in debug mode
+
 # Database verification scripts
 node src/scripts/checkPositionTotals.ts           # Verify position totals match calculated values
 node src/scripts/applyPositionTotalsTrigger.ts    # Apply position totals trigger migration
@@ -50,6 +56,7 @@ vercel --prod        # Deploy to production (requires VERCEL_TOKEN env var or lo
 - **Virtual Scrolling**: react-window 1.8.11 + react-window-infinite-loader
 - **Forms**: react-hook-form 7.62.0 + yup 1.7.0 validation
 - **Routing**: react-router-dom 7.7.1
+- **Testing**: Playwright 1.56.0 (E2E testing, port 5174)
 - **Deployment**: Vercel (production deployment platform)
 
 ## MCP (Model Context Protocol) Integration
@@ -365,6 +372,21 @@ The application supports creating new versions of tenders with position comparis
     - `trigger_recalc_position_on_wml_change()` - Simple SUM(total_amount) for position totals
     - Migration `20251001_FINAL_fix_totals_calculation.sql` fixes existing data and implements both triggers
 
+## Testing
+
+### Playwright Configuration
+- **Test Directory**: `./tests/`
+- **Base URL**: `http://localhost:5174` (note: different from dev server port 5173)
+- **Browser**: Chromium (Desktop Chrome)
+- **Features**: Screenshot on failure, video on failure, HTML reporter
+- **Auto-start**: Dev server automatically starts before tests
+
+### Writing Tests
+- Tests run in parallel by default
+- CI mode: retries 2 times, sequential execution
+- Use `test.only` for debugging (fails CI build if left in)
+- Access base URL via `await page.goto('/')`
+
 ## Common Troubleshooting
 
 ### Development & Build Issues
@@ -373,6 +395,12 @@ The application supports creating new versions of tenders with position comparis
 - **Type Errors**: Run `npm run build:check` to check all TypeScript errors (NOT `npm run build`)
 - **MCP Not Working**: Restart Claude Code completely
 - **Import Path Errors**: Verify relative paths when refactoring
+
+### Testing Issues
+- **Wrong Port**: Playwright uses port 5174, dev server uses 5173
+- **Tests Timeout**: Increase webServer timeout (default 120s)
+- **Flaky Tests**: Run with `--retries` flag or check for race conditions
+- **Debug Mode**: Use `npm run test:debug` to step through tests
 
 ### Database & Position Totals
 - **Position Totals Wrong**: Apply trigger migration via SQL Editor

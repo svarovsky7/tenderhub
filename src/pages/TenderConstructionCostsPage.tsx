@@ -47,6 +47,7 @@ import { getCategoriesWithDetails } from '../lib/supabase/api/construction-costs
 import { useNavigate } from 'react-router-dom';
 import { formatQuantity } from '../utils/formatters';
 import QuickTenderSelector from '../components/common/QuickTenderSelector';
+import { useTheme } from '../contexts/ThemeContext';
 // import { FinancialIndicatorsTab } from '../components/financial/FinancialIndicatorsTab';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -127,6 +128,7 @@ interface TenderCostVolume {
 
 const TenderConstructionCostsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { theme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tenders, setTenders] = useState<Tender[]>([]);
@@ -1482,6 +1484,9 @@ const TenderConstructionCostsPage: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
+          .tender-costs-header.dark {
+            background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
+          }
           .tender-costs-header::before {
             content: '';
             position: absolute;
@@ -1512,11 +1517,22 @@ const TenderConstructionCostsPage: React.FC = () => {
             font-size: 15px;
             transition: all 0.3s ease;
           }
+          .tender-action-btn-transparent {
+            background: transparent !important;
+            color: rgba(255, 255, 255, 0.95) !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
+            font-weight: 500 !important;
+          }
+          .tender-action-btn-transparent:hover {
+            background: rgba(255, 255, 255, 0.1) !important;
+            color: white !important;
+            border-color: rgba(255, 255, 255, 0.5) !important;
+          }
         `}
       </style>
-      
+
       {/* Header с градиентом и выбором тендера */}
-        <div className="tender-costs-header">
+        <div className={`tender-costs-header ${theme === 'dark' ? 'dark' : ''}`}>
         <div className="max-w-none">
           {/* Title and buttons row */}
           <div className="flex justify-between items-start mb-6">
@@ -1540,13 +1556,7 @@ const TenderConstructionCostsPage: React.FC = () => {
             </div>
             <div className="tender-action-buttons">
               <Button
-                className="tender-action-btn"
-                style={{ 
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  color: 'white',
-                  borderColor: 'rgba(255, 255, 255, 0.3)',
-                  fontWeight: 500
-                }}
+                className="tender-action-btn tender-action-btn-transparent"
                 size="large"
                 icon={<FolderOpenOutlined />}
                 onClick={() => navigate('/tenders')}
@@ -1555,7 +1565,7 @@ const TenderConstructionCostsPage: React.FC = () => {
               </Button>
               <Button
                 className="tender-action-btn"
-                style={{ 
+                style={{
                   background: 'rgba(255, 255, 255, 0.95)',
                   color: '#1890ff',
                   borderColor: 'rgba(255, 255, 255, 0.3)',

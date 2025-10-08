@@ -292,6 +292,16 @@ const CommercialCostsPage: React.FC = () => {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           }
+          .materials-works-action-btn-transparent {
+            background: transparent !important;
+            color: rgba(255, 255, 255, 0.95) !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
+          }
+          .materials-works-action-btn-transparent:hover {
+            background: rgba(255, 255, 255, 0.1) !important;
+            color: white !important;
+            border-color: rgba(255, 255, 255, 0.5) !important;
+          }
         `}
       </style>
       <ConfigProvider

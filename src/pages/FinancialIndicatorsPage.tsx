@@ -439,6 +439,16 @@ const FinancialIndicatorsPage: React.FC = () => {
             font-size: 15px;
             transition: all 0.3s ease;
           }
+          .materials-works-action-btn-transparent {
+            background: transparent !important;
+            color: rgba(255, 255, 255, 0.95) !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
+          }
+          .materials-works-action-btn-transparent:hover {
+            background: rgba(255, 255, 255, 0.1) !important;
+            color: white !important;
+            border-color: rgba(255, 255, 255, 0.5) !important;
+          }
         `}
       </style>
 
