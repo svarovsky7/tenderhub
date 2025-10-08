@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Row, Col, Typography } from 'antd';
-import { BookOutlined, InboxOutlined, ToolOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { ShopOutlined, DollarOutlined, LineChartOutlined, SwapOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -15,33 +15,33 @@ interface MenuCard {
   color: string;
 }
 
-const LibrariesPage: React.FC = () => {
+const CommercePage: React.FC = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
 
   const menuCards: MenuCard[] = [
     {
-      key: 'libraries-materials-works',
-      title: 'Справочник',
-      description: 'Просмотр и редактирование материалов и работ',
-      icon: <BookOutlined style={{ fontSize: 48 }} />,
-      path: '/libraries/materials-works',
+      key: 'commercial-costs',
+      title: 'Коммерческие стоимости',
+      description: 'Расчет и управление коммерческими стоимостями по тендерам',
+      icon: <DollarOutlined style={{ fontSize: 48 }} />,
+      path: '/commercial-costs',
       color: '#1890ff',
     },
     {
-      key: 'work-materials',
-      title: 'Шаблоны',
-      description: 'Управление шаблонами связей работ и материалов',
-      icon: <AppstoreOutlined style={{ fontSize: 48 }} />,
-      path: '/libraries/work-materials',
+      key: 'cost-redistribution',
+      title: 'Перераспределение сумм',
+      description: 'Перераспределение затрат между позициями и категориями',
+      icon: <SwapOutlined style={{ fontSize: 48 }} />,
+      path: '/cost-redistribution',
       color: '#52c41a',
     },
     {
-      key: 'tender-materials-works',
-      title: 'БСМ',
-      description: 'База строительных материалов по выбранному тендеру',
-      icon: <InboxOutlined style={{ fontSize: 48 }} />,
-      path: '/libraries/tender-materials-works',
+      key: 'financial',
+      title: 'Финансовые показатели',
+      description: 'Аналитика и финансовые показатели по тендерам',
+      icon: <LineChartOutlined style={{ fontSize: 48 }} />,
+      path: '/financial',
       color: '#722ed1',
     },
   ];
@@ -50,7 +50,7 @@ const LibrariesPage: React.FC = () => {
     <>
       <style>
         {`
-          .libraries-page-header {
+          .commerce-page-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
             border-radius: 16px;
             margin-bottom: 24px;
@@ -59,10 +59,10 @@ const LibrariesPage: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
-          .libraries-page-header.dark {
+          .commerce-page-header.dark {
             background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
           }
-          .libraries-page-header::before {
+          .commerce-page-header::before {
             content: '';
             position: absolute;
             top: -50%;
@@ -77,18 +77,18 @@ const LibrariesPage: React.FC = () => {
             to { transform: rotate(360deg); }
           }
 
-          .libraries-menu-card {
+          .commerce-menu-card {
             height: 100%;
             cursor: pointer;
             transition: all 0.3s ease;
             border-radius: 12px;
             overflow: hidden;
           }
-          .libraries-menu-card:hover {
+          .commerce-menu-card:hover {
             transform: translateY(-8px);
             box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
           }
-          .libraries-menu-card .ant-card-body {
+          .commerce-menu-card .ant-card-body {
             padding: 32px;
             display: flex;
             flex-direction: column;
@@ -96,7 +96,7 @@ const LibrariesPage: React.FC = () => {
             text-align: center;
             gap: 16px;
           }
-          .libraries-menu-card-icon {
+          .commerce-menu-card-icon {
             width: 80px;
             height: 80px;
             border-radius: 16px;
@@ -105,7 +105,7 @@ const LibrariesPage: React.FC = () => {
             justify-content: center;
             transition: all 0.3s ease;
           }
-          .libraries-menu-card:hover .libraries-menu-card-icon {
+          .commerce-menu-card:hover .commerce-menu-card-icon {
             transform: scale(1.1);
           }
         `}
@@ -113,21 +113,21 @@ const LibrariesPage: React.FC = () => {
       <div className="w-full min-h-full bg-gray-50">
         <div className="p-6">
           {/* Beautiful Gradient Header */}
-          <div className={`libraries-page-header ${theme === 'dark' ? 'dark' : ''}`}>
+          <div className={`commerce-page-header ${theme === 'dark' ? 'dark' : ''}`}>
             <div className="relative z-10">
               <div className="flex items-center gap-4">
                 <div
                   className="w-16 h-16 rounded-full flex items-center justify-center"
                   style={{ background: 'rgba(255,255,255,0.2)' }}
                 >
-                  <BookOutlined style={{ fontSize: 32, color: 'white' }} />
+                  <ShopOutlined style={{ fontSize: 32, color: 'white' }} />
                 </div>
                 <div>
                   <Title level={2} style={{ margin: 0, color: 'white', fontSize: 28 }}>
-                    Библиотеки
+                    Коммерция
                   </Title>
                   <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>
-                    Управление справочниками материалов, работ и шаблонов
+                    Управление коммерческими расчетами и финансовыми показателями
                   </Text>
                 </div>
               </div>
@@ -140,7 +140,7 @@ const LibrariesPage: React.FC = () => {
               {menuCards.map((card) => (
                 <Col xs={24} sm={12} lg={8} key={card.key}>
                   <Card
-                    className="libraries-menu-card"
+                    className="commerce-menu-card"
                     onClick={() => navigate(card.path)}
                     hoverable
                     style={{
@@ -149,7 +149,7 @@ const LibrariesPage: React.FC = () => {
                     }}
                   >
                     <div
-                      className="libraries-menu-card-icon"
+                      className="commerce-menu-card-icon"
                       style={{
                         background: `linear-gradient(135deg, ${card.color}15, ${card.color}25)`,
                         color: card.color,
@@ -186,4 +186,4 @@ const LibrariesPage: React.FC = () => {
   );
 };
 
-export default LibrariesPage;
+export default CommercePage;

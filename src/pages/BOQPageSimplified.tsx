@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card,
   Button,
@@ -47,15 +47,21 @@ const BOQPageSimplified: React.FC = () => {
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [selectedTenderName, setSelectedTenderName] = useState<string | null>(null);
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
+  const [previousTenderId, setPreviousTenderId] = useState<string | null>(null); // Keep previous tender visible while selecting new one
   const [loading, setLoading] = useState(false);
   const [tendersLoading, setTendersLoading] = useState(false);
   const [isContentVisible, setIsContentVisible] = useState(false);
+  const [isFirstSelection, setIsFirstSelection] = useState(true); // Track if this is the first tender selection
   const [boqStats, setBOQStats] = useState({
     totalWorks: 0,
     totalMaterials: 0,
     totalCost: 0,
     positionsCount: 0
   });
+
+  // Refs for scroll preservation
+  const scrollPositionRef = useRef<number>(0);
+  const shouldRestoreScrollRef = useRef<boolean>(false);
 
   // Load all tenders for selection
   const loadTenders = useCallback(async () => {
@@ -104,30 +110,71 @@ const BOQPageSimplified: React.FC = () => {
   // Handle tender name selection (first step)
   const handleTenderNameChange = useCallback((value: string) => {
     console.log('🔄 Tender name selection changed:', value);
+    const currentScroll = window.scrollY;
+
+    // Preserve scroll position when changing tenders (if we're not at the top)
+    if (selectedTenderId && currentScroll > 100) {
+      scrollPositionRef.current = currentScroll;
+      shouldRestoreScrollRef.current = true;
+      console.log('✅📍 PRESERVED scroll position:', scrollPositionRef.current);
+    }
+
+    // Keep previous tender ID to show old content while selecting new version
+    if (selectedTenderId) {
+      setPreviousTenderId(selectedTenderId);
+    }
+
     setSelectedTenderName(value);
     setSelectedTenderId(null); // Reset tender ID when name changes
-    // Don't hide content - keep current view while user selects version
-  }, []);
+    // Don't hide content - keep it visible and static
+    // isContentVisible stays true to keep content displayed
+  }, [selectedTenderId]);
 
   // Handle version selection (second step)
   const handleVersionChange = useCallback((version: number) => {
     console.log('🔄 Version selection changed:', version);
     if (!selectedTenderName) return;
-    
+
     // Find the tender with the selected name and version
     const [title, clientName] = selectedTenderName.split('___');
-    const targetTender = tenders.find(t => 
-      t.title === title && 
+    const targetTender = tenders.find(t =>
+      t.title === title &&
       t.client_name === clientName &&
       (t.version || 1) === version
     );
-    
+
     if (targetTender) {
       setSelectedTenderId(targetTender.id);
-      // Trigger animation after version is selected
-      setTimeout(() => setIsContentVisible(true), 100);
+      setPreviousTenderId(null); // Clear previous tender ID when new one is selected
+
+      // Ensure content is visible if it's first selection
+      if (!isContentVisible) {
+        setIsContentVisible(true);
+
+        // Mark first selection as complete AFTER animation finishes
+        // Animation duration is 600ms, wait a bit longer to be safe
+        setTimeout(() => {
+          setIsFirstSelection(false);
+        }, 650);
+      } else {
+        // If content is already visible (switching tenders), no animation needed
+        setIsFirstSelection(false);
+      }
+
+      // Restore scroll position if needed (without delay)
+      if (shouldRestoreScrollRef.current && scrollPositionRef.current > 0) {
+        requestAnimationFrame(() => {
+          window.scrollTo({
+            top: scrollPositionRef.current,
+            behavior: 'auto'
+          });
+          console.log('🔄 Restored scroll position:', scrollPositionRef.current);
+          shouldRestoreScrollRef.current = false;
+          scrollPositionRef.current = 0;
+        });
+      }
     }
-  }, [selectedTenderName, tenders]);
+  }, [selectedTenderName, tenders, isContentVisible]);
 
   // Get unique tender names/titles
   const uniqueTenderNames = React.useMemo(() => {
@@ -160,7 +207,8 @@ const BOQPageSimplified: React.FC = () => {
   }, [tenders, selectedTenderName]);
 
 
-  const selectedTender = tenders.find(t => t.id === selectedTenderId);
+  // Get current or previous tender to keep display while switching
+  const selectedTender = tenders.find(t => t.id === (selectedTenderId || previousTenderId));
   
   // Log for debugging
   React.useEffect(() => {
@@ -211,7 +259,9 @@ const BOQPageSimplified: React.FC = () => {
   const handleResetSelection = useCallback(() => {
     setSelectedTenderId(null);
     setSelectedTenderName(null);
+    setPreviousTenderId(null);
     setIsContentVisible(false);
+    setIsFirstSelection(true); // Reset to allow animation on next selection
     setBOQStats({
       totalWorks: 0,
       totalMaterials: 0,
@@ -241,21 +291,30 @@ const BOQPageSimplified: React.FC = () => {
   // Handle quick tender selection
   const handleQuickTenderSelect = useCallback((tender: Tender) => {
     console.log('🚀 Quick tender selected for BOQ:', tender.id, tender.title);
-    
+
     // Auto-fill the tender selection fields
     const tenderNameKey = `${tender.title}___${tender.client_name}`;
     setSelectedTenderName(tenderNameKey);
     setSelectedTenderId(tender.id);
-    
+    setPreviousTenderId(null); // Clear previous tender on quick select
+
     console.log('✅ Auto-filled tender selection for BOQ:', {
       tenderNameKey,
       tenderId: tender.id,
       version: tender.version
     });
-    
+
     // Show content after brief delay for smooth transition
-    setTimeout(() => setIsContentVisible(true), 150);
-    
+    setTimeout(() => {
+      setIsContentVisible(true);
+
+      // Mark first selection as complete AFTER animation finishes
+      // Animation duration is 600ms, wait a bit longer to be safe
+      setTimeout(() => {
+        setIsFirstSelection(false);
+      }, 650);
+    }, 150);
+
     // Scroll to content section
     setTimeout(() => {
       const contentSection = document.getElementById('boq-content-section');
@@ -345,7 +404,7 @@ const BOQPageSimplified: React.FC = () => {
                   </div>
                 </div>
                 <div className="boq-action-buttons">
-                  {selectedTenderId && (
+                  {(selectedTenderId || previousTenderId) && (
                     <Button
                       className="boq-action-btn boq-action-btn-transparent"
                       size="large"
@@ -382,13 +441,22 @@ const BOQPageSimplified: React.FC = () => {
               </div>
 
               {/* Tender Selection and Total Cost */}
-              <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
+              <div
+                className={`flex items-center gap-4 mt-6 ${!(selectedTenderId || previousTenderId) ? 'justify-center' : 'justify-start'}`}
+                style={{
+                  opacity: (selectedTenderId || previousTenderId) && isContentVisible ? 1 : ((selectedTenderId || previousTenderId) ? 0 : 1),
+                  transform: (selectedTenderId || previousTenderId) && isContentVisible ? 'translateY(0)' : ((selectedTenderId || previousTenderId) ? 'translateY(-10px)' : 'translateY(0)'),
+                  transition: isFirstSelection && (selectedTenderId || previousTenderId) && isContentVisible
+                    ? 'opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s'
+                    : 'none'
+                }}
+              >
                 {/* Tender Selection - Left Side */}
-                <div className={`rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
+                <div className={`rounded-lg p-4 ${(selectedTenderId || previousTenderId) ? 'flex-1 shadow-lg' : 'w-auto max-w-2xl'}`} style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
                   <Row gutter={[16, 16]} align="middle">
-                    <Col xs={24} lg={selectedTenderId ? 14 : 24}>
+                    <Col xs={24} lg={(selectedTenderId || previousTenderId) ? 14 : 24}>
                       <div className="flex flex-col gap-2">
-                        <div className={`flex flex-wrap items-center gap-2 transition-all duration-700 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
+                        <div className={`flex flex-wrap items-center gap-2 ${!(selectedTenderId || previousTenderId) ? 'justify-center' : 'justify-start'}`}>
                           <Text strong className="whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.95)' : '#262626', cursor: 'default' }}>Тендер:</Text>
                           <Select
                             value={selectedTenderName}
@@ -410,7 +478,7 @@ const BOQPageSimplified: React.FC = () => {
                             ))}
                           </Select>
                           <Select
-                            value={selectedTender?.version || undefined}
+                            value={selectedTenderId ? (selectedTender?.version || undefined) : undefined}
                             onChange={handleVersionChange}
                             style={{ width: '160px' }}
                             placeholder="Выберите версию"
@@ -425,22 +493,22 @@ const BOQPageSimplified: React.FC = () => {
                           </Select>
                         </div>
                         {selectedTender && (
-                          <div className={`transition-all duration-700 ${!isContentVisible ? 'opacity-0' : 'opacity-100'}`}>
-                            <Button 
+                          <div>
+                            <Button
                               type="link"
                               onClick={handleNavigateToTender}
                               icon={<DashboardOutlined />}
                               size="small"
                               className="whitespace-nowrap"
                             >
-                              Детали тендера
+                              БСМ тендера
                             </Button>
                           </div>
                         )}
                       </div>
                     </Col>
                     {selectedTender && (
-                      <Col xs={24} lg={10} className={`transition-all duration-700 ${isContentVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
+                      <Col xs={24} lg={10}>
                         <div className="flex flex-col justify-center gap-2">
                           <div className="flex flex-wrap items-center justify-end gap-3">
                             <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
@@ -452,8 +520,8 @@ const BOQPageSimplified: React.FC = () => {
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-3">
-                            <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
-                              <strong>Площадь по СП:</strong> {selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}
+                            <span className="text-sm whitespace-nowrap" style={{ cursor: 'default' }}>
+                              <strong style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626' }}>Площадь по СП:</strong> <span style={{ color: '#1890ff', fontWeight: 600, fontSize: '15px' }}>{selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}</span>
                             </span>
                             <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                               <strong>Площадь Заказчика:</strong> {selectedTender.area_client ? formatQuantity(selectedTender.area_client, 0) + ' м²' : '—'}
@@ -523,11 +591,11 @@ const BOQPageSimplified: React.FC = () => {
                 </div>
                 
                 {/* Total Cost - Right Side */}
-                {selectedTenderId && (
-                  <div className={`flex flex-col justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
+                {(selectedTenderId || previousTenderId) && (
+                  <div className="flex flex-col justify-center px-6 rounded-lg self-stretch" style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
                     <div>
                       <Text className="text-sm block mb-1" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.65)', cursor: 'default' }}>Общая стоимость</Text>
-                      <div className="text-3xl font-bold" style={{ cursor: 'default', color: theme === 'dark' ? '#52c41a' : 'rgba(0,0,0,0.85)' }}>
+                      <div className="text-3xl font-bold" style={{ cursor: 'default', color: '#52c41a' }}>
                         {Math.round(boqStats.totalCost).toLocaleString('ru-RU')} ₽
                       </div>
                     </div>
@@ -549,10 +617,10 @@ const BOQPageSimplified: React.FC = () => {
               )}
               
               {/* Deadline Status Bar - integrated into header */}
-              {selectedTenderId && selectedTender && (
-                <div className={`mt-4 -mx-8 -mb-8 transition-all duration-700 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}>
-                  <DeadlineStatusBar 
-                    deadline={selectedTender.submission_deadline} 
+              {(selectedTenderId || previousTenderId) && selectedTender && (
+                <div className="mt-4 -mx-8 -mb-8">
+                  <DeadlineStatusBar
+                    deadline={selectedTender.submission_deadline}
                     className=""
                   />
                 </div>
@@ -605,7 +673,8 @@ const BOQPageSimplified: React.FC = () => {
         )}
 
         {/* Intermediate state: tender name selected, waiting for version */}
-        {!selectedTenderId && selectedTenderName && (
+        {/* Only show this if no previous tender was selected (first time selection) */}
+        {!selectedTenderId && selectedTenderName && !previousTenderId && (
           <div className="p-4 lg:p-6">
             <Card className="text-center max-w-2xl mx-auto shadow-lg">
               <Empty
@@ -634,15 +703,23 @@ const BOQPageSimplified: React.FC = () => {
           </div>
         )}
 
-        {selectedTenderId && (
-          <div 
+        {/* Show content if tender is selected OR if we're switching tenders (previousTenderId exists) */}
+        {(selectedTenderId || previousTenderId) && (
+          <div
             id="boq-content-section"
-            className={`p-4 lg:p-6 transition-all duration-1000 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}
+            className="p-4 lg:p-6"
+            style={{
+              opacity: isContentVisible ? 1 : 0,
+              transform: isContentVisible ? 'translateY(0)' : 'translateY(20px)',
+              transition: isFirstSelection && isContentVisible
+                ? 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
+                : 'none'
+            }}
           >
-            <div className={`w-full transition-all duration-1000 transform ${isContentVisible ? 'translate-y-0' : 'translate-y-10'}`}>
+            <div className="w-full">
               <TenderBOQManagerLazy
-                tenderId={selectedTenderId}
-                key={selectedTenderId}
+                tenderId={selectedTenderId || previousTenderId!}
+                key={selectedTenderId || previousTenderId}
                 onStatsUpdate={handleUpdateStats}
               />
             </div>

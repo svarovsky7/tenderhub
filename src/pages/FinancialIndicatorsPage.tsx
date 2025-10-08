@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, Select, Form, message, Typography, Row, Col, Button, Empty } from 'antd';
 import { DollarOutlined, LineChartOutlined, FolderOpenOutlined, ReloadOutlined, DashboardOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { supabase } from '../lib/supabase/client';
@@ -30,9 +30,15 @@ const FinancialIndicatorsPage: React.FC = () => {
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [selectedTenderName, setSelectedTenderName] = useState<string | null>(null);
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
+  const [previousTenderId, setPreviousTenderId] = useState<string | null>(null);
   const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
   const [loading, setLoading] = useState(false);
   const [isContentVisible, setIsContentVisible] = useState(false);
+  const [isFirstSelection, setIsFirstSelection] = useState(true);
+
+  // Refs to preserve scroll position
+  const scrollPositionRef = useRef<number>(0);
+  const shouldPreserveScroll = useRef<boolean>(false);
   const [stats, setStats] = useState({
     actualTotalMaterials: 0,
     actualTotalWorks: 0,
@@ -105,11 +111,25 @@ const FinancialIndicatorsPage: React.FC = () => {
   // Handle tender name selection (first step)
   const handleTenderNameChange = useCallback((value: string) => {
     console.log('🔄 Tender name selection changed:', value);
+    const currentScroll = window.scrollY;
+
+    // Preserve scroll position when changing tenders (if we're not at the top)
+    if (selectedTenderId && currentScroll > 100) {
+      scrollPositionRef.current = currentScroll;
+      shouldPreserveScroll.current = true;
+      console.log('✅📍 PRESERVED scroll position:', scrollPositionRef.current);
+    }
+
+    // Store previous tender ID before clearing
+    if (selectedTenderId) {
+      setPreviousTenderId(selectedTenderId);
+    }
+
     setSelectedTenderName(value);
     setSelectedTenderId(null);
     setSelectedTender(null);
-    setIsContentVisible(false);
-  }, []);
+    // Don't hide content - keep it visible
+  }, [selectedTenderId]);
 
   // Handle version selection (second step) 
   const handleVersionChange = useCallback((version: number) => {
@@ -125,10 +145,37 @@ const FinancialIndicatorsPage: React.FC = () => {
     
     if (targetTender) {
       setSelectedTenderId(targetTender.id);
-      // Trigger animation after version is selected
-      setTimeout(() => setIsContentVisible(true), 100);
+      setSelectedTender(targetTender);
+      setPreviousTenderId(null);
+
+      if (!isContentVisible) {
+        setIsContentVisible(true);
+        // Mark first selection as complete AFTER animation finishes
+        setTimeout(() => {
+          setIsFirstSelection(false);
+        }, 650);
+      } else {
+        setIsFirstSelection(false);
+      }
+
+      // Restore scroll position if needed
+      setTimeout(() => {
+        if (shouldPreserveScroll.current && scrollPositionRef.current > 0) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              window.scrollTo({
+                top: scrollPositionRef.current,
+                behavior: 'auto'
+              });
+              console.log('🔄 Restored scroll position:', scrollPositionRef.current);
+              shouldPreserveScroll.current = false;
+              scrollPositionRef.current = 0;
+            });
+          });
+        }
+      }, 100);
     }
-  }, [selectedTenderName, tenders]);
+  }, [selectedTenderName, tenders, isContentVisible]);
 
   // Navigate to tender details
   const handleNavigateToTender = useCallback(() => {
@@ -160,30 +207,38 @@ const FinancialIndicatorsPage: React.FC = () => {
   const handleResetSelection = useCallback(() => {
     setSelectedTenderId(null);
     setSelectedTenderName(null);
+    setPreviousTenderId(null);
     setSelectedTender(null);
     setIsContentVisible(false);
-    setFinancialStats(null);
+    setIsFirstSelection(true);
     message.info('Выбор тендера сброшен');
   }, []);
 
   // Handle quick tender selection
   const handleQuickTenderSelect = useCallback((tender: Tender) => {
     console.log('🚀 Quick tender selected for financial indicators:', tender.id, tender.title);
-    
+
     // Auto-fill the tender selection fields
     const tenderNameKey = `${tender.title}___${tender.client_name || ''}`;
     setSelectedTenderName(tenderNameKey);
     setSelectedTenderId(tender.id);
-    
+    setPreviousTenderId(null);
+
     console.log('✅ Auto-filled tender selection for financial indicators:', {
       tenderNameKey,
       tenderId: tender.id,
       version: tender.version
     });
-    
+
     // Show content after brief delay for smooth transition
-    setTimeout(() => setIsContentVisible(true), 150);
-    
+    setTimeout(() => {
+      setIsContentVisible(true);
+      // Mark first selection as complete AFTER animation finishes
+      setTimeout(() => {
+        setIsFirstSelection(false);
+      }, 650);
+    }, 150);
+
     // Scroll to content section
     setTimeout(() => {
       const contentSection = document.getElementById('financial-indicators-content-section');
@@ -627,10 +682,18 @@ const FinancialIndicatorsPage: React.FC = () => {
 
       {/* Основной контент */}
       {selectedTenderId ? (
-        <div 
+        <div
           id="financial-indicators-content-section"
-          className={`transition-all duration-700 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`} 
-          style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 20,
+            opacity: isContentVisible ? 1 : 0,
+            transform: isContentVisible ? 'translateY(0)' : 'translateY(20px)',
+            transition: isFirstSelection && isContentVisible
+              ? 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
+              : 'none'
+          }}
         >
 
           {/* Редактор процентов затрат */}

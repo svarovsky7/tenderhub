@@ -18,8 +18,9 @@ import {
   ShopOutlined,
   BulbOutlined,
   BulbFilled,
+  ArrowLeftOutlined,
 } from '@ant-design/icons';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import ConnectionStatus from './ConnectionStatus';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -39,6 +40,7 @@ const AppLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [openKeys, setOpenKeys] = useState<string[]>(['libraries', 'construction-costs', 'admin']);
   const location = useLocation();
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
 
   // Add styles for dropdown menus when collapsed and smooth animations
@@ -140,6 +142,26 @@ const AppLayout: React.FC = () => {
         text-overflow: clip !important;
         white-space: nowrap !important;
       }
+      /* Custom submenu behavior: click on title navigates, click on arrow expands */
+      .ant-menu-submenu-title {
+        position: relative !important;
+        cursor: pointer !important;
+      }
+      .ant-menu-submenu-arrow {
+        cursor: pointer !important;
+        z-index: 10 !important;
+        position: relative !important;
+      }
+      /* Make title text clickable for navigation */
+      .ant-menu-submenu-title .ant-menu-title-content {
+        pointer-events: auto !important;
+        cursor: pointer !important;
+        flex: 1 !important;
+      }
+      /* Ensure icon doesn't interfere */
+      .ant-menu-submenu-title .anticon {
+        pointer-events: auto !important;
+      }
     `;
     document.head.appendChild(style);
     return () => {
@@ -171,11 +193,17 @@ const AppLayout: React.FC = () => {
     return () => clearTimeout(timer);
   }, [collapsed]);
 
-  // Menu items configuration
+  // Menu items configuration (must be defined before useEffect that uses it)
   const menuItems: MenuItem[] = [
     {
-      key: 'dashboard',
+      key: 'home',
       icon: <DashboardOutlined />,
+      label: <Link to="/">Главная</Link>,
+      path: '/',
+    },
+    {
+      key: 'dashboard',
+      icon: <LineChartOutlined />,
       label: <Link to="/dashboard">Дашборд</Link>,
       path: '/dashboard',
     },
@@ -188,7 +216,7 @@ const AppLayout: React.FC = () => {
     {
       key: 'commerce',
       icon: <ShopOutlined />,
-      label: 'Коммерция',
+      label: <Link to="/commerce">Коммерция</Link>,
       path: '/commerce',
       children: [
         {
@@ -214,14 +242,14 @@ const AppLayout: React.FC = () => {
     {
       key: 'libraries',
       icon: <BookOutlined />,
-      label: 'Библиотеки',
+      label: <Link to="/libraries">Библиотеки</Link>,
       path: '/libraries',
       children: [
         {
-          key: 'libraries-index',
+          key: 'libraries-materials-works',
           icon: null,
-          label: <Link to="/libraries">Справочник</Link>,
-          path: '/libraries',
+          label: <Link to="/libraries/materials-works">Справочник</Link>,
+          path: '/libraries/materials-works',
         },
         {
           key: 'work-materials',
@@ -240,7 +268,7 @@ const AppLayout: React.FC = () => {
     {
       key: 'construction-costs',
       icon: <DollarOutlined />,
-      label: 'Затраты на строительство',
+      label: <Link to="/construction-costs">Затраты на строительство</Link>,
       path: '/construction-costs',
       children: [
         {
@@ -260,7 +288,7 @@ const AppLayout: React.FC = () => {
     {
       key: 'admin',
       icon: <SettingOutlined />,
-      label: 'Администрирование',
+      label: <Link to="/admin">Администрирование</Link>,
       path: '/admin',
       children: [
         {
@@ -296,6 +324,47 @@ const AppLayout: React.FC = () => {
       path: '/admin/settings',
     },
   ];
+
+  // Handle submenu title clicks for navigation (click on title navigates, click on arrow expands)
+  React.useEffect(() => {
+    const handleSubmenuTitleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      // Check if we clicked on submenu title (but not on arrow)
+      const submenuTitle = target.closest('.ant-menu-submenu-title');
+      if (!submenuTitle) return;
+
+      // Check if we clicked on the arrow itself
+      const clickedArrow = target.closest('.ant-menu-submenu-arrow');
+      if (clickedArrow) {
+        // Let default behavior handle arrow click (expand/collapse)
+        return;
+      }
+
+      // Get the submenu key
+      const submenuElement = submenuTitle.closest('.ant-menu-submenu');
+      if (!submenuElement) return;
+
+      const submenuKey = submenuElement.getAttribute('data-menu-id');
+      console.log('🖱️ [Submenu] Title clicked, key:', submenuKey);
+
+      // Find the menu item and navigate
+      const menuItem = menuItems.find(item => item.key === submenuKey);
+      if (menuItem && menuItem.path) {
+        e.stopPropagation();
+        e.preventDefault();
+        console.log('🚀 [Submenu] Navigating to:', menuItem.path);
+        navigate(menuItem.path);
+      }
+    };
+
+    // Add event listener
+    document.addEventListener('click', handleSubmenuTitleClick, true);
+
+    return () => {
+      document.removeEventListener('click', handleSubmenuTitleClick, true);
+    };
+  }, [navigate, menuItems]);
 
   // Get current selected menu key based on location
   const getCurrentMenuKey = (): string[] => {
@@ -354,7 +423,7 @@ const AppLayout: React.FC = () => {
     const { selectedKey, parentKey } = findMenuKeys(menuItems);
     
     // Return array with selected key
-    const result = selectedKey ? [selectedKey] : ['dashboard'];
+    const result = selectedKey ? [selectedKey] : ['home'];
     console.log('✅ [getCurrentMenuKey] Result:', result);
     return result;
   };
@@ -397,76 +466,127 @@ const AppLayout: React.FC = () => {
     setOpenKeys(newOpenKeys);
   }, [location.pathname]);
 
-  // Generate breadcrumb items
+  // Generate breadcrumb items with proper hierarchy
   const getBreadcrumbItems = () => {
-    const pathSegments = location.pathname.split('/').filter(Boolean);
-    
+    const pathname = location.pathname;
     const breadcrumbItems = [
       {
-        title: <Link to="/dashboard">Главная</Link>,
+        title: <Link to="/">Главная</Link>,
       },
     ];
 
-    // Add segments based on current path
-    if (pathSegments.length > 0) {
-      const segment = pathSegments[0];
-      switch (segment) {
-        case 'tenders':
-          breadcrumbItems.push({ title: <span>Администрирование</span> });
-          breadcrumbItems.push({ title: <span>Тендеры</span> });
-          break;
-        case 'boq':
-          breadcrumbItems.push({ title: <span>BOQ Управление</span> });
-          break;
-        case 'materials-works':
-          breadcrumbItems.push({ title: <span>Материалы и работы</span> });
-          break;
-        case 'libraries':
-          breadcrumbItems.push({ title: <span>Библиотеки</span> });
-          if (pathSegments[1] === 'materials') {
-            breadcrumbItems.push({ title: <span>Материалы</span> });
-          } else if (pathSegments[1] === 'works') {
-            breadcrumbItems.push({ title: <span>Работы</span> });
-          } else if (pathSegments[1] === 'work-materials') {
-            breadcrumbItems.push({ title: <span>Шаблоны</span> });
-          } else if (pathSegments[1] === 'tender-materials-works') {
-            breadcrumbItems.push({ title: <span>БСМ</span> });
-          }
-          break;
-        case 'construction-costs':
-          if (pathSegments[1] === 'edit') {
-            // Special handling for edit page - it's now under admin
-            breadcrumbItems.push({ title: <span>Администрирование</span> });
-            breadcrumbItems.push({ title: <span>Редактирование Затрат</span> });
-          } else {
-            breadcrumbItems.push({ title: <span>Затраты на строительство</span> });
-            if (pathSegments[1] === 'tender') {
-              breadcrumbItems.push({ title: <span>Затраты тендера</span> });
-            } else if (pathSegments[1] === 'management') {
-              breadcrumbItems.push({ title: <span>Структура затрат</span> });
-            }
-          }
-          break;
-        case 'financial':
-          breadcrumbItems.push({ title: <span>Финансовые показатели</span> });
-          break;
-        case 'commercial-costs':
-          breadcrumbItems.push({ title: <span>Коммерческие стоимости</span> });
-          break;
-        case 'admin':
-          breadcrumbItems.push({ title: <span>Администрирование</span> });
-          if (pathSegments[1] === 'users') {
-            breadcrumbItems.push({ title: <span>Пользователи</span> });
-          } else if (pathSegments[1] === 'settings') {
-            breadcrumbItems.push({ title: <span>Настройки</span> });
-          }
-          break;
-        default:
-          break;
+    // Breadcrumb mapping based on routes hierarchy
+    const breadcrumbMap: { [key: string]: { title: string; parent?: string; link?: string } } = {
+      '/dashboard': { title: 'Дашборд' },
+      '/boq': { title: 'Позиции заказчика' },
+
+      // Commerce section
+      '/commerce': { title: 'Коммерция', link: '/commerce' },
+      '/commercial-costs': { title: 'Коммерческие стоимости', parent: '/commerce' },
+      '/cost-redistribution': { title: 'Перераспределение сумм', parent: '/commerce' },
+      '/financial': { title: 'Финансовые показатели', parent: '/commerce' },
+      '/financial-indicators': { title: 'Финансовые показатели', parent: '/commerce' },
+
+      // Libraries section
+      '/libraries': { title: 'Библиотеки', link: '/libraries' },
+      '/libraries/materials-works': { title: 'Справочник', parent: '/libraries' },
+      '/libraries/work-materials': { title: 'Шаблоны', parent: '/libraries' },
+      '/libraries/tender-materials-works': { title: 'БСМ', parent: '/libraries' },
+
+      // Construction Costs section
+      '/construction-costs': { title: 'Затраты на строительство', link: '/construction-costs' },
+      '/construction-costs/tender': { title: 'Затраты тендера', parent: '/construction-costs' },
+      '/construction-costs/management': { title: 'Структура затрат', parent: '/construction-costs' },
+      '/construction-costs/edit': { title: 'Редактирование Затрат', parent: '/admin' },
+
+      // Admin section
+      '/admin': { title: 'Администрирование', link: '/admin' },
+      '/admin/nomenclatures': { title: 'Номенклатуры', parent: '/admin' },
+      '/admin/users': { title: 'Пользователи', parent: '/admin' },
+      '/admin/settings': { title: 'Настройки', parent: '/admin' },
+      '/tenders': { title: 'Тендеры', parent: '/admin' },
+
+      // Other
+      '/profile': { title: 'Профиль' },
+      '/settings': { title: 'Настройки' },
+    };
+
+    // Build breadcrumb chain
+    const buildBreadcrumbChain = (path: string): void => {
+      const crumb = breadcrumbMap[path];
+      if (!crumb) return;
+
+      // If has parent, add parent first
+      if (crumb.parent) {
+        buildBreadcrumbChain(crumb.parent);
       }
+
+      // Add current crumb
+      if (crumb.link) {
+        breadcrumbItems.push({
+          title: <Link to={crumb.link}>{crumb.title}</Link>,
+        });
+      } else {
+        breadcrumbItems.push({
+          title: <span>{crumb.title}</span>,
+        });
+      }
+    };
+
+    // Find matching route (try exact match first, then prefix match)
+    let matchedPath = breadcrumbMap[pathname] ? pathname : null;
+    if (!matchedPath) {
+      // Try to find by prefix for dynamic routes
+      const pathKeys = Object.keys(breadcrumbMap).sort((a, b) => b.length - a.length);
+      matchedPath = pathKeys.find(key => pathname.startsWith(key)) || null;
+    }
+
+    if (matchedPath) {
+      buildBreadcrumbChain(matchedPath);
     }
 
     return breadcrumbItems;
+  };
+
+  // Get parent path for "Back" button
+  const getParentPath = (): string | null => {
+    const pathname = location.pathname;
+
+    const breadcrumbMap: { [key: string]: string | null } = {
+      '/dashboard': '/',
+      '/boq': '/',
+      '/commerce': '/',
+      '/commercial-costs': '/commerce',
+      '/cost-redistribution': '/commerce',
+      '/financial': '/commerce',
+      '/financial-indicators': '/commerce',
+      '/libraries': '/',
+      '/libraries/materials-works': '/libraries',
+      '/libraries/work-materials': '/libraries',
+      '/libraries/tender-materials-works': '/libraries',
+      '/construction-costs': '/',
+      '/construction-costs/tender': '/construction-costs',
+      '/construction-costs/management': '/construction-costs',
+      '/construction-costs/edit': '/admin',
+      '/admin': '/',
+      '/admin/nomenclatures': '/admin',
+      '/admin/users': '/admin',
+      '/admin/settings': '/admin',
+      '/tenders': '/admin',
+      '/profile': '/',
+      '/settings': '/',
+    };
+
+    // Exact match
+    if (breadcrumbMap[pathname] !== undefined) {
+      return breadcrumbMap[pathname];
+    }
+
+    // Prefix match for dynamic routes
+    const pathKeys = Object.keys(breadcrumbMap).sort((a, b) => b.length - a.length);
+    const matchedKey = pathKeys.find(key => pathname.startsWith(key));
+
+    return matchedKey ? breadcrumbMap[matchedKey] : null;
   };
 
   // User dropdown menu
@@ -684,7 +804,30 @@ const AppLayout: React.FC = () => {
                 borderBottom: theme === 'dark' ? '1px solid #424242' : '1px solid #e5e7eb'
               }}
             >
-              <Breadcrumb items={getBreadcrumbItems()} />
+              <div className="flex items-center gap-4">
+                {/* Back button - only show if there's a parent path and not on home page */}
+                {getParentPath() && location.pathname !== '/' && (
+                  <Button
+                    type="text"
+                    icon={<ArrowLeftOutlined />}
+                    onClick={() => {
+                      const parentPath = getParentPath();
+                      if (parentPath) {
+                        navigate(parentPath);
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.85)'
+                    }}
+                  >
+                    Назад
+                  </Button>
+                )}
+                <Breadcrumb items={getBreadcrumbItems()} />
+              </div>
             </div>
 
             <div

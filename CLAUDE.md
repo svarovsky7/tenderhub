@@ -138,19 +138,51 @@ src/components/financial/  # Financial components
 - `usePositionClipboard` - Copy/paste position contents with BOQ items and links
 
 ### Routing (all lazy-loaded)
-- `/` → `/dashboard` - Main dashboard
-- `/tenders/*` - Tender management
-- `/tender/:tenderId/boq` - BOQ interface for specific tender
-- `/tender/:tenderId/construction-costs` - Construction costs
-- `/tender/:tenderId/commercial-costs` - Commercial costs calculation
-- `/boq` - Simplified BOQ interface (uses TenderBOQManagerLazy)
-- `/materials-works` - Materials and works list for selected tender (grouped view with statistics)
-- `/libraries/materials`, `/libraries/works` - Resource libraries
-- `/libraries/work-materials` - Template management
-- `/construction-costs/tender` - Tender construction costs page
-- `/commercial-costs` - Commercial costs page (includes versions with `includeVersions: true`)
-- `/financial-indicators` - Financial indicators dashboard
-- `/admin/*` - Admin interfaces
+
+#### Navigation Structure (October 2025)
+The application uses a hierarchical navigation system with index pages and algorithmic breadcrumbs:
+
+**Main Navigation**:
+- `/` - HomePage (main landing page with section cards)
+  - `/dashboard` - Dashboard overview
+  - `/boq` - BOQ management (uses TenderBOQManagerLazy)
+  - `/commerce` - Commerce index page
+    - `/commercial-costs` - Commercial costs page
+    - `/cost-redistribution` - Cost redistribution page
+    - `/financial` or `/financial-indicators` - Financial indicators
+  - `/libraries` - Libraries index page
+    - `/libraries/materials-works` - Materials & works catalog
+    - `/libraries/work-materials` - Template management
+    - `/libraries/tender-materials-works` - Tender-specific materials/works
+  - `/construction-costs` - Construction costs index page
+    - `/construction-costs/tender` - Tender construction costs
+    - `/construction-costs/management` - Construction costs management
+    - `/construction-costs/edit` - Cost editing
+  - `/admin` - Admin index page
+    - `/admin/nomenclatures` - Nomenclature management
+    - `/admin/users` - User management
+    - `/admin/settings` - System settings
+
+**Breadcrumb System** (`AppLayout.tsx`):
+- Algorithmic generation based on route hierarchy
+- Each page has parent-child relationships defined in `breadcrumbMap`
+- "Back" button appears on all pages (except home) and navigates to parent page
+- Breadcrumbs start with "Главная" (HomePage) as root
+- Parent menu items are clickable in breadcrumbs
+
+**Index Pages** (card-based navigation):
+- HomePage.tsx - 8 cards covering all major sections
+- CommercePage.tsx - 3 cards for commerce subsections
+- LibrariesPage.tsx - 3 cards for library subsections
+- ConstructionCostsIndexPage.tsx - 2 cards for construction costs
+- AdminIndexPage.tsx - 3 cards for admin subsections
+
+**Design Standards** (October 2025):
+- All index pages use standardized gradient headers
+- Card-based layout with hover effects (translateY, box-shadow)
+- Icon + title + description format for each card
+- Responsive grid: 4 columns (xl), 3 columns (lg), 2 columns (sm), 1 column (xs)
+- Gradient colors: Light `#1e3a8a → #059669 → #0d9488`, Dark `#1e293b → #064e3b → #134e4a`
 
 ## Critical Implementation Patterns
 
@@ -210,6 +242,103 @@ console.log('❌ [FunctionName] error:', error);
 - **API Response Handling**: Some APIs return objects with numeric keys (e.g., `{0: {...}}`), access via `data[0]` or `data?.["0"]`
 - **Excel Export Naming**: Include tender name and version in filename format
 - **Position Copy/Paste**: Uses array index mapping (not sort_order) for reliable ID mapping on repeated paste; links accumulate (not replaced)
+
+### 7. Dark Theme Implementation
+
+The application supports a comprehensive dark theme system with proper contrast and visual hierarchy.
+
+#### Theme Context (`src/contexts/ThemeContext.tsx`)
+```typescript
+// Theme is stored in localStorage and persists across sessions
+const { theme, toggleTheme } = useTheme();
+// theme: 'light' | 'dark'
+```
+
+#### Theme Switch Location
+- **AppLayout.tsx**: Header contains theme toggle button (SunOutlined/MoonOutlined icon)
+- Button appears in top-right corner next to breadcrumbs
+
+#### Ant Design Configuration (`src/App.tsx`)
+```typescript
+// Theme algorithm switches based on theme state
+theme: {
+  algorithm: theme === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+  token: {
+    colorPrimary: '#1890ff',
+    borderRadius: 8,
+    // Dark mode overrides
+    ...(theme === 'dark' ? {
+      colorBgContainer: '#1f1f1f',      // Card backgrounds
+      colorBgElevated: '#262626',       // Elevated surfaces (modals, dropdowns)
+      colorBgLayout: '#141414',         // Page background
+      colorBorder: '#424242',           // Border color
+      colorText: 'rgba(255, 255, 255, 0.85)',          // Primary text
+      colorTextSecondary: 'rgba(255, 255, 255, 0.65)', // Secondary text
+      colorTextTertiary: 'rgba(255, 255, 255, 0.45)',  // Tertiary text
+    } : {}),
+  },
+}
+```
+
+#### Gradient Headers
+All major pages use standardized gradients with dark theme variants:
+
+**Light Theme**:
+```css
+background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
+```
+
+**Dark Theme**:
+```css
+background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
+```
+
+Pages using gradient headers:
+- HomePage.tsx
+- BOQPageSimplified.tsx
+- CommercePage.tsx
+- LibrariesPage.tsx
+- ConstructionCostsIndexPage.tsx
+- AdminIndexPage.tsx
+
+#### Component Theme Patterns
+```typescript
+// Always use theme from context for conditional styling
+const { theme } = useTheme();
+
+// Example: Card background
+<Card style={{
+  background: theme === 'dark' ? '#1f1f1f' : '#ffffff',
+  borderColor: theme === 'dark' ? '#434343' : '#d9d9d9'
+}}>
+
+// Example: Text color
+<Text style={{
+  color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)'
+}}>
+
+// Example: Gradient header with theme variant
+<div className={`header-gradient ${theme === 'dark' ? 'dark' : ''}`}>
+```
+
+#### BOQ Table Row Colors
+Row colors in `BOQItemsTable.tsx` (lines 64-77) maintain visibility in both themes:
+- **Works**: `bg-orange-100/90` (orange, 90% opacity)
+- **Sub-works**: `bg-purple-100` (purple)
+- **Materials (linked)**: `bg-blue-100` (blue)
+- **Materials (unlinked)**: `bg-blue-100/60` (blue, 60% opacity)
+- **Sub-materials**: `bg-green-100/80` (green, 80% opacity)
+
+These Tailwind classes automatically adjust for dark mode when using Tailwind's dark mode classes.
+
+#### Important Theme Notes
+- Theme persists in localStorage with key `theme`
+- All new components MUST support both light and dark themes
+- Test both themes when making UI changes
+- Use theme context, NOT CSS media queries for theme detection
+- Gradient headers use className approach with `.dark` variant
+- Avoid hardcoded colors - always use theme-conditional styling
+- Ant Design components automatically adjust via theme algorithm
 
 ## Environment Setup
 
@@ -280,6 +409,9 @@ Environment variables must be configured in Vercel dashboard:
 - Filtering by confidence score and mapping type in version modal
 - Single active markup record per tender enforcement
 - Position copy/paste with BOQ items and work_material_links (supports repeated paste)
+- **Dark theme** with comprehensive support across all components (October 2025)
+- **Hierarchical navigation** with index pages and algorithmic breadcrumbs (October 2025)
+- **Smooth tender switching** in BOQ page without page movement (October 2025)
 
 ### ⚠️ Disabled/Placeholder
 - Authentication (no login required)
@@ -371,6 +503,13 @@ The application supports creating new versions of tenders with position comparis
     - `update_linked_material_total_amount()` - Updates boq_items.total_amount when work_material_links change
     - `trigger_recalc_position_on_wml_change()` - Simple SUM(total_amount) for position totals
     - Migration `20251001_FINAL_fix_totals_calculation.sql` fixes existing data and implements both triggers
+17. **BOQ Tender Selection UX** (October 2025):
+    - Two-step selection: name → version (prevents accidental version selection)
+    - Version selector resets when tender name changes
+    - Page remains static during tender switching (no animations or movement)
+    - Animation only on first tender load, disabled for subsequent switches
+    - "Площадь по СП" value highlighted in blue (#1890ff) for better visibility
+    - `isFirstSelection` state tracks initial load vs. tender switching
 
 ## Testing
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Card,
   Button,
@@ -47,10 +47,16 @@ const CostRedistributionPage: React.FC = () => {
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [selectedTenderName, setSelectedTenderName] = useState<string | null>(null);
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
+  const [previousTenderId, setPreviousTenderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [tendersLoading, setTendersLoading] = useState(false);
   const [isContentVisible, setIsContentVisible] = useState(false);
+  const [isFirstSelection, setIsFirstSelection] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('wizard');
+
+  // Refs to preserve scroll position when changing tenders
+  const scrollPositionRef = useRef<number>(0);
+  const shouldPreserveScroll = useRef<boolean>(false);
 
   // Load tenders
   const loadTenders = useCallback(async () => {
@@ -93,10 +99,24 @@ const CostRedistributionPage: React.FC = () => {
   // Handle tender name selection
   const handleTenderNameChange = useCallback((value: string) => {
     console.log('🔄 Tender name selection changed:', value);
+    const currentScroll = window.scrollY;
+
+    // Preserve scroll position when changing tenders (if we're not at the top)
+    if (selectedTenderId && currentScroll > 100) {
+      scrollPositionRef.current = currentScroll;
+      shouldPreserveScroll.current = true;
+      console.log('✅📍 PRESERVED scroll position:', scrollPositionRef.current);
+    }
+
+    // Store previous tender ID before clearing
+    if (selectedTenderId) {
+      setPreviousTenderId(selectedTenderId);
+    }
+
     setSelectedTenderName(value);
     setSelectedTenderId(null);
     // Don't hide content - keep current view while user selects version
-  }, []);
+  }, [selectedTenderId]);
 
   // Handle version selection
   const handleVersionChange = useCallback((version: number) => {
@@ -112,9 +132,36 @@ const CostRedistributionPage: React.FC = () => {
 
     if (targetTender) {
       setSelectedTenderId(targetTender.id);
-      setTimeout(() => setIsContentVisible(true), 100);
+      setPreviousTenderId(null);
+
+      if (!isContentVisible) {
+        setIsContentVisible(true);
+        // Mark first selection as complete AFTER animation finishes
+        setTimeout(() => {
+          setIsFirstSelection(false);
+        }, 650);
+      } else {
+        setIsFirstSelection(false);
+      }
+
+      // Restore scroll position if needed
+      setTimeout(() => {
+        if (shouldPreserveScroll.current && scrollPositionRef.current > 0) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              window.scrollTo({
+                top: scrollPositionRef.current,
+                behavior: 'auto'
+              });
+              console.log('🔄 Restored scroll position:', scrollPositionRef.current);
+              shouldPreserveScroll.current = false;
+              scrollPositionRef.current = 0;
+            });
+          });
+        }
+      }, 100);
     }
-  }, [selectedTenderName, tenders]);
+  }, [selectedTenderName, tenders, isContentVisible]);
 
   // Get unique tender names
   const uniqueTenderNames = React.useMemo(() => {
@@ -143,7 +190,7 @@ const CostRedistributionPage: React.FC = () => {
     return Array.from(versions).sort((a, b) => b - a);
   }, [tenders, selectedTenderName]);
 
-  const selectedTender = tenders.find(t => t.id === selectedTenderId);
+  const selectedTender = tenders.find(t => t.id === (selectedTenderId || previousTenderId));
 
   const handleRefresh = useCallback(() => {
     if (!selectedTenderId) {
@@ -175,7 +222,9 @@ const CostRedistributionPage: React.FC = () => {
   const handleResetSelection = useCallback(() => {
     setSelectedTenderId(null);
     setSelectedTenderName(null);
+    setPreviousTenderId(null);
     setIsContentVisible(false);
+    setIsFirstSelection(true);
     setViewMode('wizard');
     message.info('Выбор тендера сброшен');
   }, []);
@@ -194,8 +243,15 @@ const CostRedistributionPage: React.FC = () => {
     const tenderNameKey = `${tender.title}___${tender.client_name}`;
     setSelectedTenderName(tenderNameKey);
     setSelectedTenderId(tender.id);
+    setPreviousTenderId(null);
 
-    setTimeout(() => setIsContentVisible(true), 150);
+    setTimeout(() => {
+      setIsContentVisible(true);
+      // Mark first selection as complete AFTER animation finishes
+      setTimeout(() => {
+        setIsFirstSelection(false);
+      }, 650);
+    }, 150);
 
     setTimeout(() => {
       const contentSection = document.getElementById('redistribution-content-section');
@@ -534,9 +590,16 @@ const CostRedistributionPage: React.FC = () => {
           {selectedTenderId && (
             <div
               id="redistribution-content-section"
-              className={`p-4 lg:p-6 transition-all duration-1000 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}
+              className="p-4 lg:p-6"
+              style={{
+                opacity: isContentVisible ? 1 : 0,
+                transform: isContentVisible ? 'translateY(0)' : 'translateY(20px)',
+                transition: isFirstSelection && isContentVisible
+                  ? 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
+                  : 'none'
+              }}
             >
-              <div className={`w-full transition-all duration-1000 transform ${isContentVisible ? 'translate-y-0' : 'translate-y-10'}`}>
+              <div>
                 {viewMode === 'wizard' ? (
                   <CostRedistributionWizard
                     tenderId={selectedTenderId}

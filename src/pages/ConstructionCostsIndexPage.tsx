@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Row, Col, Typography } from 'antd';
-import { BookOutlined, InboxOutlined, ToolOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { DollarOutlined, FileTextOutlined, ToolOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -15,34 +15,26 @@ interface MenuCard {
   color: string;
 }
 
-const LibrariesPage: React.FC = () => {
+const ConstructionCostsIndexPage: React.FC = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
 
   const menuCards: MenuCard[] = [
     {
-      key: 'libraries-materials-works',
-      title: 'Справочник',
-      description: 'Просмотр и редактирование материалов и работ',
-      icon: <BookOutlined style={{ fontSize: 48 }} />,
-      path: '/libraries/materials-works',
+      key: 'tender-costs',
+      title: 'Затраты тендера',
+      description: 'Просмотр и управление затратами по выбранному тендеру',
+      icon: <FileTextOutlined style={{ fontSize: 48 }} />,
+      path: '/construction-costs/tender',
       color: '#1890ff',
     },
     {
-      key: 'work-materials',
-      title: 'Шаблоны',
-      description: 'Управление шаблонами связей работ и материалов',
-      icon: <AppstoreOutlined style={{ fontSize: 48 }} />,
-      path: '/libraries/work-materials',
+      key: 'cost-management',
+      title: 'Структура затрат',
+      description: 'Управление категориями и структурой затрат на строительство',
+      icon: <ToolOutlined style={{ fontSize: 48 }} />,
+      path: '/construction-costs/management',
       color: '#52c41a',
-    },
-    {
-      key: 'tender-materials-works',
-      title: 'БСМ',
-      description: 'База строительных материалов по выбранному тендеру',
-      icon: <InboxOutlined style={{ fontSize: 48 }} />,
-      path: '/libraries/tender-materials-works',
-      color: '#722ed1',
     },
   ];
 
@@ -50,7 +42,7 @@ const LibrariesPage: React.FC = () => {
     <>
       <style>
         {`
-          .libraries-page-header {
+          .construction-costs-page-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
             border-radius: 16px;
             margin-bottom: 24px;
@@ -59,10 +51,10 @@ const LibrariesPage: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
-          .libraries-page-header.dark {
+          .construction-costs-page-header.dark {
             background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
           }
-          .libraries-page-header::before {
+          .construction-costs-page-header::before {
             content: '';
             position: absolute;
             top: -50%;
@@ -77,18 +69,18 @@ const LibrariesPage: React.FC = () => {
             to { transform: rotate(360deg); }
           }
 
-          .libraries-menu-card {
+          .construction-costs-menu-card {
             height: 100%;
             cursor: pointer;
             transition: all 0.3s ease;
             border-radius: 12px;
             overflow: hidden;
           }
-          .libraries-menu-card:hover {
+          .construction-costs-menu-card:hover {
             transform: translateY(-8px);
             box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
           }
-          .libraries-menu-card .ant-card-body {
+          .construction-costs-menu-card .ant-card-body {
             padding: 32px;
             display: flex;
             flex-direction: column;
@@ -96,7 +88,7 @@ const LibrariesPage: React.FC = () => {
             text-align: center;
             gap: 16px;
           }
-          .libraries-menu-card-icon {
+          .construction-costs-menu-card-icon {
             width: 80px;
             height: 80px;
             border-radius: 16px;
@@ -105,7 +97,7 @@ const LibrariesPage: React.FC = () => {
             justify-content: center;
             transition: all 0.3s ease;
           }
-          .libraries-menu-card:hover .libraries-menu-card-icon {
+          .construction-costs-menu-card:hover .construction-costs-menu-card-icon {
             transform: scale(1.1);
           }
         `}
@@ -113,21 +105,21 @@ const LibrariesPage: React.FC = () => {
       <div className="w-full min-h-full bg-gray-50">
         <div className="p-6">
           {/* Beautiful Gradient Header */}
-          <div className={`libraries-page-header ${theme === 'dark' ? 'dark' : ''}`}>
+          <div className={`construction-costs-page-header ${theme === 'dark' ? 'dark' : ''}`}>
             <div className="relative z-10">
               <div className="flex items-center gap-4">
                 <div
                   className="w-16 h-16 rounded-full flex items-center justify-center"
                   style={{ background: 'rgba(255,255,255,0.2)' }}
                 >
-                  <BookOutlined style={{ fontSize: 32, color: 'white' }} />
+                  <DollarOutlined style={{ fontSize: 32, color: 'white' }} />
                 </div>
                 <div>
                   <Title level={2} style={{ margin: 0, color: 'white', fontSize: 28 }}>
-                    Библиотеки
+                    Затраты на строительство
                   </Title>
                   <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>
-                    Управление справочниками материалов, работ и шаблонов
+                    Управление затратами и структурой стоимости строительства
                   </Text>
                 </div>
               </div>
@@ -136,11 +128,11 @@ const LibrariesPage: React.FC = () => {
 
           {/* Menu Cards */}
           <div className="max-w-none">
-            <Row gutter={[24, 24]}>
+            <Row gutter={[24, 24]} justify="start">
               {menuCards.map((card) => (
                 <Col xs={24} sm={12} lg={8} key={card.key}>
                   <Card
-                    className="libraries-menu-card"
+                    className="construction-costs-menu-card"
                     onClick={() => navigate(card.path)}
                     hoverable
                     style={{
@@ -149,7 +141,7 @@ const LibrariesPage: React.FC = () => {
                     }}
                   >
                     <div
-                      className="libraries-menu-card-icon"
+                      className="construction-costs-menu-card-icon"
                       style={{
                         background: `linear-gradient(135deg, ${card.color}15, ${card.color}25)`,
                         color: card.color,
@@ -186,4 +178,4 @@ const LibrariesPage: React.FC = () => {
   );
 };
 
-export default LibrariesPage;
+export default ConstructionCostsIndexPage;

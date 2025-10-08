@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Row, Col, Typography } from 'antd';
-import { BookOutlined, InboxOutlined, ToolOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { SettingOutlined, AppstoreOutlined, FileTextOutlined, EditOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -15,33 +15,33 @@ interface MenuCard {
   color: string;
 }
 
-const LibrariesPage: React.FC = () => {
+const AdminIndexPage: React.FC = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
 
   const menuCards: MenuCard[] = [
     {
-      key: 'libraries-materials-works',
-      title: 'Справочник',
-      description: 'Просмотр и редактирование материалов и работ',
-      icon: <BookOutlined style={{ fontSize: 48 }} />,
-      path: '/libraries/materials-works',
+      key: 'nomenclatures',
+      title: 'Номенклатуры',
+      description: 'Управление номенклатурами и классификаторами',
+      icon: <AppstoreOutlined style={{ fontSize: 48 }} />,
+      path: '/admin/nomenclatures',
       color: '#1890ff',
     },
     {
-      key: 'work-materials',
-      title: 'Шаблоны',
-      description: 'Управление шаблонами связей работ и материалов',
-      icon: <AppstoreOutlined style={{ fontSize: 48 }} />,
-      path: '/libraries/work-materials',
+      key: 'tenders',
+      title: 'Тендеры',
+      description: 'Управление тендерами и их параметрами',
+      icon: <FileTextOutlined style={{ fontSize: 48 }} />,
+      path: '/tenders',
       color: '#52c41a',
     },
     {
-      key: 'tender-materials-works',
-      title: 'БСМ',
-      description: 'База строительных материалов по выбранному тендеру',
-      icon: <InboxOutlined style={{ fontSize: 48 }} />,
-      path: '/libraries/tender-materials-works',
+      key: 'cost-edit',
+      title: 'Редактирование Затрат',
+      description: 'Редактирование структуры затрат на строительство',
+      icon: <EditOutlined style={{ fontSize: 48 }} />,
+      path: '/construction-costs/edit',
       color: '#722ed1',
     },
   ];
@@ -50,7 +50,7 @@ const LibrariesPage: React.FC = () => {
     <>
       <style>
         {`
-          .libraries-page-header {
+          .admin-page-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
             border-radius: 16px;
             margin-bottom: 24px;
@@ -59,10 +59,10 @@ const LibrariesPage: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
-          .libraries-page-header.dark {
+          .admin-page-header.dark {
             background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
           }
-          .libraries-page-header::before {
+          .admin-page-header::before {
             content: '';
             position: absolute;
             top: -50%;
@@ -77,18 +77,18 @@ const LibrariesPage: React.FC = () => {
             to { transform: rotate(360deg); }
           }
 
-          .libraries-menu-card {
+          .admin-menu-card {
             height: 100%;
             cursor: pointer;
             transition: all 0.3s ease;
             border-radius: 12px;
             overflow: hidden;
           }
-          .libraries-menu-card:hover {
+          .admin-menu-card:hover {
             transform: translateY(-8px);
             box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
           }
-          .libraries-menu-card .ant-card-body {
+          .admin-menu-card .ant-card-body {
             padding: 32px;
             display: flex;
             flex-direction: column;
@@ -96,7 +96,7 @@ const LibrariesPage: React.FC = () => {
             text-align: center;
             gap: 16px;
           }
-          .libraries-menu-card-icon {
+          .admin-menu-card-icon {
             width: 80px;
             height: 80px;
             border-radius: 16px;
@@ -105,7 +105,7 @@ const LibrariesPage: React.FC = () => {
             justify-content: center;
             transition: all 0.3s ease;
           }
-          .libraries-menu-card:hover .libraries-menu-card-icon {
+          .admin-menu-card:hover .admin-menu-card-icon {
             transform: scale(1.1);
           }
         `}
@@ -113,21 +113,21 @@ const LibrariesPage: React.FC = () => {
       <div className="w-full min-h-full bg-gray-50">
         <div className="p-6">
           {/* Beautiful Gradient Header */}
-          <div className={`libraries-page-header ${theme === 'dark' ? 'dark' : ''}`}>
+          <div className={`admin-page-header ${theme === 'dark' ? 'dark' : ''}`}>
             <div className="relative z-10">
               <div className="flex items-center gap-4">
                 <div
                   className="w-16 h-16 rounded-full flex items-center justify-center"
                   style={{ background: 'rgba(255,255,255,0.2)' }}
                 >
-                  <BookOutlined style={{ fontSize: 32, color: 'white' }} />
+                  <SettingOutlined style={{ fontSize: 32, color: 'white' }} />
                 </div>
                 <div>
                   <Title level={2} style={{ margin: 0, color: 'white', fontSize: 28 }}>
-                    Библиотеки
+                    Администрирование
                   </Title>
                   <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>
-                    Управление справочниками материалов, работ и шаблонов
+                    Управление системными настройками и справочниками
                   </Text>
                 </div>
               </div>
@@ -140,7 +140,7 @@ const LibrariesPage: React.FC = () => {
               {menuCards.map((card) => (
                 <Col xs={24} sm={12} lg={8} key={card.key}>
                   <Card
-                    className="libraries-menu-card"
+                    className="admin-menu-card"
                     onClick={() => navigate(card.path)}
                     hoverable
                     style={{
@@ -149,7 +149,7 @@ const LibrariesPage: React.FC = () => {
                     }}
                   >
                     <div
-                      className="libraries-menu-card-icon"
+                      className="admin-menu-card-icon"
                       style={{
                         background: `linear-gradient(135deg, ${card.color}15, ${card.color}25)`,
                         color: card.color,
@@ -186,4 +186,4 @@ const LibrariesPage: React.FC = () => {
   );
 };
 
-export default LibrariesPage;
+export default AdminIndexPage;

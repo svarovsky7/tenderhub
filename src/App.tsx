@@ -9,6 +9,7 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import './App.css';
 
 // Lazy load pages for better performance
+const HomePage = React.lazy(() => import('./pages/HomePage'));
 const TendersPage = React.lazy(() => import('./pages/TendersPage'));
 const BOQPageSimplified = React.lazy(() => import('./pages/BOQPageSimplified'));
 const MaterialsPage = React.lazy(() => import('./pages/MaterialsPage'));
@@ -31,6 +32,10 @@ const MarkupTablesSetup = React.lazy(() => import('./pages/admin/MarkupTablesSet
 const TenderMaterialsWorksPage = React.lazy(() => import('./pages/TenderMaterialsWorksPage'));
 const NomenclaturesPage = React.lazy(() => import('./pages/admin/NomenclaturesPage'));
 const LibrariesPage = React.lazy(() => import('./pages/LibrariesPage'));
+const LibrariesMaterialsWorksPage = React.lazy(() => import('./pages/LibrariesMaterialsWorksPage'));
+const CommercePage = React.lazy(() => import('./pages/CommercePage'));
+const ConstructionCostsIndexPage = React.lazy(() => import('./pages/ConstructionCostsIndexPage'));
+const AdminIndexPage = React.lazy(() => import('./pages/AdminIndexPage'));
 
 // Inner component that uses theme
 const AppContent: React.FC = () => {
@@ -70,8 +75,17 @@ const AppContent: React.FC = () => {
         <Routes>
           {/* All routes with layout */}
           <Route path="/" element={<AppLayout />}>
+            {/* Home Page */}
+            <Route
+              index
+              element={
+                <React.Suspense fallback={<div>Загрузка...</div>}>
+                  <HomePage />
+                </React.Suspense>
+              }
+            />
+
             {/* Dashboard */}
-            <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
 
             {/* Tenders */}
@@ -94,6 +108,16 @@ const AppContent: React.FC = () => {
               }
             />
 
+            {/* Commerce Section */}
+            <Route
+              path="commerce"
+              element={
+                <React.Suspense fallback={<div>Загрузка...</div>}>
+                  <CommercePage />
+                </React.Suspense>
+              }
+            />
+
             {/* Libraries */}
             <Route path="libraries">
               <Route
@@ -101,6 +125,14 @@ const AppContent: React.FC = () => {
                 element={
                   <React.Suspense fallback={<div>Загрузка...</div>}>
                     <LibrariesPage />
+                  </React.Suspense>
+                }
+              />
+              <Route
+                path="materials-works"
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <LibrariesMaterialsWorksPage />
                   </React.Suspense>
                 }
               />
@@ -124,6 +156,14 @@ const AppContent: React.FC = () => {
 
             {/* Construction Costs routes */}
             <Route path="construction-costs">
+              <Route
+                index
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <ConstructionCostsIndexPage />
+                  </React.Suspense>
+                }
+              />
               <Route
                 path="tender"
                 element={
@@ -193,6 +233,14 @@ const AppContent: React.FC = () => {
 
             {/* Admin routes */}
             <Route path="admin">
+              <Route
+                index
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <AdminIndexPage />
+                  </React.Suspense>
+                }
+              />
               <Route
                 path="nomenclatures"
                 element={

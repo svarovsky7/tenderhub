@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Card,
   Table,
@@ -66,6 +66,10 @@ const TenderMaterialsWorksPage: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'materials' | 'works'>('all');
 
+  // Ref to preserve scroll position when changing tenders
+  const scrollPositionRef = useRef<number>(0);
+  const shouldPreserveScroll = useRef<boolean>(false);
+
   // Check for tender parameter in URL
   const searchParams = new URLSearchParams(window.location.search);
   const tenderParam = searchParams.get('tender');
@@ -109,14 +113,36 @@ const TenderMaterialsWorksPage: React.FC = () => {
   // Handle tender name selection
   const handleTenderNameChange = useCallback((value: string) => {
     console.log('🔄 Tender name selection changed:', value);
+    const currentScroll = window.scrollY;
+    console.log('🔍 Current state - selectedTenderId:', selectedTenderId, 'scrollY:', currentScroll);
+
+    // Always preserve scroll position when changing tenders (if we're not at the top)
+    if (selectedTenderId && currentScroll > 100) {
+      scrollPositionRef.current = currentScroll;
+      shouldPreserveScroll.current = true;
+      console.log('✅📍 PRESERVED scroll position:', scrollPositionRef.current);
+    } else {
+      console.log('❌ NOT preserving - no previous tender or at top');
+    }
+
     setSelectedTenderName(value);
+    // Reset selected tender ID when changing tender name - user must select version
     setSelectedTenderId(null);
-  }, []);
+    console.log('🔄 Reset tender ID - user must select version');
+  }, [selectedTenderId]);
 
   // Handle version selection
   const handleVersionChange = useCallback((version: number) => {
     console.log('🔄 Version selection changed:', version);
     if (!selectedTenderName) return;
+
+    // Preserve scroll position when changing version
+    const currentScroll = window.scrollY;
+    if (selectedTenderId && currentScroll > 100) {
+      scrollPositionRef.current = currentScroll;
+      shouldPreserveScroll.current = true;
+      console.log('✅📍 PRESERVED scroll position for version change:', scrollPositionRef.current);
+    }
 
     const [title, clientName] = selectedTenderName.split('___');
     const targetTender = tenders.find(t =>
@@ -128,7 +154,7 @@ const TenderMaterialsWorksPage: React.FC = () => {
     if (targetTender) {
       setSelectedTenderId(targetTender.id);
     }
-  }, [selectedTenderName, tenders]);
+  }, [selectedTenderName, tenders, selectedTenderId]);
 
   // Get unique tender names/titles
   const uniqueTenderNames = useMemo(() => {
@@ -157,14 +183,8 @@ const TenderMaterialsWorksPage: React.FC = () => {
     return Array.from(versions).sort((a, b) => b - a);
   }, [tenders, selectedTenderName]);
 
-  // Загрузка элементов BOQ при выборе тендера
-  useEffect(() => {
-    if (selectedTenderId) {
-      loadBoqItems();
-    }
-  }, [selectedTenderId]);
-
-  const loadBoqItems = async () => {
+  // Загрузка элементов BOQ
+  const loadBoqItems = useCallback(async () => {
     if (!selectedTenderId) return;
 
     setLoading(true);
@@ -180,8 +200,37 @@ const TenderMaterialsWorksPage: React.FC = () => {
       console.error('❌ Error loading BOQ items:', error);
     } finally {
       setLoading(false);
+
+      // Restore scroll position after data is loaded
+      console.log('🔍 Checking scroll restoration - shouldPreserve:', shouldPreserveScroll.current, 'position:', scrollPositionRef.current);
+
+      if (shouldPreserveScroll.current && scrollPositionRef.current > 0) {
+        console.log('📍 Attempting to restore scroll position:', scrollPositionRef.current);
+        // Use setTimeout with double requestAnimationFrame to ensure DOM and table are fully rendered
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const targetScroll = scrollPositionRef.current;
+            window.scrollTo({
+              top: targetScroll,
+              behavior: 'auto' // Use 'auto' for immediate scroll restoration
+            });
+            console.log('🔄 Restored scroll position to:', targetScroll, 'actual:', window.scrollY);
+            shouldPreserveScroll.current = false;
+            scrollPositionRef.current = 0;
+          });
+        });
+      } else {
+        console.log('⏭️ Skipping scroll restoration');
+      }
     }
-  };
+  }, [selectedTenderId]);
+
+  // Загрузка элементов BOQ при выборе тендера
+  useEffect(() => {
+    if (selectedTenderId) {
+      loadBoqItems();
+    }
+  }, [selectedTenderId, loadBoqItems]);
 
   // Группировка элементов по описанию и типу
   const groupedItems = useMemo(() => {
@@ -367,8 +416,6 @@ const TenderMaterialsWorksPage: React.FC = () => {
     const tenderNameKey = `${tender.title}___${tender.client_name}`;
     setSelectedTenderName(tenderNameKey);
     setSelectedTenderId(tender.id);
-    // Collapse quick select after selection
-    setIsQuickSelectExpanded(false);
   }, []);
 
   const selectedTender = tenders.find(t => t.id === selectedTenderId);
@@ -493,17 +540,11 @@ const TenderMaterialsWorksPage: React.FC = () => {
     }
 
     console.log('🔄 Starting refresh for tender:', selectedTenderId);
-    setLoading(true);
     message.loading('Обновление данных...', 0.5);
 
     // Reload BOQ items
-    loadBoqItems(selectedTenderId);
-
-    setTimeout(() => {
-      setLoading(false);
-      message.success('Данные обновлены');
-    }, 500);
-  }, [selectedTenderId]);
+    loadBoqItems();
+  }, [selectedTenderId, loadBoqItems]);
 
   return (
     <>
@@ -709,40 +750,50 @@ const TenderMaterialsWorksPage: React.FC = () => {
 
         {selectedTenderId && (
           <Card className="mb-4 bsm-stats-card">
+            <style>
+              {`
+                .bsm-stats-card .ant-statistic-content-prefix {
+                  color: inherit !important;
+                }
+                .bsm-stats-card .ant-statistic-title {
+                  color: ${theme === 'dark' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.65)'};
+                }
+              `}
+            </style>
             <Space direction="vertical" style={{ width: '100%' }} size="middle">
               <Row gutter={16}>
                 <Col xs={24} sm={12} md={6}>
                   <Statistic
                     title="Материалов"
                     value={stats.materialsCount}
-                    prefix={<AppstoreOutlined />}
-                    valueStyle={{ color: '#1890ff' }}
+                    prefix={<AppstoreOutlined style={{ color: '#1890ff' }} />}
+                    valueStyle={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}
                   />
                 </Col>
                 <Col xs={24} sm={12} md={6}>
                   <Statistic
                     title="Работ"
                     value={stats.worksCount}
-                    prefix={<ToolOutlined />}
-                    valueStyle={{ color: '#52c41a' }}
+                    prefix={<ToolOutlined style={{ color: '#52c41a' }} />}
+                    valueStyle={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}
                   />
                 </Col>
                 <Col xs={24} sm={12} md={6}>
                   <Statistic
                     title="Стоимость материалов"
                     value={stats.materialsTotal}
-                    prefix={<CalculatorOutlined />}
+                    prefix={<CalculatorOutlined style={{ color: '#1890ff' }} />}
                     formatter={(value) => formatCurrency(value as number)}
-                    valueStyle={{ color: '#1890ff' }}
+                    valueStyle={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}
                   />
                 </Col>
                 <Col xs={24} sm={12} md={6}>
                   <Statistic
                     title="Стоимость работ"
                     value={stats.worksTotal}
-                    prefix={<CalculatorOutlined />}
+                    prefix={<CalculatorOutlined style={{ color: '#52c41a' }} />}
                     formatter={(value) => formatCurrency(value as number)}
-                    valueStyle={{ color: '#52c41a' }}
+                    valueStyle={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}
                   />
                 </Col>
               </Row>
@@ -753,9 +804,9 @@ const TenderMaterialsWorksPage: React.FC = () => {
                     <Statistic
                       title="Общая стоимость"
                       value={stats.total}
-                      prefix={<BarChartOutlined />}
+                      prefix={<BarChartOutlined style={{ color: '#722ed1' }} />}
                       formatter={(value) => formatCurrency(value as number)}
-                      valueStyle={{ color: '#722ed1', fontSize: '24px' }}
+                      valueStyle={{ color: theme === 'dark' ? '#ffffff' : '#000000', fontSize: '24px' }}
                     />
                   </Card>
                 </Col>

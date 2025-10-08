@@ -5,6 +5,7 @@ import { calculateBOQItemsTotal } from '../utils/calculateTotal';
 import { WorkEditRow } from './EditRows/WorkEditRow';
 import { MaterialEditRow } from './EditRows/MaterialEditRow';
 import type { FormInstance } from 'antd/es/form';
+import { useTheme } from '../../../../contexts/ThemeContext';
 
 interface BOQItemsTableProps {
   refreshKey: number;
@@ -28,7 +29,7 @@ interface BOQItemsTableProps {
 }
 
 /**
- * Компонент таблицы для отображения элементов BOQ с поддержкой inline редактирования
+ * Компонент таблицы для отображения элементов BOQ с поддержкой inline редактирования и тёмной темы
  */
 export const BOQItemsTable: React.FC<BOQItemsTableProps> = ({
   refreshKey,
@@ -50,6 +51,47 @@ export const BOQItemsTable: React.FC<BOQItemsTableProps> = ({
   works,
   loading
 }) => {
+  const { theme } = useTheme();
+
+  // Get row background color based on item type and theme
+  const getRowBackgroundColor = (itemType: string, workLink?: boolean) => {
+    const isDark = theme === 'dark';
+
+    switch(itemType) {
+      case 'work':
+        return isDark ? 'rgba(255, 152, 0, 0.15)' : 'rgba(255, 237, 213, 0.9)'; // Orange
+      case 'sub_work':
+        return isDark ? 'rgba(156, 39, 176, 0.15)' : 'rgba(243, 229, 245, 1)'; // Purple
+      case 'material':
+        return workLink
+          ? (isDark ? 'rgba(33, 150, 243, 0.15)' : 'rgba(225, 245, 254, 1)') // Blue
+          : (isDark ? 'rgba(33, 150, 243, 0.1)' : 'rgba(225, 245, 254, 0.6)'); // Blue lighter
+      case 'sub_material':
+        return isDark ? 'rgba(76, 175, 80, 0.15)' : 'rgba(232, 245, 233, 0.8)'; // Green
+      default:
+        return 'transparent';
+    }
+  };
+
+  const getRowHoverColor = (itemType: string, workLink?: boolean) => {
+    const isDark = theme === 'dark';
+
+    switch(itemType) {
+      case 'work':
+        return isDark ? 'rgba(255, 152, 0, 0.2)' : 'rgba(255, 237, 213, 1)';
+      case 'sub_work':
+        return isDark ? 'rgba(156, 39, 176, 0.2)' : 'rgba(225, 190, 231, 1)';
+      case 'material':
+        return workLink
+          ? (isDark ? 'rgba(33, 150, 243, 0.2)' : 'rgba(187, 222, 251, 1)')
+          : (isDark ? 'rgba(33, 150, 243, 0.15)' : 'rgba(187, 222, 251, 0.8)');
+      case 'sub_material':
+        return isDark ? 'rgba(76, 175, 80, 0.2)' : 'rgba(200, 230, 201, 1)';
+      default:
+        return 'transparent';
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" style={{ width: '100%', minWidth: '1200px' }}>
       <Table
@@ -62,19 +104,22 @@ export const BOQItemsTable: React.FC<BOQItemsTableProps> = ({
         scroll={{ x: 1200, y: 400 }}
         className="custom-table boq-items-table"
         rowClassName={(record) => {
-          switch(record.item_type) {
-            case 'work':
-              return 'bg-orange-100/90 hover:bg-orange-100 font-medium transition-colors';
-            case 'sub_work':
-              return 'bg-purple-100 hover:bg-purple-200 font-medium transition-colors';
-            case 'material':
-              return record.work_link ? 'bg-blue-100 hover:bg-blue-200 transition-colors' : 'bg-blue-100/60 hover:bg-blue-200/80 transition-colors';
-            case 'sub_material':
-              return 'bg-green-100/80 hover:bg-green-200 transition-colors';
-            default:
-              return '';
-          }
+          const isFontMedium = record.item_type === 'work' || record.item_type === 'sub_work';
+          return isFontMedium ? 'font-medium transition-colors' : 'transition-colors';
         }}
+        onRow={(record) => ({
+          'data-row-key': record.id,
+          style: {
+            backgroundColor: getRowBackgroundColor(record.item_type, record.work_link),
+            transition: 'background-color 0.2s ease',
+          },
+          onMouseEnter: (e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = getRowHoverColor(record.item_type, record.work_link);
+          },
+          onMouseLeave: (e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = getRowBackgroundColor(record.item_type, record.work_link);
+          },
+        })}
         components={{
           body: {
             row: ({ children, ...props }: any) => {
@@ -119,9 +164,6 @@ export const BOQItemsTable: React.FC<BOQItemsTableProps> = ({
             }
           }
         }}
-        onRow={(record) => ({
-          'data-row-key': record.id,
-        })}
         summary={(pageData) => {
           // Use the shared calculation function with position.boq_items for lookup
           const total = calculateBOQItemsTotal(pageData, position.boq_items);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card,
   Button,
@@ -45,9 +45,16 @@ const CommercialCostsPage: React.FC = () => {
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [selectedTenderName, setSelectedTenderName] = useState<string | null>(null);
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
+  const [previousTenderId, setPreviousTenderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [tendersLoading, setTendersLoading] = useState(false);
   const [isContentVisible, setIsContentVisible] = useState(false);
+  const [isFirstSelection, setIsFirstSelection] = useState(true);
+
+  // Refs to preserve scroll position
+  const scrollPositionRef = useRef<number>(0);
+  const shouldPreserveScroll = useRef<boolean>(false);
+
   const [commercialStats, setCommercialStats] = useState({
     totalBaseCost: 0,
     totalCommercialCost: 0,
@@ -101,28 +108,68 @@ const CommercialCostsPage: React.FC = () => {
   // Handle tender name selection (first step)
   const handleTenderNameChange = useCallback((value: string) => {
     console.log('🔄 Tender name selection changed:', value);
+
+    const currentScroll = window.scrollY;
+
+    // Preserve scroll position when changing tenders (if we're not at the top)
+    if (selectedTenderId && currentScroll > 100) {
+      scrollPositionRef.current = currentScroll;
+      shouldPreserveScroll.current = true;
+      console.log('✅📍 PRESERVED scroll position:', scrollPositionRef.current);
+    }
+
+    // Store previous tender before clearing
+    if (selectedTenderId) {
+      setPreviousTenderId(selectedTenderId);
+    }
+
     setSelectedTenderName(value);
     setSelectedTenderId(null);
-    setIsContentVisible(false);
-  }, []);
+    // Don't hide content - keep it visible
+  }, [selectedTenderId]);
 
   // Handle version selection (second step)
   const handleVersionChange = useCallback((version: number) => {
     console.log('🔄 Version selection changed:', version);
     if (!selectedTenderName) return;
-    
+
     const [title, clientName] = selectedTenderName.split('___');
-    const targetTender = tenders.find(t => 
-      t.title === title && 
+    const targetTender = tenders.find(t =>
+      t.title === title &&
       t.client_name === clientName &&
       (t.version || 1) === version
     );
-    
+
     if (targetTender) {
       setSelectedTenderId(targetTender.id);
-      setTimeout(() => setIsContentVisible(true), 100);
+      setPreviousTenderId(null);
+
+      if (!isContentVisible) {
+        setIsContentVisible(true);
+        // Mark first selection as complete AFTER animation finishes
+        setTimeout(() => {
+          setIsFirstSelection(false);
+        }, 650);
+      } else {
+        setIsFirstSelection(false);
+      }
+
+      // Restore scroll position if needed
+      if (shouldPreserveScroll.current && scrollPositionRef.current > 0) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            window.scrollTo({
+              top: scrollPositionRef.current,
+              behavior: 'auto'
+            });
+            console.log('🔄 Restored scroll position:', scrollPositionRef.current);
+            shouldPreserveScroll.current = false;
+            scrollPositionRef.current = 0;
+          });
+        });
+      }
     }
-  }, [selectedTenderName, tenders]);
+  }, [selectedTenderName, tenders, isContentVisible]);
 
   // Get unique tender names/titles
   const uniqueTenderNames = React.useMemo(() => {
@@ -151,7 +198,7 @@ const CommercialCostsPage: React.FC = () => {
     return Array.from(versions).sort((a, b) => b - a);
   }, [tenders, selectedTenderName]);
 
-  const selectedTender = tenders.find(t => t.id === selectedTenderId);
+  const selectedTender = tenders.find(t => t.id === (selectedTenderId || previousTenderId));
   
   const handleRefresh = useCallback(() => {
     if (!selectedTenderId) {
@@ -183,7 +230,9 @@ const CommercialCostsPage: React.FC = () => {
   const handleResetSelection = useCallback(() => {
     setSelectedTenderId(null);
     setSelectedTenderName(null);
+    setPreviousTenderId(null);
     setIsContentVisible(false);
+    setIsFirstSelection(true);
     setCommercialStats({
       totalBaseCost: 0,
       totalCommercialCost: 0,
@@ -549,9 +598,16 @@ const CommercialCostsPage: React.FC = () => {
         {selectedTenderId && (
           <div
             id="tender-content-section"
-            className={`p-4 lg:p-6 transition-all duration-1000 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}
+            className="p-4 lg:p-6"
+            style={{
+              opacity: isContentVisible ? 1 : 0,
+              transform: isContentVisible ? 'translateY(0)' : 'translateY(20px)',
+              transition: isFirstSelection && isContentVisible
+                ? 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
+                : 'none'
+            }}
           >
-            <div className={`w-full transition-all duration-1000 transform ${isContentVisible ? 'translate-y-0' : 'translate-y-10'}`}>
+            <div>
               <TenderCommercialManager
                 tenderId={selectedTenderId}
                 key={selectedTenderId}
