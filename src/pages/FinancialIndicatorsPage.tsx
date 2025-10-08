@@ -7,6 +7,7 @@ import { ModernFinancialIndicators } from '../components/financial/ModernFinanci
 import QuickTenderSelector from '../components/common/QuickTenderSelector';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { formatQuantity } from '../utils/formatters';
+import { useTheme } from '../contexts/ThemeContext';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -25,6 +26,7 @@ interface Tender {
 const FinancialIndicatorsPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme } = useTheme();
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [selectedTenderName, setSelectedTenderName] = useState<string | null>(null);
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
@@ -404,6 +406,9 @@ const FinancialIndicatorsPage: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
+          .financial-page-header.dark {
+            background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
+          }
           .financial-page-header::before {
             content: '';
             position: absolute;
@@ -436,9 +441,9 @@ const FinancialIndicatorsPage: React.FC = () => {
           }
         `}
       </style>
-      
+
       {/* Header с градиентом и выбором тендера */}
-        <div className="financial-page-header">
+        <div className={`financial-page-header ${theme === 'dark' ? 'dark' : ''}`}>
         <div className="max-w-none">
           {/* Title and buttons row */}
           <div className="flex justify-between items-start mb-6">
@@ -463,11 +468,8 @@ const FinancialIndicatorsPage: React.FC = () => {
             <div className="financial-action-buttons">
               {selectedTenderId && (
                 <Button
-                  className="financial-action-btn"
+                  className="financial-action-btn materials-works-action-btn-transparent"
                   style={{
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    color: 'white',
-                    borderColor: 'rgba(255, 255, 255, 0.3)',
                     fontWeight: 600
                   }}
                   size="large"
@@ -478,11 +480,8 @@ const FinancialIndicatorsPage: React.FC = () => {
                 </Button>
               )}
               <Button
-                className="financial-action-btn"
+                className="financial-action-btn materials-works-action-btn-transparent"
                 style={{
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  color: 'white',
-                  borderColor: 'rgba(255, 255, 255, 0.3)',
                   fontWeight: 500
                 }}
                 size="large"
@@ -512,7 +511,7 @@ const FinancialIndicatorsPage: React.FC = () => {
           {/* Tender Selection */}
           <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
             {/* Tender Selection - Left Side */}
-            <div className={`rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
+            <div className={`tender-selection-block rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
               <Row gutter={[16, 16]} align="middle">
                 <Col xs={24} lg={selectedTenderId ? 14 : 24}>
                   <div className="flex flex-col gap-2">
@@ -582,7 +581,7 @@ const FinancialIndicatorsPage: React.FC = () => {
             
             {/* Total Cost - Right Side */}
             {selectedTenderId && commercialTotal > 0 && (
-              <div className={`flex flex-col justify-center items-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
+              <div className={`commercial-stats-block flex flex-col justify-center items-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
                 <div className="text-center">
                   <div className="text-3xl font-bold text-green-700" style={{ cursor: 'default' }}>
                     {Math.round(commercialTotal).toLocaleString('ru-RU')} ₽

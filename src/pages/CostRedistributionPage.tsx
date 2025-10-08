@@ -29,6 +29,7 @@ import RedistributionResultsTable from '../components/financial/RedistributionRe
 import DeadlineStatusBar from '../components/tender/DeadlineStatusBar';
 import QuickTenderSelector from '../components/common/QuickTenderSelector';
 import { tendersApi } from '../lib/supabase/api';
+import { useTheme } from '../contexts/ThemeContext';
 import type { Tender } from '../lib/supabase/types';
 import { formatQuantity } from '../utils/formatters';
 
@@ -42,6 +43,7 @@ const CostRedistributionPage: React.FC = () => {
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { theme } = useTheme();
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [selectedTenderName, setSelectedTenderName] = useState<string | null>(null);
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
@@ -229,6 +231,9 @@ const CostRedistributionPage: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
+          .redistribution-page-header.dark {
+            background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
+          }
           .redistribution-page-header::before {
             content: '';
             position: absolute;
@@ -272,7 +277,7 @@ const CostRedistributionPage: React.FC = () => {
         <div className="w-full min-h-full bg-gray-50">
           <div className="p-6">
             {/* Header */}
-            <div className="redistribution-page-header" style={{ borderRadius: '16px' }}>
+            <div className={`redistribution-page-header ${theme === 'dark' ? 'dark' : ''}`} style={{ borderRadius: '16px' }}>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-4">
                   <div
@@ -293,11 +298,8 @@ const CostRedistributionPage: React.FC = () => {
                 <div className="redistribution-action-buttons">
                   {selectedTenderId && (
                     <Button
-                      className="redistribution-action-btn"
+                      className="redistribution-action-btn materials-works-action-btn-transparent"
                       style={{
-                        background: 'rgba(255, 255, 255, 0.2)',
-                        color: 'white',
-                        borderColor: 'rgba(255, 255, 255, 0.3)',
                         fontWeight: 600
                       }}
                       size="large"
@@ -308,11 +310,8 @@ const CostRedistributionPage: React.FC = () => {
                     </Button>
                   )}
                   <Button
-                    className="redistribution-action-btn"
+                    className="redistribution-action-btn materials-works-action-btn-transparent"
                     style={{
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      color: 'white',
-                      borderColor: 'rgba(255, 255, 255, 0.3)',
                       fontWeight: 500
                     }}
                     size="large"
@@ -341,7 +340,7 @@ const CostRedistributionPage: React.FC = () => {
 
               {/* Tender Selection */}
               <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
-                <div className={`rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
+                <div className={`tender-selection-block rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
                   <Row gutter={[16, 16]} align="middle">
                     <Col xs={24} lg={selectedTenderId ? 14 : 24}>
                       <div className="flex flex-col gap-2">

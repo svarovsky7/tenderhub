@@ -268,6 +268,23 @@ body {
   color: #4da8ff !important;
 }
 
+/* Exception for transparent action buttons (БСМ page, BOQ page, etc.) */
+/* Dark background without hover */
+:root.dark .ant-btn.materials-works-action-btn-transparent,
+:root.dark .ant-btn.boq-action-btn-transparent {
+  background: rgba(0, 0, 0, 0.2) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Darker background with blue highlight on hover */
+:root.dark .ant-btn.materials-works-action-btn-transparent:hover,
+:root.dark .ant-btn.boq-action-btn-transparent:hover {
+  background: rgba(0, 0, 0, 0.3) !important;
+  color: #69c0ff !important;
+  border-color: #69c0ff !important;
+}
+
 :root.dark .ant-btn-default {
   background: #1f1f1f !important;
   border-color: rgba(255,255,255,0.2) !important;
@@ -278,6 +295,23 @@ body {
   background: #262626 !important;
   border-color: #4da8ff !important;
   color: #4da8ff !important;
+}
+
+/* Exception for transparent default buttons */
+/* Dark background without hover */
+:root.dark .ant-btn-default.materials-works-action-btn-transparent,
+:root.dark .ant-btn-default.boq-action-btn-transparent {
+  background: rgba(0, 0, 0, 0.2) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Darker background with blue highlight on hover */
+:root.dark .ant-btn-default.materials-works-action-btn-transparent:hover,
+:root.dark .ant-btn-default.boq-action-btn-transparent:hover {
+  background: rgba(0, 0, 0, 0.3) !important;
+  color: #69c0ff !important;
+  border-color: #69c0ff !important;
 }
 
 :root.dark .ant-btn-primary {
@@ -459,6 +493,12 @@ body {
   color: rgba(255, 255, 255, 0.98) !important;
 }
 
+/* Labels in dark theme - dimmer for better contrast with content */
+:root.dark .ant-typography.text-gray-500.font-semibold,
+:root.dark .text-gray-500.font-semibold {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
 :root.dark .text-gray-600 {
   color: rgba(255, 255, 255, 0.95) !important;
 }
@@ -623,7 +663,7 @@ body {
 }
 
 /* Override specific text elements in cards */
-:root.dark .ant-card span:not([class*="ant-btn"]):not([class*="anticon"]),
+:root.dark .ant-card span:not([class*="ant-btn"]):not([class*="anticon"]):not(.text-gray-500.font-semibold),
 :root.dark .ant-card div:not([class*="ant-btn"]):not([class*="ant-input"]),
 :root.dark .ant-card p,
 :root.dark .ant-card h1,
@@ -823,6 +863,11 @@ body {
   color: rgba(255, 255, 255, 0.95) !important;
 }
 
+/* Labels (like "Примечание Заказчика:", "Ед. изм. Заказчика:") - dimmer in dark mode */
+:root.dark .ant-card .text-gray-500.font-semibold {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
 /* Position card table styles in dark mode - maximum contrast */
 :root.dark .custom-table .ant-table-thead > tr > th {
   background-color: #262626 !important;
@@ -924,4 +969,171 @@ body {
 
 .boq-item-exit {
   animation: fadeOut 0.2s ease-in;
+}
+
+/* Commercial Costs Page - Tender Selection Blocks in Dark Theme */
+:root.dark .tender-selection-block {
+  background: rgba(31, 31, 31, 0.9) !important;
+  border: 1px solid rgba(64, 64, 64, 0.5) !important;
+}
+
+:root.dark .commercial-stats-block {
+  background: rgba(31, 31, 31, 0.9) !important;
+  border: 1px solid rgba(64, 64, 64, 0.5) !important;
+}
+
+/* Text colors inside tender selection block in dark theme */
+:root.dark .tender-selection-block .text-gray-800,
+:root.dark .tender-selection-block strong,
+:root.dark .tender-label-text {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+:root.dark .tender-selection-block .text-gray-600 {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+:root.dark .tender-selection-block .text-gray-400 {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+:root.dark .commercial-stats-block .text-gray-600 {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Ant Design Messages in Dark Theme */
+:root.dark .ant-message-notice-content {
+  background-color: #1f1f1f !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.dark .ant-message-notice-content .anticon {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+:root.dark .ant-message-success .anticon {
+  color: #52c41a !important;
+}
+
+:root.dark .ant-message-error .anticon {
+  color: #ff4d4f !important;
+}
+
+:root.dark .ant-message-warning .anticon {
+  color: #faad14 !important;
+}
+
+:root.dark .ant-message-info .anticon {
+  color: #1890ff !important;
+}
+
+/* Ant Design Notifications in Dark Theme */
+:root.dark .ant-notification-notice {
+  background-color: #1f1f1f !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.dark .ant-notification-notice-message {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+:root.dark .ant-notification-notice-description {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+:root.dark .ant-notification-notice-icon {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+:root.dark .ant-notification-notice-close {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+:root.dark .ant-notification-notice-close:hover {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Materials Library Page - Dark Theme */
+:root.dark .ant-statistic {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+:root.dark .ant-statistic-title {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Dashboard statistics - allow custom colors */
+:root.dark .dashboard-stats-container .ant-statistic-title {
+  color: unset !important;
+}
+
+/* БСМ statistics - keep colored values in dark theme */
+:root.dark .bsm-stats-card .ant-statistic-title {
+  color: unset !important;
+}
+
+:root.dark .bsm-stats-card .ant-statistic-content {
+  /* Allow individual valueStyle colors to show through */
+  color: inherit !important;
+}
+
+:root.dark .ant-statistic-content {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Override for Dashboard - remove global white color, let inline styles work */
+/* Increased specificity to ensure override */
+html:root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(1) .ant-statistic-content {
+  color: #1890ff !important;
+}
+html:root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(2) .ant-statistic-content {
+  color: #52c41a !important;
+}
+html:root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(3) .ant-statistic-content {
+  color: #722ed1 !important;
+}
+
+/* Override for БСМ statistics - colored values in dark theme */
+:root.dark .bsm-stats-card .ant-row:first-child .ant-col:nth-child(1) .ant-statistic-content {
+  color: #1890ff !important;
+}
+:root.dark .bsm-stats-card .ant-row:first-child .ant-col:nth-child(2) .ant-statistic-content {
+  color: #52c41a !important;
+}
+:root.dark .bsm-stats-card .ant-row:first-child .ant-col:nth-child(3) .ant-statistic-content {
+  color: #1890ff !important;
+}
+:root.dark .bsm-stats-card .ant-row:first-child .ant-col:nth-child(4) .ant-statistic-content {
+  color: #52c41a !important;
+}
+:root.dark .bsm-stats-card .ant-row:last-child .ant-statistic-content {
+  color: #722ed1 !important;
+}
+
+/* Materials page white containers in dark theme */
+:root.dark div[style*="background: white"],
+:root.dark div[style*="background:white"] {
+  background: #1f1f1f !important;
+  border-color: rgba(64, 64, 64, 0.5) !important;
+}
+
+/* Materials page - bright "Добавить материал" button in dark theme */
+:root.dark .add-material-button.ant-btn-primary {
+  background: #1890ff !important;
+  border-color: #1890ff !important;
+  color: #ffffff !important;
+}
+
+:root.dark .add-material-button.ant-btn-primary:hover {
+  background: #40a9ff !important;
+  border-color: #40a9ff !important;
+}
+
+/* TenderHub logo - no filter needed, logo already has good contrast */
+:root.dark img[alt="TenderHub Logo"] {
+  /* Logo already has blue background and white elements, looks good in both themes */
 }

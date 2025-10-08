@@ -421,6 +421,9 @@ const Dashboard: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
+          .dashboard-page-header.dark {
+            background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
+          }
           .dashboard-page-header::before {
             content: '';
             position: absolute;
@@ -461,12 +464,29 @@ const Dashboard: React.FC = () => {
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
           }
-          .dashboard-stats-container .ant-statistic-title {
-            color: ${theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.65)'};
+          /* Light theme - default gray titles */
+          .dashboard-stats-container.theme-light .ant-statistic-title {
+            color: rgba(0,0,0,0.65) !important;
             font-weight: 500;
           }
-          .dashboard-stats-container .ant-statistic-content {
-            color: ${theme === 'dark' ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.85)'};
+          /* Dark theme - white titles */
+          :root.dark .dashboard-stats-container.theme-dark .ant-statistic-title {
+            color: rgba(255,255,255,0.85) !important;
+            font-weight: 500;
+          }
+          /* Dark theme - colored values (numbers) */
+          :root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(1) .ant-statistic-content {
+            color: #1890ff !important;
+          }
+          :root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(2) .ant-statistic-content {
+            color: #52c41a !important;
+          }
+          :root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(3) .ant-statistic-content {
+            color: #722ed1 !important;
+          }
+          /* Light theme - default content colors */
+          .dashboard-stats-container.theme-light .ant-statistic-content {
+            color: rgba(0,0,0,0.85);
           }
 
           /* Expired tender - light green background */
@@ -496,7 +516,7 @@ const Dashboard: React.FC = () => {
       <div className="w-full min-h-full bg-gray-50">
         <div className="p-6">
           {/* Beautiful Gradient Header */}
-          <div className="dashboard-page-header">
+          <div className={`dashboard-page-header ${theme === 'dark' ? 'dark' : ''}`}>
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-4">
                 <div
@@ -517,10 +537,15 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* Statistics in Header */}
-            <div className="dashboard-stats-container">
+            <div className={`dashboard-stats-container ${theme === 'dark' ? 'theme-dark' : 'theme-light'}`}>
               <Row gutter={[16, 16]}>
                 <Col xs={24} sm={12} lg={8}>
-                  <Card>
+                  <Card
+                    style={{
+                      background: theme === 'dark' ? '#1f1f1f' : 'rgba(255, 255, 255, 0.95)',
+                      borderColor: theme === 'dark' ? '#434343' : undefined
+                    }}
+                  >
                     <Statistic
                       title="Всего тендеров"
                       value={stats.totalTenders}
@@ -530,7 +555,12 @@ const Dashboard: React.FC = () => {
                   </Card>
                 </Col>
                 <Col xs={24} sm={12} lg={8}>
-                  <Card>
+                  <Card
+                    style={{
+                      background: theme === 'dark' ? '#1f1f1f' : 'rgba(255, 255, 255, 0.95)',
+                      borderColor: theme === 'dark' ? '#434343' : undefined
+                    }}
+                  >
                     <Statistic
                       title="Активные тендеры"
                       value={stats.activeTenders}
@@ -540,7 +570,12 @@ const Dashboard: React.FC = () => {
                   </Card>
                 </Col>
                 <Col xs={24} sm={12} lg={8}>
-                  <Card>
+                  <Card
+                    style={{
+                      background: theme === 'dark' ? '#1f1f1f' : 'rgba(255, 255, 255, 0.95)',
+                      borderColor: theme === 'dark' ? '#434343' : undefined
+                    }}
+                  >
                     <Statistic
                       title="Общая стоимость"
                       value={stats.totalValue}

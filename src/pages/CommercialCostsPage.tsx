@@ -28,6 +28,7 @@ import TenderCommercialManager from '../components/tender/TenderCommercialManage
 import DeadlineStatusBar from '../components/tender/DeadlineStatusBar';
 import QuickTenderSelector from '../components/common/QuickTenderSelector';
 import { tendersApi } from '../lib/supabase/api';
+import { useTheme } from '../contexts/ThemeContext';
 import type { Tender } from '../lib/supabase/types';
 import { formatQuantity } from '../utils/formatters';
 import dayjs from 'dayjs';
@@ -37,9 +38,10 @@ const { Option } = Select;
 
 const CommercialCostsPage: React.FC = () => {
   console.log('🚀 CommercialCostsPage component rendered');
-  
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { theme } = useTheme();
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [selectedTenderName, setSelectedTenderName] = useState<string | null>(null);
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
@@ -257,6 +259,9 @@ const CommercialCostsPage: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
+          .commercial-page-header.dark {
+            background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
+          }
           .commercial-page-header::before {
             content: '';
             position: absolute;
@@ -300,7 +305,7 @@ const CommercialCostsPage: React.FC = () => {
         <div className="w-full min-h-full bg-gray-50">
           <div className="p-6">
             {/* Header */}
-            <div className="commercial-page-header" style={{ borderRadius: '16px' }}>
+            <div className={`commercial-page-header ${theme === 'dark' ? 'dark' : ''}`} style={{ borderRadius: '16px' }}>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-4">
                   <div
@@ -321,11 +326,8 @@ const CommercialCostsPage: React.FC = () => {
                 <div className="commercial-action-buttons">
                   {selectedTenderId && (
                     <Button
-                      className="commercial-action-btn"
+                      className="commercial-action-btn materials-works-action-btn-transparent"
                       style={{
-                        background: 'rgba(255, 255, 255, 0.2)',
-                        color: 'white',
-                        borderColor: 'rgba(255, 255, 255, 0.3)',
                         fontWeight: 600
                       }}
                       size="large"
@@ -336,11 +338,8 @@ const CommercialCostsPage: React.FC = () => {
                     </Button>
                   )}
                   <Button
-                    className="commercial-action-btn"
+                    className="commercial-action-btn materials-works-action-btn-transparent"
                     style={{
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      color: 'white',
-                      borderColor: 'rgba(255, 255, 255, 0.3)',
                       fontWeight: 500
                     }}
                     size="large"
@@ -370,12 +369,12 @@ const CommercialCostsPage: React.FC = () => {
               {/* Tender Selection and Commercial Stats */}
               <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
                 {/* Tender Selection */}
-                <div className={`rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
+                <div className={`tender-selection-block rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
                   <Row gutter={[16, 16]} align="middle">
                     <Col xs={24} lg={selectedTenderId ? 14 : 24}>
                       <div className="flex flex-col gap-2">
                         <div className={`flex flex-wrap items-center gap-2 transition-all duration-700 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
-                          <Text strong className="whitespace-nowrap" style={{ color: '#262626', cursor: 'default' }}>Тендер:</Text>
+                          <Text strong className="whitespace-nowrap tender-label-text" style={{ color: '#262626', cursor: 'default' }}>Тендер:</Text>
                           <Select
                             value={selectedTenderName}
                             onChange={handleTenderNameChange}
@@ -440,7 +439,7 @@ const CommercialCostsPage: React.FC = () => {
                 
                 {/* Commercial Summary */}
                 {selectedTenderId && (
-                  <div className={`flex justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
+                  <div className={`commercial-stats-block flex justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
                     <Row gutter={[16, 8]} justify="center" align="middle">
                       <Col>
                         <div className="text-center">
@@ -499,7 +498,7 @@ const CommercialCostsPage: React.FC = () => {
             </div>
           </div>
 
-        {/* Main Content */}
+          {/* Main Content */}
         {!selectedTenderId && (
           <div className="p-4 lg:p-6">
             {/* Empty State */}

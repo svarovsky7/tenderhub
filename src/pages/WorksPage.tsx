@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { Typography, Card, Table, Button, Space, Input, message, Tag, Statistic, Row, Col, Form, Select, InputNumber, AutoComplete, Modal, ConfigProvider } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ToolOutlined, SaveOutlined, BuildOutlined, SettingOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ToolOutlined, SaveOutlined, BuildOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { worksWithNamesApi } from '../lib/supabase/api/works-with-names';
-import SimpleNameForm from '../components/libraries/SimpleNameForm';
-import NamesList from '../components/libraries/NamesList';
 import type { Work } from '../lib/supabase/types';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -12,7 +10,6 @@ const { Title, Text } = Typography;
 const { Search } = Input;
 
 const WorksPage: React.FC = () => {
-  const [mode, setMode] = useState<'create' | 'configure'>('create');
   const [searchText, setSearchText] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -23,7 +20,7 @@ const WorksPage: React.FC = () => {
   const [nameOptions, setNameOptions] = useState<Array<{ value: string; label: string; unit?: string }>>([]);
   const [isUnitLocked, setIsUnitLocked] = useState(false);
 
-  // Загрузка списка работ для режима configure
+  // Загрузка списка работ
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['works', searchText, currentPage, pageSize],
     queryFn: async () => {
@@ -36,7 +33,6 @@ const WorksPage: React.FC = () => {
       }
       return result;
     },
-    enabled: mode === 'configure',
     staleTime: 5 * 60 * 1000,
   });
 
@@ -47,7 +43,6 @@ const WorksPage: React.FC = () => {
       const result = await worksWithNamesApi.getNames();
       return result.data || [];
     },
-    enabled: mode === 'configure',
     staleTime: 5 * 60 * 1000,
   });
 
@@ -341,68 +336,9 @@ const WorksPage: React.FC = () => {
   const selectedCurrency = Form.useWatch('currency_type', form) || 'RUB';
 
   return (
-    <ConfigProvider
-      theme={{
-        token: {
-          borderRadius: 8,
-          colorPrimary: '#1890ff'
-        }
-      }}
-    >
-      <div className="w-full min-h-full bg-gray-50">
+      <div className="w-full">
         <style>
           {`
-            .works-header {
-              background: linear-gradient(135deg, #f97316 0%, #a855f7 50%, #ec4899 100%);
-              border-radius: 16px;
-              margin-bottom: 24px;
-              padding: 32px;
-              color: white;
-              position: relative;
-              overflow: hidden;
-            }
-            .works-header::before {
-              content: '';
-              position: absolute;
-              top: -50%;
-              right: -50%;
-              width: 200%;
-              height: 200%;
-              background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-              animation: rotate 30s linear infinite;
-            }
-            @keyframes rotate {
-              from { transform: rotate(0deg); }
-              to { transform: rotate(360deg); }
-            }
-            .mode-action-buttons {
-              display: flex;
-              gap: 12px;
-              align-items: center;
-              margin-top: 20px;
-            }
-            .mode-action-btn {
-              height: 42px;
-              padding: 0 24px;
-              border-radius: 8px;
-              font-size: 15px;
-              font-weight: 500;
-              transition: all 0.3s ease;
-              border: 1px solid rgba(255, 255, 255, 0.3);
-            }
-            .mode-action-btn:hover {
-              transform: translateY(-2px);
-              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            }
-            .mode-action-btn-active {
-              background: rgba(255, 255, 255, 0.95) !important;
-              color: #f97316 !important;
-              font-weight: 600;
-            }
-            .mode-action-btn-inactive {
-              background: rgba(255, 255, 255, 0.2);
-              color: white;
-            }
             .row-type-work {
               background-color: rgba(255, 152, 0, 0.1) !important;
             }
@@ -426,65 +362,7 @@ const WorksPage: React.FC = () => {
             }
           `}
         </style>
-
-        {/* Header */}
-        <div className="p-6">
-          <div className="works-header">
-            <div className="relative z-10">
-              <div className="flex items-center gap-4">
-                <div
-                  className="w-16 h-16 rounded-full flex items-center justify-center"
-                  style={{ background: 'rgba(255,255,255,0.2)' }}
-                >
-                  <BuildOutlined style={{ fontSize: 32, color: 'white' }} />
-                </div>
-                <div>
-                  <Title level={2} style={{ margin: 0, color: 'white', fontSize: 28 }}>
-                    Библиотека работ
-                  </Title>
-                  <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>
-                    Управляйте наименованиями и базовыми данными работ
-                  </Text>
-                </div>
-              </div>
-              <div className="mode-action-buttons">
-                <Button
-                  className={`mode-action-btn ${mode === 'create' ? 'mode-action-btn-active' : 'mode-action-btn-inactive'}`}
-                  size="large"
-                  icon={<PlusOutlined />}
-                  onClick={() => setMode('create')}
-                >
-                  Создать работу
-                </Button>
-                <Button
-                  className={`mode-action-btn ${mode === 'configure' ? 'mode-action-btn-active' : 'mode-action-btn-inactive'}`}
-                  size="large"
-                  icon={<SettingOutlined />}
-                  onClick={() => setMode('configure')}
-                >
-                  Задать базовые данные
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      {/* Main Content */}
-      <div className="p-6 max-w-none">
-        {mode === 'create' ? (
-          <div>
-            {/* Simple Name Form */}
-            <Card style={{ marginBottom: 24 }}>
-              <SimpleNameForm type="work" />
-            </Card>
-
-            {/* Names List */}
-            <Card title="Список наименований работ">
-              <NamesList type="work" />
-            </Card>
-          </div>
-        ) : (
-          <>
+        <div className="max-w-none">
             {/* Statistics */}
             <div style={{
               background: 'white',
@@ -525,22 +403,22 @@ const WorksPage: React.FC = () => {
               <style>
                 {`
                   .configure-works-table .ant-table-thead > tr > th {
-                    background: linear-gradient(135deg, rgba(249, 115, 22, 0.03) 0%, rgba(168, 85, 247, 0.03) 100%);
+                    background: linear-gradient(135deg, rgba(30, 58, 138, 0.03) 0%, rgba(5, 150, 105, 0.03) 100%);
                     font-weight: 600;
-                    color: #f97316;
-                    border-bottom: 2px solid rgba(249, 115, 22, 0.1);
+                    color: #1890ff;
+                    border-bottom: 2px solid rgba(30, 58, 138, 0.1);
                   }
                   .configure-works-table .ant-table-tbody > tr {
                     transition: all 0.3s ease;
                   }
                   .configure-works-table .ant-table-tbody > tr:nth-child(odd) {
-                    background: linear-gradient(90deg, rgba(249, 115, 22, 0.02) 0%, rgba(168, 85, 247, 0.02) 100%);
+                    background: linear-gradient(90deg, rgba(30, 58, 138, 0.02) 0%, rgba(5, 150, 105, 0.02) 100%);
                   }
                   .configure-works-table .ant-table-tbody > tr:nth-child(even) {
-                    background: linear-gradient(90deg, rgba(168, 85, 247, 0.02) 0%, rgba(236, 72, 153, 0.02) 100%);
+                    background: linear-gradient(90deg, rgba(5, 150, 105, 0.02) 0%, rgba(13, 148, 136, 0.02) 100%);
                   }
                   .configure-works-table .ant-table-tbody > tr:hover > td {
-                    background: linear-gradient(135deg, rgba(249, 115, 22, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%) !important;
+                    background: linear-gradient(135deg, rgba(30, 58, 138, 0.08) 0%, rgba(5, 150, 105, 0.08) 100%) !important;
                     transform: translateX(2px);
                   }
                   .gradient-border-animation-works {
@@ -549,7 +427,7 @@ const WorksPage: React.FC = () => {
                     left: 0;
                     right: 0;
                     height: 2px;
-                    background: linear-gradient(90deg, #f97316, #a855f7, #ec4899, #f97316);
+                    background: linear-gradient(90deg, #1e3a8a, #059669, #0d9488, #1e3a8a);
                     background-size: 200% 100%;
                     animation: gradient-shift 4s ease infinite;
                   }
@@ -561,9 +439,9 @@ const WorksPage: React.FC = () => {
               <div style={{
                 marginBottom: '16px',
                 padding: '12px',
-                background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.02) 0%, rgba(168, 85, 247, 0.02) 100%)',
+                background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.02) 0%, rgba(5, 150, 105, 0.02) 100%)',
                 borderRadius: '8px',
-                border: '1px solid rgba(249, 115, 22, 0.06)',
+                border: '1px solid rgba(30, 58, 138, 0.06)',
               }}>
                 <div className="flex justify-between items-center">
                   <Input
@@ -767,11 +645,8 @@ const WorksPage: React.FC = () => {
                   className="configure-works-table"
                 />
               </div>
-          </>
-        )}
         </div>
       </div>
-    </ConfigProvider>
   );
 };
 
