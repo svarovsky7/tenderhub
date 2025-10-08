@@ -1003,7 +1003,6 @@ const TenderCommercialManager: React.FC<TenderCommercialManagerProps> = ({
           scroll={{ x: 1620 }}
           size="small"
           bordered
-          sticky
         />
       )}
     </div>

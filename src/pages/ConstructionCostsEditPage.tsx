@@ -28,7 +28,7 @@ import {
   ClearOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { 
+import {
   getCategoriesWithDetails,
   deleteCategory,
   deleteDetail,
@@ -38,6 +38,7 @@ import {
 } from '../lib/supabase/api/construction-costs';
 import { importConstructionCosts, type ImportRow } from '../lib/supabase/api/import-costs';
 import { supabase } from '../lib/supabase/client';
+import { useTheme } from '../contexts/ThemeContext';
 import EditableTable from '../components/admin/EditableTable';
 import ModernImportModal from '../components/admin/ModernImportModal';
 
@@ -45,6 +46,7 @@ const { Title, Text } = Typography;
 
 const ConstructionCostsEditPage: React.FC = () => {
   const navigate = useNavigate();
+  const { theme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [details, setDetails] = useState<any[]>([]);
@@ -567,6 +569,9 @@ const ConstructionCostsEditPage: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
+          .edit-page-header.dark {
+            background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
+          }
           .edit-page-header::before {
             content: '';
             position: absolute;
@@ -600,7 +605,7 @@ const ConstructionCostsEditPage: React.FC = () => {
         `}
       </style>
 
-      <div className="edit-page-header">
+      <div className={`edit-page-header ${theme === 'dark' ? 'dark' : ''}`}>
         <Row align="middle" justify="space-between">
           <Col>
             <Flex align="center" gap={16}>

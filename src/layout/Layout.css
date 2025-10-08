@@ -281,16 +281,57 @@
   background-color: var(--bg-secondary);
 }
 
+/* Collapsed sidebar icon alignment */
+.ant-layout-sider-collapsed .ant-menu-item,
+.ant-layout-sider-collapsed .ant-menu-submenu-title {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 4px 0 !important;
+}
+
+.ant-layout-sider-collapsed .ant-menu-item .anticon,
+.ant-layout-sider-collapsed .ant-menu-submenu-title .anticon {
+  font-size: 18px !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+}
+
+/* Ensure icons don't overflow in collapsed state */
+.ant-layout-sider-collapsed .ant-menu-item-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin: 0 auto !important;
+}
+
+/* Remove extra spacing in collapsed menu items */
+.ant-layout-sider-collapsed .ant-menu-inline .ant-menu-item,
+.ant-layout-sider-collapsed .ant-menu-inline .ant-menu-submenu-title {
+  padding-inline: 0 !important;
+  width: 100% !important;
+}
+
+/* Center align selected indicator in collapsed state */
+.ant-layout-sider-collapsed .ant-menu-item-selected::after {
+  right: 0 !important;
+  left: auto !important;
+  width: 3px !important;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .sidebar {
     width: 80px;
   }
-  
+
   .page {
     margin-left: 80px;
   }
-  
+
   .page__header {
     left: 80px;
   }

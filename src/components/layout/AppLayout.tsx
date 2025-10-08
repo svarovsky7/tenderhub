@@ -218,16 +218,10 @@ const AppLayout: React.FC = () => {
       path: '/libraries',
       children: [
         {
-          key: 'materials',
+          key: 'libraries-index',
           icon: null,
-          label: <Link to="/libraries/materials">Материалы</Link>,
-          path: '/libraries/materials',
-        },
-        {
-          key: 'works',
-          icon: null,
-          label: <Link to="/libraries/works">Работы</Link>,
-          path: '/libraries/works',
+          label: <Link to="/libraries">Справочник</Link>,
+          path: '/libraries',
         },
         {
           key: 'work-materials',
@@ -270,6 +264,12 @@ const AppLayout: React.FC = () => {
       path: '/admin',
       children: [
         {
+          key: 'nomenclatures',
+          icon: null,
+          label: <Link to="/admin/nomenclatures">Номенклатуры</Link>,
+          path: '/admin/nomenclatures',
+        },
+        {
           key: 'tenders',
           icon: null,
           label: <Link to="/tenders">Тендеры</Link>,
@@ -281,23 +281,19 @@ const AppLayout: React.FC = () => {
           label: <Link to="/construction-costs/edit">Редактирование Затрат</Link>,
           path: '/construction-costs/edit',
         },
-        {
-          type: 'divider',
-          key: 'admin-divider',
-        },
-        {
-          key: 'users',
-          icon: null,
-          label: <Link to="/admin/users">Пользователи</Link>,
-          path: '/admin/users',
-        },
-        {
-          key: 'settings',
-          icon: null,
-          label: <Link to="/admin/settings">Настройки</Link>,
-          path: '/admin/settings',
-        },
       ],
+    },
+    {
+      key: 'users',
+      icon: <UserOutlined />,
+      label: <Link to="/admin/users">Пользователи</Link>,
+      path: '/admin/users',
+    },
+    {
+      key: 'settings',
+      icon: <SettingOutlined />,
+      label: <Link to="/admin/settings">Настройки</Link>,
+      path: '/admin/settings',
     },
   ];
 
@@ -319,24 +315,40 @@ const AppLayout: React.FC = () => {
     
     // Find matching menu item and parent keys
     const findMenuKeys = (items: MenuItem[], parentKey?: string): { selectedKey: string | null, parentKey: string | null } => {
+      let bestMatch: { selectedKey: string, parentKey: string | null, pathLength: number } | null = null;
+
       for (const item of items) {
         // Check children first for more specific matches
         if (item.children) {
-          for (const child of item.children) {
-            if (child.type !== 'divider' && child.path && pathname.startsWith(child.path)) {
-              console.log('✅ [getCurrentMenuKey] Found child match:', child.key, 'Parent:', item.key);
-              return { selectedKey: child.key, parentKey: item.key };
+          // Sort children by path length (longest first) to find most specific match
+          const sortedChildren = [...item.children]
+            .filter(child => child.type !== 'divider' && child.path)
+            .sort((a, b) => (b.path?.length || 0) - (a.path?.length || 0));
+
+          for (const child of sortedChildren) {
+            if (child.path && pathname.startsWith(child.path)) {
+              const pathLength = child.path.length;
+              if (!bestMatch || pathLength > bestMatch.pathLength) {
+                console.log('✅ [getCurrentMenuKey] Found child match:', child.key, 'Parent:', item.key, 'Path length:', pathLength);
+                bestMatch = { selectedKey: child.key, parentKey: item.key, pathLength };
+              }
             }
           }
         }
-        
+
         // Then check parent item
         if (item.path && pathname.startsWith(item.path)) {
-          console.log('✅ [getCurrentMenuKey] Found parent match:', item.key);
-          return { selectedKey: item.key, parentKey: null };
+          const pathLength = item.path.length;
+          if (!bestMatch || pathLength > bestMatch.pathLength) {
+            console.log('✅ [getCurrentMenuKey] Found parent match:', item.key, 'Path length:', pathLength);
+            bestMatch = { selectedKey: item.key, parentKey: null, pathLength };
+          }
         }
       }
-      return { selectedKey: null, parentKey: null };
+
+      return bestMatch
+        ? { selectedKey: bestMatch.selectedKey, parentKey: bestMatch.parentKey }
+        : { selectedKey: null, parentKey: null };
     };
 
     const { selectedKey, parentKey } = findMenuKeys(menuItems);
@@ -494,27 +506,39 @@ const AppLayout: React.FC = () => {
         }}
       >
         <div
-          className="p-4"
+          className={`flex items-center ${collapsed ? 'justify-center px-0' : 'px-4'}`}
           style={{
-            borderBottom: theme === 'dark' ? '1px solid #424242' : '1px solid #e5e7eb'
+            height: '64px',
+            borderBottom: theme === 'dark' ? '1px solid #424242' : '1px solid #e5e7eb',
+            transition: 'padding 0.2s ease'
           }}
         >
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <FileTextOutlined className="text-white text-lg" />
+          <div className="flex items-center space-x-4" style={{ height: '40px' }}>
+            <div className={`${collapsed ? 'w-8 h-8' : 'w-10 h-10'} flex items-center justify-center flex-shrink-0`}
+              style={{ transition: 'width 0.2s ease, height 0.2s ease' }}
+            >
+              <img
+                src="/tenderhub-logo.svg"
+                alt="TenderHub Logo"
+                className="w-full h-full"
+                style={{ objectFit: 'contain' }}
+              />
             </div>
             {!collapsed && (
-              <div>
-                <Title
-                  level={4}
-                  className="m-0"
-                  style={{
-                    color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : '#1f2937'
-                  }}
-                >
-                  TenderHub
-                </Title>
-              </div>
+              <Title
+                level={4}
+                style={{
+                  color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : '#1f2937',
+                  margin: 0,
+                  padding: 0,
+                  lineHeight: '1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  height: '100%'
+                }}
+              >
+                TenderHub
+              </Title>
             )}
           </div>
         </div>
@@ -596,6 +620,7 @@ const AppLayout: React.FC = () => {
                     checkedChildren={<span style={{ fontSize: '14px' }}>🌙</span>}
                     unCheckedChildren={<span style={{ fontSize: '14px' }}>☀️</span>}
                     style={{ minWidth: '50px' }}
+                    data-testid="theme-toggle"
                   />
                 </div>
               </Tooltip>

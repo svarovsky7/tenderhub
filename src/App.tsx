@@ -29,6 +29,8 @@ const CostRedistributionPage = React.lazy(() => import('./pages/CostRedistributi
 const TestMarkupTable = React.lazy(() => import('./pages/admin/TestMarkupTable'));
 const MarkupTablesSetup = React.lazy(() => import('./pages/admin/MarkupTablesSetup'));
 const TenderMaterialsWorksPage = React.lazy(() => import('./pages/TenderMaterialsWorksPage'));
+const NomenclaturesPage = React.lazy(() => import('./pages/admin/NomenclaturesPage'));
+const LibrariesPage = React.lazy(() => import('./pages/LibrariesPage'));
 
 // Inner component that uses theme
 const AppContent: React.FC = () => {
@@ -95,18 +97,10 @@ const AppContent: React.FC = () => {
             {/* Libraries */}
             <Route path="libraries">
               <Route
-                path="materials"
+                index
                 element={
                   <React.Suspense fallback={<div>Загрузка...</div>}>
-                    <MaterialsPage />
-                  </React.Suspense>
-                }
-              />
-              <Route
-                path="works"
-                element={
-                  <React.Suspense fallback={<div>Загрузка...</div>}>
-                    <WorksPage />
+                    <LibrariesPage />
                   </React.Suspense>
                 }
               />
@@ -200,12 +194,20 @@ const AppContent: React.FC = () => {
             {/* Admin routes */}
             <Route path="admin">
               <Route
+                path="nomenclatures"
+                element={
+                  <React.Suspense fallback={<div>Загрузка...</div>}>
+                    <NomenclaturesPage />
+                  </React.Suspense>
+                }
+              />
+              <Route
                 path="users"
                 element={
                   <React.Suspense fallback={<div>Загрузка...</div>}>
                     <UsersPage />
                   </React.Suspense>
-                } 
+                }
               />
               <Route
                 path="cost-test"

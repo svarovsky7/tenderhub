@@ -4,6 +4,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { materialsWithNamesApi } from '../../lib/supabase/api/materials-with-names';
 import { worksWithNamesApi } from '../../lib/supabase/api/works-with-names';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface SimpleNameFormProps {
   type: 'material' | 'work';
@@ -14,6 +15,7 @@ const SimpleNameForm: React.FC<SimpleNameFormProps> = ({ type, onSuccess }) => {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
+  const { theme } = useTheme();
 
   const handleSubmit = async (values: { name: string; unit: string }) => {
     setLoading(true);
@@ -107,8 +109,8 @@ const SimpleNameForm: React.FC<SimpleNameFormProps> = ({ type, onSuccess }) => {
     <div style={{
       background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.05) 0%, rgba(5, 150, 105, 0.05) 100%)',
       borderRadius: '12px',
-      padding: '20px',
-      marginBottom: '24px',
+      padding: '16px',
+      marginBottom: 0,
       border: '1px solid rgba(30, 58, 138, 0.1)',
       boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
       position: 'relative',
@@ -120,9 +122,9 @@ const SimpleNameForm: React.FC<SimpleNameFormProps> = ({ type, onSuccess }) => {
         left: 0,
         right: 0,
         height: '3px',
-        background: type === 'material'
-          ? 'linear-gradient(90deg, #1e3a8a 0%, #059669 50%, #0d9488 100%)'
-          : 'linear-gradient(90deg, #f97316 0%, #a855f7 50%, #ec4899 100%)',
+        background: theme === 'dark'
+          ? 'linear-gradient(90deg, #1e293b 0%, #064e3b 50%, #134e4a 100%)'
+          : 'linear-gradient(90deg, #1e3a8a 0%, #059669 50%, #0d9488 100%)',
         animation: 'shimmer 3s ease-in-out infinite'
       }} />
       <style>
@@ -194,9 +196,9 @@ const SimpleNameForm: React.FC<SimpleNameFormProps> = ({ type, onSuccess }) => {
               padding: '0 24px',
               fontSize: '15px',
               fontWeight: 500,
-              background: type === 'material'
-                ? 'linear-gradient(135deg, #1e3a8a 0%, #059669 100%)'
-                : 'linear-gradient(135deg, #f97316 0%, #a855f7 100%)',
+              background: theme === 'dark'
+                ? 'linear-gradient(135deg, #1e293b 0%, #064e3b 100%)'
+                : 'linear-gradient(135deg, #1e3a8a 0%, #059669 100%)',
               border: 'none',
               boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
               transition: 'all 0.3s ease'

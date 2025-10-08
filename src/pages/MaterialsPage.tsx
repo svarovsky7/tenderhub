@@ -3,8 +3,6 @@ import { Typography, Card, Table, Button, Space, Input, message, Tag, Tooltip, S
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, FileExcelOutlined, SaveOutlined, AppstoreAddOutlined, SettingOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { materialsWithNamesApi } from '../lib/supabase/api/materials-with-names';
-import SimpleNameForm from '../components/libraries/SimpleNameForm';
-import NamesList from '../components/libraries/NamesList';
 import type { Material } from '../lib/supabase/types';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -12,7 +10,7 @@ const { Title, Text } = Typography;
 const { Search } = Input;
 
 const MaterialsPage: React.FC = () => {
-  const [mode, setMode] = useState<'create' | 'configure'>('create');
+  const [mode, setMode] = useState<'create' | 'configure'>('configure');
   const [searchText, setSearchText] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -23,7 +21,7 @@ const MaterialsPage: React.FC = () => {
   const [nameOptions, setNameOptions] = useState<Array<{ value: string; label: string; unit?: string }>>([]);
   const [isUnitLocked, setIsUnitLocked] = useState(false);
 
-  // Загрузка списка материалов для режима configure
+  // Загрузка списка материалов
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['materials', searchText, currentPage, pageSize],
     queryFn: async () => {
@@ -36,7 +34,6 @@ const MaterialsPage: React.FC = () => {
       }
       return result;
     },
-    enabled: mode === 'configure',
     staleTime: 5 * 60 * 1000,
   });
 
@@ -47,7 +44,6 @@ const MaterialsPage: React.FC = () => {
       const result = await materialsWithNamesApi.getNames();
       return result.data || [];
     },
-    enabled: mode === 'configure',
     staleTime: 5 * 60 * 1000,
   });
 
@@ -418,68 +414,9 @@ const MaterialsPage: React.FC = () => {
   const selectedCurrency = Form.useWatch('currency_type', form) || 'RUB';
 
   return (
-    <ConfigProvider
-      theme={{
-        token: {
-          borderRadius: 8,
-          colorPrimary: '#1890ff'
-        }
-      }}
-    >
-      <div className="w-full min-h-full bg-gray-50">
+      <div className="w-full">
         <style>
           {`
-            .materials-header {
-              background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
-              border-radius: 16px;
-              margin-bottom: 24px;
-              padding: 32px;
-              color: white;
-              position: relative;
-              overflow: hidden;
-            }
-            .materials-header::before {
-              content: '';
-              position: absolute;
-              top: -50%;
-              right: -50%;
-              width: 200%;
-              height: 200%;
-              background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-              animation: rotate 30s linear infinite;
-            }
-            @keyframes rotate {
-              from { transform: rotate(0deg); }
-              to { transform: rotate(360deg); }
-            }
-            .mode-action-buttons {
-              display: flex;
-              gap: 12px;
-              align-items: center;
-              margin-top: 20px;
-            }
-            .mode-action-btn {
-              height: 42px;
-              padding: 0 24px;
-              border-radius: 8px;
-              font-size: 15px;
-              font-weight: 500;
-              transition: all 0.3s ease;
-              border: 1px solid rgba(255, 255, 255, 0.3);
-            }
-            .mode-action-btn:hover {
-              transform: translateY(-2px);
-              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            }
-            .mode-action-btn-active {
-              background: rgba(255, 255, 255, 0.95) !important;
-              color: #1890ff !important;
-              font-weight: 600;
-            }
-            .mode-action-btn-inactive {
-              background: rgba(255, 255, 255, 0.2);
-              color: white;
-            }
             .row-type-material {
               background-color: rgba(33, 150, 243, 0.1) !important;
             }
@@ -503,64 +440,7 @@ const MaterialsPage: React.FC = () => {
             }
           `}
         </style>
-
-        {/* Header */}
-        <div className="p-6">
-          <div className="materials-header">
-            <div className="relative z-10">
-              <div className="flex items-center gap-4">
-                <div
-                  className="w-16 h-16 rounded-full flex items-center justify-center"
-                  style={{ background: 'rgba(255,255,255,0.2)' }}
-                >
-                  <AppstoreAddOutlined style={{ fontSize: 32, color: 'white' }} />
-                </div>
-                <div>
-                  <Title level={2} style={{ margin: 0, color: 'white', fontSize: 28 }}>
-                    Библиотека материалов
-                  </Title>
-                  <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>
-                    Управляйте наименованиями и базовыми данными материалов
-                  </Text>
-                </div>
-              </div>
-              <div className="mode-action-buttons">
-                <Button
-                  className={`mode-action-btn ${mode === 'create' ? 'mode-action-btn-active' : 'mode-action-btn-inactive'}`}
-                  size="large"
-                  icon={<PlusOutlined />}
-                  onClick={() => setMode('create')}
-                >
-                  Создать материал
-                </Button>
-                <Button
-                  className={`mode-action-btn ${mode === 'configure' ? 'mode-action-btn-active' : 'mode-action-btn-inactive'}`}
-                  size="large"
-                  icon={<SettingOutlined />}
-                  onClick={() => setMode('configure')}
-                >
-                  Задать базовые данные
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      {/* Main Content */}
-      <div className="p-6 max-w-none">
-        {mode === 'create' ? (
-          <div>
-            {/* Simple Name Form */}
-            <Card style={{ marginBottom: 24 }}>
-              <SimpleNameForm type="material" />
-            </Card>
-
-            {/* Names List */}
-            <Card title="Список наименований материалов">
-              <NamesList type="material" />
-            </Card>
-          </div>
-        ) : (
+        <div className="max-w-none">
           <>
             {/* Statistics */}
             <div style={{
@@ -668,6 +548,7 @@ const MaterialsPage: React.FC = () => {
                       type="primary"
                       icon={<PlusOutlined />}
                       onClick={handleAdd}
+                      className="add-material-button"
                     >
                       Добавить материал
                     </Button>
@@ -909,10 +790,8 @@ const MaterialsPage: React.FC = () => {
                 />
               </div>
           </>
-        )}
         </div>
       </div>
-    </ConfigProvider>
   );
 };
 

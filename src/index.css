@@ -1081,19 +1081,18 @@ body {
   color: inherit !important;
 }
 
-:root.dark .ant-statistic-content {
-  color: rgba(255, 255, 255, 0.95) !important;
-}
+/* Note: Removed global .ant-statistic-content white color rule */
+/* Dashboard and БСМ statistics use specific colored rules below */
+/* Materials Library uses title color for statistics */
 
-/* Override for Dashboard - remove global white color, let inline styles work */
-/* Increased specificity to ensure override */
-html:root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(1) .ant-statistic-content {
+/* Override for Dashboard - colored numbers in dark theme */
+:root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(1) .ant-statistic-content {
   color: #1890ff !important;
 }
-html:root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(2) .ant-statistic-content {
+:root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(2) .ant-statistic-content {
   color: #52c41a !important;
 }
-html:root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(3) .ant-statistic-content {
+:root.dark .dashboard-stats-container.theme-dark .ant-col:nth-child(3) .ant-statistic-content {
   color: #722ed1 !important;
 }
 

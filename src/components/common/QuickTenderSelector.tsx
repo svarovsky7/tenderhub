@@ -135,8 +135,8 @@ const QuickTenderSelector: React.FC<QuickTenderSelectorProps> = ({
                background: theme === 'dark' ? 'rgba(31, 31, 31, 0.8)' : 'rgba(255, 255, 255, 0.15)',
                backdropFilter: 'blur(12px)',
                WebkitBackdropFilter: 'blur(12px)',
-               border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(255, 255, 255, 0.2)',
-               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+               border: theme === 'dark' ? '1px solid rgba(64, 64, 64, 0.4)' : '1px solid rgba(255, 255, 255, 0.2)',
+               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)'
              }}>
           <Spin size="large" />
           <div className="mt-4">
@@ -161,13 +161,13 @@ const QuickTenderSelector: React.FC<QuickTenderSelectorProps> = ({
             background: ${theme === 'dark' ? 'rgba(31, 31, 31, 0.9)' : 'rgba(255, 255, 255, 0.12)'};
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border: 1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'};
+            border: 1px solid ${theme === 'dark' ? 'rgba(64, 64, 64, 0.4)' : 'rgba(255, 255, 255, 0.2)'};
             border-radius: 12px;
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             cursor: pointer;
             position: relative;
             overflow: visible;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
             min-height: 170px;
             height: 170px;
             display: flex;
@@ -182,7 +182,7 @@ const QuickTenderSelector: React.FC<QuickTenderSelectorProps> = ({
             left: 0;
             right: 0;
             bottom: 0;
-            background: linear-gradient(145deg, ${theme === 'dark' ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.08)'} 0%, ${theme === 'dark' ? 'rgba(255, 255, 255, 0.01)' : 'rgba(255, 255, 255, 0.04)'} 100%);
+            background: linear-gradient(145deg, ${theme === 'dark' ? 'rgba(64, 64, 64, 0.15)' : 'rgba(255, 255, 255, 0.08)'} 0%, ${theme === 'dark' ? 'rgba(32, 32, 32, 0.1)' : 'rgba(255, 255, 255, 0.04)'} 100%);
             opacity: 0;
             transition: all 0.25s ease;
             border-radius: 12px;
@@ -194,8 +194,8 @@ const QuickTenderSelector: React.FC<QuickTenderSelectorProps> = ({
 
           .modern-tender-card:hover {
             transform: translateY(-3px) scale(1.01);
-            border-color: ${theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.35)'};
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18), 0 0 0 1px ${theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.25)'};
+            border-color: ${theme === 'dark' ? 'rgba(64, 64, 64, 0.6)' : 'rgba(255, 255, 255, 0.35)'};
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3), 0 0 0 1px ${theme === 'dark' ? 'rgba(64, 64, 64, 0.5)' : 'rgba(255, 255, 255, 0.25)'};
             background: ${theme === 'dark' ? 'rgba(38, 38, 38, 0.95)' : 'rgba(255, 255, 255, 0.18)'};
           }
 
@@ -271,7 +271,7 @@ const QuickTenderSelector: React.FC<QuickTenderSelectorProps> = ({
             background: linear-gradient(135deg, rgba(82, 196, 26, 0.85) 0%, rgba(82, 196, 26, 0.65) 100%);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.35);
+            border: 1px solid ${theme === 'dark' ? 'rgba(100, 100, 100, 0.4)' : 'rgba(255, 255, 255, 0.35)'};
             color: #ffffff;
             font-weight: 700;
             font-size: 13px;
@@ -289,7 +289,7 @@ const QuickTenderSelector: React.FC<QuickTenderSelectorProps> = ({
             background: linear-gradient(135deg, rgba(24, 144, 255, 0.9) 0%, rgba(24, 144, 255, 0.7) 100%);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.4);
+            border: 1px solid ${theme === 'dark' ? 'rgba(100, 100, 100, 0.4)' : 'rgba(255, 255, 255, 0.4)'};
             color: #ffffff;
             font-weight: 700;
             font-size: 12px;
@@ -313,8 +313,8 @@ const QuickTenderSelector: React.FC<QuickTenderSelectorProps> = ({
           .tender-icon-wrapper {
             width: 42px;
             height: 42px;
-            background: linear-gradient(135deg, ${theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.25)'} 0%, ${theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.15)'} 100%);
-            border: 1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.4)'};
+            background: linear-gradient(135deg, ${theme === 'dark' ? 'rgba(80, 80, 80, 0.3)' : 'rgba(255, 255, 255, 0.25)'} 0%, ${theme === 'dark' ? 'rgba(50, 50, 50, 0.2)' : 'rgba(255, 255, 255, 0.15)'} 100%);
+            border: 1px solid ${theme === 'dark' ? 'rgba(96, 96, 96, 0.4)' : 'rgba(255, 255, 255, 0.4)'};
             border-radius: 12px;
             display: flex;
             align-items: center;
@@ -322,14 +322,14 @@ const QuickTenderSelector: React.FC<QuickTenderSelectorProps> = ({
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
           }
 
           .modern-tender-card:hover .tender-icon-wrapper {
-            background: linear-gradient(135deg, ${theme === 'dark' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.35)'} 0%, ${theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.22)'} 100%);
-            border-color: ${theme === 'dark' ? 'rgba(255, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.5)'};
+            background: linear-gradient(135deg, ${theme === 'dark' ? 'rgba(96, 96, 96, 0.4)' : 'rgba(255, 255, 255, 0.35)'} 0%, ${theme === 'dark' ? 'rgba(64, 64, 64, 0.3)' : 'rgba(255, 255, 255, 0.22)'} 100%);
+            border-color: ${theme === 'dark' ? 'rgba(112, 112, 112, 0.5)' : 'rgba(255, 255, 255, 0.5)'};
             transform: scale(1.08) rotate(3deg);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
           }
 
           .priority-badge {
@@ -346,7 +346,7 @@ const QuickTenderSelector: React.FC<QuickTenderSelectorProps> = ({
             justify-content: center;
             font-size: 10px;
             z-index: 10;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid ${theme === 'dark' ? 'rgba(80, 80, 80, 0.4)' : 'rgba(255, 255, 255, 0.2)'};
           }
 
           .deadline-badge {
@@ -363,12 +363,12 @@ const QuickTenderSelector: React.FC<QuickTenderSelectorProps> = ({
             justify-content: center;
             font-size: 10px;
             z-index: 10;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid ${theme === 'dark' ? 'rgba(80, 80, 80, 0.4)' : 'rgba(255, 255, 255, 0.2)'};
           }
 
           .no-area-tag {
             background: ${theme === 'dark' ? 'rgba(31, 31, 31, 0.8)' : 'rgba(255, 255, 255, 0.1)'};
-            border: 1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.25)'};
+            border: 1px solid ${theme === 'dark' ? 'rgba(80, 80, 80, 0.35)' : 'rgba(255, 255, 255, 0.25)'};
             color: rgba(255, 255, 255, 0.7);
             border-radius: 10px;
             padding: 6px 12px;
