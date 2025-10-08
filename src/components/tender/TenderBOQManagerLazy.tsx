@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import {
   Button,
@@ -255,9 +255,6 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
 
       // Set positions WITH statistics
       setPositions(positionsData);
-
-      // Reset pagination to first page when loading new positions
-      setCurrentPage(1);
 
       // Save initial total cost to prevent reset on position expand
       setInitialTotalCost(totalCost);
@@ -1016,20 +1013,34 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
     }
   };
 
+  // Get regular positions (for search and pagination)
+  const regularPositions = useMemo(() => {
+    return sortPositionsByNumber(
+      positions.filter(p => !p.is_additional && !p.is_orphaned)
+    );
+  }, [positions, sortPositionsByNumber]);
+
   // Handle position search and scroll
-  const handlePositionSearch = (value: string, option: any) => {
+  const handlePositionSearch = useCallback((value: string, option: any) => {
     console.log('🔍 Position search selected:', value, option);
     const positionId = option.key;
 
     // Find the position in the list to determine which page it's on
-    const regularPositions = sortPositionsByNumber(
-      positions.filter(p => !p.is_additional && !p.is_orphaned)
-    );
     const positionIndex = regularPositions.findIndex(p => p.id === positionId);
+
+    console.log('📍 Position search debug:', {
+      positionId,
+      positionIndex,
+      totalRegularPositions: regularPositions.length,
+      pageSize,
+      currentPage
+    });
 
     if (positionIndex !== -1) {
       // Calculate which page this position is on
       const targetPage = Math.floor(positionIndex / pageSize) + 1;
+
+      console.log('📄 Target page:', targetPage, 'Current page:', currentPage);
 
       // Navigate to the correct page if not already there
       if (targetPage !== currentPage) {
@@ -1052,34 +1063,42 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
           cardElement.style.boxShadow = '';
           cardElement.style.transform = '';
         }, 1500);
+      } else {
+        console.log('⚠️ Card element not found for position:', positionId);
       }
     }, 100);
 
     // Clear the search value after selection
     setSearchValue('');
-  };
+  }, [regularPositions, pageSize, currentPage]);
 
   // Get autocomplete options from positions
-  const getPositionOptions = () => {
+  const getPositionOptions = useCallback(() => {
     if (!searchValue) return [];
 
     const searchLower = searchValue.toLowerCase();
-    return positions
-      .filter(pos => pos.work_name.toLowerCase().includes(searchLower))
+    // Filter only from regular positions (not ДОП and not orphaned)
+    return regularPositions
+      .filter(pos =>
+        pos.work_name.toLowerCase().includes(searchLower) ||
+        pos.item_no?.toLowerCase().includes(searchLower) ||
+        pos.position_number?.toString().includes(searchLower)
+      )
       .slice(0, 10) // Limit to 10 results
       .map(pos => ({
         key: pos.id,
-        value: pos.work_name,
+        // Use unique identifier in value to distinguish positions with same name
+        value: `${pos.item_no || pos.position_number} - ${pos.work_name}`,
         label: (
           <div>
             <div style={{ fontWeight: 500 }}>{pos.work_name}</div>
             <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
-              Позиция № {pos.position_number} • {pos.item_no}
+              № п/п {pos.position_number} • {pos.item_no}
             </div>
           </div>
         )
       }));
-  };
+  }, [searchValue, regularPositions]);
 
   // Handle create position
   const handleCreatePosition = async (values: any) => {
@@ -1118,15 +1137,11 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
 
   // Get paginated positions (regular positions only, excluding additional and orphaned)
   const getPaginatedPositions = useCallback(() => {
-    const regularPositions = sortPositionsByNumber(
-      positions.filter(p => !p.is_additional && !p.is_orphaned)
-    );
-
     const startIndex = (currentPage - 1) * pageSize;
     const endIndex = startIndex + pageSize;
 
     return regularPositions.slice(startIndex, endIndex);
-  }, [positions, currentPage, pageSize, sortPositionsByNumber]);
+  }, [regularPositions, currentPage, pageSize]);
 
   // Handle pagination change
   const handlePageChange = (page: number) => {
