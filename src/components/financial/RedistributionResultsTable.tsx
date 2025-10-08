@@ -15,6 +15,7 @@ import { costRedistributionApi } from '../../lib/supabase/api/cost-redistributio
 import { supabase } from '../../lib/supabase/client';
 import { formatQuantity } from '../../utils/formatters';
 import { calculateWorkPortion } from '../../utils/calculations';
+import { exportRedistributionResultsToExcel } from '../../utils/excel-templates';
 import type { ClientPosition } from '../../lib/supabase/types';
 
 const { Text } = Typography;
@@ -31,6 +32,10 @@ interface PositionWithRedistribution extends ClientPosition {
   adjustment_amount: number;
   total_commercial_materials_cost?: number;
   total_commercial_works_cost?: number;
+  item_no: string;              // № п/п из Excel
+  manual_volume: number | null; // Количество ГП для расчета цены за единицу
+  manual_note: string | null;   // Примечание СУ-10
+  position_type?: string;       // Тип позиции для подсветки в Excel
 }
 
 const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
@@ -228,15 +233,38 @@ const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
     onRefresh?.();
   };
 
-  // Колонки таблицы (структура как в /commercial-costs)
+  const handleExport = () => {
+    console.log('🚀 [handleExport] Starting export for tender:', tenderId);
+
+    if (positions.length === 0) {
+      message.warning('Нет данных для экспорта');
+      return;
+    }
+
+    try {
+      const fileName = tenderTitle
+        ? `Форма КП "${tenderTitle}" Версия ${tenderVersion}.xlsx`
+        : `Форма КП.xlsx`;
+
+      exportRedistributionResultsToExcel(positions, tenderTitle, tenderVersion, fileName);
+      message.success('Таблица успешно экспортирована');
+      console.log('✅ [handleExport] Export successful');
+    } catch (error) {
+      console.error('❌ [handleExport] Export failed:', error);
+      message.error('Ошибка при экспорте таблицы');
+    }
+  };
+
+  // Колонки таблицы результатов перераспределения
   const columns = [
     {
-      title: '№',
-      dataIndex: 'position_number',
-      key: 'position_number',
-      width: 60,
+      title: 'Номер раздела',
+      dataIndex: 'item_no',
+      key: 'item_no',
+      width: 100,
       fixed: 'left' as const,
-      render: (num: number) => <Text strong>{num}</Text>
+      align: 'center' as const,
+      render: (itemNo: string) => <Text strong>{itemNo}</Text>
     },
     {
       title: 'Наименование работ',
@@ -244,12 +272,7 @@ const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
       key: 'work_name',
       width: 300,
       fixed: 'left' as const,
-      ellipsis: true,
-      render: (name: string) => (
-        <Tooltip title={name}>
-          <Text>{name}</Text>
-        </Tooltip>
-      )
+      render: (name: string) => <Text>{name}</Text>
     },
     {
       title: 'Ед. изм.',
@@ -259,64 +282,104 @@ const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
       align: 'center' as const
     },
     {
-      title: 'Стоимость работ (исходная)',
-      dataIndex: 'original_works_cost',
-      key: 'original_works_cost',
-      width: 150,
-      align: 'right' as const,
-      render: (cost: number) => (
-        <Text type="secondary">{formatQuantity(cost, 0)} ₽</Text>
+      title: 'Количество ГП',
+      dataIndex: 'manual_volume',
+      key: 'manual_volume',
+      width: 120,
+      align: 'center' as const,
+      render: (volume: number | null) => (
+        <Text>{volume ? formatQuantity(volume, 2) : '—'}</Text>
       )
     },
     {
-      title: 'Корректировка',
+      title: 'Цена материала за ед.',
+      key: 'material_unit_price',
+      width: 140,
+      align: 'center' as const,
+      render: (_: any, record: PositionWithRedistribution) => {
+        const manualVolume = record.manual_volume;
+        if (!manualVolume || manualVolume === 0) {
+          return <Text type="secondary">—</Text>;
+        }
+        const materialsCost = record.total_commercial_materials_cost || 0;
+        const pricePerUnit = materialsCost / manualVolume;
+        return <Text>{formatQuantity(pricePerUnit, 2)}</Text>;
+      }
+    },
+    {
+      title: 'Цена работы за ед.',
+      key: 'work_unit_price',
+      width: 140,
+      align: 'center' as const,
+      render: (_: any, record: PositionWithRedistribution) => {
+        const manualVolume = record.manual_volume;
+        if (!manualVolume || manualVolume === 0) {
+          return <Text type="secondary">—</Text>;
+        }
+        const worksCost = record.redistributed_works_cost || 0;
+        const pricePerUnit = worksCost / manualVolume;
+        return <Text strong style={{ color: '#1890ff' }}>{formatQuantity(pricePerUnit, 2)}</Text>;
+      }
+    },
+    {
+      title: 'Итого материал',
+      dataIndex: 'total_commercial_materials_cost',
+      key: 'total_commercial_materials_cost',
+      width: 140,
+      align: 'center' as const,
+      render: (cost: number) => (
+        <Text>{formatQuantity(cost || 0, 2)}</Text>
+      )
+    },
+    {
+      title: 'Итого работа',
+      dataIndex: 'redistributed_works_cost',
+      key: 'redistributed_works_cost',
+      width: 140,
+      align: 'center' as const,
+      render: (cost: number) => (
+        <Text strong style={{ color: '#1890ff' }}>{formatQuantity(cost, 2)}</Text>
+      )
+    },
+    {
+      title: 'Всего',
+      key: 'total',
+      width: 150,
+      align: 'center' as const,
+      render: (_: any, record: PositionWithRedistribution) => {
+        const total = (record.redistributed_works_cost || 0) + (record.total_commercial_materials_cost || 0);
+        return (
+          <Text strong style={{ fontSize: 16, color: '#52c41a' }}>
+            {formatQuantity(total, 2)}
+          </Text>
+        );
+      }
+    },
+    {
+      title: 'Сумма перераспределения',
       dataIndex: 'adjustment_amount',
       key: 'adjustment_amount',
-      width: 120,
-      align: 'right' as const,
+      width: 160,
+      align: 'center' as const,
       render: (amount: number) => {
         const color = amount > 0 ? 'green' : amount < 0 ? 'red' : 'default';
         const sign = amount > 0 ? '+' : '';
         return (
           <Tag color={color}>
-            {sign}{formatQuantity(amount, 0)} ₽
+            {sign}{formatQuantity(amount, 2)}
           </Tag>
         );
       }
     },
     {
-      title: 'Стоимость работ (после перераспределения)',
-      dataIndex: 'redistributed_works_cost',
-      key: 'redistributed_works_cost',
-      width: 180,
-      align: 'right' as const,
-      render: (cost: number) => (
-        <Text strong style={{ color: '#1890ff' }}>{formatQuantity(cost, 0)} ₽</Text>
+      title: 'Примечание СУ-10',
+      dataIndex: 'manual_note',
+      key: 'manual_note',
+      width: 200,
+      align: 'center' as const,
+      render: (note: string | null) => (
+        <Text type={note ? 'default' : 'secondary'}>{note || '—'}</Text>
       )
-    },
-    {
-      title: 'Стоимость материалов',
-      dataIndex: 'total_commercial_materials_cost',
-      key: 'total_commercial_materials_cost',
-      width: 150,
-      align: 'right' as const,
-      render: (cost: number) => (
-        <Text>{formatQuantity(cost || 0, 0)} ₽</Text>
-      )
-    },
-    {
-      title: 'Итого (с перераспределением)',
-      key: 'total_with_redistribution',
-      width: 180,
-      align: 'right' as const,
-      render: (_: any, record: PositionWithRedistribution) => {
-        const total = (record.redistributed_works_cost || 0) + (record.total_commercial_materials_cost || 0);
-        return (
-          <Text strong style={{ fontSize: 16, color: '#52c41a' }}>
-            {formatQuantity(total, 0)} ₽
-          </Text>
-        );
-      }
     }
   ];
 
@@ -362,43 +425,49 @@ const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
           </Text>
           <Tag color="blue">Позиций: {positions.length}</Tag>
         </Space>
-        <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
-          Обновить
-        </Button>
+        <Space>
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            onClick={handleExport}
+            disabled={positions.length === 0}
+          >
+            Экспорт в Excel
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+            Обновить
+          </Button>
+        </Space>
       </div>
 
       {/* Статистика */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '16px',
         padding: '16px',
         background: '#f5f5f5',
         borderRadius: '8px'
       }}>
         <div>
-          <Text type="secondary">Исходная стоимость работ:</Text>
-          <div><Text strong style={{ fontSize: 18 }}>{formatQuantity(totals.originalWorks, 2)} ₽</Text></div>
-        </div>
-        <div>
-          <Text type="secondary">Корректировка:</Text>
-          <div>
-            <Text strong style={{ fontSize: 18, color: totals.adjustments >= 0 ? '#52c41a' : '#f5222d' }}>
-              {totals.adjustments >= 0 ? '+' : ''}{formatQuantity(totals.adjustments, 2)} ₽
-            </Text>
-          </div>
+          <Text type="secondary">Стоимость материалов:</Text>
+          <div><Text strong style={{ fontSize: 18 }}>{formatQuantity(totals.materials, 2)}</Text></div>
         </div>
         <div>
           <Text type="secondary">Стоимость работ после:</Text>
-          <div><Text strong style={{ fontSize: 18, color: '#1890ff' }}>{formatQuantity(totals.redistributedWorks, 2)} ₽</Text></div>
-        </div>
-        <div>
-          <Text type="secondary">Стоимость материалов:</Text>
-          <div><Text strong style={{ fontSize: 18 }}>{formatQuantity(totals.materials, 2)} ₽</Text></div>
+          <div><Text strong style={{ fontSize: 18, color: '#1890ff' }}>{formatQuantity(totals.redistributedWorks, 2)}</Text></div>
         </div>
         <div>
           <Text type="secondary">Итого:</Text>
-          <div><Text strong style={{ fontSize: 20, color: '#52c41a' }}>{formatQuantity(totals.total, 2)} ₽</Text></div>
+          <div><Text strong style={{ fontSize: 20, color: '#52c41a' }}>{formatQuantity(totals.total, 2)}</Text></div>
+        </div>
+        <div>
+          <Text type="secondary">Сумма перераспределения:</Text>
+          <div>
+            <Text strong style={{ fontSize: 18, color: totals.adjustments >= 0 ? '#52c41a' : '#f5222d' }}>
+              {totals.adjustments >= 0 ? '+' : ''}{formatQuantity(totals.adjustments, 2)}
+            </Text>
+          </div>
         </div>
       </div>
 
@@ -413,7 +482,7 @@ const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
           showSizeChanger: true,
           pageSizeOptions: ['20', '50', '100', '200']
         }}
-        scroll={{ x: 1400 }}
+        scroll={{ x: 1670 }}
         bordered
         size="small"
       />

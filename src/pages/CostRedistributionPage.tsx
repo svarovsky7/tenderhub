@@ -339,31 +339,6 @@ const CostRedistributionPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* View Mode Selector */}
-              {selectedTenderId && (
-                <div className="mt-6 flex justify-center">
-                  <Radio.Group
-                    value={viewMode}
-                    onChange={(e) => setViewMode(e.target.value)}
-                    size="large"
-                    buttonStyle="solid"
-                  >
-                    <Radio.Button value="wizard">
-                      <Space>
-                        <SettingOutlined />
-                        Настройка перераспределения
-                      </Space>
-                    </Radio.Button>
-                    <Radio.Button value="results">
-                      <Space>
-                        <TableOutlined />
-                        Результаты перераспределения
-                      </Space>
-                    </Radio.Button>
-                  </Radio.Group>
-                </div>
-              )}
-
               {/* Tender Selection */}
               <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
                 <div className={`rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
@@ -445,6 +420,31 @@ const CostRedistributionPage: React.FC = () => {
                     selectedTenderId={selectedTenderId}
                     maxItems={6}
                   />
+                </div>
+              )}
+
+              {/* View Mode Selector */}
+              {selectedTenderId && (
+                <div className="mt-6 flex justify-center">
+                  <Radio.Group
+                    value={viewMode}
+                    onChange={(e) => setViewMode(e.target.value)}
+                    size="large"
+                    buttonStyle="solid"
+                  >
+                    <Radio.Button value="wizard">
+                      <Space>
+                        <SettingOutlined />
+                        Настройка перераспределения
+                      </Space>
+                    </Radio.Button>
+                    <Radio.Button value="results">
+                      <Space>
+                        <TableOutlined />
+                        Результаты перераспределения
+                      </Space>
+                    </Radio.Button>
+                  </Radio.Group>
                 </div>
               )}
 

@@ -292,6 +292,145 @@ export const exportCommercialCostsToExcel = (positions: any[], tenderName = '', 
 };
 
 /**
+ * Export redistribution results to Excel with formatting
+ */
+export const exportRedistributionResultsToExcel = (positions: any[], tenderName = '', tenderVersion = 1, fileName = 'redistribution_results.xlsx') => {
+  console.log('🚀 [exportRedistributionResultsToExcel] Exporting positions:', positions.length);
+
+  // Helper function to calculate unit price
+  const calculateUnitPrice = (totalCost: number | undefined, manualVolume: number | null): number | string => {
+    if (!manualVolume || manualVolume === 0 || !totalCost) return '';
+    return totalCost / manualVolume;
+  };
+
+  const exportData = positions.map(position => ({
+    'Номер раздела': position.item_no || '',
+    'Наименование работ': position.work_name || '',
+    'Ед. изм.': position.unit || '',
+    'Количество ГП': position.manual_volume || '',
+    'Цена материала за ед.': calculateUnitPrice(position.total_commercial_materials_cost, position.manual_volume),
+    'Цена работы за ед.': calculateUnitPrice(position.redistributed_works_cost, position.manual_volume),
+    'Итого материал': position.total_commercial_materials_cost ? Math.round(position.total_commercial_materials_cost) : '',
+    'Итого работа': position.redistributed_works_cost ? Math.round(position.redistributed_works_cost) : '',
+    'Всего': position.redistributed_works_cost || position.total_commercial_materials_cost
+      ? Math.round((position.redistributed_works_cost || 0) + (position.total_commercial_materials_cost || 0))
+      : '',
+    'Сумма перераспределения': position.adjustment_amount ? Math.round(position.adjustment_amount) : '',
+    'Примечание СУ-10': position.manual_note || '',
+  }));
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(exportData);
+
+  // Get worksheet range
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+
+  // Define styles
+  const borderStyle = {
+    top: { style: "thin", color: { rgb: "000000" } },
+    bottom: { style: "thin", color: { rgb: "000000" } },
+    left: { style: "thin", color: { rgb: "000000" } },
+    right: { style: "thin", color: { rgb: "000000" } }
+  };
+
+  const centerAlignment = {
+    horizontal: "center",
+    vertical: "center",
+    wrapText: true
+  };
+
+  const leftAlignment = {
+    horizontal: "left",
+    vertical: "center",
+    wrapText: true
+  };
+
+  const lightRedColor = 'FFCCCC'; // Light red for zero cost rows
+
+  // Define number formats
+  const decimalFormat = '#,##0.00'; // Format with 2 decimal places
+
+  // Column indices for formatting - all numeric columns use 2 decimal places
+  const decimalColumns = [3, 4, 5, 6, 7, 8, 9]; // Количество ГП, Цена материала за ед., Цена работы за ед., Итого материал, Итого работа, Всего, Сумма перераспределения
+
+  // Apply styles to all cells
+  for (let row = 0; row <= range.e.r; row++) {
+    // Check if this row has zero cost AND is executable type (row > 0 to skip header)
+    const position = row > 0 ? positions[row - 1] : null;
+    const totalCost = position
+      ? (position.redistributed_works_cost || 0) + (position.total_commercial_materials_cost || 0)
+      : 1;
+    const hasZeroCost = position &&
+      position.position_type === 'executable' &&
+      totalCost === 0;
+
+    for (let col = 0; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = ws[cellAddress];
+
+      if (cell) {
+        if (!cell.s) cell.s = {};
+
+        // Add borders to all cells
+        cell.s.border = borderStyle;
+
+        // Add alignment (column 1 is "Наименование работ")
+        if (col === 1) {
+          cell.s.alignment = leftAlignment;
+        } else {
+          cell.s.alignment = centerAlignment;
+        }
+
+        // Add number format for numeric columns (skip header row)
+        if (row > 0 && decimalColumns.includes(col)) {
+          cell.s.numFmt = decimalFormat;
+        }
+
+        // Add light red background for executable rows with zero cost
+        if (hasZeroCost && row > 0) {
+          cell.s.fill = {
+            patternType: "solid",
+            fgColor: { rgb: lightRedColor }
+          };
+        }
+
+        // Bold header row
+        if (row === 0) {
+          cell.s.font = { bold: true };
+        }
+      }
+    }
+  }
+
+  // Set column widths
+  const colWidths = [
+    { wch: 15 }, // Номер раздела
+    { wch: 40 }, // Наименование работ
+    { wch: 10 }, // Ед. изм.
+    { wch: 12 }, // Количество ГП
+    { wch: 20 }, // Цена материала за ед.
+    { wch: 20 }, // Цена работы за ед.
+    { wch: 15 }, // Итого материал
+    { wch: 15 }, // Итого работа
+    { wch: 15 }, // Всего
+    { wch: 20 }, // Сумма перераспределения
+    { wch: 25 }, // Примечание СУ-10
+  ];
+  ws['!cols'] = colWidths;
+
+  // Freeze the first row (header)
+  ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft" };
+
+  // Add title and tender info
+  const sheetName = 'Форма КП';
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+  XLSX.writeFile(wb, fileName);
+
+  console.log('✅ [exportRedistributionResultsToExcel] Export completed');
+};
+
+/**
  * Export construction costs to Excel
  */
 export const exportConstructionCostsToExcel = (costs: any[], fileName = 'construction_costs.xlsx') => {
