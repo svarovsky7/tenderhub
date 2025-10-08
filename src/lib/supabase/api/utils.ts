@@ -47,9 +47,9 @@ export interface PaginationOptions {
 }
 
 export const applyPagination = (query: any, options: PaginationOptions = {}) => {
-  const { page = 1, limit = 20 } = options;
+  const { page = 1, limit = 1000 } = options;
   const from = (page - 1) * limit;
   const to = from + limit - 1;
-  
+
   return query.range(from, to);
 };

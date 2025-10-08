@@ -85,7 +85,6 @@ export const getTableColumns = ({
       dataIndex: 'description',
       key: 'description',
       width: 240,
-      ellipsis: { showTitle: false },
       render: (text, record) => {
         let linkedWork = null;
         if ((record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link) {
@@ -111,17 +110,15 @@ export const getTableColumns = ({
         const isLinkedMaterial = (record.item_type === 'material' || record.item_type === 'sub_material') && record.work_link;
 
         return (
-          <Tooltip title={text} placement="topLeft">
-            <div className={isLinkedMaterial ? 'pl-6' : ''}>
-              <div className="py-1 text-sm">{text}</div>
-              {isLinkedMaterial && linkedWork && (
-                <div className="text-xs text-gray-500 mt-1 truncate">
-                  <LinkOutlined className="mr-1" />
-                  {linkedWork.description}
-                </div>
-              )}
-            </div>
-          </Tooltip>
+          <div className={isLinkedMaterial ? 'pl-6' : ''}>
+            <div className="py-1 text-sm whitespace-normal break-words">{text}</div>
+            {isLinkedMaterial && linkedWork && (
+              <div className="text-xs text-gray-500 mt-1 whitespace-normal break-words">
+                <LinkOutlined className="mr-1" />
+                {linkedWork.description}
+              </div>
+            )}
+          </div>
         );
       }
     },

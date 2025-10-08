@@ -1161,7 +1161,8 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
               placeholder="Поиск по наименованию позиции"
               allowClear
               popupMatchSelectWidth={false}
-              dropdownStyle={{ minWidth: 600 }}
+              dropdownStyle={{ maxWidth: 500, minWidth: 400 }}
+              getPopupContainer={(trigger) => trigger.parentElement || document.body}
             />
             <Button
               type="primary"

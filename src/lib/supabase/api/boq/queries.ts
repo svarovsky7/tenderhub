@@ -101,7 +101,7 @@ export const boqQueryApi = {
         };
       }
 
-      const { page = 1, limit = 20 } = pagination;
+      const { page = 1, limit = 1000 } = pagination;
       
       console.log('✅ BOQ items retrieved successfully');
       return {
@@ -187,7 +187,7 @@ export const boqQueryApi = {
         };
       }
 
-      const { page = 1, limit = 20 } = pagination;
+      const { page = 1, limit = 1000 } = pagination;
       
       // Batch load cost categories for all items with detail_cost_category_id
       const itemsWithCategoryIds = (data || []).filter(item => item.detail_cost_category_id);
