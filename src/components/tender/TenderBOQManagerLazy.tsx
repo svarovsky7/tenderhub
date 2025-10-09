@@ -105,7 +105,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const pageSize = 50; // Fixed page size
+  const [pageSize, setPageSize] = useState<number>(50); // Default page size
 
   // Sort positions by position number only (preserving Excel file order)
   const sortPositionsByNumber = useCallback((positions: ClientPositionWithStats[]): ClientPositionWithStats[] => {
@@ -1144,8 +1144,13 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
   }, [regularPositions, currentPage, pageSize]);
 
   // Handle pagination change
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+  const handlePageChange = (page: number, newPageSize?: number) => {
+    if (newPageSize && newPageSize !== pageSize) {
+      setPageSize(newPageSize);
+      setCurrentPage(1); // Reset to first page when page size changes
+    } else {
+      setCurrentPage(page);
+    }
     // Scroll to top of positions list
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1307,14 +1312,15 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
           ))}
 
           {/* Pagination */}
-          {positions.filter(p => !p.is_additional && !p.is_orphaned).length > pageSize && (
+          {positions.filter(p => !p.is_additional && !p.is_orphaned).length > 0 && (
             <div className="flex justify-center mt-6 mb-4">
               <Pagination
                 current={currentPage}
                 pageSize={pageSize}
                 total={positions.filter(p => !p.is_additional && !p.is_orphaned).length}
                 onChange={handlePageChange}
-                showSizeChanger={false}
+                showSizeChanger={true}
+                pageSizeOptions={['50', '100', '200', '500', '1000']}
                 showTotal={(total, range) => `${range[0]}-${range[1]} из ${total} позиций`}
               />
             </div>
