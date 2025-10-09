@@ -614,7 +614,6 @@ const CostRedistributionPage: React.FC = () => {
                     <RedistributionResultsTable
                       tenderId={selectedTenderId}
                       tenderTitle={selectedTender?.title || ''}
-                      onRefresh={handleRefresh}
                     />
                   </Card>
                 )}

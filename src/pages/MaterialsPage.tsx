@@ -65,13 +65,10 @@ const MaterialsPage: React.FC = () => {
       if (result.error) {
         throw new Error(typeof result.error === 'string' ? result.error : 'Ошибка при создании материала');
       }
-      if (!result.data) {
-        throw new Error('Не удалось получить данные созданного материала');
-      }
       return result.data;
     },
     onSuccess: () => {
-      message.success('Материал успешно создан');
+      message.success('Материал добавлен');
       queryClient.invalidateQueries({ queryKey: ['materials'] });
       queryClient.invalidateQueries({ queryKey: ['material-names'] });
       setEditingMaterialId(null);
@@ -392,26 +389,19 @@ const MaterialsPage: React.FC = () => {
     },
   ];
 
-  // Данные для таблицы с новой строкой при добавлении
-  const tableData = [
-    ...(isAdding ? [{
-      id: 'new',
-      name: '',
-      unit: 'шт',
-      item_type: 'material',
-      material_type: 'основной',
-      unit_rate: 0,
-      currency_type: 'RUB',
-      delivery_price_type: 'included',
-      delivery_amount: 0,
-      consumption_coefficient: 1,
-      quote_link: null,
-    } as Material] : []),
-    ...(data?.data || [])
-  ];
+  // Данные для таблицы
+  const tableData = data?.data || [];
 
   const deliveryType = Form.useWatch('delivery_price_type', form);
   const selectedCurrency = Form.useWatch('currency_type', form) || 'RUB';
+  const itemType = Form.useWatch('item_type', form) || 'material';
+
+  // Цветовые схемы для разных типов материалов
+  const colorScheme = {
+    'material': { bg: 'rgba(33, 150, 243, 0.05)', border: '#2196f3' }, // голубой
+    'sub_material': { bg: 'rgba(139, 195, 74, 0.05)', border: '#8bc34a' } // зеленый
+  };
+  const colors = colorScheme[itemType] || colorScheme['material'];
 
   return (
       <div className="w-full">
@@ -469,7 +459,7 @@ const MaterialsPage: React.FC = () => {
               </Row>
             </div>
 
-            {/* Materials List with expandable inline form */}
+            {/* Materials List */}
             <div style={{
               background: 'white',
               borderRadius: '12px',
@@ -561,15 +551,195 @@ const MaterialsPage: React.FC = () => {
                 )}
               </div>
 
+              {/* Inline Add Form */}
+              {isAdding && (
+                <div style={{
+                  padding: '16px',
+                  backgroundColor: colors.bg,
+                  border: `2px solid ${colors.border}`,
+                  borderRadius: '8px',
+                  marginBottom: '16px'
+                }}>
+                  <Form
+                    form={form}
+                    layout="vertical"
+                    onFinish={handleSaveInlineEdit}
+                    size="small"
+                  >
+                    <Row gutter={[8, 8]}>
+                      <Col span={2}>
+                        <Form.Item
+                          name="item_type"
+                          label="Тип элемента"
+                          rules={[{ required: true, message: 'Выберите тип' }]}
+                          style={{ marginBottom: 0 }}
+                        >
+                          <Select size="small">
+                            <Select.Option value="material">Материал</Select.Option>
+                            <Select.Option value="sub_material">Суб-мат</Select.Option>
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                      <Col span={3} style={{ paddingLeft: 0 }}>
+                        <Form.Item
+                          name="material_type"
+                          label="Тип материала"
+                          style={{ marginBottom: 0 }}
+                        >
+                          <Select size="small">
+                            <Select.Option value="основной">Основной</Select.Option>
+                            <Select.Option value="вспомогательный">Вспомогательный</Select.Option>
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                      <Col span={6}>
+                        <Form.Item
+                          name="name"
+                          label="Наименование"
+                          rules={[{ required: true, message: 'Введите наименование' }]}
+                        >
+                          <AutoComplete
+                            options={nameOptions}
+                            onSearch={handleSearchName}
+                            onSelect={handleSelectName}
+                            onChange={handleChangeName}
+                            placeholder="Введите наименование материала"
+                            allowClear
+                          />
+                        </Form.Item>
+                      </Col>
+                      <Col span={2}>
+                        <Form.Item
+                          name="unit"
+                          label="Ед."
+                          rules={[{ required: true, message: 'Выберите единицу' }]}
+                        >
+                          <Select
+                            disabled={isUnitLocked}
+                            size="small"
+                            suffixIcon={isUnitLocked ? null : undefined}
+                            style={isUnitLocked ? { cursor: 'not-allowed' } : undefined}
+                          >
+                            <Select.Option value="шт">шт</Select.Option>
+                            <Select.Option value="м">м</Select.Option>
+                            <Select.Option value="м2">м²</Select.Option>
+                            <Select.Option value="м3">м³</Select.Option>
+                            <Select.Option value="кг">кг</Select.Option>
+                            <Select.Option value="т">т</Select.Option>
+                            <Select.Option value="л">л</Select.Option>
+                            <Select.Option value="комплект">компл</Select.Option>
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                      <Col span={2}>
+                        <Form.Item
+                          name="consumption_coefficient"
+                          label="К. расх"
+                          rules={[{ type: 'number', min: 1, message: 'Минимум 1' }]}
+                        >
+                          <InputNumber
+                            min={1}
+                            step={0.01}
+                            placeholder="1.00"
+                            className="w-full"
+                            size="small"
+                          />
+                        </Form.Item>
+                      </Col>
+                      <Col span={2}>
+                        <Form.Item
+                          name="currency_type"
+                          label="Валюта"
+                        >
+                          <Select size="small">
+                            <Select.Option value="RUB">₽</Select.Option>
+                            <Select.Option value="USD">$</Select.Option>
+                            <Select.Option value="EUR">€</Select.Option>
+                            <Select.Option value="CNY">¥</Select.Option>
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                      <Col span={2}>
+                        <Form.Item
+                          name="unit_rate"
+                          label="Цена"
+                        >
+                          <InputNumber
+                            min={0}
+                            step={0.01}
+                            placeholder="0.00"
+                            className="w-full"
+                            size="small"
+                          />
+                        </Form.Item>
+                      </Col>
+                      <Col span={3}>
+                        <Form.Item
+                          name="delivery_price_type"
+                          label="Доставка"
+                        >
+                          <Select size="small">
+                            <Select.Option value="included">Включено</Select.Option>
+                            <Select.Option value="not_included">+3%</Select.Option>
+                            <Select.Option value="amount">Сумма</Select.Option>
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                      {deliveryType === 'amount' && (
+                        <Col span={2}>
+                          <Form.Item
+                            name="delivery_amount"
+                            label="Сумма"
+                          >
+                            <InputNumber
+                              min={0}
+                              step={0.01}
+                              placeholder="0.00"
+                              className="w-full"
+                              size="small"
+                            />
+                          </Form.Item>
+                        </Col>
+                      )}
+                    </Row>
+
+                    <Row gutter={[8, 8]}>
+                      <Col span={20}>
+                        <Form.Item
+                          name="quote_link"
+                          label="Ссылка на КП"
+                        >
+                          <Input placeholder="https://..." />
+                        </Form.Item>
+                      </Col>
+                      <Col span={4}>
+                        <Form.Item label=" ">
+                          <Space style={{ float: 'right' }}>
+                            <Button onClick={handleCancelInlineEdit}>
+                              Отмена
+                            </Button>
+                            <Button
+                              type="primary"
+                              htmlType="submit"
+                              icon={<SaveOutlined />}
+                              loading={createMutation.isPending}
+                            >
+                              Добавить
+                            </Button>
+                          </Space>
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                  </Form>
+                </div>
+              )}
+
               <Table
                   columns={columns}
                   dataSource={tableData}
                   rowKey="id"
                   loading={isLoading}
-                  rowClassName={(record) => {
-                    if (record.id === 'new') return 'row-new-hidden';
-                    return record.item_type === 'sub_material' ? 'row-type-auxiliary' : 'row-type-material';
-                  }}
+                  rowClassName={(record) => record.item_type === 'sub_material' ? 'row-type-auxiliary' : 'row-type-material'}
                   pagination={{
                     current: currentPage,
                     pageSize: pageSize,
@@ -583,10 +753,9 @@ const MaterialsPage: React.FC = () => {
                     },
                   }}
                   expandable={{
-                    expandedRowKeys: editingMaterialId && editingMaterialId !== 'new' ? [editingMaterialId] : isAdding ? ['new'] : [],
+                    expandedRowKeys: editingMaterialId && editingMaterialId !== 'new' ? [editingMaterialId] : [],
                     expandedRowRender: (record) => {
-                      if ((editingMaterialId === record.id) || (isAdding && record.id === 'new')) {
-                        const isNewRecord = record.id === 'new';
+                      if (editingMaterialId === record.id && editingMaterialId !== 'new') {
                         const currencySymbol = getCurrencySymbol(selectedCurrency);
                         const itemType = form.getFieldValue('item_type') || record.item_type || 'material';
 
@@ -768,9 +937,9 @@ const MaterialsPage: React.FC = () => {
                                         type="primary"
                                         htmlType="submit"
                                         icon={<SaveOutlined />}
-                                        loading={createMutation.isPending || updateMutation.isPending}
+                                        loading={updateMutation.isPending}
                                       >
-                                        {isNewRecord ? 'Добавить' : 'Сохранить'}
+                                        Сохранить
                                       </Button>
                                     </Space>
                                   </Form.Item>

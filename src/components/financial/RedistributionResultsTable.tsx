@@ -6,10 +6,9 @@ import {
   Typography,
   Space,
   Tag,
-  Tooltip,
   Button
 } from 'antd';
-import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
+import { DownloadOutlined } from '@ant-design/icons';
 import { clientPositionsApi, tendersApi } from '../../lib/supabase/api';
 import { costRedistributionApi } from '../../lib/supabase/api/cost-redistribution';
 import { supabase } from '../../lib/supabase/client';
@@ -24,7 +23,6 @@ const { Text } = Typography;
 interface RedistributionResultsTableProps {
   tenderId: string;
   tenderTitle: string;
-  onRefresh?: () => void;
 }
 
 interface PositionWithRedistribution extends ClientPosition {
@@ -41,8 +39,7 @@ interface PositionWithRedistribution extends ClientPosition {
 
 const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
   tenderId,
-  tenderTitle,
-  onRefresh
+  tenderTitle
 }) => {
   console.log('🚀 RedistributionResultsTable rendered for tender:', tenderId);
 
@@ -51,6 +48,8 @@ const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
   const [positions, setPositions] = useState<PositionWithRedistribution[]>([]);
   const [redistributionId, setRedistributionId] = useState<string | null>(null);
   const [tenderVersion, setTenderVersion] = useState<number>(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Загрузить активное перераспределение и позиции
   const loadRedistributionResults = useCallback(async () => {
@@ -229,11 +228,6 @@ const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
   useEffect(() => {
     loadRedistributionResults();
   }, [loadRedistributionResults]);
-
-  const handleRefresh = () => {
-    loadRedistributionResults();
-    onRefresh?.();
-  };
 
   const handleExport = () => {
     console.log('🚀 [handleExport] Starting export for tender:', tenderId);
@@ -427,19 +421,14 @@ const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
           </Text>
           <Tag color="blue">Позиций: {positions.length}</Tag>
         </Space>
-        <Space>
-          <Button
-            type="primary"
-            icon={<DownloadOutlined />}
-            onClick={handleExport}
-            disabled={positions.length === 0}
-          >
-            Экспорт в Excel
-          </Button>
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
-            Обновить
-          </Button>
-        </Space>
+        <Button
+          type="primary"
+          icon={<DownloadOutlined />}
+          onClick={handleExport}
+          disabled={positions.length === 0}
+        >
+          Экспорт в Excel
+        </Button>
       </div>
 
       {/* Статистика */}
@@ -454,20 +443,35 @@ const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
       }}>
         <div>
           <Text type="secondary">Стоимость материалов:</Text>
-          <div><Text strong style={{ fontSize: 18 }}>{formatQuantity(totals.materials, 2)}</Text></div>
+          <div>
+            <Text strong style={{ fontSize: 18 }}>
+              {formatQuantity(totals.materials, 2)}
+            </Text>
+          </div>
         </div>
         <div>
-          <Text type="secondary">Стоимость работ после:</Text>
-          <div><Text strong style={{ fontSize: 18, color: '#1890ff' }}>{formatQuantity(totals.redistributedWorks, 2)}</Text></div>
+          <Text type="secondary">Стоимость работ:</Text>
+          <div>
+            <Text strong style={{ fontSize: 18, color: '#1890ff' }}>
+              {formatQuantity(totals.redistributedWorks, 2)}
+            </Text>
+          </div>
         </div>
         <div>
           <Text type="secondary">Итого:</Text>
-          <div><Text strong style={{ fontSize: 20, color: '#52c41a' }}>{formatQuantity(totals.total, 2)}</Text></div>
+          <div>
+            <Text strong style={{ fontSize: 20, color: '#52c41a' }}>
+              {formatQuantity(totals.total, 2)}
+            </Text>
+          </div>
         </div>
         <div>
           <Text type="secondary">Сумма перераспределения:</Text>
           <div>
-            <Text strong style={{ fontSize: 18, color: totals.adjustments >= 0 ? '#52c41a' : '#f5222d' }}>
+            <Text strong style={{
+              fontSize: 18,
+              color: totals.adjustments >= 0 ? '#52c41a' : '#f5222d'
+            }}>
               {totals.adjustments >= 0 ? '+' : ''}{formatQuantity(totals.adjustments, 2)}
             </Text>
           </div>
@@ -480,10 +484,15 @@ const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
         dataSource={positions}
         rowKey="id"
         pagination={{
-          pageSize: 50,
+          current: currentPage,
+          pageSize: pageSize,
           showTotal: (total) => `Всего позиций: ${total}`,
           showSizeChanger: true,
-          pageSizeOptions: ['20', '50', '100', '200']
+          pageSizeOptions: ['20', '50', '100', '200'],
+          onChange: (page, size) => {
+            setCurrentPage(page);
+            setPageSize(size);
+          }
         }}
         scroll={{ x: 1670 }}
         bordered

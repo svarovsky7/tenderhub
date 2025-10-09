@@ -90,11 +90,10 @@ export const worksWithNamesApi = {
       }
 
       // Create work with name_id
-      const { data: newWork, error: workError } = await supabase
+      const { data: newWorks, error: workError } = await supabase
         .from('works_library')
         .insert({ ...workData, name_id: nameId })
-        .select('*')
-        .single();
+        .select('*');
 
       if (workError) {
         return {
@@ -102,18 +101,30 @@ export const worksWithNamesApi = {
         };
       }
 
+      // Get first work from array
+      const newWork = newWorks?.[0];
+
+      // If insert succeeded but data wasn't returned, construct response from input
+      if (!newWork) {
+        console.warn('⚠️ Work created but data not returned, using fallback');
+        return {
+          data: { ...workData, name_id: nameId, name, unit } as Work,
+          message: 'Работа успешно создана',
+        };
+      }
+
       // Get the complete work with name
       const { data: completeWork, error: fetchError } = await supabase
         .from('works_library_with_names')
         .select('*')
-        .eq('id', newWork!.id)
+        .eq('id', newWork.id)
         .maybeSingle();
 
       if (fetchError) {
         console.warn('⚠️ Warning: Could not fetch created work details:', fetchError);
         // Return basic data if view is not ready - this is NOT an error
         return {
-          data: { ...newWork!, name, unit } as Work,
+          data: { ...newWork, name, unit } as Work,
           message: 'Работа успешно создана',
         };
       }
@@ -122,7 +133,7 @@ export const worksWithNamesApi = {
         // View might not be updated yet, return basic data - this is NOT an error
         console.warn('⚠️ View not updated yet, returning basic data');
         return {
-          data: { ...newWork!, name, unit } as Work,
+          data: { ...newWork, name, unit } as Work,
           message: 'Работа успешно создана',
         };
       }

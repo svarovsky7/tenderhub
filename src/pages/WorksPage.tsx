@@ -64,13 +64,10 @@ const WorksPage: React.FC = () => {
       if (result.error) {
         throw new Error(typeof result.error === 'string' ? result.error : 'Ошибка при создании работы');
       }
-      if (!result.data) {
-        throw new Error('Не удалось получить данные созданной работы');
-      }
       return result.data;
     },
     onSuccess: () => {
-      message.success('Работа успешно создана');
+      message.success('Работа добавлена');
       queryClient.invalidateQueries({ queryKey: ['works'] });
       queryClient.invalidateQueries({ queryKey: ['work-names'] });
       setEditingWorkId(null);
@@ -320,20 +317,18 @@ const WorksPage: React.FC = () => {
     },
   ];
 
-  // Данные для таблицы с новой строкой при добавлении
-  const tableData = [
-    ...(isAdding ? [{
-      id: 'new',
-      name: '',
-      unit: 'м2',
-      unit_rate: 0,
-      currency_type: 'RUB',
-      item_type: 'work',
-    } as Work] : []),
-    ...(data?.data || [])
-  ];
+  // Данные для таблицы
+  const tableData = data?.data || [];
 
   const selectedCurrency = Form.useWatch('currency_type', form) || 'RUB';
+  const itemType = Form.useWatch('item_type', form) || 'work';
+
+  // Цветовые схемы для разных типов работ
+  const colorScheme = {
+    'work': { bg: 'rgba(255, 152, 0, 0.05)', border: '#ff9800' }, // оранжевый
+    'sub_work': { bg: 'rgba(156, 39, 176, 0.05)', border: '#9c27b0' } // фиолетовый
+  };
+  const colors = colorScheme[itemType] || colorScheme['work'];
 
   return (
       <div className="w-full">
@@ -481,15 +476,132 @@ const WorksPage: React.FC = () => {
                 )}
               </div>
 
+              {/* Inline Add Form */}
+              {isAdding && (
+                <div style={{
+                  padding: '16px',
+                  backgroundColor: colors.bg,
+                  border: `2px solid ${colors.border}`,
+                  borderRadius: '8px',
+                  marginBottom: '16px'
+                }}>
+                  <Form
+                    form={form}
+                    layout="vertical"
+                    onFinish={handleSaveInlineEdit}
+                    size="small"
+                  >
+                    <Row gutter={[8, 8]}>
+                      <Col span={2}>
+                        <Form.Item
+                          name="item_type"
+                          label="Тип элемента"
+                          rules={[{ required: true, message: 'Выберите тип' }]}
+                        >
+                          <Select size="small">
+                            <Select.Option value="work">Работа</Select.Option>
+                            <Select.Option value="sub_work">Суб-раб</Select.Option>
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                      <Col span={7}>
+                        <Form.Item
+                          name="name"
+                          label="Наименование"
+                          rules={[{ required: true, message: 'Введите наименование' }]}
+                        >
+                          <AutoComplete
+                            options={nameOptions}
+                            onSearch={handleSearchName}
+                            onSelect={handleSelectName}
+                            onChange={handleChangeName}
+                            placeholder="Введите наименование работы"
+                            allowClear
+                          />
+                        </Form.Item>
+                      </Col>
+                      <Col span={3}>
+                        <Form.Item
+                          name="unit"
+                          label="Ед. изм."
+                          rules={[{ required: true, message: 'Выберите единицу' }]}
+                        >
+                          <Select
+                            disabled={isUnitLocked}
+                            size="small"
+                            suffixIcon={isUnitLocked ? null : undefined}
+                            style={isUnitLocked ? { cursor: 'not-allowed' } : undefined}
+                          >
+                            <Select.Option value="м2">м²</Select.Option>
+                            <Select.Option value="м">м</Select.Option>
+                            <Select.Option value="м3">м³</Select.Option>
+                            <Select.Option value="шт">шт</Select.Option>
+                            <Select.Option value="кг">кг</Select.Option>
+                            <Select.Option value="т">т</Select.Option>
+                            <Select.Option value="час">час</Select.Option>
+                            <Select.Option value="смена">смена</Select.Option>
+                            <Select.Option value="комплект">комплект</Select.Option>
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                      <Col span={2}>
+                        <Form.Item
+                          name="currency_type"
+                          label="Валюта"
+                        >
+                          <Select size="small">
+                            <Select.Option value="RUB">₽</Select.Option>
+                            <Select.Option value="USD">$</Select.Option>
+                            <Select.Option value="EUR">€</Select.Option>
+                            <Select.Option value="CNY">¥</Select.Option>
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                      <Col span={10}>
+                        <Form.Item
+                          name="unit_rate"
+                          label="Стоимость"
+                        >
+                          <InputNumber
+                            min={0}
+                            step={0.01}
+                            placeholder="0.00"
+                            className="w-full"
+                            size="small"
+                          />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+
+                    <Row gutter={[8, 8]}>
+                      <Col span={24}>
+                        <Form.Item label=" ">
+                          <Space style={{ float: 'right' }}>
+                            <Button onClick={handleCancelInlineEdit}>
+                              Отмена
+                            </Button>
+                            <Button
+                              type="primary"
+                              htmlType="submit"
+                              icon={<SaveOutlined />}
+                              loading={createMutation.isPending}
+                            >
+                              Добавить
+                            </Button>
+                          </Space>
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                  </Form>
+                </div>
+              )}
+
               <Table
                   columns={columns}
                   dataSource={tableData}
                   rowKey="id"
                   loading={isLoading}
-                  rowClassName={(record) => {
-                    if (record.id === 'new') return 'row-new-hidden';
-                    return record.item_type === 'sub_work' ? 'row-type-subwork' : 'row-type-work';
-                  }}
+                  rowClassName={(record) => record.item_type === 'sub_work' ? 'row-type-subwork' : 'row-type-work'}
                   pagination={{
                     current: currentPage,
                     pageSize: pageSize,
@@ -503,10 +615,9 @@ const WorksPage: React.FC = () => {
                     },
                   }}
                   expandable={{
-                    expandedRowKeys: editingWorkId && editingWorkId !== 'new' ? [editingWorkId] : isAdding ? ['new'] : [],
+                    expandedRowKeys: editingWorkId && editingWorkId !== 'new' ? [editingWorkId] : [],
                     expandedRowRender: (record) => {
-                      if ((editingWorkId === record.id) || (isAdding && record.id === 'new')) {
-                        const isNewRecord = record.id === 'new';
+                      if (editingWorkId === record.id && editingWorkId !== 'new') {
                         const currencySymbol = getCurrencySymbol(selectedCurrency);
 
                         const itemType = form.getFieldValue('item_type') || record.item_type || 'work';
@@ -624,9 +735,9 @@ const WorksPage: React.FC = () => {
                                         type="primary"
                                         htmlType="submit"
                                         icon={<SaveOutlined />}
-                                        loading={createMutation.isPending || updateMutation.isPending}
+                                        loading={updateMutation.isPending}
                                       >
-                                        {isNewRecord ? 'Добавить' : 'Сохранить'}
+                                        Сохранить
                                       </Button>
                                     </Space>
                                   </Form.Item>

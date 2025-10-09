@@ -90,11 +90,10 @@ export const materialsWithNamesApi = {
       }
 
       // Create material with name_id
-      const { data: newMaterial, error: materialError } = await supabase
+      const { data: newMaterials, error: materialError } = await supabase
         .from('materials_library')
         .insert({ ...materialData, name_id: nameId })
-        .select('*')
-        .single();
+        .select('*');
 
       if (materialError) {
         return {
@@ -102,18 +101,30 @@ export const materialsWithNamesApi = {
         };
       }
 
+      // Get first material from array
+      const newMaterial = newMaterials?.[0];
+
+      // If insert succeeded but data wasn't returned, construct response from input
+      if (!newMaterial) {
+        console.warn('⚠️ Material created but data not returned, using fallback');
+        return {
+          data: { ...materialData, name_id: nameId, name, unit } as Material,
+          message: 'Материал успешно создан',
+        };
+      }
+
       // Get the complete material with name
       const { data: completeMaterial, error: fetchError } = await supabase
         .from('materials_library_with_names')
         .select('*')
-        .eq('id', newMaterial!.id)
+        .eq('id', newMaterial.id)
         .maybeSingle();
 
       if (fetchError) {
         console.warn('⚠️ Warning: Could not fetch created material details:', fetchError);
         // Return basic data if view is not ready - this is NOT an error
         return {
-          data: { ...newMaterial!, name, unit } as Material,
+          data: { ...newMaterial, name, unit } as Material,
           message: 'Материал успешно создан',
         };
       }
@@ -122,7 +133,7 @@ export const materialsWithNamesApi = {
         // View might not be updated yet, return basic data - this is NOT an error
         console.warn('⚠️ View not updated yet, returning basic data');
         return {
-          data: { ...newMaterial!, name, unit } as Material,
+          data: { ...newMaterial, name, unit } as Material,
           message: 'Материал успешно создан',
         };
       }
