@@ -269,22 +269,31 @@ const CommercialCostsPage: React.FC = () => {
 
   // Handle quick tender selection
   const handleQuickTenderSelect = useCallback((tender: Tender) => {
-    console.log('🚀 Quick tender selected:', tender.id, tender.title);
-    
+    console.log('🚀 Quick tender selected for Commercial Costs:', tender.id, tender.title);
+
     // Auto-fill the tender selection fields
     const tenderNameKey = `${tender.title}___${tender.client_name}`;
     setSelectedTenderName(tenderNameKey);
     setSelectedTenderId(tender.id);
-    
-    console.log('✅ Auto-filled tender selection:', {
+    setPreviousTenderId(null); // Clear previous tender on quick select
+
+    console.log('✅ Auto-filled tender selection for Commercial Costs:', {
       tenderNameKey,
       tenderId: tender.id,
       version: tender.version
     });
-    
+
     // Show content after brief delay for smooth transition
-    setTimeout(() => setIsContentVisible(true), 150);
-    
+    setTimeout(() => {
+      setIsContentVisible(true);
+
+      // Mark first selection as complete AFTER animation finishes
+      // Animation duration is 600ms, wait a bit longer to be safe
+      setTimeout(() => {
+        setIsFirstSelection(false);
+      }, 650);
+    }, 150);
+
     // Scroll to content section
     setTimeout(() => {
       const contentSection = document.getElementById('tender-content-section');
@@ -300,8 +309,8 @@ const CommercialCostsPage: React.FC = () => {
         {`
           .commercial-page-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
-            border-radius: 16px 16px 0 0;
-            margin-bottom: 0;
+            border-radius: 16px;
+            margin-bottom: 24px;
             padding: 32px;
             padding-bottom: 32px;
             color: white;
@@ -364,7 +373,7 @@ const CommercialCostsPage: React.FC = () => {
         <div className="w-full min-h-full bg-gray-50">
           <div className="p-6">
             {/* Header */}
-            <div className={`commercial-page-header ${theme === 'dark' ? 'dark' : ''}`} style={{ borderRadius: '16px' }}>
+            <div className={`commercial-page-header ${theme === 'dark' ? 'dark' : ''}`}>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-4">
                   <div
@@ -383,7 +392,7 @@ const CommercialCostsPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="commercial-action-buttons">
-                  {selectedTenderId && (
+                  {(selectedTenderId || previousTenderId) && (
                     <Button
                       className="commercial-action-btn materials-works-action-btn-transparent"
                       style={{
@@ -426,14 +435,23 @@ const CommercialCostsPage: React.FC = () => {
               </div>
 
               {/* Tender Selection and Commercial Stats */}
-              <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
+              <div
+                className={`flex items-center gap-4 mt-6 ${!(selectedTenderId || previousTenderId) ? 'justify-center' : 'justify-start'}`}
+                style={{
+                  opacity: (selectedTenderId || previousTenderId) && isContentVisible ? 1 : ((selectedTenderId || previousTenderId) ? 0 : 1),
+                  transform: (selectedTenderId || previousTenderId) && isContentVisible ? 'translateY(0)' : ((selectedTenderId || previousTenderId) ? 'translateY(-10px)' : 'translateY(0)'),
+                  transition: isFirstSelection && (selectedTenderId || previousTenderId) && isContentVisible
+                    ? 'opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s'
+                    : 'none'
+                }}
+              >
                 {/* Tender Selection */}
-                <div className={`tender-selection-block rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
+                <div className={`rounded-lg p-4 ${(selectedTenderId || previousTenderId) ? 'flex-1 shadow-lg' : 'w-auto max-w-2xl'}`} style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
                   <Row gutter={[16, 16]} align="middle">
-                    <Col xs={24} lg={selectedTenderId ? 14 : 24}>
+                    <Col xs={24} lg={(selectedTenderId || previousTenderId) ? 14 : 24}>
                       <div className="flex flex-col gap-2">
-                        <div className={`flex flex-wrap items-center gap-2 transition-all duration-700 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
-                          <Text strong className="whitespace-nowrap tender-label-text" style={{ color: '#262626', cursor: 'default' }}>Тендер:</Text>
+                        <div className={`flex flex-wrap items-center gap-2 ${!(selectedTenderId || previousTenderId) ? 'justify-center' : 'justify-start'}`}>
+                          <Text strong className="whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.95)' : '#262626', cursor: 'default' }}>Тендер:</Text>
                           <Select
                             value={selectedTenderName}
                             onChange={handleTenderNameChange}
@@ -454,7 +472,7 @@ const CommercialCostsPage: React.FC = () => {
                             ))}
                           </Select>
                           <Select
-                            value={selectedTender?.version || undefined}
+                            value={selectedTenderId ? (selectedTender?.version || undefined) : undefined}
                             onChange={handleVersionChange}
                             style={{ width: '160px' }}
                             placeholder="Выберите версию"
@@ -471,22 +489,22 @@ const CommercialCostsPage: React.FC = () => {
                       </div>
                     </Col>
                     {selectedTender && (
-                      <Col xs={24} lg={10} className={`transition-all duration-700 ${isContentVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
+                      <Col xs={24} lg={10}>
                         <div className="flex flex-col justify-center gap-2">
                           <div className="flex flex-wrap items-center justify-end gap-3">
-                            <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                            <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                               <strong>Название:</strong> {selectedTender.title}
                             </span>
-                            <span className="text-gray-400" style={{ cursor: 'default' }}>|</span>
-                            <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                            <span style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)', cursor: 'default' }}>|</span>
+                            <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                               <strong>Заказчик:</strong> {selectedTender.client_name}
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-3">
-                            <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
-                              <strong>Площадь по СП:</strong> {selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}
+                            <span className="text-sm whitespace-nowrap" style={{ cursor: 'default' }}>
+                              <strong style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626' }}>Площадь по СП:</strong> <span style={{ color: '#1890ff', fontWeight: 600, fontSize: '15px' }}>{selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}</span>
                             </span>
-                            <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                            <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                               <strong>Площадь Заказчика:</strong> {selectedTender.area_client ? formatQuantity(selectedTender.area_client, 0) + ' м²' : '—'}
                             </span>
                           </div>
@@ -497,45 +515,31 @@ const CommercialCostsPage: React.FC = () => {
                 </div>
                 
                 {/* Commercial Summary */}
-                {selectedTenderId && (
-                  <div className={`commercial-stats-block flex justify-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
-                    <Row gutter={[16, 8]} justify="center" align="middle">
-                      <Col>
-                        <div className="text-center">
-                          <Text className="text-xs text-gray-600 block" style={{ cursor: 'default' }}>Базовая стоимость</Text>
-                          <div className="text-lg font-bold text-blue-600" style={{ cursor: 'default' }}>
-                            {Math.round(commercialStats.totalBaseCost).toLocaleString('ru-RU')} ₽
-                          </div>
+                {(selectedTenderId || previousTenderId) && (
+                  <div className="flex flex-col justify-center px-6 rounded-lg self-stretch" style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
+                    <div>
+                      <Text className="text-sm block mb-1" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.65)', cursor: 'default' }}>Базовая → Коммерческая</Text>
+                      <div className="flex items-baseline gap-2">
+                        <div className="text-xl font-bold" style={{ cursor: 'default', color: theme === 'dark' ? '#40a9ff' : '#1890ff' }}>
+                          {Math.round(commercialStats.totalBaseCost).toLocaleString('ru-RU')} ₽
                         </div>
-                      </Col>
-                      <Col>
-                        <div className="text-center">
-                          <Text className="text-xs text-gray-600 block" style={{ cursor: 'default' }}>Коммерческая</Text>
-                          <div className="text-lg font-bold text-green-600" style={{ cursor: 'default' }}>
-                            {Math.round(commercialStats.totalCommercialCost).toLocaleString('ru-RU')} ₽
-                          </div>
+                        <div className="text-sm" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', cursor: 'default' }}>→</div>
+                        <div className="text-2xl font-bold" style={{ cursor: 'default', color: theme === 'dark' ? '#73d13d' : '#52c41a' }}>
+                          {Math.round(commercialStats.totalCommercialCost).toLocaleString('ru-RU')} ₽
                         </div>
-                      </Col>
-                      <Col>
-                        <div className="text-center">
-                          <Text className="text-xs text-gray-600 block" style={{ cursor: 'default' }}>Наценка</Text>
-                          <div className="text-lg font-bold text-orange-600" style={{ cursor: 'default' }}>
-                            +{Math.round(commercialStats.totalMarkup).toLocaleString('ru-RU')} ₽
-                          </div>
-                          <div className="text-xs text-gray-500" style={{ cursor: 'default' }}>
-                            +{commercialStats.markupPercentage.toFixed(1)}%
-                          </div>
+                        <div className="text-base font-semibold ml-2" style={{ cursor: 'default', color: theme === 'dark' ? '#ffa940' : '#fa8c16' }}>
+                          (+{commercialStats.markupPercentage.toFixed(1)}%)
                         </div>
-                      </Col>
-                    </Row>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-              
+
               {/* Quick Tender Selection - moved to header */}
-              {!selectedTenderId && (
+              {!selectedTenderId && !selectedTenderName && (
                 <div className="mt-6">
-                  <QuickTenderSelector 
+                  <QuickTenderSelector
                     tenders={tenders}
                     loading={tendersLoading}
                     onTenderSelect={handleQuickTenderSelect}
@@ -544,12 +548,12 @@ const CommercialCostsPage: React.FC = () => {
                   />
                 </div>
               )}
-              
+
               {/* Deadline Status Bar */}
-              {selectedTenderId && selectedTender && (
-                <div className={`mt-4 -mx-8 -mb-8 transition-all duration-700 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}>
-                  <DeadlineStatusBar 
-                    deadline={selectedTender.submission_deadline} 
+              {(selectedTenderId || previousTenderId) && selectedTender && (
+                <div className="mt-4 -mx-8 -mb-8">
+                  <DeadlineStatusBar
+                    deadline={selectedTender.submission_deadline}
                     className=""
                   />
                 </div>
@@ -558,7 +562,7 @@ const CommercialCostsPage: React.FC = () => {
           </div>
 
           {/* Main Content */}
-        {!selectedTenderId && (
+        {!selectedTenderId && !selectedTenderName && (
           <div className="p-4 lg:p-6">
             {/* Empty State */}
             <Card className="text-center max-w-2xl mx-auto shadow-lg">
@@ -566,13 +570,19 @@ const CommercialCostsPage: React.FC = () => {
                 description={
                   <div className="space-y-3">
                     <div>
-                      <Text className="text-xl font-semibold text-gray-800 block">
+                      <Text
+                        className="text-xl font-semibold block"
+                        style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#1f2937' }}
+                      >
                         {tendersLoading ? "Загрузка тендеров..." : "Выберите тендер для анализа коммерческих стоимостей"}
                       </Text>
                     </div>
                     {!tendersLoading && (
                       <div>
-                        <Text className="text-base text-gray-500 block">
+                        <Text
+                          className="text-base block"
+                          style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : '#6b7280' }}
+                        >
                           Выберите тендер из списка выше или используйте селектор
                         </Text>
                       </div>
@@ -582,8 +592,8 @@ const CommercialCostsPage: React.FC = () => {
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
               >
                 {!tendersLoading && tenders.length === 0 && (
-                  <Button 
-                    type="primary" 
+                  <Button
+                    type="primary"
                     onClick={() => navigate('/tenders')}
                     size="large"
                   >
@@ -594,8 +604,40 @@ const CommercialCostsPage: React.FC = () => {
             </Card>
           </div>
         )}
-        
-        {selectedTenderId && (
+
+        {/* Intermediate state: tender name selected, waiting for version */}
+        {/* Only show this if no previous tender was selected (first time selection) */}
+        {!selectedTenderId && selectedTenderName && !previousTenderId && (
+          <div className="p-4 lg:p-6">
+            <Card className="text-center max-w-2xl mx-auto shadow-lg">
+              <Empty
+                description={
+                  <div className="space-y-3">
+                    <div>
+                      <Text
+                        className="text-xl font-semibold block"
+                        style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#1f2937' }}
+                      >
+                        Выберите версию тендера
+                      </Text>
+                    </div>
+                    <div>
+                      <Text
+                        className="text-base"
+                        style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : '#6b7280' }}
+                      >
+                        Используйте селектор "Версия" в шапке страницы
+                      </Text>
+                    </div>
+                  </div>
+                }
+              />
+            </Card>
+          </div>
+        )}
+
+        {/* Show content if tender is selected OR if we're switching tenders (previousTenderId exists) */}
+        {(selectedTenderId || previousTenderId) && (
           <div
             id="tender-content-section"
             className="p-4 lg:p-6"
@@ -607,10 +649,10 @@ const CommercialCostsPage: React.FC = () => {
                 : 'none'
             }}
           >
-            <div>
+            <div className="w-full">
               <TenderCommercialManager
-                tenderId={selectedTenderId}
-                key={selectedTenderId}
+                tenderId={selectedTenderId || previousTenderId!}
+                key={selectedTenderId || previousTenderId}
                 onStatsUpdate={handleUpdateStats}
               />
             </div>

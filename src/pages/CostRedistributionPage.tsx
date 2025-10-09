@@ -279,8 +279,8 @@ const CostRedistributionPage: React.FC = () => {
         {`
           .redistribution-page-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
-            border-radius: 16px 16px 0 0;
-            margin-bottom: 0;
+            border-radius: 16px;
+            margin-bottom: 24px;
             padding: 32px;
             padding-bottom: 32px;
             color: white;
@@ -343,7 +343,7 @@ const CostRedistributionPage: React.FC = () => {
         <div className="w-full min-h-full bg-gray-50">
           <div className="p-6">
             {/* Header */}
-            <div className={`redistribution-page-header ${theme === 'dark' ? 'dark' : ''}`} style={{ borderRadius: '16px' }}>
+            <div className={`redistribution-page-header ${theme === 'dark' ? 'dark' : ''}`}>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-4">
                   <div
@@ -362,7 +362,7 @@ const CostRedistributionPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="redistribution-action-buttons">
-                  {selectedTenderId && (
+                  {(selectedTenderId || previousTenderId) && (
                     <Button
                       className="redistribution-action-btn materials-works-action-btn-transparent"
                       style={{
@@ -405,13 +405,22 @@ const CostRedistributionPage: React.FC = () => {
               </div>
 
               {/* Tender Selection */}
-              <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
-                <div className={`tender-selection-block rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
+              <div
+                className={`flex items-center gap-4 mt-6 ${!(selectedTenderId || previousTenderId) ? 'justify-center' : 'justify-start'}`}
+                style={{
+                  opacity: (selectedTenderId || previousTenderId) && isContentVisible ? 1 : ((selectedTenderId || previousTenderId) ? 0 : 1),
+                  transform: (selectedTenderId || previousTenderId) && isContentVisible ? 'translateY(0)' : ((selectedTenderId || previousTenderId) ? 'translateY(-10px)' : 'translateY(0)'),
+                  transition: isFirstSelection && (selectedTenderId || previousTenderId) && isContentVisible
+                    ? 'opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s'
+                    : 'none'
+                }}
+              >
+                <div className={`rounded-lg p-4 ${(selectedTenderId || previousTenderId) ? 'flex-1 shadow-lg' : 'w-auto max-w-2xl'}`} style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
                   <Row gutter={[16, 16]} align="middle">
-                    <Col xs={24} lg={selectedTenderId ? 14 : 24}>
+                    <Col xs={24} lg={(selectedTenderId || previousTenderId) ? 14 : 24}>
                       <div className="flex flex-col gap-2">
-                        <div className={`flex flex-wrap items-center gap-2 transition-all duration-700 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
-                          <Text strong className="whitespace-nowrap" style={{ color: '#262626', cursor: 'default' }}>Тендер:</Text>
+                        <div className={`flex flex-wrap items-center gap-2 ${!(selectedTenderId || previousTenderId) ? 'justify-center' : 'justify-start'}`}>
+                          <Text strong className="whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.95)' : '#262626', cursor: 'default' }}>Тендер:</Text>
                           <Select
                             value={selectedTenderName}
                             onChange={handleTenderNameChange}
@@ -432,7 +441,7 @@ const CostRedistributionPage: React.FC = () => {
                             ))}
                           </Select>
                           <Select
-                            value={selectedTender?.version || undefined}
+                            value={selectedTenderId ? (selectedTender?.version || undefined) : undefined}
                             onChange={handleVersionChange}
                             style={{ width: '160px' }}
                             placeholder="Выберите версию"
@@ -449,22 +458,22 @@ const CostRedistributionPage: React.FC = () => {
                       </div>
                     </Col>
                     {selectedTender && (
-                      <Col xs={24} lg={10} className={`transition-all duration-700 ${isContentVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
+                      <Col xs={24} lg={10}>
                         <div className="flex flex-col justify-center gap-2">
                           <div className="flex flex-wrap items-center justify-end gap-3">
-                            <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                            <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                               <strong>Название:</strong> {selectedTender.title}
                             </span>
-                            <span className="text-gray-400" style={{ cursor: 'default' }}>|</span>
-                            <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                            <span style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)', cursor: 'default' }}>|</span>
+                            <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                               <strong>Заказчик:</strong> {selectedTender.client_name}
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-3">
-                            <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
-                              <strong>Площадь по СП:</strong> {selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}
+                            <span className="text-sm whitespace-nowrap" style={{ cursor: 'default' }}>
+                              <strong style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626' }}>Площадь по СП:</strong> <span style={{ color: '#1890ff', fontWeight: 600, fontSize: '15px' }}>{selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}</span>
                             </span>
-                            <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                            <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                               <strong>Площадь Заказчика:</strong> {selectedTender.area_client ? formatQuantity(selectedTender.area_client, 0) + ' м²' : '—'}
                             </span>
                           </div>
@@ -489,8 +498,8 @@ const CostRedistributionPage: React.FC = () => {
               )}
 
               {/* Deadline Status Bar */}
-              {selectedTenderId && selectedTender && (
-                <div className={`mt-4 -mx-8 -mb-8 transition-all duration-700 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}>
+              {(selectedTenderId || previousTenderId) && selectedTender && (
+                <div className="mt-4 -mx-8 -mb-8">
                   <DeadlineStatusBar
                     deadline={selectedTender.submission_deadline}
                     className=""
@@ -535,13 +544,19 @@ const CostRedistributionPage: React.FC = () => {
                   description={
                     <div className="space-y-3">
                       <div>
-                        <Text className="text-xl font-semibold text-gray-800 block">
+                        <Text
+                          className="text-xl font-semibold block"
+                          style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#1f2937' }}
+                        >
                           {tendersLoading ? "Загрузка тендеров..." : "Выберите тендер для перераспределения стоимостей"}
                         </Text>
                       </div>
                       {!tendersLoading && (
                         <div>
-                          <Text className="text-base text-gray-500 block">
+                          <Text
+                            className="text-base block"
+                            style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : '#6b7280' }}
+                          >
                             Выберите тендер из списка выше или используйте селектор
                           </Text>
                         </div>
@@ -565,31 +580,38 @@ const CostRedistributionPage: React.FC = () => {
           )}
 
           {/* Intermediate state: tender name selected, waiting for version */}
-          {!selectedTenderId && selectedTenderName && (
+          {/* Only show this if no previous tender was selected (first time selection) */}
+          {!selectedTenderId && selectedTenderName && !previousTenderId && (
             <div className="p-4 lg:p-6">
               <Card className="text-center max-w-2xl mx-auto shadow-lg">
                 <Empty
                   description={
                     <div className="space-y-3">
                       <div>
-                        <Text className="text-xl font-semibold text-gray-800 block">
+                        <Text
+                          className="text-xl font-semibold block"
+                          style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#1f2937' }}
+                        >
                           Выберите версию тендера
                         </Text>
                       </div>
                       <div>
-                        <Text className="text-base text-gray-500 block">
+                        <Text
+                          className="text-base"
+                          style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : '#6b7280' }}
+                        >
                           Используйте селектор "Версия" в шапке страницы
                         </Text>
                       </div>
                     </div>
                   }
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
                 />
               </Card>
             </div>
           )}
 
-          {selectedTenderId && (
+          {/* Show content if tender is selected OR if we're switching tenders (previousTenderId exists) */}
+          {(selectedTenderId || previousTenderId) && (
             <div
               id="redistribution-content-section"
               className="p-4 lg:p-6"
@@ -601,10 +623,10 @@ const CostRedistributionPage: React.FC = () => {
                   : 'none'
               }}
             >
-              <div>
+              <div className="w-full">
                 {viewMode === 'wizard' ? (
                   <CostRedistributionWizard
-                    tenderId={selectedTenderId}
+                    tenderId={selectedTenderId || previousTenderId!}
                     tenderTitle={selectedTender?.title || ''}
                     onComplete={handleRedistributionComplete}
                     onCancel={handleRedistributionCancel}
@@ -612,7 +634,7 @@ const CostRedistributionPage: React.FC = () => {
                 ) : (
                   <Card>
                     <RedistributionResultsTable
-                      tenderId={selectedTenderId}
+                      tenderId={selectedTenderId || previousTenderId!}
                       tenderTitle={selectedTender?.title || ''}
                     />
                   </Card>

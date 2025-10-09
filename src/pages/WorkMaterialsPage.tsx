@@ -66,6 +66,9 @@ const WorkMaterialsPage: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
+          .work-materials-header.dark {
+            background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
+          }
           .work-materials-header::before {
             content: '';
             position: absolute;
@@ -132,7 +135,7 @@ const WorkMaterialsPage: React.FC = () => {
         <div className="w-full min-h-full bg-gray-50">
           <div className="p-6">
             {/* Beautiful Gradient Header */}
-            <div className="work-materials-header">
+            <div className={`work-materials-header ${theme === 'dark' ? 'dark' : ''}`}>
               <div className="flex justify-between items-start relative z-10">
                 <div className="flex items-center gap-4">
                   <div

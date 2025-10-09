@@ -34,6 +34,7 @@ import type { BOQItem, Tender } from '../lib/supabase/types';
 import { formatCurrency, formatQuantity } from '../utils/formatters';
 import { useTheme } from '../contexts/ThemeContext';
 import QuickTenderSelector from '../components/common/QuickTenderSelector';
+import DeadlineStatusBar from '../components/tender/DeadlineStatusBar';
 import * as XLSX from 'xlsx-js-style';
 import { useNavigate } from 'react-router-dom';
 
@@ -62,9 +63,12 @@ const TenderMaterialsWorksPage: React.FC = () => {
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [selectedTenderName, setSelectedTenderName] = useState<string | null>(null);
   const [selectedTenderId, setSelectedTenderId] = useState<string | null>(null);
+  const [previousTenderId, setPreviousTenderId] = useState<string | null>(null);
   const [boqItems, setBoqItems] = useState<BOQItem[]>([]);
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'materials' | 'works'>('all');
+  const [isContentVisible, setIsContentVisible] = useState(false);
+  const [isFirstSelection, setIsFirstSelection] = useState(true);
 
   // Ref to preserve scroll position when changing tenders
   const scrollPositionRef = useRef<number>(0);
@@ -114,35 +118,28 @@ const TenderMaterialsWorksPage: React.FC = () => {
   const handleTenderNameChange = useCallback((value: string) => {
     console.log('🔄 Tender name selection changed:', value);
     const currentScroll = window.scrollY;
-    console.log('🔍 Current state - selectedTenderId:', selectedTenderId, 'scrollY:', currentScroll);
 
-    // Always preserve scroll position when changing tenders (if we're not at the top)
+    // Preserve scroll position when changing tenders (if we're not at the top)
     if (selectedTenderId && currentScroll > 100) {
       scrollPositionRef.current = currentScroll;
       shouldPreserveScroll.current = true;
       console.log('✅📍 PRESERVED scroll position:', scrollPositionRef.current);
-    } else {
-      console.log('❌ NOT preserving - no previous tender or at top');
+    }
+
+    // Store previous tender before clearing
+    if (selectedTenderId) {
+      setPreviousTenderId(selectedTenderId);
     }
 
     setSelectedTenderName(value);
-    // Reset selected tender ID when changing tender name - user must select version
     setSelectedTenderId(null);
-    console.log('🔄 Reset tender ID - user must select version');
+    // Don't hide content - keep it visible
   }, [selectedTenderId]);
 
   // Handle version selection
   const handleVersionChange = useCallback((version: number) => {
     console.log('🔄 Version selection changed:', version);
     if (!selectedTenderName) return;
-
-    // Preserve scroll position when changing version
-    const currentScroll = window.scrollY;
-    if (selectedTenderId && currentScroll > 100) {
-      scrollPositionRef.current = currentScroll;
-      shouldPreserveScroll.current = true;
-      console.log('✅📍 PRESERVED scroll position for version change:', scrollPositionRef.current);
-    }
 
     const [title, clientName] = selectedTenderName.split('___');
     const targetTender = tenders.find(t =>
@@ -153,8 +150,36 @@ const TenderMaterialsWorksPage: React.FC = () => {
 
     if (targetTender) {
       setSelectedTenderId(targetTender.id);
+      setPreviousTenderId(null);
+
+      if (!isContentVisible) {
+        setIsContentVisible(true);
+        // Mark first selection as complete AFTER animation finishes
+        setTimeout(() => {
+          setIsFirstSelection(false);
+        }, 650);
+      } else {
+        setIsFirstSelection(false);
+      }
+
+      // Restore scroll position if needed
+      setTimeout(() => {
+        if (shouldPreserveScroll.current && scrollPositionRef.current > 0) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              window.scrollTo({
+                top: scrollPositionRef.current,
+                behavior: 'auto'
+              });
+              console.log('🔄 Restored scroll position:', scrollPositionRef.current);
+              shouldPreserveScroll.current = false;
+              scrollPositionRef.current = 0;
+            });
+          });
+        }
+      }, 100);
     }
-  }, [selectedTenderName, tenders, selectedTenderId]);
+  }, [selectedTenderName, tenders, isContentVisible]);
 
   // Get unique tender names/titles
   const uniqueTenderNames = useMemo(() => {
@@ -411,14 +436,25 @@ const TenderMaterialsWorksPage: React.FC = () => {
 
   // Handle tender selection
   const handleTenderSelect = useCallback((tender: Tender) => {
-    console.log('🔍 [TenderMaterialsWorksPage] Tender selected:', tender.id, tender.title);
+    console.log('🚀 Quick tender selected:', tender.id, tender.title);
+
     // Auto-fill the tender selection fields
     const tenderNameKey = `${tender.title}___${tender.client_name}`;
     setSelectedTenderName(tenderNameKey);
     setSelectedTenderId(tender.id);
+    setPreviousTenderId(null);
+
+    // Show content after brief delay for smooth transition
+    setTimeout(() => {
+      setIsContentVisible(true);
+      // Mark first selection as complete AFTER animation finishes
+      setTimeout(() => {
+        setIsFirstSelection(false);
+      }, 650);
+    }, 150);
   }, []);
 
-  const selectedTender = tenders.find(t => t.id === selectedTenderId);
+  const selectedTender = tenders.find(t => t.id === (selectedTenderId || previousTenderId));
 
   // Export to Excel
   const handleExportToExcel = useCallback(() => {
@@ -527,7 +563,10 @@ const TenderMaterialsWorksPage: React.FC = () => {
   const handleResetSelection = useCallback(() => {
     setSelectedTenderId(null);
     setSelectedTenderName(null);
+    setPreviousTenderId(null);
     setBoqItems([]);
+    setIsContentVisible(false);
+    setIsFirstSelection(true);
     message.info('Выбор тендера сброшен');
   }, []);
 
@@ -553,7 +592,7 @@ const TenderMaterialsWorksPage: React.FC = () => {
           .materials-works-page-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
             border-radius: 16px;
-            margin-bottom: 0;
+            margin-bottom: 24px;
             padding: 32px;
             padding-bottom: 32px;
             color: white;
@@ -627,7 +666,7 @@ const TenderMaterialsWorksPage: React.FC = () => {
               </div>
             </div>
             <div className="materials-works-action-buttons">
-              {selectedTenderId && (
+              {(selectedTenderId || previousTenderId) && (
                 <Button
                   className="materials-works-action-btn materials-works-action-btn-transparent"
                   size="large"
@@ -664,13 +703,22 @@ const TenderMaterialsWorksPage: React.FC = () => {
           </div>
 
           {/* Tender Selection */}
-          <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
-            <div className={`tender-selection-block rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
+          <div
+            className={`flex items-center gap-4 mt-6 ${!(selectedTenderId || previousTenderId) ? 'justify-center' : 'justify-start'}`}
+            style={{
+              opacity: (selectedTenderId || previousTenderId) && isContentVisible ? 1 : ((selectedTenderId || previousTenderId) ? 0 : 1),
+              transform: (selectedTenderId || previousTenderId) && isContentVisible ? 'translateY(0)' : ((selectedTenderId || previousTenderId) ? 'translateY(-10px)' : 'translateY(0)'),
+              transition: isFirstSelection && (selectedTenderId || previousTenderId) && isContentVisible
+                ? 'opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s'
+                : 'none'
+            }}
+          >
+            <div className={`rounded-lg p-4 ${(selectedTenderId || previousTenderId) ? 'flex-1 shadow-lg' : 'w-auto max-w-2xl'}`} style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
               <Row gutter={[16, 16]} align="middle">
-                <Col xs={24} lg={selectedTenderId ? 14 : 24}>
+                <Col xs={24} lg={(selectedTenderId || previousTenderId) ? 14 : 24}>
                   <div className="flex flex-col gap-2">
-                    <div className={`flex flex-wrap items-center gap-2 transition-all duration-700 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
-                      <Text strong className="whitespace-nowrap tender-label-text" style={{ color: '#262626', cursor: 'default' }}>Тендер:</Text>
+                    <div className={`flex flex-wrap items-center gap-2 ${!(selectedTenderId || previousTenderId) ? 'justify-center' : 'justify-start'}`}>
+                      <Text strong className="whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.95)' : '#262626', cursor: 'default' }}>Тендер:</Text>
                       <Select
                         value={selectedTenderName}
                         onChange={handleTenderNameChange}
@@ -691,7 +739,7 @@ const TenderMaterialsWorksPage: React.FC = () => {
                         ))}
                       </Select>
                       <Select
-                        value={selectedTender?.version || undefined}
+                        value={selectedTenderId ? (selectedTender?.version || undefined) : undefined}
                         onChange={handleVersionChange}
                         style={{ width: '160px' }}
                         placeholder="Выберите версию"
@@ -708,22 +756,22 @@ const TenderMaterialsWorksPage: React.FC = () => {
                   </div>
                 </Col>
                 {selectedTender && (
-                  <Col xs={24} lg={10} className="transition-all duration-700 opacity-100 translate-x-0">
+                  <Col xs={24} lg={10}>
                     <div className="flex flex-col justify-center gap-2">
                       <div className="flex flex-wrap items-center justify-end gap-3">
-                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                        <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                           <strong>Название:</strong> {selectedTender.title}
                         </span>
-                        <span className="text-gray-400" style={{ cursor: 'default' }}>|</span>
-                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                        <span style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)', cursor: 'default' }}>|</span>
+                        <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                           <strong>Заказчик:</strong> {selectedTender.client_name}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center justify-end gap-3">
-                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
-                          <strong>Площадь по СП:</strong> {selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}
+                        <span className="text-sm whitespace-nowrap" style={{ cursor: 'default' }}>
+                          <strong style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626' }}>Площадь по СП:</strong> <span style={{ color: '#1890ff', fontWeight: 600, fontSize: '15px' }}>{selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}</span>
                         </span>
-                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                        <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                           <strong>Площадь Заказчика:</strong> {selectedTender.area_client ? formatQuantity(selectedTender.area_client, 0) + ' м²' : '—'}
                         </span>
                       </div>
@@ -735,7 +783,7 @@ const TenderMaterialsWorksPage: React.FC = () => {
           </div>
 
           {/* Quick Tender Selection - moved to header */}
-          {!selectedTenderId && (
+          {!selectedTenderId && !selectedTenderName && (
             <div className="mt-6">
               <QuickTenderSelector
                 tenders={tenders}
@@ -746,9 +794,44 @@ const TenderMaterialsWorksPage: React.FC = () => {
               />
             </div>
           )}
+
+          {/* Deadline Status Bar */}
+          {(selectedTenderId || previousTenderId) && selectedTender && (
+            <div className="mt-4 -mx-8 -mb-8">
+              <DeadlineStatusBar
+                deadline={selectedTender.submission_deadline}
+                className=""
+              />
+            </div>
+          )}
         </div>
 
-        {selectedTenderId && (
+        {/* Intermediate state: tender name selected, waiting for version */}
+        {!selectedTenderId && selectedTenderName && !previousTenderId && (
+          <Card className="mt-4 text-center max-w-2xl mx-auto shadow-lg">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <div className="space-y-2">
+                  <Text
+                    className="text-xl font-semibold block"
+                    style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#1f2937' }}
+                  >
+                    Выберите версию тендера
+                  </Text>
+                  <Text
+                    className="text-base"
+                    style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : '#6b7280' }}
+                  >
+                    Используйте селектор "Версия" в шапке страницы
+                  </Text>
+                </div>
+              }
+            />
+          </Card>
+        )}
+
+        {(selectedTenderId || previousTenderId) && (
           <Card className="mb-4 bsm-stats-card">
             <style>
               {`
@@ -895,18 +978,56 @@ const TenderMaterialsWorksPage: React.FC = () => {
               emptyText: selectedTenderId ? (
                 <Empty description="Нет данных для отображения" />
               ) : (
-                <Empty description="Выберите тендер для просмотра материалов и работ" />
+                <Empty
+                  description={
+                    <div className="space-y-2">
+                      <Text
+                        className="text-xl font-semibold block"
+                        style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#1f2937' }}
+                      >
+                        Выберите тендер для просмотра материалов и работ
+                      </Text>
+                      <Text
+                        className="text-base"
+                        style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : '#6b7280' }}
+                      >
+                        Выберите тендер из списка выше или используйте селектор
+                      </Text>
+                    </div>
+                  }
+                />
               ),
             }}
           />
           </Card>
         )}
 
-        {!selectedTenderId && (
-          <Card className="mt-4">
+        {!selectedTenderId && !previousTenderId && (
+          <Card className="mt-4 text-center max-w-2xl mx-auto shadow-lg">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="Выберите тендер для просмотра материалов и работ"
+              description={
+                <div className="space-y-3">
+                  <div>
+                    <Text
+                      className="text-xl font-semibold block"
+                      style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#1f2937' }}
+                    >
+                      {tendersLoading ? "Загрузка тендеров..." : "Выберите тендер для просмотра материалов и работ"}
+                    </Text>
+                  </div>
+                  {!tendersLoading && (
+                    <div>
+                      <Text
+                        className="text-base block"
+                        style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : '#6b7280' }}
+                      >
+                        Выберите тендер из списка выше или используйте селектор
+                      </Text>
+                    </div>
+                  )}
+                </div>
+              }
             />
           </Card>
         )}

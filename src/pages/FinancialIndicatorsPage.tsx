@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase/client';
 import { MarkupEditor } from '../components/financial/MarkupEditor';
 import { ModernFinancialIndicators } from '../components/financial/ModernFinancialIndicators';
 import QuickTenderSelector from '../components/common/QuickTenderSelector';
+import DeadlineStatusBar from '../components/tender/DeadlineStatusBar';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { formatQuantity } from '../utils/formatters';
 import { useTheme } from '../contexts/ThemeContext';
@@ -21,6 +22,7 @@ interface Tender {
   area_sp?: number;
   area_client?: number;
   version?: number;
+  submission_deadline?: string;
 }
 
 const FinancialIndicatorsPage: React.FC = () => {
@@ -95,7 +97,7 @@ const FinancialIndicatorsPage: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('tenders')
-        .select('id, title, tender_number, client_name, area_sp, area_client, version')
+        .select('id, title, tender_number, client_name, area_sp, area_client, version, submission_deadline')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -531,7 +533,7 @@ const FinancialIndicatorsPage: React.FC = () => {
               </Text>
             </div>
             <div className="financial-action-buttons">
-              {selectedTenderId && (
+              {(selectedTenderId || previousTenderId) && (
                 <Button
                   className="financial-action-btn materials-works-action-btn-transparent"
                   style={{
@@ -574,14 +576,23 @@ const FinancialIndicatorsPage: React.FC = () => {
           </div>
 
           {/* Tender Selection */}
-          <div className={`flex items-center gap-4 transition-all duration-700 mt-6 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
+          <div
+            className={`flex items-center gap-4 mt-6 ${!(selectedTenderId || previousTenderId) ? 'justify-center' : 'justify-start'}`}
+            style={{
+              opacity: (selectedTenderId || previousTenderId) && isContentVisible ? 1 : ((selectedTenderId || previousTenderId) ? 0 : 1),
+              transform: (selectedTenderId || previousTenderId) && isContentVisible ? 'translateY(0)' : ((selectedTenderId || previousTenderId) ? 'translateY(-10px)' : 'translateY(0)'),
+              transition: isFirstSelection && (selectedTenderId || previousTenderId) && isContentVisible
+                ? 'opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s'
+                : 'none'
+            }}
+          >
             {/* Tender Selection - Left Side */}
-            <div className={`tender-selection-block rounded-lg p-4 transition-all duration-700 transform ${selectedTenderId ? 'flex-1 shadow-lg scale-100' : 'w-auto max-w-2xl scale-105'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
+            <div className={`rounded-lg p-4 ${(selectedTenderId || previousTenderId) ? 'flex-1 shadow-lg' : 'w-auto max-w-2xl'}`} style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)' }}>
               <Row gutter={[16, 16]} align="middle">
-                <Col xs={24} lg={selectedTenderId ? 14 : 24}>
+                <Col xs={24} lg={(selectedTenderId || previousTenderId) ? 14 : 24}>
                   <div className="flex flex-col gap-2">
-                    <div className={`flex flex-wrap items-center gap-2 transition-all duration-700 ${!selectedTenderId ? 'justify-center' : 'justify-start'}`}>
-                      <Text strong className="whitespace-nowrap" style={{ color: '#262626', cursor: 'default' }}>Тендер:</Text>
+                    <div className={`flex flex-wrap items-center gap-2 ${!(selectedTenderId || previousTenderId) ? 'justify-center' : 'justify-start'}`}>
+                      <Text strong className="whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.95)' : '#262626', cursor: 'default' }}>Тендер:</Text>
                       <Select
                         value={selectedTenderName}
                         onChange={handleTenderNameChange}
@@ -602,7 +613,7 @@ const FinancialIndicatorsPage: React.FC = () => {
                         ))}
                       </Select>
                       <Select
-                        value={selectedTender?.version || undefined}
+                        value={selectedTenderId ? (selectedTender?.version || undefined) : undefined}
                         onChange={handleVersionChange}
                         style={{ width: '160px' }}
                         placeholder="Выберите версию"
@@ -619,22 +630,22 @@ const FinancialIndicatorsPage: React.FC = () => {
                   </div>
                 </Col>
                 {selectedTender && (
-                  <Col xs={24} lg={10} className={`transition-all duration-700 ${isContentVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
+                  <Col xs={24} lg={10}>
                     <div className="flex flex-col justify-center gap-2">
                       <div className="flex flex-wrap items-center justify-end gap-3">
-                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                        <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                           <strong>Название:</strong> {selectedTender.title}
                         </span>
-                        <span className="text-gray-400" style={{ cursor: 'default' }}>|</span>
-                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                        <span style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)', cursor: 'default' }}>|</span>
+                        <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                           <strong>Заказчик:</strong> {selectedTender.client_name}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center justify-end gap-3">
-                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
-                          <strong>Площадь по СП:</strong> {selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}
+                        <span className="text-sm whitespace-nowrap" style={{ cursor: 'default' }}>
+                          <strong style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626' }}>Площадь по СП:</strong> <span style={{ color: '#1890ff', fontWeight: 600, fontSize: '15px' }}>{selectedTender.area_sp ? formatQuantity(selectedTender.area_sp, 0) + ' м²' : '—'}</span>
                         </span>
-                        <span className="text-sm whitespace-nowrap text-gray-800" style={{ cursor: 'default' }}>
+                        <span className="text-sm whitespace-nowrap" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626', cursor: 'default' }}>
                           <strong>Площадь Заказчика:</strong> {selectedTender.area_client ? formatQuantity(selectedTender.area_client, 0) + ' м²' : '—'}
                         </span>
                       </div>
@@ -645,15 +656,15 @@ const FinancialIndicatorsPage: React.FC = () => {
             </div>
             
             {/* Total Cost - Right Side */}
-            {selectedTenderId && commercialTotal > 0 && (
-              <div className={`commercial-stats-block flex flex-col justify-center items-center px-6 rounded-lg transition-all duration-700 self-stretch ${isContentVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
+            {(selectedTenderId || previousTenderId) && commercialTotal > 0 && (
+              <div className="flex flex-col justify-center items-center px-6 rounded-lg self-stretch" style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-green-700" style={{ cursor: 'default' }}>
+                  <div className="text-3xl font-bold" style={{ cursor: 'default', color: theme === 'dark' ? '#73d13d' : '#52c41a' }}>
                     {Math.round(commercialTotal).toLocaleString('ru-RU')} ₽
                   </div>
                   {/* Цена за м² */}
                   {selectedTender?.area_sp && (
-                    <div className="text-lg font-medium text-gray-600 mt-2" style={{ cursor: 'default' }}>
+                    <div className="text-lg font-medium mt-2" style={{ cursor: 'default', color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.65)' }}>
                       {Math.round((commercialTotal / selectedTender.area_sp)).toLocaleString('ru-RU')} ₽/м²
                     </div>
                   )}
@@ -661,16 +672,26 @@ const FinancialIndicatorsPage: React.FC = () => {
               </div>
             )}
           </div>
-          
+
           {/* Quick Tender Selection - moved to header */}
-          {!selectedTenderId && (
+          {!selectedTenderId && !selectedTenderName && (
             <div className="mt-6">
-              <QuickTenderSelector 
+              <QuickTenderSelector
                 tenders={tenders}
                 loading={loading}
                 onTenderSelect={handleQuickTenderSelect}
                 selectedTenderId={selectedTenderId}
                 maxItems={6}
+              />
+            </div>
+          )}
+
+          {/* Deadline Status Bar */}
+          {(selectedTenderId || previousTenderId) && selectedTender && (
+            <div className="mt-4 -mx-8 -mb-8">
+              <DeadlineStatusBar
+                deadline={selectedTender.submission_deadline}
+                className=""
               />
             </div>
           )}
@@ -680,8 +701,68 @@ const FinancialIndicatorsPage: React.FC = () => {
         {/* Main Content */}
         <div className="max-w-none">
 
-      {/* Основной контент */}
-      {selectedTenderId ? (
+      {/* Empty State */}
+      {!selectedTenderId && !selectedTenderName && (
+        <div>
+          <div className="text-center max-w-2xl mx-auto">
+            <Card className="shadow-lg">
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  <div className="space-y-2">
+                    <Title
+                      level={4}
+                      style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.65)' }}
+                    >
+                      Выберите тендер для анализа финансовых показателей
+                    </Title>
+                    <Text
+                      type="secondary"
+                      className="text-base"
+                      style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }}
+                    >
+                      Выберите тендер из списка выше или используйте селектор
+                    </Text>
+                  </div>
+                }
+              />
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Intermediate state: tender name selected, waiting for version */}
+      {/* Only show this if no previous tender was selected (first time selection) */}
+      {!selectedTenderId && selectedTenderName && !previousTenderId && (
+        <div>
+          <div className="text-center max-w-2xl mx-auto">
+            <Card className="shadow-lg">
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  <div className="space-y-2">
+                    <Title
+                      level={4}
+                      style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#1f2937' }}
+                    >
+                      Выберите версию тендера
+                    </Title>
+                    <Text
+                      className="text-base"
+                      style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : '#6b7280' }}
+                    >
+                      Используйте селектор "Версия" в шапке страницы
+                    </Text>
+                  </div>
+                }
+              />
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Show content if tender is selected OR if we're switching tenders (previousTenderId exists) */}
+      {(selectedTenderId || previousTenderId) && (
         <div
           id="financial-indicators-content-section"
           style={{
@@ -698,7 +779,7 @@ const FinancialIndicatorsPage: React.FC = () => {
 
           {/* Редактор процентов затрат */}
           <MarkupEditor
-            tenderId={selectedTenderId}
+            tenderId={selectedTenderId || previousTenderId!}
             baseCosts={{
               materials: stats.actualTotalMaterials,
               works: stats.actualTotalWorks,
@@ -785,27 +866,6 @@ const FinancialIndicatorsPage: React.FC = () => {
               </div>
             </Card>
           )}
-        </div>
-      ) : (
-        <div>
-          {/* Empty State */}
-          <div className="text-center max-w-2xl mx-auto">
-            <Card className="shadow-lg">
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={
-                  <div className="space-y-2">
-                    <Title level={4} className="text-gray-600">
-                      Выберите тендер для анализа финансовых показателей
-                    </Title>
-                    <Text type="secondary" className="text-base">
-                      Выберите тендер из списка выше или используйте селектор
-                    </Text>
-                  </div>
-                }
-              />
-            </Card>
-          </div>
         </div>
       )}
         </div>

@@ -330,8 +330,8 @@ const BOQPageSimplified: React.FC = () => {
         {`
           .boq-page-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #059669 50%, #0d9488 100%);
-            border-radius: 16px 16px 0 0;
-            margin-bottom: 0;
+            border-radius: 16px;
+            margin-bottom: 24px;
             padding: 32px;
             padding-bottom: 32px;
             color: white;
@@ -385,7 +385,7 @@ const BOQPageSimplified: React.FC = () => {
         <div className="w-full min-h-full bg-gray-50">
           <div className="p-6">
             {/* Beautiful Gradient Header */}
-            <div className={`boq-page-header ${theme === 'dark' ? 'dark' : ''}`} style={{ borderRadius: '16px' }}>
+            <div className={`boq-page-header ${theme === 'dark' ? 'dark' : ''}`}>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-4">
                   <div
