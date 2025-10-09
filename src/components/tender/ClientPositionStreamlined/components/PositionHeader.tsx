@@ -142,7 +142,7 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
         </Col>
 
         {/* Work Name */}
-        <Col xs={24} sm={18} md={14} lg={14}>
+        <Col xs={24} sm={18} md={14} lg={13}>
           <div style={{ paddingLeft: `${visualIndent}px` }}>
             <div className="flex items-baseline gap-2 flex-wrap">
               {/* Редактируемое название для ДОП работ */}
@@ -261,7 +261,7 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
         </Col>
 
         {/* Client and GP data - four rows */}
-        <Col xs={24} sm={24} md={8} lg={6}>
+        <Col xs={24} sm={24} md={8} lg={5}>
           <div className="flex flex-col gap-2">
             {/* First row - Client note - only for non-ДОП positions */}
             {!position.is_additional && position.client_note && (
@@ -515,7 +515,7 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
         </Col>
 
         {/* Additional Work Button and Total Cost */}
-        <Col xs={24} sm={24} md={24} lg={3}>
+        <Col xs={24} sm={24} md={24} lg={5}>
           <div className="flex flex-row items-center justify-end gap-2 flex-wrap">
             {/* Кнопка добавления ДОП работы - для всех основных позиций */}
             {!position.is_additional && position.id && (
@@ -599,8 +599,8 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
               </Popconfirm>
             )}
 
-            {/* Кнопка копирования содержимого позиции - показывать всегда, если ничего не скопировано, или только на скопированной позиции */}
-            {canAddItems && onCopyPosition && position.id && !hasCopiedData && (
+            {/* Кнопка копирования содержимого позиции - показывать всегда */}
+            {canAddItems && onCopyPosition && position.id && (
               <Tooltip title="Копировать содержимое позиции">
                 <Button
                   size="small"

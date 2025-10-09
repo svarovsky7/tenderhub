@@ -18,7 +18,7 @@ export const PositionSummary: React.FC<PositionSummaryProps> = ({
   materialsCount
 }) => {
   return (
-    <>
+    <div className="flex flex-col gap-1">
       {/* Total Cost */}
       <div>
         <Text strong className="text-lg text-green-700 whitespace-nowrap">
@@ -37,6 +37,6 @@ export const PositionSummary: React.FC<PositionSummaryProps> = ({
           <Text strong className="text-blue-600 text-xs">{materialsCount}</Text>
         </span>
       </div>
-    </>
+    </div>
   );
 };
