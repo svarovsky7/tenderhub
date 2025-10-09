@@ -242,6 +242,7 @@ console.log('❌ [FunctionName] error:', error);
 - **API Response Handling**: Some APIs return objects with numeric keys (e.g., `{0: {...}}`), access via `data[0]` or `data?.["0"]`
 - **Excel Export Naming**: Include tender name and version in filename format
 - **Position Copy/Paste**: Uses array index mapping (not sort_order) for reliable ID mapping on repeated paste; links accumulate (not replaced)
+- **Supabase Insert Fallback**: When `.insert().select()` returns null despite HTTP 201, construct fallback response from input data (see materials-with-names.ts, works-with-names.ts)
 
 ### 7. Dark Theme Implementation
 
@@ -339,6 +340,49 @@ These Tailwind classes automatically adjust for dark mode when using Tailwind's 
 - Gradient headers use className approach with `.dark` variant
 - Avoid hardcoded colors - always use theme-conditional styling
 - Ant Design components automatically adjust via theme algorithm
+
+### 8. Library Pages UI/UX Patterns (October 2025)
+
+**Inline Add Forms** (MaterialsPage.tsx, WorksPage.tsx):
+- Add form appears between control buttons and table (inside list container)
+- Form is NOT inside expandable row - it's a standalone block
+- `isAdding` state controls form visibility
+- Dynamic background color based on `item_type`:
+  - Materials: `material` → blue, `sub_material` → green
+  - Works: `work` → orange, `sub_work` → purple
+- Uses `Form.useWatch('item_type', form)` for real-time color updates
+- Color scheme object defines `bg` and `border` for each type
+- expandable prop only used for editing existing records (NOT adding)
+
+**Structure**:
+```tsx
+// Statistics block
+<Statistics />
+
+// List container
+<div>
+  {/* Search and buttons */}
+  <SearchBar />
+
+  {/* Inline add form (conditional) */}
+  {isAdding && (
+    <div style={{
+      backgroundColor: colors.bg,
+      border: `2px solid ${colors.border}`
+    }}>
+      <Form>...</Form>
+    </div>
+  )}
+
+  {/* Table */}
+  <Table expandable={/* only for editing */} />
+</div>
+```
+
+**Pagination**:
+- Always use controlled state: `pageSize`, `currentPage`
+- Props: `current`, `pageSize`, `onChange`
+- Default options: `['10', '20', '50', '100']`
 
 ## Environment Setup
 
@@ -510,6 +554,12 @@ The application supports creating new versions of tenders with position comparis
     - Animation only on first tender load, disabled for subsequent switches
     - "Площадь по СП" value highlighted in blue (#1890ff) for better visibility
     - `isFirstSelection` state tracks initial load vs. tender switching
+18. **Library Pages UI Improvements** (October 2025):
+    - Moved inline add forms from expandable rows to standalone blocks between search and table
+    - Added dynamic background colors based on item_type selection (blue/green for materials, orange/purple for works)
+    - Fixed Supabase insert null response with fallback data construction
+    - Implemented controlled pagination with proper state management
+    - Fixed cost redistribution page pagination and removed "после" from statistics text
 
 ## Testing
 
@@ -563,6 +613,12 @@ The application supports creating new versions of tenders with position comparis
 ### Excel & Export
 - **Excel Export Slow**: Batch loading implemented (reduced from 10-15s to 1-2s)
 - **Excel Export Wrong Filename**: Check API response structure (may return `{0: {...}}` instead of direct object)
+
+### Library Pages & Forms
+- **Material/Work Creation Error**: Check for Supabase null response fallback (see materials-with-names.ts:108-114)
+- **Form Position Wrong**: Add form should be between search bar and table, not in separate container
+- **Form Color Not Changing**: Ensure `Form.useWatch('item_type', form)` is used and colorScheme object is defined
+- **Pagination Not Working**: Use controlled state with `pageSize`, `currentPage`, and `onChange` handler
 
 ### Copy/Paste & UI
 - **Position Copy Button Shows Everywhere**: Check logic uses `(!hasCopiedData || copiedFromPositionId === position.id)`

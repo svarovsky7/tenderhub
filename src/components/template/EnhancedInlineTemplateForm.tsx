@@ -519,6 +519,42 @@ const EnhancedInlineTemplateForm: React.FC<EnhancedInlineTemplateFormProps> = ({
             WebkitTextFillColor: 'transparent',
             fontWeight: 600
           }}>
+            Добавление работ и материалов
+          </span>
+        </Divider>
+
+        {/* Inline selectors */}
+        <div className="mb-4">
+          <Row gutter={16}>
+            <Col span={12}>
+              <InlineLibrarySelector
+                type="work"
+                onAdd={handleAddItem}
+                placeholder="Введите название работы для поиска..."
+              />
+            </Col>
+            <Col span={12}>
+              <InlineLibrarySelector
+                type="material"
+                onAdd={handleAddItem}
+                placeholder="Введите название материала для поиска..."
+              />
+            </Col>
+          </Row>
+        </div>
+
+        <Divider style={{
+          borderTop: '2px solid transparent',
+          borderImage: 'linear-gradient(90deg, #3b82f6, #10b981, #14b8a6) 1',
+          marginTop: '24px',
+          marginBottom: '24px'
+        }}>
+          <span style={{
+            background: 'linear-gradient(90deg, #3b82f6, #10b981)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontWeight: 600
+          }}>
             Элементы шаблона
           </span>
         </Divider>
@@ -548,26 +584,6 @@ const EnhancedInlineTemplateForm: React.FC<EnhancedInlineTemplateFormProps> = ({
           onUpdate={handleItemUpdate}
           onDelete={handleItemDelete}
         />
-
-        {/* Inline selectors */}
-        <div className="mt-4 mb-4">
-          <Row gutter={16}>
-            <Col span={12}>
-              <InlineLibrarySelector
-                type="work"
-                onAdd={handleAddItem}
-                placeholder="Введите название работы для поиска..."
-              />
-            </Col>
-            <Col span={12}>
-              <InlineLibrarySelector
-                type="material"
-                onAdd={handleAddItem}
-                placeholder="Введите название материала для поиска..."
-              />
-            </Col>
-          </Row>
-        </div>
 
         <Divider style={{
           borderTop: '2px solid transparent',

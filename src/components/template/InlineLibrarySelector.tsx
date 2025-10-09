@@ -285,31 +285,36 @@ const InlineLibrarySelector: React.FC<InlineLibrarySelectorProps> = ({
         return {
           background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)', // orange-50 to orange-100
           borderColor: '#fb923c', // orange-400
-          titleColor: '#ea580c' // orange-600
+          titleColor: '#ea580c', // orange-600
+          selectedBg: 'rgba(234, 88, 12, 0.75)' // orange-600 with 75% opacity
         };
       case 'sub_work':
         return {
           background: 'linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)', // purple-50 to purple-100
           borderColor: '#c084fc', // purple-400
-          titleColor: '#9333ea' // purple-600
+          titleColor: '#9333ea', // purple-600
+          selectedBg: 'rgba(147, 51, 234, 0.75)' // purple-600 with 75% opacity
         };
       case 'material':
         return {
           background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', // blue-50 to blue-100
           borderColor: '#60a5fa', // blue-400
-          titleColor: '#2563eb' // blue-600
+          titleColor: '#2563eb', // blue-600
+          selectedBg: 'rgba(37, 99, 235, 0.75)' // blue-600 with 75% opacity
         };
       case 'sub_material':
         return {
           background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', // green-50 to green-100
           borderColor: '#4ade80', // green-400
-          titleColor: '#16a34a' // green-600
+          titleColor: '#16a34a', // green-600
+          selectedBg: 'rgba(22, 163, 74, 0.75)' // green-600 with 75% opacity
         };
       default:
         return {
           background: '#ffffff',
           borderColor: '#d9d9d9',
-          titleColor: '#000000'
+          titleColor: '#000000',
+          selectedBg: 'rgba(0, 0, 0, 0.75)'
         };
     }
   };
@@ -457,10 +462,26 @@ const InlineLibrarySelector: React.FC<InlineLibrarySelectorProps> = ({
 
       {/* Show selected item details */}
       {selectedItem && (
-        <div style={{ marginTop: 12, padding: '8px 12px', background: '#f5f5f5', borderRadius: 4 }}>
-          <Text strong>Выбрано: </Text>
-          <Text>{selectedItem.name}</Text>
-          <Tag color="blue" style={{ marginLeft: 8 }}>{selectedItem.unit}</Tag>
+        <div style={{
+          marginTop: 12,
+          padding: '12px 16px',
+          background: colorScheme.selectedBg,
+          borderRadius: 8,
+          border: `2px solid ${colorScheme.borderColor}`,
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+        }}>
+          <Text strong style={{ color: 'white', fontSize: 13 }}>Выбрано: </Text>
+          <Text style={{ color: 'white', fontSize: 13 }}>{selectedItem.name}</Text>
+          <Tag
+            style={{
+              marginLeft: 8,
+              background: 'rgba(255, 255, 255, 0.2)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              color: 'white'
+            }}
+          >
+            {selectedItem.unit}
+          </Tag>
         </div>
       )}
     </Card>

@@ -21,6 +21,7 @@ import { materialsApi, worksApi } from '../../lib/supabase/api';
 import { DecimalInput } from '../common';
 import { supabase } from '../../lib/supabase/client';
 import type { ColumnsType } from 'antd/es/table';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface TemplateListProps {
   onAddToTemplate?: (templateName: string, templateNote?: string) => void;
@@ -75,6 +76,7 @@ interface TemplateItem {
 const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showContent = false, searchQuery = '' }) => {
   console.log('🚀 TemplateList render', { showContent, searchQuery });
 
+  const { theme } = useTheme();
   const [expandedTemplates, setExpandedTemplates] = useState<string[]>([]);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [addingToTemplate, setAddingToTemplate] = useState<string | null>(null);
@@ -2028,9 +2030,24 @@ const TemplateList: React.FC<TemplateListProps> = ({ onAddToTemplate, showConten
                       ) : (
                         <div className="flex items-center gap-1">
                           {template.template_description ? (
-                            <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">📝 {template.template_description}</span>
+                            <span
+                              className="text-sm px-2 py-1 rounded"
+                              style={{
+                                color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : '#4b5563',
+                                background: theme === 'dark' ? '#262626' : '#f3f4f6'
+                              }}
+                            >
+                              📝 {template.template_description}
+                            </span>
                           ) : (
-                            <span className="text-sm text-gray-400 italic">Без описания</span>
+                            <span
+                              className="text-sm italic"
+                              style={{
+                                color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : '#9ca3af'
+                              }}
+                            >
+                              Без описания
+                            </span>
                           )}
                           <Tooltip title="Редактировать описание">
                             <Button

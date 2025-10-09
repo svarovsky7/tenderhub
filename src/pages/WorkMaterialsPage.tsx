@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import TemplateList from '../components/template/TemplateList';
 import InlineAddTemplateToBOQ from '../components/template/InlineAddTemplateToBOQ';
 import EnhancedInlineTemplateForm from '../components/template/EnhancedInlineTemplateForm';
+import { useTheme } from '../contexts/ThemeContext';
 
 const { Title, Text } = Typography;
 
@@ -20,6 +21,7 @@ const WorkMaterialsPage: React.FC = () => {
   console.log('🚀 WorkMaterialsPage загружена (с inline формой вместо модального окна)');
 
   const navigate = useNavigate();
+  const { theme } = useTheme();
   const [showCreateTemplateForm, setShowCreateTemplateForm] = useState(false);
   const [showTemplatesContent, setShowTemplatesContent] = useState(false);
   const [selectedTemplateForBOQ, setSelectedTemplateForBOQ] = useState<{ name: string; note?: string } | null>(null);
@@ -94,6 +96,11 @@ const WorkMaterialsPage: React.FC = () => {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           }
+          .wm-search-input,
+          .wm-search-input .ant-input-affix-wrapper,
+          .wm-search-input .ant-input {
+            background: ${theme === 'dark' ? '#141414' : 'transparent'} !important;
+          }
           .wm-search-input input {
             background: transparent !important;
             color: white !important;
@@ -155,7 +162,6 @@ const WorkMaterialsPage: React.FC = () => {
                       width: 280,
                       height: 42,
                       borderRadius: 8,
-                      background: 'rgba(255, 255, 255, 0.2)',
                       color: 'white',
                       borderColor: 'rgba(255, 255, 255, 0.3)',
                       fontSize: 15

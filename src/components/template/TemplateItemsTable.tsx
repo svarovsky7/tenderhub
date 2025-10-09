@@ -287,9 +287,6 @@ const TemplateItemsTable: React.FC<TemplateItemsTableProps> = ({
       dataSource={sortedItems}
       pagination={false}
       size="small"
-      locale={{
-        emptyText: 'Добавьте работы и материалы для создания шаблона'
-      }}
       rowClassName={(record) => {
         // Работы - оранжевый фон
         if (record.type === 'work') {
