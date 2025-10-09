@@ -516,7 +516,7 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
 
         {/* Additional Work Button and Total Cost */}
         <Col xs={24} sm={24} md={24} lg={3}>
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-row items-center justify-end gap-2 flex-wrap">
             {/* Кнопка добавления ДОП работы - для всех основных позиций */}
             {!position.is_additional && position.id && (
               <Button

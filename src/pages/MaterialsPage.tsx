@@ -183,6 +183,19 @@ const MaterialsPage: React.FC = () => {
       values.consumption_coefficient = 1;
     }
 
+    // Validate quote_link - only save if it's a valid URL
+    if (values.quote_link) {
+      try {
+        new URL(values.quote_link);
+        // Valid URL - keep it
+      } catch {
+        // Invalid URL - clear it
+        console.log('⚠️ Невалидная ссылка на КП, поле будет очищено:', values.quote_link);
+        message.warning('Ссылка на КП должна быть валидным URL (например: https://example.com). Поле будет очищено.');
+        values.quote_link = undefined;
+      }
+    }
+
     if (editingMaterialId === 'new') {
       await createMutation.mutateAsync(values);
     } else if (editingMaterialId) {

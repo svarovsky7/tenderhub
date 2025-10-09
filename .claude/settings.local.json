@@ -44,7 +44,15 @@
       "Read(//c/Users/nekrasov.l.m/mcp-servers/playwright/**)",
       "Bash(npx playwright test:*)",
       "Bash(findstr:*)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_evaluate",
+      "Bash(npx playwright codegen:*)"
     ],
     "deny": [],
     "additionalDirectories": [
