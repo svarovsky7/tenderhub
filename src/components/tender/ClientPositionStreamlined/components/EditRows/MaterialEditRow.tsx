@@ -12,6 +12,7 @@ import {
   calculateSubcontractMaterialCommercialCost
 } from '../../../../../utils/calculateCommercialCost';
 import type { BOQItemWithLibrary } from '../../../../../lib/supabase/types/boq';
+import { useTheme } from '../../../../../contexts/ThemeContext';
 
 interface MaterialEditRowProps {
   item: BOQItemWithLibrary;
@@ -38,6 +39,8 @@ export const MaterialEditRow: React.FC<MaterialEditRowProps> = ({
   works,
   loading
 }) => {
+  const { theme } = useTheme();
+
   // Watch form fields for dynamic calculation
   const quantity = Form.useWatch('quantity', editForm) || 0;
   const unitRate = Form.useWatch('unit_rate', editForm) || 0;
@@ -405,14 +408,14 @@ export const MaterialEditRow: React.FC<MaterialEditRowProps> = ({
               <div style={{
                 height: '24px',
                 padding: '0 8px',
-                background: '#f5f5f5',
+                background: theme === 'dark' ? '#1f1f1f' : '#f5f5f5',
                 borderRadius: '2px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: '14px',
                 fontWeight: 'normal',
-                color: '#000',
+                color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#000',
                 whiteSpace: 'nowrap'
               }}>
                 {(() => {
@@ -466,6 +469,11 @@ export const MaterialEditRow: React.FC<MaterialEditRowProps> = ({
               <Input
                 placeholder="Ссылка на коммерческое предложение"
                 size="small"
+                style={{
+                  backgroundColor: theme === 'dark' ? '#1f1f1f' : '#fff',
+                  borderColor: theme === 'dark' ? '#434343' : '#d9d9d9',
+                  color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)'
+                }}
               />
             </Form.Item>
           </div>
@@ -480,6 +488,11 @@ export const MaterialEditRow: React.FC<MaterialEditRowProps> = ({
               <Input
                 placeholder="Примечание к элементу"
                 size="small"
+                style={{
+                  backgroundColor: theme === 'dark' ? '#1f1f1f' : '#fff',
+                  borderColor: theme === 'dark' ? '#434343' : '#d9d9d9',
+                  color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)'
+                }}
               />
             </Form.Item>
 

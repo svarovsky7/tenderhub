@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Dropdown, Spin, message, Tag, Space, Empty, Input, Divider, Button, Typography } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTheme } from '../../contexts/ThemeContext';
 import { 
   EnvironmentOutlined, 
   FolderOutlined, 
@@ -47,6 +48,7 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
 }) => {
   console.log('🚀 [CostDetailCascadeSelector] Rendering with value:', value);
 
+  const { theme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<'category' | 'detail' | 'location'>('category');
   const [displayValue, setDisplayValue] = useState<string>('');
@@ -385,19 +387,26 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
       return (
         <div>
           {!searchTerm && (
-            <div style={{ 
-              padding: '8px 12px', 
-              background: '#e6f7ff', 
-              borderBottom: '1px solid #91d5ff',
+            <div style={{
+              padding: '8px 12px',
+              background: theme === 'dark' ? '#111b26' : '#e6f7ff',
+              borderBottom: `1px solid ${theme === 'dark' ? '#15395b' : '#91d5ff'}`,
               fontSize: '12px',
-              color: '#1890ff'
+              color: theme === 'dark' ? '#3a9aff' : '#1890ff'
             }}>
               💡 Начните вводить для поиска или выберите из списка
             </div>
           )}
           <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-            <div style={{ padding: '8px 12px', background: '#fafafa', borderBottom: '1px solid #f0f0f0' }}>
-              <Text style={{ fontWeight: 500 }}>Выберите категорию затрат</Text>
+            <div style={{
+              padding: '8px 12px',
+              background: theme === 'dark' ? '#141414' : '#fafafa',
+              borderBottom: `1px solid ${theme === 'dark' ? '#303030' : '#f0f0f0'}`
+            }}>
+              <Text style={{
+                fontWeight: 500,
+                color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)'
+              }}>Выберите категорию затрат</Text>
             </div>
             {categoriesWithDetails.map((category) => (
               <div
@@ -407,17 +416,18 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
                 style={{
                   padding: '8px 12px',
                   cursor: 'pointer',
-                  transition: 'background-color 0.2s'
+                  transition: 'background-color 0.2s',
+                  color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#f0f0f0';
+                  e.currentTarget.style.backgroundColor = theme === 'dark' ? '#262626' : '#f0f0f0';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
                 <Space>
-                  <FolderOutlined style={{ color: '#1890ff' }} />
+                  <FolderOutlined style={{ color: theme === 'dark' ? '#3a9aff' : '#1890ff' }} />
                   <span>{category.name}</span>
                 </Space>
               </div>
@@ -445,19 +455,31 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
       
       return (
         <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-          <div style={{ padding: '8px 12px', background: '#fafafa', borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{
+            padding: '8px 12px',
+            background: theme === 'dark' ? '#141414' : '#fafafa',
+            borderBottom: `1px solid ${theme === 'dark' ? '#303030' : '#f0f0f0'}`
+          }}>
             <Space>
               <Button
                 type="text"
                 size="small"
                 onClick={() => setStep('category')}
+                style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)' }}
               >
                 ← Назад
               </Button>
-              <Text style={{ fontWeight: 500 }}>Выберите детализацию</Text>
+              <Text style={{
+                fontWeight: 500,
+                color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)'
+              }}>Выберите детализацию</Text>
             </Space>
           </div>
-          <div style={{ padding: '4px 12px', background: '#f9f9f9', borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{
+            padding: '4px 12px',
+            background: theme === 'dark' ? '#0d1117' : '#f9f9f9',
+            borderBottom: `1px solid ${theme === 'dark' ? '#303030' : '#f0f0f0'}`
+          }}>
             <Tag color="blue">{selection.category.name}</Tag>
           </div>
           {uniqueDetailNames.length > 0 ? (
@@ -478,7 +500,7 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
                       // Store all details with same name for location step
                       detailVariants: details
                     } as any);
-                    
+
                     if (details.length === 1 && firstDetail.location) {
                       // Single detail with linked location - complete immediately
                       handleDetailSelect(firstDetail);
@@ -490,17 +512,18 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
                   style={{
                     padding: '8px 12px',
                     cursor: 'pointer',
-                    transition: 'background-color 0.2s'
+                    transition: 'background-color 0.2s',
+                    color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#f0f0f0';
+                    e.currentTarget.style.backgroundColor = theme === 'dark' ? '#262626' : '#f0f0f0';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = 'transparent';
                   }}
                 >
                   <Space>
-                    <FileTextOutlined style={{ color: '#52c41a' }} />
+                    <FileTextOutlined style={{ color: theme === 'dark' ? '#73d13d' : '#52c41a' }} />
                     <span>{detailName}</span>
                     {hasMultipleLocations && (
                       <Tag color="orange" style={{ fontSize: '11px' }}>
@@ -547,24 +570,36 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
       
       return (
         <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-          <div style={{ padding: '8px 12px', background: '#fafafa', borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{
+            padding: '8px 12px',
+            background: theme === 'dark' ? '#141414' : '#fafafa',
+            borderBottom: `1px solid ${theme === 'dark' ? '#303030' : '#f0f0f0'}`
+          }}>
             <Space>
               <Button
                 type="text"
                 size="small"
                 onClick={() => setStep('detail')}
+                style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)' }}
               >
                 ← Назад
               </Button>
-              <Text style={{ fontWeight: 500 }}>
+              <Text style={{
+                fontWeight: 500,
+                color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)'
+              }}>
                 {locationsToShow.length === 1 ? 'Локация для этой детализации' : 'Выберите локацию'}
               </Text>
             </Space>
           </div>
-          <div style={{ padding: '4px 12px', background: '#f9f9f9', borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{
+            padding: '4px 12px',
+            background: theme === 'dark' ? '#0d1117' : '#f9f9f9',
+            borderBottom: `1px solid ${theme === 'dark' ? '#303030' : '#f0f0f0'}`
+          }}>
             <Space>
               <Tag color="blue">{selection.category?.name}</Tag>
-              <ArrowRightOutlined style={{ fontSize: '10px', color: '#8c8c8c' }} />
+              <ArrowRightOutlined style={{ fontSize: '10px', color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : '#8c8c8c' }} />
               <Tag color="green">{selection.detail.name}</Tag>
             </Space>
           </div>
@@ -594,17 +629,18 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
                 style={{
                   padding: '8px 12px',
                   cursor: 'pointer',
-                  transition: 'background-color 0.2s'
+                  transition: 'background-color 0.2s',
+                  color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#f0f0f0';
+                  e.currentTarget.style.backgroundColor = theme === 'dark' ? '#262626' : '#f0f0f0';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
                 <Space>
-                  <EnvironmentOutlined style={{ color: '#fa8c16' }} />
+                  <EnvironmentOutlined style={{ color: theme === 'dark' ? '#ffa940' : '#fa8c16' }} />
                   <span>{locationName}</span>
                 </Space>
               </div>
@@ -620,12 +656,12 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
   const renderSearchMode = () => {
     return (
       <div>
-        <div style={{ 
-          padding: '8px 12px', 
-          background: '#f5f5f5', 
-          borderBottom: '1px solid #e8e8e8',
+        <div style={{
+          padding: '8px 12px',
+          background: theme === 'dark' ? '#141414' : '#f5f5f5',
+          borderBottom: `1px solid ${theme === 'dark' ? '#303030' : '#e8e8e8'}`,
           fontSize: '12px',
-          color: '#8c8c8c'
+          color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : '#8c8c8c'
         }}>
           <SearchOutlined /> Результаты поиска
         </div>
@@ -644,31 +680,42 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
                   padding: '8px 12px',
                   cursor: 'pointer',
                   transition: 'background-color 0.2s',
-                  borderBottom: '1px solid #f5f5f5'
+                  borderBottom: `1px solid ${theme === 'dark' ? '#262626' : '#f5f5f5'}`
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#f0f0f0';
+                  e.currentTarget.style.backgroundColor = theme === 'dark' ? '#262626' : '#f0f0f0';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
-                <div style={{ fontSize: '13px', color: '#262626' }}>
+                <div style={{
+                  fontSize: '13px',
+                  color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#262626'
+                }}>
                   {result.name}
                 </div>
-                <div style={{ fontSize: '11px', color: '#8c8c8c', marginTop: '2px' }}>
+                <div style={{
+                  fontSize: '11px',
+                  color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : '#8c8c8c',
+                  marginTop: '2px'
+                }}>
                   {result.category_name} → {result.location_name}
                 </div>
                 {result.unit_cost && (
-                  <div style={{ fontSize: '11px', color: '#52c41a', marginTop: '1px' }}>
+                  <div style={{
+                    fontSize: '11px',
+                    color: theme === 'dark' ? '#73d13d' : '#52c41a',
+                    marginTop: '1px'
+                  }}>
                     {result.unit_cost.toLocaleString('ru-RU')} ₽
                   </div>
                 )}
               </div>
             ))
           ) : (
-            <Empty 
-              description="Ничего не найдено" 
+            <Empty
+              description="Ничего не найдено"
               style={{ padding: '20px' }}
             />
           )}
@@ -687,11 +734,11 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
     if (searchTerm && searchTerm.trim().length < 2) {
       return (
         <div>
-          <div style={{ 
-            padding: '16px', 
-            textAlign: 'center', 
-            color: '#8c8c8c',
-            borderBottom: '1px solid #f0f0f0'
+          <div style={{
+            padding: '16px',
+            textAlign: 'center',
+            color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : '#8c8c8c',
+            borderBottom: `1px solid ${theme === 'dark' ? '#303030' : '#f0f0f0'}`
           }}>
             <SearchOutlined style={{ marginRight: 8 }} />
             Введите минимум 2 символа для поиска
@@ -715,10 +762,10 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
       placement="bottomLeft"
       getPopupContainer={(trigger) => trigger.parentElement || document.body}
       overlay={
-        <div 
-          style={{ 
-            backgroundColor: 'white',
-            border: '1px solid #d9d9d9',
+        <div
+          style={{
+            backgroundColor: theme === 'dark' ? '#1f1f1f' : 'white',
+            border: `1px solid ${theme === 'dark' ? '#434343' : '#d9d9d9'}`,
             borderRadius: '8px',
             boxShadow: '0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05)',
             minWidth: '300px'
@@ -739,13 +786,19 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
         onBlur={handleInputBlur}
         placeholder={placeholder}
         disabled={disabled}
-        style={{ width: '100%', ...style }}
+        style={{
+          width: '100%',
+          backgroundColor: theme === 'dark' ? '#1f1f1f' : '#fff',
+          borderColor: theme === 'dark' ? '#434343' : '#d9d9d9',
+          color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)',
+          ...style
+        }}
         className={className}
-        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+        prefix={<SearchOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : '#bfbfbf' }} />}
         suffix={
           inputValue && !disabled ? (
             <CloseCircleFilled
-              style={{ color: '#bfbfbf', cursor: 'pointer' }}
+              style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : '#bfbfbf', cursor: 'pointer' }}
               onClick={(e) => {
                 e.stopPropagation();
                 handleReset();
