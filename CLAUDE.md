@@ -318,6 +318,19 @@ const { theme } = useTheme();
   color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)'
 }}>
 
+// Example: Input fields
+<Input style={{
+  backgroundColor: theme === 'dark' ? '#1f1f1f' : '#fff',
+  borderColor: theme === 'dark' ? '#434343' : '#d9d9d9',
+  color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)'
+}} />
+
+// Example: Readonly/Display fields (like total amounts)
+<div style={{
+  background: theme === 'dark' ? '#1f1f1f' : '#f5f5f5',
+  color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : '#000'
+}}>
+
 // Example: Gradient header with theme variant
 <div className={`header-gradient ${theme === 'dark' ? 'dark' : ''}`}>
 ```
@@ -332,6 +345,14 @@ Row colors in `BOQItemsTable.tsx` (lines 64-77) maintain visibility in both them
 
 These Tailwind classes automatically adjust for dark mode when using Tailwind's dark mode classes.
 
+#### Components with Full Dark Theme Support (October 2025)
+- **CostDetailCascadeSelector**: Dropdown, input, all selection modes, search results
+- **WorkEditRow** (inline edit): All input fields, readonly "Сумма" field, quote link, notes
+- **MaterialEditRow** (inline edit): All input fields, readonly "Сумма" field, quote link, notes
+- **PositionSummary**: Total cost display with conditional colors
+- **BOQItemsTable**: Row colors with Tailwind dark mode classes
+- All major pages with gradient headers (HomePage, BOQPage, Commerce, Libraries, etc.)
+
 #### Important Theme Notes
 - Theme persists in localStorage with key `theme`
 - All new components MUST support both light and dark themes
@@ -340,6 +361,7 @@ These Tailwind classes automatically adjust for dark mode when using Tailwind's 
 - Gradient headers use className approach with `.dark` variant
 - Avoid hardcoded colors - always use theme-conditional styling
 - Ant Design components automatically adjust via theme algorithm
+- **Critical**: When adding inline forms or modals, apply theme to ALL input fields, including "Ссылка на КП" and "Примечание"
 
 ### 8. Library Pages UI/UX Patterns (October 2025)
 
