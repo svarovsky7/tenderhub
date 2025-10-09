@@ -16,6 +16,7 @@ import { supabase } from '../../lib/supabase/client';
 import { formatQuantity } from '../../utils/formatters';
 import { calculateWorkPortion } from '../../utils/calculations';
 import { exportRedistributionResultsToExcel } from '../../utils/excel-templates';
+import { useTheme } from '../../contexts/ThemeContext';
 import type { ClientPosition } from '../../lib/supabase/types';
 
 const { Text } = Typography;
@@ -45,6 +46,7 @@ const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
 }) => {
   console.log('🚀 RedistributionResultsTable rendered for tender:', tenderId);
 
+  const { theme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [positions, setPositions] = useState<PositionWithRedistribution[]>([]);
   const [redistributionId, setRedistributionId] = useState<string | null>(null);
@@ -446,8 +448,9 @@ const RedistributionResultsTable: React.FC<RedistributionResultsTableProps> = ({
         gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '16px',
         padding: '16px',
-        background: '#f5f5f5',
-        borderRadius: '8px'
+        background: theme === 'dark' ? '#262626' : '#f5f5f5',
+        borderRadius: '8px',
+        border: theme === 'dark' ? '1px solid #434343' : 'none'
       }}>
         <div>
           <Text type="secondary">Стоимость материалов:</Text>

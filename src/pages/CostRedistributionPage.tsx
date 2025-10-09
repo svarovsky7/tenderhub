@@ -488,31 +488,6 @@ const CostRedistributionPage: React.FC = () => {
                 </div>
               )}
 
-              {/* View Mode Selector */}
-              {selectedTenderId && (
-                <div className="mt-6 flex justify-center">
-                  <Radio.Group
-                    value={viewMode}
-                    onChange={(e) => setViewMode(e.target.value)}
-                    size="large"
-                    buttonStyle="solid"
-                  >
-                    <Radio.Button value="wizard">
-                      <Space>
-                        <SettingOutlined />
-                        Настройка перераспределения
-                      </Space>
-                    </Radio.Button>
-                    <Radio.Button value="results">
-                      <Space>
-                        <TableOutlined />
-                        Результаты перераспределения
-                      </Space>
-                    </Radio.Button>
-                  </Radio.Group>
-                </div>
-              )}
-
               {/* Deadline Status Bar */}
               {selectedTenderId && selectedTender && (
                 <div className={`mt-4 -mx-8 -mb-8 transition-all duration-700 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}>
@@ -524,6 +499,33 @@ const CostRedistributionPage: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* View Mode Selector */}
+          {selectedTenderId && (
+            <div className="px-6 pb-4">
+              <div className="flex justify-center">
+                <Radio.Group
+                  value={viewMode}
+                  onChange={(e) => setViewMode(e.target.value)}
+                  size="large"
+                  buttonStyle="solid"
+                >
+                  <Radio.Button value="wizard">
+                    <Space>
+                      <SettingOutlined />
+                      Настройка перераспределения
+                    </Space>
+                  </Radio.Button>
+                  <Radio.Button value="results">
+                    <Space>
+                      <TableOutlined />
+                      Результаты перераспределения
+                    </Space>
+                  </Radio.Button>
+                </Radio.Group>
+              </div>
+            </div>
+          )}
 
           {/* Main Content */}
           {!selectedTenderId && !selectedTenderName && (
