@@ -16,6 +16,7 @@ import { LinkOutlined, DeleteOutlined, CopyOutlined, SnippetsOutlined } from '@a
 import { PositionSummary } from './PositionSummary';
 import { clientPositionsApi } from '../../../../lib/supabase/api';
 import { formatQuantity } from '../../../../utils/formatters';
+import { useTheme } from '../../../../contexts/ThemeContext';
 
 const { Title, Text } = Typography;
 
@@ -112,6 +113,8 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
   copiedFromPositionId,
   clipboardLoading
 }) => {
+  const { theme } = useTheme();
+
   return (
     <div
       className={`px-4 py-2 border-b transition-colors duration-200 ${
@@ -266,10 +269,10 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
             {/* First row - Client note - only for non-ДОП positions */}
             {!position.is_additional && position.client_note && (
               <div className="flex flex-col gap-1">
-                <Text className="text-sm text-gray-500 font-semibold">Примечание Заказчика:</Text>
-                <Text className="text-sm text-gray-700 break-words whitespace-pre-wrap">
-                  <strong>{position.client_note}</strong>
-                </Text>
+                <span className="text-sm label-text" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', fontWeight: 600 }}>Примечание Заказчика:</span>
+                <span className="text-sm break-words whitespace-pre-wrap" style={{ color: theme === 'dark' ? '#ffffff' : '#000000', fontWeight: 600 }}>
+                  {position.client_note}
+                </span>
               </div>
             )}
 
@@ -278,7 +281,7 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
               // For ДОП positions - show editable field only when expanded
               isExpanded ? (
                 <div className="flex items-center gap-2 w-full" onClick={(e) => e.stopPropagation()}>
-                  <Text className="text-sm text-gray-500 whitespace-nowrap font-semibold">Примечание ГП:</Text>
+                  <span className="text-sm whitespace-nowrap label-text" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', fontWeight: 600 }}>Примечание ГП:</span>
                   <Input
                     size="small"
                     value={tempManualNote ?? undefined}
@@ -297,10 +300,10 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
               ) : (
                 position.manual_note && (
                   <div className="flex items-center gap-1">
-                    <Text className="text-sm text-gray-500 font-semibold">Примечание ГП:</Text>
-                    <Text className="text-sm text-green-600 flex-1" ellipsis={{ tooltip: position.manual_note }}>
-                      <strong>{position.manual_note}</strong>
-                    </Text>
+                    <span className="text-sm label-text" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', fontWeight: 600 }}>Примечание ГП:</span>
+                    <strong className="text-sm flex-1" style={{ color: theme === 'dark' ? '#ffffff' : '#000000', fontWeight: 600 }}>
+                      {position.manual_note}
+                    </strong>
                   </div>
                 )
               )
@@ -309,7 +312,7 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
               (canAddItems ? (
                 isExpanded ? (
                   <div className="flex items-center gap-2 w-full" onClick={(e) => e.stopPropagation()}>
-                    <Text className="text-sm text-gray-500 whitespace-nowrap font-semibold">Примечание ГП:</Text>
+                    <span className="text-sm whitespace-nowrap label-text" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', fontWeight: 600 }}>Примечание ГП:</span>
                     <Input
                       size="middle"
                       value={tempManualNote ?? undefined}
@@ -327,16 +330,16 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
                 ) : (
                   position.manual_note && (
                     <div className="flex items-center gap-1">
-                      <Text className="text-sm text-gray-500 font-semibold">Примечание ГП:</Text>
-                      <Text className="text-sm text-green-600 flex-1" ellipsis={{ tooltip: position.manual_note }}>
-                        <strong>{position.manual_note}</strong>
-                      </Text>
+                      <span className="text-sm label-text" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', fontWeight: 600 }}>Примечание ГП:</span>
+                      <strong className="text-sm flex-1" style={{ color: theme === 'dark' ? '#73d13d' : '#52c41a', fontWeight: 600 }}>
+                        {position.manual_note}
+                      </strong>
                     </div>
                   )
                 )
               ) : (
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                  <Text className="text-sm text-gray-500 whitespace-nowrap font-semibold">Примечание ГП:</Text>
+                  <span className="text-sm whitespace-nowrap label-text" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', fontWeight: 600 }}>Примечание ГП:</span>
                   <Input
                     size="middle"
                     value={tempManualNote ?? undefined}
@@ -359,22 +362,22 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
               <div className="flex items-center gap-1">
                 {position.volume ? (
                   <>
-                    <Text className="text-sm text-gray-500 font-semibold">Кол-во Заказчика:</Text>
-                    <Text className="text-sm text-gray-600">
-                      <strong>{position.volume}</strong>
-                    </Text>
+                    <span className="text-sm label-text" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', fontWeight: 600 }}>Кол-во Заказчика:</span>
+                    <span className="text-sm" style={{ color: theme === 'dark' ? '#ffffff' : '#000000', fontWeight: 600 }}>
+                      {position.volume}
+                    </span>
                     {position.unit && (
-                      <Text className="text-sm text-gray-600 ml-1">
-                        <strong>{position.unit}</strong>
-                      </Text>
+                      <span className="text-sm ml-1" style={{ color: theme === 'dark' ? '#ffffff' : '#000000', fontWeight: 600 }}>
+                        {position.unit}
+                      </span>
                     )}
                   </>
                 ) : (
                   <>
-                    <Text className="text-sm text-gray-500 font-semibold">Ед. изм. Заказчика:</Text>
-                    <Text className="text-sm text-gray-600">
-                      <strong>{position.unit}</strong>
-                    </Text>
+                    <span className="text-sm label-text" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', fontWeight: 600 }}>Ед. изм. Заказчика:</span>
+                    <span className="text-sm" style={{ color: theme === 'dark' ? '#ffffff' : '#000000', fontWeight: 600 }}>
+                      {position.unit}
+                    </span>
                   </>
                 )}
               </div>
@@ -385,7 +388,7 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
               // For ДОП positions - show editable fields only when expanded
               isExpanded ? (
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                  <Text className="text-sm text-gray-500 font-semibold whitespace-nowrap">Объем ГП:</Text>
+                  <span className="text-sm whitespace-nowrap label-text" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', fontWeight: 600 }}>Объем ГП:</span>
                   <InputNumber
                     size="small"
                     min={0}
@@ -452,16 +455,16 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
               ) : (
                 (position.manual_volume || position.unit) && (
                   <div className="flex items-center gap-1">
-                    <Text className="text-sm text-gray-500 font-semibold">Объем ГП:</Text>
+                    <span className="text-sm label-text" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', fontWeight: 600 }}>Объем ГП:</span>
                     {position.manual_volume && (
-                      <Text className="text-sm text-green-600">
-                        <strong>{formatQuantity(position.manual_volume, 2)}</strong>
-                      </Text>
+                      <strong className="text-sm" style={{ color: theme === 'dark' ? '#73d13d' : '#52c41a', fontWeight: 600 }}>
+                        {formatQuantity(position.manual_volume, 2)}
+                      </strong>
                     )}
                     {position.unit && (
-                      <Text className="text-sm text-green-600 ml-1">
-                        <strong>{position.unit}</strong>
-                      </Text>
+                      <strong className="text-sm ml-1" style={{ color: theme === 'dark' ? '#ffffff' : '#000000', fontWeight: 600 }}>
+                        {position.unit}
+                      </strong>
                     )}
                   </div>
                 )
@@ -471,7 +474,7 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
               canAddItems && (
                 isExpanded ? (
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <Text className="text-sm text-gray-500 font-semibold">Кол-во ГП:</Text>
+                    <span className="text-sm label-text" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', fontWeight: 600 }}>Кол-во ГП:</span>
                     <InputNumber
                       size="middle"
                       min={0}
@@ -489,7 +492,7 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
                       parser={(value) => value?.replace(',', '.') as any}
                     />
                     {position.unit && (
-                      <Text className="text-sm text-gray-600 ml-1">
+                      <Text className="text-sm ml-1" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.65)' }}>
                         <strong>{position.unit}</strong>
                       </Text>
                     )}
@@ -497,14 +500,14 @@ export const PositionHeader: React.FC<PositionHeaderProps> = ({
                 ) : (
                   position.manual_volume && (
                     <div className="flex items-center gap-1">
-                      <Text className="text-sm text-gray-500 font-semibold">Кол-во ГП:</Text>
-                      <Text className="text-sm text-green-600">
-                        <strong>{formatQuantity(position.manual_volume, 2)}</strong>
-                      </Text>
+                      <span className="text-sm label-text" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', fontWeight: 600 }}>Кол-во ГП:</span>
+                      <strong className="text-sm" style={{ color: theme === 'dark' ? '#73d13d' : '#52c41a', fontWeight: 600 }}>
+                        {formatQuantity(position.manual_volume, 2)}
+                      </strong>
                       {position.unit && (
-                        <Text className="text-sm text-green-600 ml-1">
-                          <strong>{position.unit}</strong>
-                        </Text>
+                        <strong className="text-sm ml-1" style={{ color: theme === 'dark' ? '#73d13d' : '#52c41a', fontWeight: 600 }}>
+                          {position.unit}
+                        </strong>
                       )}
                     </div>
                   )

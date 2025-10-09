@@ -38,7 +38,7 @@ interface MenuItem {
 
 const AppLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const [openKeys, setOpenKeys] = useState<string[]>(['libraries', 'construction-costs', 'admin']);
+  const [openKeys, setOpenKeys] = useState<string[]>([]);
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
@@ -124,6 +124,7 @@ const AppLayout: React.FC = () => {
       .ant-layout-sider-collapsed .ant-menu-submenu-title .ant-menu-title-content {
         opacity: 0 !important;
         width: 0 !important;
+        display: none !important;
         transition: opacity 0.1s ease-out, width 0.1s ease-out !important;
       }
       /* Show text smoothly when expanded */
@@ -131,6 +132,7 @@ const AppLayout: React.FC = () => {
       .ant-layout-sider:not(.ant-layout-sider-collapsed) .ant-menu-submenu-title .ant-menu-title-content {
         opacity: 1 !important;
         width: auto !important;
+        display: block !important;
         transition: opacity 0.2s ease-in 0.1s, width 0.2s ease-in 0.1s !important;
       }
       /* Prevent text overflow during animation */
@@ -138,30 +140,219 @@ const AppLayout: React.FC = () => {
         overflow: hidden !important;
       }
       .ant-menu-title-content {
-        overflow: hidden !important;
+        overflow: visible !important;
         text-overflow: clip !important;
-        white-space: nowrap !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        line-height: 1.3 !important;
+      }
+      /* For submenu titles specifically, allow wrapping */
+      .ant-menu-submenu-title .ant-menu-title-content {
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        padding-right: 30px !important;
       }
       /* Custom submenu behavior: click on title navigates, click on arrow expands */
+      /* Increase height for menu items with wrapping text */
       .ant-menu-submenu-title {
         position: relative !important;
         cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        min-height: 40px !important;
+        height: auto !important;
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+        font-weight: normal !important;
       }
       .ant-menu-submenu-arrow {
         cursor: pointer !important;
         z-index: 10 !important;
-        position: relative !important;
+        position: absolute !important;
+        right: 16px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        width: 20px !important;
+        height: 20px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
+      /* Prevent arrow click from propagating to title */
+      .ant-menu-submenu-arrow::before,
+      .ant-menu-submenu-arrow::after {
+        pointer-events: auto !important;
       }
       /* Make title text clickable for navigation */
       .ant-menu-submenu-title .ant-menu-title-content {
         pointer-events: auto !important;
         cursor: pointer !important;
         flex: 1 !important;
+        margin-right: 30px !important; /* Space for arrow */
       }
-      /* Ensure icon doesn't interfere */
-      .ant-menu-submenu-title .anticon {
-        pointer-events: auto !important;
+      /* Ensure icon doesn't interfere and align to center */
+      .ant-menu-submenu-title .anticon:not(.ant-menu-submenu-arrow) {
+        pointer-events: none !important;
+        align-self: center !important;
+        margin-top: 0 !important;
       }
+      /* Override text and icon colors for all parent menu items */
+      /* Dark theme: white text and icons for ALL submenu items */
+      ${isDark ? `
+      .ant-menu-light .ant-menu-submenu > .ant-menu-submenu-title {
+        color: rgba(255, 255, 255, 0.85) !important;
+      }
+      .ant-menu-light .ant-menu-submenu > .ant-menu-submenu-title .anticon {
+        color: rgba(255, 255, 255, 0.85) !important;
+      }
+      .ant-menu-light .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-light .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content a {
+        color: rgba(255, 255, 255, 0.85) !important;
+      }
+      /* Hover state for dark theme */
+      .ant-menu-light .ant-menu-submenu:hover > .ant-menu-submenu-title {
+        color: rgba(255, 255, 255, 0.95) !important;
+      }
+      .ant-menu-light .ant-menu-submenu:hover > .ant-menu-submenu-title .anticon,
+      .ant-menu-light .ant-menu-submenu:hover > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-light .ant-menu-submenu:hover > .ant-menu-submenu-title .ant-menu-title-content a {
+        color: rgba(255, 255, 255, 0.95) !important;
+      }
+      /* Selected state with blue background for dark theme */
+      /* Apply when parent page is selected (getCurrentMenuKey handles selection logic) */
+      /* Use semi-transparent blue so arrow icon is visible: rgba(24, 144, 255, 0.15) */
+      /* Use muted white text for better contrast: rgba(255, 255, 255, 0.75) */
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title {
+        background-color: rgba(24, 144, 255, 0.15) !important;
+        color: rgba(255, 255, 255, 0.75) !important;
+        font-weight: normal !important;
+      }
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .anticon,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .anticon,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .anticon {
+        color: rgba(255, 255, 255, 0.70) !important;
+      }
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .ant-menu-title-content a,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .ant-menu-title-content a,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .ant-menu-title-content a {
+        color: rgba(255, 255, 255, 0.75) !important;
+        font-weight: normal !important;
+      }
+      /* Selected child menu items (dark theme) - dark transparent background */
+      .ant-menu-inline.ant-menu-light .ant-menu-item-selected,
+      .ant-menu-light.ant-menu-inline .ant-menu-item-selected,
+      .ant-menu-light .ant-menu-item-selected.ant-menu-item-only-child {
+        background-color: rgba(255, 255, 255, 0.08) !important;
+        color: rgba(255, 255, 255, 0.75) !important;
+      }
+      .ant-menu-inline.ant-menu-light .ant-menu-item-selected .ant-menu-title-content,
+      .ant-menu-inline.ant-menu-light .ant-menu-item-selected .ant-menu-title-content a,
+      .ant-menu-light.ant-menu-inline .ant-menu-item-selected .ant-menu-title-content,
+      .ant-menu-light.ant-menu-inline .ant-menu-item-selected .ant-menu-title-content a,
+      .ant-menu-light .ant-menu-item-selected.ant-menu-item-only-child .ant-menu-title-content,
+      .ant-menu-light .ant-menu-item-selected.ant-menu-item-only-child .ant-menu-title-content a {
+        color: rgba(255, 255, 255, 0.75) !important;
+      }
+      /* Remove parent highlighting when child is selected (dark theme) */
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title {
+        background-color: transparent !important;
+        color: rgba(255, 255, 255, 0.85) !important;
+      }
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .anticon,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .anticon,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .anticon {
+        color: rgba(255, 255, 255, 0.85) !important;
+      }
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .ant-menu-title-content a,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .ant-menu-title-content a,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .ant-menu-title-content a {
+        color: rgba(255, 255, 255, 0.85) !important;
+      }
+      ` : `
+      /* Light theme: black text and icons for ALL submenu items */
+      .ant-menu-light .ant-menu-submenu > .ant-menu-submenu-title {
+        color: rgba(0, 0, 0, 0.85) !important;
+      }
+      .ant-menu-light .ant-menu-submenu > .ant-menu-submenu-title .anticon {
+        color: rgba(0, 0, 0, 0.85) !important;
+      }
+      .ant-menu-light .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-light .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content a {
+        color: rgba(0, 0, 0, 0.85) !important;
+      }
+      /* Hover state for light theme */
+      .ant-menu-light .ant-menu-submenu:hover > .ant-menu-submenu-title {
+        color: rgba(0, 0, 0, 1) !important;
+      }
+      .ant-menu-light .ant-menu-submenu:hover > .ant-menu-submenu-title .anticon,
+      .ant-menu-light .ant-menu-submenu:hover > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-light .ant-menu-submenu:hover > .ant-menu-submenu-title .ant-menu-title-content a {
+        color: rgba(0, 0, 0, 1) !important;
+      }
+      /* Selected state with blue background for light theme */
+      /* Apply when parent page is selected (getCurrentMenuKey handles selection logic) */
+      /* Use same color as regular menu items: #e6f4ff */
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title {
+        background-color: #e6f4ff !important;
+        color: #1890ff !important;
+        font-weight: normal !important;
+      }
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .anticon,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .anticon,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .anticon {
+        color: #1890ff !important;
+      }
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .ant-menu-title-content a,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .ant-menu-title-content a,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline > .ant-menu-submenu-title .ant-menu-title-content a {
+        color: #1890ff !important;
+        font-weight: normal !important;
+      }
+      /* Selected child menu items (light theme) - keep standard Ant Design blue */
+      .ant-menu-light .ant-menu-item-selected {
+        background-color: #e6f4ff !important;
+        color: #1890ff !important;
+      }
+      .ant-menu-light .ant-menu-item-selected .ant-menu-title-content,
+      .ant-menu-light .ant-menu-item-selected .ant-menu-title-content a {
+        color: #1890ff !important;
+      }
+      /* Remove parent highlighting when child is selected (light theme) */
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title {
+        background-color: transparent !important;
+        color: rgba(0, 0, 0, 0.85) !important;
+      }
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .anticon,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .anticon,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .anticon {
+        color: rgba(0, 0, 0, 0.85) !important;
+      }
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-inline.ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .ant-menu-title-content a,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-light .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .ant-menu-title-content a,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .ant-menu-title-content,
+      .ant-menu-submenu-selected.ant-menu-submenu-inline:has(.ant-menu-item-selected) > .ant-menu-submenu-title .ant-menu-title-content a {
+        color: rgba(0, 0, 0, 0.85) !important;
+      }
+      `}
     `;
     document.head.appendChild(style);
     return () => {
@@ -330,58 +521,68 @@ const AppLayout: React.FC = () => {
     const handleSubmenuTitleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
 
-      // Check if we clicked on submenu title (but not on arrow)
+      // Check if we clicked on submenu title
       const submenuTitle = target.closest('.ant-menu-submenu-title');
       if (!submenuTitle) return;
 
-      // Check if we clicked on the arrow itself
-      const clickedArrow = target.closest('.ant-menu-submenu-arrow');
-      if (clickedArrow) {
-        // Let default behavior handle arrow click (expand/collapse)
-        return;
-      }
-
-      // Get the submenu key
+      // Get the submenu element
       const submenuElement = submenuTitle.closest('.ant-menu-submenu');
       if (!submenuElement) return;
 
-      const submenuKey = submenuElement.getAttribute('data-menu-id');
-      console.log('🖱️ [Submenu] Title clicked, key:', submenuKey);
+      // Calculate if click was in the arrow area (right 40px of the submenu title)
+      const rect = submenuTitle.getBoundingClientRect();
+      const clickX = e.clientX;
+      const arrowAreaStart = rect.right - 40; // Arrow area is rightmost 40px
 
-      // Find the menu item and navigate
-      const menuItem = menuItems.find(item => item.key === submenuKey);
-      if (menuItem && menuItem.path) {
-        e.stopPropagation();
-        e.preventDefault();
-        console.log('🚀 [Submenu] Navigating to:', menuItem.path);
-        navigate(menuItem.path);
+      // If clicked in arrow area, let default behavior handle it
+      if (clickX >= arrowAreaStart) {
+        console.log('🖱️ [Submenu] Arrow area clicked - allowing default expand/collapse');
+        return;
+      }
+
+      // Clicked on the title/label area - navigate to parent page
+      // Find the Link element inside the submenu title to get the path
+      const linkElement = submenuTitle.querySelector('a');
+      if (linkElement) {
+        const href = linkElement.getAttribute('href');
+        console.log('🖱️ [Submenu] Title/label area clicked, navigating to:', href);
+
+        if (href) {
+          // Prevent default expand/collapse behavior
+          e.stopPropagation();
+          e.preventDefault();
+          console.log('🚀 [Submenu] Navigating to:', href);
+          navigate(href);
+        }
+      } else {
+        console.log('⚠️ [Submenu] No link found in submenu title');
       }
     };
 
-    // Add event listener
+    // Add event listener with capture phase to intercept before Ant Design handlers
     document.addEventListener('click', handleSubmenuTitleClick, true);
 
     return () => {
       document.removeEventListener('click', handleSubmenuTitleClick, true);
     };
-  }, [navigate, menuItems]);
+  }, [navigate]);
 
   // Get current selected menu key based on location
   const getCurrentMenuKey = (): string[] => {
     const pathname = location.pathname;
     console.log('🚀 [getCurrentMenuKey] called with pathname:', pathname);
-    
+
     // Special handling for paths now under admin
     if (pathname.startsWith('/tenders') || pathname.startsWith('/tender/')) {
       console.log('✅ [getCurrentMenuKey] Found tenders match under admin');
       return ['tenders'];
     }
-    
+
     if (pathname.startsWith('/construction-costs/edit')) {
       console.log('✅ [getCurrentMenuKey] Found cost-edit match under admin');
       return ['cost-edit'];
     }
-    
+
     // Find matching menu item and parent keys
     const findMenuKeys = (items: MenuItem[], parentKey?: string): { selectedKey: string | null, parentKey: string | null } => {
       let bestMatch: { selectedKey: string, parentKey: string | null, pathLength: number } | null = null;
@@ -405,12 +606,21 @@ const AppLayout: React.FC = () => {
           }
         }
 
-        // Then check parent item
-        if (item.path && pathname.startsWith(item.path)) {
-          const pathLength = item.path.length;
-          if (!bestMatch || pathLength > bestMatch.pathLength) {
-            console.log('✅ [getCurrentMenuKey] Found parent match:', item.key, 'Path length:', pathLength);
-            bestMatch = { selectedKey: item.key, parentKey: null, pathLength };
+        // Check parent item only if:
+        // 1. It has no children, OR
+        // 2. It has children but the path is an EXACT match (not just a prefix)
+        if (item.path) {
+          const isExactMatch = pathname === item.path;
+          const hasChildren = !!item.children;
+
+          if (!hasChildren || isExactMatch) {
+            if (pathname.startsWith(item.path)) {
+              const pathLength = item.path.length;
+              if (!bestMatch || pathLength > bestMatch.pathLength) {
+                console.log('✅ [getCurrentMenuKey] Found parent match:', item.key, 'Exact:', isExactMatch, 'Path length:', pathLength);
+                bestMatch = { selectedKey: item.key, parentKey: null, pathLength };
+              }
+            }
           }
         }
       }
@@ -421,8 +631,8 @@ const AppLayout: React.FC = () => {
     };
 
     const { selectedKey, parentKey } = findMenuKeys(menuItems);
-    
-    // Return array with selected key
+
+    // Return array with selected key (only the child, not the parent)
     const result = selectedKey ? [selectedKey] : ['home'];
     console.log('✅ [getCurrentMenuKey] Result:', result);
     return result;
@@ -619,10 +829,16 @@ const AppLayout: React.FC = () => {
         collapsed={collapsed}
         theme="light"
         width={250}
+        collapsedWidth={80}
         className={`sidebar ${collapsed ? 'collapsed' : ''}`}
         style={{
           boxShadow: '2px 0 6px rgba(0,21,41,.1)',
           backgroundColor: theme === 'dark' ? '#1f1f1f' : '#ffffff',
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 100,
         }}
       >
         <div
@@ -692,7 +908,9 @@ const AppLayout: React.FC = () => {
       <Layout
         className={`page ${collapsed ? 'collapsed' : ''}`}
         style={{
-          backgroundColor: theme === 'dark' ? '#141414' : '#f0f2f5'
+          backgroundColor: theme === 'dark' ? '#141414' : '#f0f2f5',
+          marginLeft: collapsed ? '80px' : '250px',
+          transition: 'margin-left 0.2s ease',
         }}
       >
         <Header

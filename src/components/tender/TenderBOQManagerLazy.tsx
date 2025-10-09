@@ -1153,16 +1153,16 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
   return (
     <div className="space-y-4">
       {/* Header */}
-      <Card className="shadow-sm">
+      <Card className="shadow-sm" style={{ padding: '8px 24px' }}>
         <div className="flex justify-between items-center">
-          <div>
-            <Title level={4} className="mb-0">
+          <div className="flex flex-col gap-1">
+            <Title level={4} className="mb-0" style={{ display: 'flex', alignItems: 'center' }}>
               <FolderOpenOutlined className="mr-2" />
-              Позиции заказчика
+              Позиции Заказчика
             </Title>
-            <Text type="secondary">
-              {positions.length} позиций •
-              {expandedPositions.size} развернуто •
+            <Text type="secondary" style={{ fontSize: '13px' }}>
+              {positions.length} позиций •{' '}
+              {expandedPositions.size} развернуто •{' '}
               {loadedPositionItems.size} загружено
             </Text>
           </div>

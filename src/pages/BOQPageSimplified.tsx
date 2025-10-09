@@ -529,13 +529,13 @@ const BOQPageSimplified: React.FC = () => {
                           </div>
                           {/* Курсы валют на отдельной строке */}
                           <div className="flex flex-wrap items-center justify-end gap-3 mt-1" style={{ position: 'relative', zIndex: 10 }}>
-                            <span className="text-sm whitespace-nowrap text-green-500" style={{ cursor: 'default', fontWeight: 600 }}>
+                            <span className="text-sm whitespace-nowrap" style={{ cursor: 'default', fontWeight: 600, color: theme === 'dark' ? '#73d13d' : '#52c41a' }}>
                               <strong>Курс USD:</strong> {selectedTender.usd_rate ? `${Number(selectedTender.usd_rate).toFixed(2)} ₽/$` : '—'}
                             </span>
-                            <span className="text-sm whitespace-nowrap text-blue-500" style={{ cursor: 'default', fontWeight: 600 }}>
+                            <span className="text-sm whitespace-nowrap" style={{ cursor: 'default', fontWeight: 600, color: theme === 'dark' ? '#40a9ff' : '#1890ff' }}>
                               <strong>Курс EUR:</strong> {selectedTender.eur_rate ? `${Number(selectedTender.eur_rate).toFixed(2)} ₽/€` : '—'}
                             </span>
-                            <span className="text-sm whitespace-nowrap text-orange-500" style={{ cursor: 'default', fontWeight: 600 }}>
+                            <span className="text-sm whitespace-nowrap" style={{ cursor: 'default', fontWeight: 600, color: theme === 'dark' ? '#ffa940' : '#fa8c16' }}>
                               <strong>Курс CNY:</strong> {selectedTender.cny_rate ? `${Number(selectedTender.cny_rate).toFixed(2)} ₽/¥` : '—'}
                             </span>
                           </div>
@@ -595,7 +595,7 @@ const BOQPageSimplified: React.FC = () => {
                   <div className="flex flex-col justify-center px-6 rounded-lg self-stretch" style={{ background: theme === 'dark' ? 'rgba(31,31,31,0.95)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(24,144,255,0.2)' }}>
                     <div>
                       <Text className="text-sm block mb-1" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.65)', cursor: 'default' }}>Общая стоимость</Text>
-                      <div className="text-3xl font-bold" style={{ cursor: 'default', color: '#52c41a' }}>
+                      <div className="text-3xl font-bold" style={{ cursor: 'default', color: theme === 'dark' ? '#73d13d' : '#52c41a' }}>
                         {Math.round(boqStats.totalCost).toLocaleString('ru-RU')} ₽
                       </div>
                     </div>

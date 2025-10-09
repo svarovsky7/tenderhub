@@ -20,6 +20,7 @@ import { useMediaQueryFix } from './ClientPositionStreamlined/hooks/useMediaQuer
 import { useSortedBOQItems } from './ClientPositionStreamlined/hooks/useSortedBOQItems';
 import { useCommercialCost } from './ClientPositionStreamlined/hooks/useCommercialCost';
 import { useTenderMarkup } from './ClientPositionStreamlined/hooks/useTenderMarkup';
+import { useTheme } from '../../contexts/ThemeContext';
 import { getTableColumns } from './ClientPositionStreamlined/components/Table/BOQTableColumns';
 import { PositionTableStyles, getPositionCardStyles } from './ClientPositionStreamlined/styles/PositionStyles';
 import {
@@ -99,6 +100,9 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
   clipboardLoading
 }) => {
   console.log(`🎨 [ClientPositionCardStreamlined] Rendering position: ${position.work_name}, isLoading: ${isLoading}, isExpanded: ${isExpanded}`);
+
+  // Theme
+  const { theme } = useTheme();
 
   // Forms
   const [form] = Form.useForm();
@@ -279,7 +283,8 @@ const ClientPositionCardStreamlined: React.FC<ClientPositionCardStreamlinedProps
     position,
     handleEditMaterial,
     handleEditWork,
-    handleDeleteItem
+    handleDeleteItem,
+    theme
   });
 
 

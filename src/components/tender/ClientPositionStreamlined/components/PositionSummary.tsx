@@ -1,7 +1,5 @@
 import React from 'react';
-import { Typography } from 'antd';
-
-const { Text } = Typography;
+import { useTheme } from '../../../../contexts/ThemeContext';
 
 interface PositionSummaryProps {
   totalCost: number;
@@ -17,24 +15,58 @@ export const PositionSummary: React.FC<PositionSummaryProps> = ({
   worksCount,
   materialsCount
 }) => {
+  const { theme } = useTheme();
+
   return (
     <div className="flex flex-col gap-1">
       {/* Total Cost */}
       <div>
-        <Text strong className="text-lg text-green-700 whitespace-nowrap">
+        <strong
+          className="text-lg whitespace-nowrap"
+          style={{
+            fontWeight: 600,
+            color: theme === 'dark' ? '#73d13d' : '#389e0d'
+          }}
+        >
           {Math.round(totalCost).toLocaleString('ru-RU')} ₽
-        </Text>
+        </strong>
       </div>
 
       {/* Statistics */}
       <div className="flex items-center gap-2">
         <span className="whitespace-nowrap">
-          <Text className="text-gray-600 text-xs">Р: </Text>
-          <Text strong className="text-green-600 text-xs">{worksCount}</Text>
+          <span
+            className="text-xs"
+            style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }}
+          >
+            Р:{' '}
+          </span>
+          <strong
+            className="text-xs"
+            style={{
+              fontWeight: 600,
+              color: theme === 'dark' ? '#73d13d' : '#52c41a'
+            }}
+          >
+            {worksCount}
+          </strong>
         </span>
         <span className="whitespace-nowrap">
-          <Text className="text-gray-600 text-xs">М: </Text>
-          <Text strong className="text-blue-600 text-xs">{materialsCount}</Text>
+          <span
+            className="text-xs"
+            style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }}
+          >
+            М:{' '}
+          </span>
+          <strong
+            className="text-xs"
+            style={{
+              fontWeight: 600,
+              color: theme === 'dark' ? '#40a9ff' : '#1890ff'
+            }}
+          >
+            {materialsCount}
+          </strong>
         </span>
       </div>
     </div>

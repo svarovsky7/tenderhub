@@ -78,15 +78,15 @@ export const BOQItemsTable: React.FC<BOQItemsTableProps> = ({
 
     switch(itemType) {
       case 'work':
-        return isDark ? 'rgba(255, 152, 0, 0.2)' : 'rgba(255, 237, 213, 1)';
+        return isDark ? 'rgba(255, 152, 0, 0.2)' : 'rgba(255, 224, 178, 1)'; // Darker orange on hover
       case 'sub_work':
-        return isDark ? 'rgba(156, 39, 176, 0.2)' : 'rgba(225, 190, 231, 1)';
+        return isDark ? 'rgba(156, 39, 176, 0.2)' : 'rgba(225, 190, 231, 1)'; // Already darker purple
       case 'material':
         return workLink
-          ? (isDark ? 'rgba(33, 150, 243, 0.2)' : 'rgba(187, 222, 251, 1)')
-          : (isDark ? 'rgba(33, 150, 243, 0.15)' : 'rgba(187, 222, 251, 0.8)');
+          ? (isDark ? 'rgba(33, 150, 243, 0.2)' : 'rgba(179, 229, 252, 1)') // Darker blue on hover
+          : (isDark ? 'rgba(33, 150, 243, 0.15)' : 'rgba(179, 229, 252, 0.75)'); // Darker blue on hover
       case 'sub_material':
-        return isDark ? 'rgba(76, 175, 80, 0.2)' : 'rgba(200, 230, 201, 1)';
+        return isDark ? 'rgba(76, 175, 80, 0.2)' : 'rgba(200, 230, 201, 1)'; // Already darker green
       default:
         return 'transparent';
     }
@@ -170,14 +170,14 @@ export const BOQItemsTable: React.FC<BOQItemsTableProps> = ({
 
           return (
             <Table.Summary fixed>
-              <Table.Summary.Row style={{ backgroundColor: '#f8f9fa' }}>
+              <Table.Summary.Row style={{ backgroundColor: theme === 'dark' ? '#1f1f1f' : '#f8f9fa' }}>
                 <Table.Summary.Cell index={0} colSpan={8} align="right">
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={8} align="right">
                   <div className="whitespace-nowrap">
-                    <Typography.Text strong className="text-lg text-green-700">
+                    <strong className="text-lg table-sum-green" style={{ color: theme === 'dark' ? '#73d13d' : '#52c41a', fontWeight: 600 }}>
                       {Math.round(total).toLocaleString('ru-RU')} ₽
-                    </Typography.Text>
+                    </strong>
                   </div>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={9} />

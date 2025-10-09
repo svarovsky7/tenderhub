@@ -11,6 +11,7 @@ import {
 import type { BOQItemWithLibrary } from '../../../../../lib/supabase/types';
 import type { ClientPosition } from '../../../../../lib/supabase/api';
 import CostCategoryDisplay from '../../../CostCategoryDisplay';
+import { useTheme } from '../../../../../contexts/ThemeContext';
 
 const { Text } = Typography;
 
@@ -19,13 +20,15 @@ interface GetColumnsProps {
   handleEditMaterial: (item: BOQItemWithLibrary) => void;
   handleEditWork: (item: BOQItemWithLibrary) => void;
   handleDeleteItem: (id: string) => void;
+  theme?: 'light' | 'dark';
 }
 
 export const getTableColumns = ({
   position,
   handleEditMaterial,
   handleEditWork,
-  handleDeleteItem
+  handleDeleteItem,
+  theme = 'light'
 }: GetColumnsProps): ColumnsType<BOQItemWithLibrary> => {
   return [
     {
@@ -135,13 +138,16 @@ export const getTableColumns = ({
         if (record.item_type === 'material' || record.item_type === 'sub_material') {
           const coef = record.conversion_coefficient ||
                       record.work_link?.usage_coefficient || 1;
+          const color = coef !== 1
+            ? (theme === 'dark' ? '#95de64' : '#52c41a') // green
+            : (theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)'); // gray
           return (
-            <div className={`text-center py-1 font-medium text-sm ${coef !== 1 ? 'text-green-600' : 'text-gray-400'}`}>
+            <div className="text-center py-1 font-medium text-sm coef-colored" style={{ color }}>
               {coef}
             </div>
           );
         }
-        return <div className="text-center text-gray-300 text-sm">—</div>;
+        return <div className="text-center text-sm coef-colored" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)' }}>—</div>;
       }
     },
     {
@@ -157,13 +163,16 @@ export const getTableColumns = ({
         if (record.item_type === 'material' || record.item_type === 'sub_material') {
           const coef = record.consumption_coefficient ||
                       record.work_link?.material_quantity_per_work || 1;
+          const color = coef !== 1
+            ? (theme === 'dark' ? '#ffa940' : '#fa8c16') // orange
+            : (theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)'); // gray
           return (
-            <div className={`text-center py-1 font-medium text-sm ${coef !== 1 ? 'text-orange-600' : 'text-gray-400'}`}>
+            <div className="text-center py-1 font-medium text-sm coef-colored" style={{ color }}>
               {coef}
             </div>
           );
         }
-        return <div className="text-center text-gray-300 text-sm">—</div>;
+        return <div className="text-center text-sm coef-colored" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)' }}>—</div>;
       }
     },
     {
@@ -457,9 +466,9 @@ export const getTableColumns = ({
 
         const totalElement = (
           <div className="whitespace-nowrap text-center">
-            <Text strong className="text-green-600 text-sm">
+            <strong className="text-sm table-sum-green" style={{ color: theme === 'dark' ? '#73d13d' : '#52c41a', fontWeight: 600 }}>
               {Math.round(total).toLocaleString('ru-RU')} ₽
-            </Text>
+            </strong>
           </div>
         );
 
