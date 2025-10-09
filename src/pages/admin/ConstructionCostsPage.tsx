@@ -63,6 +63,7 @@ import {
 } from '../../lib/supabase/api/construction-costs';
 import { supabase } from '../../lib/supabase/client';
 import ModernImportModal from '../../components/admin/ModernImportModal';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const { Content } = Layout;
 const { TabPane } = Tabs;
@@ -74,6 +75,7 @@ interface TreeNode extends DataNode {
 }
 
 const ConstructionCostsPage: React.FC = () => {
+  const { theme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
@@ -435,55 +437,55 @@ const ConstructionCostsPage: React.FC = () => {
         {`
           /* Современная карточка */
           .modern-card {
-            background: white;
+            background: ${theme === 'dark' ? '#1f1f1f' : 'white'};
             border-radius: 12px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
-            border: none;
+            border: ${theme === 'dark' ? '1px solid #424242' : 'none'};
             transition: all 0.3s ease;
           }
-          
+
           .modern-card:hover {
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, ${theme === 'dark' ? '0.3' : '0.1'});
           }
-          
+
           /* Стилизация дерева */
           .ant-tree {
             background: transparent;
             font-size: 15px;
           }
-          
+
           .ant-tree-node-content-wrapper {
             transition: all 0.2s;
             padding: 6px 12px;
             border-radius: 6px;
           }
-          
+
           .ant-tree-node-content-wrapper:hover {
-            background: #f0f2f5;
+            background: ${theme === 'dark' ? '#262626' : '#f0f2f5'};
           }
-          
+
           .ant-tree-node-selected .ant-tree-node-content-wrapper {
-            background: #e6f7ff;
+            background: ${theme === 'dark' ? '#003a70' : '#e6f7ff'};
           }
-          
+
           /* Быстрая статистика */
           .stats-card {
-            background: white;
+            background: ${theme === 'dark' ? '#1f1f1f' : 'white'};
             border-radius: 12px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-            border: none;
+            border: ${theme === 'dark' ? '1px solid #424242' : 'none'};
             transition: all 0.3s ease;
             height: 100%;
           }
-          
+
           .stats-card:hover {
             transform: translateY(-4px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, ${theme === 'dark' ? '0.3' : '0.15'});
           }
         `}
       </style>
 
-      <Content style={{ background: '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
+      <Content style={{ background: theme === 'dark' ? '#141414' : '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
         <div style={{ padding: '24px', maxWidth: 1600, margin: '0 auto' }}>
           {/* Быстрая статистика */}
           <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>

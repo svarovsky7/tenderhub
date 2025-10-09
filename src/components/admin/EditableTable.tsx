@@ -21,6 +21,7 @@ import {
   ShrinkOutlined,
   FolderOpenOutlined
 } from '@ant-design/icons';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface EditableTableProps {
   dataSource: any[];
@@ -47,6 +48,8 @@ const EditableTable: React.FC<EditableTableProps> = ({
   expandedRowKeys,
   onExpandedRowsChange
 }) => {
+  const { theme } = useTheme();
+
   const isEditing = (record: any) => {
     // Для локализаций используем составной ключ
     if (record.type === 'location' && record.detailRecordId) {
@@ -113,7 +116,7 @@ const EditableTable: React.FC<EditableTableProps> = ({
         }
         
         return (
-          <div style={{ 
+          <div style={{
             marginLeft: indent,
             display: 'flex',
             alignItems: 'center',
@@ -121,11 +124,10 @@ const EditableTable: React.FC<EditableTableProps> = ({
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
               {icon}
-              <span style={{ 
+              <span style={{
                 fontWeight: record.type === 'category' ? 600 : 400,
                 fontSize: record.type === 'category' ? 15 : 14,
-                color: record.type === 'category' ? '#1890ff' : 
-                       record.type === 'detail' ? '#52c41a' : '#faad14'
+                color: theme === 'dark' ? '#ffffff' : '#000000'
               }}>
                 {text}
               </span>
@@ -180,8 +182,10 @@ const EditableTable: React.FC<EditableTableProps> = ({
       editable: true,
       width: 160,
       render: (text: string) => (
-        <span style={{ 
-          color: text && text !== '-' ? '#52c41a' : '#999',
+        <span style={{
+          color: text && text !== '-'
+            ? (theme === 'dark' ? '#ffffff' : '#000000')
+            : (theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : '#999'),
           fontWeight: text && text !== '-' ? 500 : 400
         }}>
           {text || 'Не указано'}
@@ -331,15 +335,18 @@ const EditableTable: React.FC<EditableTableProps> = ({
   return (
     <Form form={form} component={false}>
       {/* Панель управления сворачиванием */}
-      <div style={{ 
-        marginBottom: 16, 
-        padding: '12px 16px', 
-        background: '#f8f9fa', 
+      <div style={{
+        marginBottom: 16,
+        padding: '12px 16px',
+        background: theme === 'dark' ? '#141414' : '#f8f9fa',
         borderRadius: '8px',
-        border: '1px solid #e9ecef'
+        border: theme === 'dark' ? '1px solid #424242' : '1px solid #e9ecef'
       }}>
         <Space wrap>
-          <span style={{ fontWeight: 500, color: '#495057' }}>
+          <span style={{
+            fontWeight: 500,
+            color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : '#495057'
+          }}>
             <FolderOpenOutlined /> Управление группировкой:
           </span>
           <Button 

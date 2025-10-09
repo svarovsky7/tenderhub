@@ -52,7 +52,8 @@
       "mcp__playwright__browser_type",
       "mcp__playwright__browser_take_screenshot",
       "mcp__playwright__browser_evaluate",
-      "Bash(npx playwright codegen:*)"
+      "Bash(npx playwright codegen:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\n🎨 Улучшена визуальная консистентность градиентных шапок\n\n- Скруглены все углы (border-radius: 16px) на страницах с градиентной шапкой\n- Стандартизированы отступы (margin-bottom: 24px) на всех страницах\n- Добавлена поддержка темной темы для WorkMaterialsPage\n- Улучшены блоки подсказок на TenderMaterialsWorksPage с единообразным стилем\n- Исправлена BOQ страница: добавлен margin-bottom для консистентности\n\nЗатронутые страницы:\n- CommercialCostsPage\n- FinancialIndicatorsPage  \n- TenderMaterialsWorksPage\n- TenderConstructionCostsPage\n- CostRedistributionPage\n- BOQPageSimplified\n- WorkMaterialsPage\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "additionalDirectories": [

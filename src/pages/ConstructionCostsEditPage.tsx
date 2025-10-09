@@ -598,9 +598,55 @@ const ConstructionCostsEditPage: React.FC = () => {
             font-size: 15px;
             transition: all 0.3s ease;
           }
-          .action-btn:hover {
+          .action-btn:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          }
+          /* Back to Structure button hover */
+          .action-btn:nth-child(1):hover:not(:disabled) {
+            background: ${theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.15)'} !important;
+            color: #ffffff !important;
+            border-color: ${theme === 'dark' ? '#38bdf8' : '#0ea5e9'} !important;
+            border-width: 2px !important;
+            box-shadow: 0 0 0 3px ${theme === 'dark' ? 'rgba(56, 189, 248, 0.3)' : 'rgba(14, 165, 233, 0.25)'},
+                        0 4px 12px rgba(56, 189, 248, 0.4);
+          }
+          /* Export button hover */
+          .action-btn:nth-child(2):hover:not(:disabled) {
+            background: ${theme === 'dark' ? 'rgba(96, 165, 250, 0.85)' : 'rgba(251, 191, 36, 0.3)'} !important;
+            color: #ffffff !important;
+            border-color: ${theme === 'dark' ? '#fbbf24' : '#f59e0b'} !important;
+            border-width: 2px !important;
+            box-shadow: 0 0 0 3px ${theme === 'dark' ? 'rgba(251, 191, 36, 0.3)' : 'rgba(245, 158, 11, 0.25)'},
+                        0 4px 12px rgba(251, 191, 36, 0.5);
+          }
+          /* Import button hover */
+          .action-btn:nth-child(3):hover:not(:disabled) {
+            background: ${theme === 'dark' ? 'rgba(59, 130, 246, 0.9)' : 'rgba(37, 99, 235, 0.95)'} !important;
+            color: #ffffff !important;
+            border-color: ${theme === 'dark' ? '#60a5fa' : '#3b82f6'} !important;
+            border-width: 2px !important;
+            box-shadow: 0 0 0 3px ${theme === 'dark' ? 'rgba(96, 165, 250, 0.3)' : 'rgba(59, 130, 246, 0.25)'},
+                        0 4px 16px rgba(59, 130, 246, 0.35);
+          }
+          /* Refresh button hover */
+          .action-btn:nth-child(4):hover:not(:disabled) {
+            background: ${theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.25)'} !important;
+            border-color: ${theme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.5)'} !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          }
+          /* Clear button (inside Popconfirm) hover */
+          .action-btn:nth-child(5) button:hover:not(:disabled) {
+            background: ${theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.15)'} !important;
+            color: #ffffff !important;
+            border-color: #ef4444 !important;
+            border-width: 2px !important;
+            box-shadow: 0 0 0 3px ${theme === 'dark' ? 'rgba(239, 68, 68, 0.5)' : 'rgba(239, 68, 68, 0.3)'},
+                        0 4px 12px ${theme === 'dark' ? 'rgba(239, 68, 68, 0.6)' : 'rgba(239, 68, 68, 0.4)'};
+          }
+          .modern-card {
+            background: ${theme === 'dark' ? '#1f1f1f' : 'white'};
+            border-radius: 12px;
+            border: ${theme === 'dark' ? '1px solid #424242' : '1px solid #f0f0f0'};
           }
         `}
       </style>
@@ -626,51 +672,91 @@ const ConstructionCostsEditPage: React.FC = () => {
           </Col>
           <Col>
             <div className="action-buttons">
+              {/* К структуре (Back to Structure) */}
               <Button
                 className="action-btn"
-                style={{ 
-                  background: 'rgba(255, 255, 255, 0.95)',
-                  color: '#52c41a',
-                  borderColor: 'rgba(255, 255, 255, 0.3)',
+                style={{
+                  background: theme === 'dark'
+                    ? 'rgba(255, 255, 255, 0.1)'
+                    : 'rgba(255, 255, 255, 0.15)',
+                  backdropFilter: 'blur(10px)',
+                  color: '#ffffff',
+                  borderColor: theme === 'dark'
+                    ? 'rgba(255, 255, 255, 0.2)'
+                    : 'rgba(255, 255, 255, 0.3)',
                   fontWeight: 600
                 }}
-                icon={<ReloadOutlined />}
-                onClick={loadData}
-                loading={loading}
+                icon={<ArrowLeftOutlined style={{ color: '#ffffff' }} />}
+                onClick={() => navigate('/construction-costs/management')}
                 size="large"
               >
-                Обновить
+                К структуре
               </Button>
+
+              {/* Экспорт (Export) */}
               <Button
                 className="action-btn"
-                style={{ 
-                  background: 'rgba(255, 255, 255, 0.95)',
-                  color: '#faad14',
-                  borderColor: 'rgba(255, 255, 255, 0.3)',
+                style={{
+                  background: theme === 'dark'
+                    ? 'rgba(96, 165, 250, 0.85)'
+                    : 'rgba(251, 191, 36, 0.15)',
+                  backdropFilter: 'blur(10px)',
+                  color: '#ffffff',
+                  borderColor: theme === 'dark' ? '#fbbf24' : '#f59e0b',
+                  borderWidth: '2px',
                   fontWeight: 600
                 }}
-                icon={<DownloadOutlined />}
+                icon={<DownloadOutlined style={{ color: '#ffffff' }} />}
                 onClick={handleExportExcel}
                 disabled={categories.length === 0}
                 size="large"
               >
                 Экспорт
               </Button>
+
+              {/* Импорт (Import) - Primary CTA */}
               <Button
                 className="action-btn"
-                style={{ 
-                  background: '#ffd93d',
-                  color: '#333',
-                  borderColor: '#ffd93d',
-                  fontWeight: 600,
-                  boxShadow: '0 2px 8px rgba(255, 217, 61, 0.4)'
+                style={{
+                  background: theme === 'dark'
+                    ? 'rgba(96, 165, 250, 0.85)'
+                    : 'rgba(59, 130, 246, 0.9)',
+                  backdropFilter: 'blur(10px)',
+                  color: '#ffffff',
+                  borderColor: theme === 'dark' ? '#60a5fa' : '#3b82f6',
+                  borderWidth: '2px',
+                  fontWeight: 600
                 }}
-                icon={<UploadOutlined />}
+                icon={<UploadOutlined style={{ color: '#ffffff' }} />}
                 onClick={() => setIsImportModalVisible(true)}
                 size="large"
               >
                 Импорт
               </Button>
+
+              {/* Обновить (Refresh) */}
+              <Button
+                className="action-btn"
+                style={{
+                  background: theme === 'dark'
+                    ? 'rgba(255, 255, 255, 0.1)'
+                    : 'rgba(255, 255, 255, 0.15)',
+                  backdropFilter: 'blur(10px)',
+                  color: '#ffffff',
+                  borderColor: theme === 'dark'
+                    ? 'rgba(255, 255, 255, 0.2)'
+                    : 'rgba(255, 255, 255, 0.3)',
+                  fontWeight: 600
+                }}
+                icon={<ReloadOutlined style={{ color: '#ffffff' }} />}
+                onClick={loadData}
+                loading={loading}
+                size="large"
+              >
+                Обновить
+              </Button>
+
+              {/* Очистить (Clear All) - Destructive */}
               <Popconfirm
                 title="Удалить все данные?"
                 description="Это действие необратимо. Все категории, детали и локализации будут удалены."
@@ -680,33 +766,23 @@ const ConstructionCostsEditPage: React.FC = () => {
               >
                 <Button
                   className="action-btn"
-                  style={{ 
-                    background: 'rgba(255, 77, 79, 0.1)',
-                    color: '#ff4d4f',
-                    borderColor: 'rgba(255, 77, 79, 0.3)',
+                  style={{
+                    background: theme === 'dark'
+                      ? 'rgba(255, 255, 255, 0.1)'
+                      : 'rgba(255, 255, 255, 0.15)',
+                    backdropFilter: 'blur(10px)',
+                    color: theme === 'dark' ? '#ef4444' : '#dc2626',
+                    borderColor: theme === 'dark' ? '#ef4444' : 'rgba(255, 255, 255, 0.3)',
+                    borderWidth: theme === 'dark' ? '2px' : '1px',
                     fontWeight: 600
                   }}
-                  icon={<ClearOutlined />}
+                  icon={<ClearOutlined style={{ color: theme === 'dark' ? '#ef4444' : '#dc2626' }} />}
                   disabled={categories.length === 0}
                   size="large"
                 >
                   Очистить
                 </Button>
               </Popconfirm>
-              <Button
-                className="action-btn"
-                style={{ 
-                  background: 'rgba(255, 255, 255, 0.95)',
-                  color: '#1890ff',
-                  borderColor: 'rgba(255, 255, 255, 0.3)',
-                  fontWeight: 600
-                }}
-                icon={<ArrowLeftOutlined />}
-                onClick={() => navigate('/construction-costs/management')}
-                size="large"
-              >
-                К структуре
-              </Button>
             </div>
           </Col>
         </Row>
