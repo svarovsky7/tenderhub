@@ -145,7 +145,7 @@ export const tendersApi = {
   // Get tender by ID
   async getById(id: string): Promise<ApiResponse<TenderWithSummary>> {
     try {
-      const { data, error } = await supabase
+      const { data: rawData, error } = await supabase
         .from('tenders')
         .select(`
           *,
@@ -169,6 +169,12 @@ export const tendersApi = {
           error: handleSupabaseError(error, 'Get tender'),
         };
       }
+
+      // Handle array response (in case .single() returns array)
+      const data = Array.isArray(rawData) ? rawData[0] : rawData;
+
+      console.log('🔍 [tendersApi.getById] Raw data type:', Array.isArray(rawData) ? 'array' : typeof rawData);
+      console.log('🔍 [tendersApi.getById] Processed data:', data);
 
       // Get saved commercial value or calculate from base costs
       const clientPositions = (data as any).client_positions || [];

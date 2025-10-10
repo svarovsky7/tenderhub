@@ -1158,3 +1158,23 @@ body {
 :root.dark img[alt="TenderHub Logo"] {
   /* Logo already has blue background and white elements, looks good in both themes */
 }
+
+/* Hide number input spin buttons (arrows) */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Specific override for GP volume input */
+.no-spin-buttons::-webkit-inner-spin-button,
+.no-spin-buttons::-webkit-outer-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+  display: none !important;
+}

@@ -94,7 +94,7 @@ export const clientPositionsApi = {
    */
   async getById(id: string): Promise<ApiResponse<ClientPositionSummary>> {
     try {
-      const { data, error } = await supabase
+      const { data: rawData, error } = await supabase
         .from('client_positions')
         .select('*')
         .eq('id', id)
@@ -105,6 +105,12 @@ export const clientPositionsApi = {
           error: handleSupabaseError(error, 'Get client position'),
         };
       }
+
+      // Handle array response (in case .single() returns array)
+      const data = Array.isArray(rawData) ? rawData[0] : rawData;
+
+      console.log('🔍 [clientPositionsApi.getById] Raw data type:', Array.isArray(rawData) ? 'array' : typeof rawData);
+      console.log('🔍 [clientPositionsApi.getById] Processed data:', data);
 
       return {
         data,
@@ -728,6 +734,57 @@ export const clientPositionsApi = {
       console.error('💥 Exception in getPositionStatistics:', error);
       return {
         error: handleSupabaseError(error, 'Get position statistics'),
+      };
+    }
+  },
+
+  /**
+   * Get aggregated tender totals using PostgreSQL function
+   * Much faster than JavaScript summation for large tenders (440+ positions)
+   *
+   * @param tenderId - The tender ID to calculate totals for
+   * @returns Aggregated totals including costs and counts
+   */
+  async getTenderTotals(tenderId: string): Promise<ApiResponse<{
+    total_cost: number;
+    total_materials_cost: number;
+    total_works_cost: number;
+    total_works_count: number;
+    total_materials_count: number;
+    positions_count: number;
+  }>> {
+    console.log('🚀 clientPositionsApi.getTenderTotals called with:', { tenderId });
+
+    try {
+      const { data, error } = await supabase
+        .rpc('get_tender_totals', { p_tender_id: tenderId })
+        .single();
+
+      if (error) {
+        console.error('❌ Error fetching tender totals:', error);
+        return {
+          error: handleSupabaseError(error, 'Get tender totals'),
+        };
+      }
+
+      // Convert BigInt to numbers for JSON serialization
+      const totals = {
+        total_cost: parseFloat(data.total_cost) || 0,
+        total_materials_cost: parseFloat(data.total_materials_cost) || 0,
+        total_works_cost: parseFloat(data.total_works_cost) || 0,
+        total_works_count: Number(data.total_works_count) || 0,
+        total_materials_count: Number(data.total_materials_count) || 0,
+        positions_count: Number(data.positions_count) || 0,
+      };
+
+      console.log('✅ Tender totals calculated:', totals);
+      return {
+        data: totals,
+      };
+    } catch (error) {
+      console.error('💥 Exception in getTenderTotals:', error);
+      return {
+        error: handleSupabaseError(error, 'Get tender totals'),
       };
     }
   },

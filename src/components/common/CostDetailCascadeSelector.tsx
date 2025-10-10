@@ -761,7 +761,7 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
       trigger={[]}
       placement="bottomLeft"
       getPopupContainer={(trigger) => trigger.parentElement || document.body}
-      overlay={
+      popupRender={() => (
         <div
           style={{
             backgroundColor: theme === 'dark' ? '#1f1f1f' : 'white',
@@ -776,7 +776,7 @@ const CostDetailCascadeSelectorComponent: React.FC<CostDetailCascadeSelectorProp
         >
           {renderDropdown()}
         </div>
-      }
+      )}
     >
       <Input
         ref={inputRef}

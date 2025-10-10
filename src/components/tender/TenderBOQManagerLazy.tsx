@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { flushSync } from 'react-dom';
 import {
   Button,
   Empty,
@@ -11,14 +10,13 @@ import {
   Space,
   Typography,
   Card,
-  AutoComplete,
-  Pagination
+  AutoComplete
 } from 'antd';
-import { PlusOutlined, ReloadOutlined, FolderOpenOutlined, BuildOutlined, ToolOutlined, FileExcelOutlined } from '@ant-design/icons';
-import { clientPositionsApi, boqApi, tendersApi } from '../../lib/supabase/api';
+import { PlusOutlined, ReloadOutlined, FolderOpenOutlined, FileExcelOutlined } from '@ant-design/icons';
+import { clientPositionsApi, tendersApi } from '../../lib/supabase/api';
 import { supabase } from '../../lib/supabase/client';
-import { workMaterialLinksApi } from '../../lib/supabase/api/work-material-links';
-import ClientPositionCardStreamlined from './ClientPositionCardStreamlined';
+import ClientPositionListItem from './ClientPositionListItem';
+import AdditionalWorkInlineForm from './ClientPositionStreamlined/components/AdditionalWorkInlineForm';
 import type { ClientPositionInsert, ClientPositionType } from '../../lib/supabase/types';
 import { exportBOQToExcel } from '../../utils/excel-templates';
 import { usePositionClipboard } from '../../hooks/usePositionClipboard';
@@ -59,32 +57,16 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
   tenderId,
   onStatsUpdate
 }) => {
-  // State for positions (without BOQ items initially)
+  // State for positions (without BOQ items)
   const [positions, setPositions] = useState<ClientPositionWithStats[]>([]);
-
-  // Cache for loaded BOQ items by position ID (use ref for synchronous access)
-  const loadedPositionItemsRef = useRef<Map<string, any[]>>(new Map());
-  const [loadedPositionItems, setLoadedPositionItems] = useState<Map<string, any[]>>(new Map());
-
-  // Track which positions are currently loading
-  const [loadingPositions, setLoadingPositions] = useState<Set<string>>(new Set());
-
-  // Ref for synchronous loading check (prevents race conditions)
-  const loadingPositionsRef = useRef<Set<string>>(new Set());
-
-  // Force update counter to trigger re-render when loading completes
-  const [, forceUpdate] = useState(0);
-
-  // Track expanded positions
-  const [expandedPositions, setExpandedPositions] = useState<Set<string>>(new Set());
 
   // Loading states
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
 
-  // Store initial total cost to prevent reset on position expand
-  const [initialTotalCost, setInitialTotalCost] = useState<number | null>(null);
+  // Additional work form state
+  const [showingAdditionalFormFor, setShowingAdditionalFormFor] = useState<string | null>(null);
 
   // Modal and forms
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -103,9 +85,10 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
   const [searchValue, setSearchValue] = useState<string>('');
   const positionCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(50); // Default page size
+  // Progressive loading state
+  const [displayCount, setDisplayCount] = useState<number>(100); // Show 100 positions initially
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const hasRestoredRef = useRef<boolean>(false); // Track if we've restored from storage
 
   // Sort positions by position number only (preserving Excel file order)
   const sortPositionsByNumber = useCallback((positions: ClientPositionWithStats[]): ClientPositionWithStats[] => {
@@ -146,7 +129,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
   // Load ONLY positions without BOQ items
   const loadPositions = useCallback(async () => {
     console.log('📡 [TenderBOQManagerLazy] Loading positions (without BOQ items) for tender:', tenderId);
-    console.log('🔍 [TenderBOQManagerLazy] Tender ID type:', typeof tenderId);
+
     setLoading(true);
 
     try {
@@ -178,12 +161,6 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
       }
 
       console.log(`✅ Loaded ${positionsData.length} positions (headers only)`);
-      console.log('📊 [TenderBOQManagerLazy] First 3 positions:', positionsData.slice(0, 3).map(p => ({
-        id: p.id,
-        name: p.work_name,
-        materials_cost: p.total_materials_cost,
-        works_cost: p.total_works_cost
-      })));
 
       // Get statistics for all positions
       const allPositionIds = [];
@@ -197,75 +174,99 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
         }
       });
 
-      // Load statistics (works and materials counts)
+      // Load statistics (works and materials counts) for display in cards
       const statsResult = await clientPositionsApi.getPositionStatistics(allPositionIds);
       const statistics = statsResult.data || {};
 
-      // Calculate total from all positions and apply statistics
-      let totalCost = 0;
-      let totalWorks = 0;
-      let totalMaterials = 0;
-
+      // Apply statistics to positions for display
       positionsData.forEach(position => {
-        // Parse to numbers to ensure correct calculation
+        // Calculate position cost for display
         const materialsCost = parseFloat(position.total_materials_cost) || 0;
         const worksCost = parseFloat(position.total_works_cost) || 0;
-        const posCost = materialsCost + worksCost;
-
-        totalCost += posCost;
-
-        // Also set total_position_cost for display
-        position.total_position_cost = posCost;
+        position.total_position_cost = materialsCost + worksCost;
 
         // Apply statistics from database
         const posStats = statistics[position.id] || { works_count: 0, materials_count: 0 };
         position.works_count = posStats.works_count;
         position.materials_count = posStats.materials_count;
-        totalWorks += posStats.works_count;
-        totalMaterials += posStats.materials_count;
 
-        console.log(`Position ${position.work_name}: Materials=${materialsCost}, Works=${worksCost}, Total=${posCost}, WorksCount=${posStats.works_count}, MaterialsCount=${posStats.materials_count}`);
-
-        // Include additional works in the total
+        // Process additional works
         if (position.additional_works && Array.isArray(position.additional_works)) {
           position.additional_works.forEach(add => {
             const addMaterialsCost = parseFloat(add.total_materials_cost) || 0;
             const addWorksCost = parseFloat(add.total_works_cost) || 0;
-            const addCost = addMaterialsCost + addWorksCost;
+            add.total_position_cost = addMaterialsCost + addWorksCost;
 
-            totalCost += addCost;
-
-            // Also set total_position_cost for display
-            add.total_position_cost = addCost;
-
-            // Apply statistics for additional work
             const addStats = statistics[add.id] || { works_count: 0, materials_count: 0 };
             add.works_count = addStats.works_count;
             add.materials_count = addStats.materials_count;
-            totalWorks += addStats.works_count;
-            totalMaterials += addStats.materials_count;
-
-            console.log(`  Additional ${add.work_name}: Materials=${addMaterialsCost}, Works=${addWorksCost}, Total=${addCost}, WorksCount=${addStats.works_count}, MaterialsCount=${addStats.materials_count}`);
           });
         }
       });
 
-      console.log('📊 Total cost calculated:', totalCost);
-      console.log('📊 Total works:', totalWorks, 'Total materials:', totalMaterials);
-
-      // Set positions WITH statistics
+      // Set positions with statistics
       setPositions(positionsData);
 
-      // Save initial total cost to prevent reset on position expand
-      setInitialTotalCost(totalCost);
+      // Cache positions in sessionStorage with timestamp (5 minute TTL)
+      try {
+        const cacheData = {
+          positions: positionsData,
+          timestamp: Date.now(),
+          ttl: 5 * 60 * 1000 // 5 minutes
+        };
+        sessionStorage.setItem(`boq-positions-${tenderId}`, JSON.stringify(cacheData));
+        console.log('💾 Cached positions in sessionStorage');
+      } catch (error) {
+        console.warn('⚠️ Failed to cache positions:', error);
+      }
 
-      // Update stats with position count, works/materials count and total
-      onStatsUpdate?.({
-        positions: positionsData.length,
-        works: totalWorks,
-        materials: totalMaterials,
-        total: totalCost
-      });
+      // Get aggregated totals from database (FAST!)
+      console.log('📊 Fetching aggregated totals from database...');
+      const totalsResult = await clientPositionsApi.getTenderTotals(tenderId);
+
+      if (totalsResult.error) {
+        console.warn('⚠️ Database aggregation not available, using JavaScript fallback:', totalsResult.error);
+
+        // Fallback: Calculate totals in JavaScript (slower but works)
+        let totalCost = 0;
+        let totalWorks = 0;
+        let totalMaterials = 0;
+
+        positionsData.forEach(position => {
+          totalCost += position.total_position_cost || 0;
+          totalWorks += position.works_count || 0;
+          totalMaterials += position.materials_count || 0;
+
+          // Include additional works
+          if (position.additional_works && Array.isArray(position.additional_works)) {
+            position.additional_works.forEach(add => {
+              totalCost += add.total_position_cost || 0;
+              totalWorks += add.works_count || 0;
+              totalMaterials += add.materials_count || 0;
+            });
+          }
+        });
+
+        console.log('📊 Fallback totals calculated:', { totalCost, totalWorks, totalMaterials });
+
+        onStatsUpdate?.({
+          positions: positionsData.length,
+          works: totalWorks,
+          materials: totalMaterials,
+          total: totalCost
+        });
+      } else {
+        const totals = totalsResult.data!;
+        console.log('✅ Aggregated totals from database:', totals);
+
+        // Update stats with aggregated data from database
+        onStatsUpdate?.({
+          positions: totals.positions_count,
+          works: totals.total_works_count,
+          materials: totals.total_materials_count,
+          total: totals.total_cost
+        });
+      }
 
     } catch (error) {
       console.error('❌ Error loading positions:', error);
@@ -276,522 +277,60 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
     }
   }, [tenderId, onStatsUpdate]);
 
-  // Load BOQ items for a specific position (lazy loading)
-  const loadPositionItems = useCallback(async (positionId: string) => {
-    console.log('🔄 [loadPositionItems] CALLED for position:', positionId);
-    console.log('🔍 [loadPositionItems] loadedPositionItemsRef.current.has:', loadedPositionItemsRef.current.has(positionId), 'for position:', positionId);
-    console.log('🔍 [loadPositionItems] loadingPositionsRef.current.has:', loadingPositionsRef.current.has(positionId), 'for position:', positionId);
-    console.log('🔍 [loadPositionItems] Cache contents:', Array.from(loadedPositionItemsRef.current.keys()));
-
-    // Check if already loaded (use ref for synchronous check)
-    if (loadedPositionItemsRef.current.has(positionId)) {
-      console.log('✅ Items already cached for position:', positionId);
-      return loadedPositionItemsRef.current.get(positionId);
-    }
-
-    console.log('📡 Loading BOQ items for position:', positionId);
-
-    // Synchronous check using ref to prevent race conditions
-    if (loadingPositionsRef.current.has(positionId)) {
-      console.log('⏳ Already loading items for position (ref check):', positionId);
-      return;
-    }
-
-    // Mark as loading in ref (synchronous)
-    loadingPositionsRef.current.add(positionId);
-
-    // Also update state for UI
-    setLoadingPositions(prev => new Set(prev).add(positionId));
+  // Update single position (optimized for clipboard operations)
+  const updateSinglePosition = useCallback(async (positionId: string) => {
+    console.log('🔄 [TenderBOQManagerLazy] Updating single position:', positionId);
 
     try {
-      // Load BOQ items
-      const { data: boqItems } = await boqApi.getByClientPositionId(positionId);
-      const items = boqItems || [];
+      // 1. Load updated position data from database
+      const { data: updatedPosition, error } = await supabase
+        .from('client_positions')
+        .select('*')
+        .eq('id', positionId)
+        .single();
 
-      // Load work-material links
-      const { data: links } = await workMaterialLinksApi.getLinksByPosition(positionId);
-
-      // Process items with link information
-      const processedItems = items.map(item => {
-        if ((item.item_type === 'material' || item.item_type === 'sub_material') && links && links.length > 0) {
-          const materialLinks = links.filter(l =>
-            l.material_boq_item_id === item.id ||
-            l.sub_material_boq_item_id === item.id
-          );
-
-          if (materialLinks.length > 0) {
-            return {
-              ...item,
-              work_links: materialLinks,
-              work_link: materialLinks[0]
-            };
-          }
-        } else if ((item.item_type === 'work' || item.item_type === 'sub_work') && links && links.length > 0) {
-          const workLinks = links.filter(l =>
-            l.work_boq_item_id === item.id ||
-            l.sub_work_boq_item_id === item.id
-          );
-
-          if (workLinks.length > 0) {
-            return {
-              ...item,
-              linked_materials: workLinks
-            };
-          }
-        }
-        return item;
-      });
-
-      // Sort items: works first, then linked materials, then unlinked
-      const sortedItems = [];
-      const unlinkedMaterials = [];
-
-      processedItems.forEach(item => {
-        if (item.item_type === 'work' || item.item_type === 'sub_work') {
-          sortedItems.push(item);
-          // Add linked materials right after their work
-          processedItems.forEach(matItem => {
-            if ((matItem.item_type === 'material' || matItem.item_type === 'sub_material') && matItem.work_link) {
-              const linkedToThisWork =
-                (matItem.work_link.work_boq_item_id === item.id && item.item_type === 'work') ||
-                (matItem.work_link.sub_work_boq_item_id === item.id && item.item_type === 'sub_work');
-              if (linkedToThisWork && !sortedItems.includes(matItem)) {
-                sortedItems.push(matItem);
-              }
-            }
-          });
-        } else if ((item.item_type === 'material' || item.item_type === 'sub_material') && !item.work_link) {
-          unlinkedMaterials.push(item);
-        }
-      });
-
-      sortedItems.push(...unlinkedMaterials);
-
-      console.log(`✅ Loaded ${sortedItems.length} items for position ${positionId}`);
-
-      // Cache the loaded items (both in ref and state)
-      console.log('💾 [loadPositionItems] Caching items for position:', positionId, 'count:', sortedItems.length);
-      loadedPositionItemsRef.current.set(positionId, sortedItems);
-      console.log('💾 [loadPositionItems] Ref cache updated, total cached positions:', loadedPositionItemsRef.current.size);
-
-      setLoadedPositionItems(prev => {
-        const next = new Map(prev);
-        next.set(positionId, sortedItems);
-        console.log('💾 [loadPositionItems] State cache updated, total cached positions:', next.size);
-        return next;
-      });
-
-      // Update position with loaded items
-      setPositions(prevPositions =>
-        prevPositions.map(pos => {
-          if (pos.id === positionId) {
-            return { ...pos, boq_items: sortedItems };
-          }
-          // Also check additional works
-          if (pos.additional_works) {
-            const updatedAdditional = pos.additional_works.map((add: any) =>
-              add.id === positionId ? { ...add, boq_items: sortedItems } : add
-            );
-            if (updatedAdditional !== pos.additional_works) {
-              return { ...pos, additional_works: updatedAdditional };
-            }
-          }
-          return pos;
-        })
-      );
-
-      // Update stats
-      const worksCount = sortedItems.filter(item =>
-        item.item_type === 'work' || item.item_type === 'sub_work'
-      ).length;
-      const materialsCount = sortedItems.filter(item =>
-        item.item_type === 'material' || item.item_type === 'sub_material'
-      ).length;
-
-      // Count works and materials from newly loaded items
-      // But keep the initial total cost to prevent reset
-      let totalWorks = worksCount;
-      let totalMaterials = materialsCount;
-
-      // Count items from all previously loaded positions
-      positions.forEach(pos => {
-        // Count items if loaded (but not the current position as we already counted it)
-        if (pos.id !== positionId) {
-          const items = loadedPositionItems.get(pos.id) || pos.boq_items || [];
-          totalWorks += items.filter(item =>
-            item.item_type === 'work' || item.item_type === 'sub_work'
-          ).length;
-          totalMaterials += items.filter(item =>
-            item.item_type === 'material' || item.item_type === 'sub_material'
-          ).length;
-        }
-
-        // Include additional works
-        if (pos.additional_works) {
-          pos.additional_works.forEach(add => {
-            if (add.id !== positionId) {
-              const addItems = loadedPositionItems.get(add.id) || add.boq_items || [];
-              totalWorks += addItems.filter(item =>
-                item.item_type === 'work' || item.item_type === 'sub_work'
-              ).length;
-              totalMaterials += addItems.filter(item =>
-                item.item_type === 'material' || item.item_type === 'sub_material'
-              ).length;
-            }
-          });
-        }
-      });
-
-      // Update stats with work/material counts but preserve initial total cost
-      onStatsUpdate?.({
-        positions: positions.length,
-        works: totalWorks,
-        materials: totalMaterials,
-        total: initialTotalCost || 0 // Use stored initial total to prevent reset
-      });
-
-      return sortedItems;
-
-    } catch (error) {
-      console.error('❌ Error loading position items:', error);
-      message.error('Ошибка загрузки элементов позиции');
-    } finally {
-      // Remove from loading set (both ref and state)
-      console.log('🔄 [loadPositionItems] FINALLY block executing for:', positionId);
-      loadingPositionsRef.current.delete(positionId);
-      console.log('🔄 [loadPositionItems] Deleted from ref, ref size:', loadingPositionsRef.current.size);
-
-      // Use flushSync to force synchronous state update and re-render
-      flushSync(() => {
-        // Force re-render by updating state (even though we use ref for the actual check)
-        setLoadingPositions(prev => {
-          const next = new Set(prev);
-          next.delete(positionId);
-          console.log('🔄 [loadPositionItems] State updated, new loading set:', Array.from(next));
-          return next;
-        });
-
-        // Increment force update counter to trigger re-render of child components
-        forceUpdate(prev => {
-          const next = prev + 1;
-          console.log('🔄 [loadPositionItems] Force update triggered, counter:', next);
-          return next;
-        });
-      });
-
-      console.log('🔄 [loadPositionItems] FINALLY block completed for:', positionId);
-    }
-  }, [onStatsUpdate, positions, initialTotalCost]); // Removed loadedPositionItems from deps as we use ref now
-
-  // Toggle position expansion and load items if needed
-  const togglePosition = useCallback(async (positionId: string) => {
-    const isExpanding = !expandedPositions.has(positionId);
-
-    // Update expanded state
-    setExpandedPositions(prev => {
-      const next = new Set(prev);
-      if (isExpanding) {
-        next.add(positionId);
-      } else {
-        next.delete(positionId);
-      }
-      return next;
-    });
-
-    // Load items if expanding and not loaded (use ref for synchronous check)
-    if (isExpanding && !loadedPositionItemsRef.current.has(positionId)) {
-      await loadPositionItems(positionId);
-    }
-  }, [expandedPositions, loadPositionItems]);
-
-  // Force refresh position - always reload items regardless of cache
-  const forceRefreshPosition = useCallback(async (positionId: string) => {
-    console.log('🔄 Force refreshing position:', positionId);
-
-    try {
-      // Remove from cache to force reload
-      setLoadedPositionItems(prev => {
-        const next = new Map(prev);
-        next.delete(positionId);
-        return next;
-      });
-
-      // Always reload items if position is expanded
-      let newItems = undefined;
-      if (expandedPositions.has(positionId)) {
-        console.log('🔄 Force reloading items for expanded position:', positionId);
-
-        // Mark as loading
-        setLoadingPositions(prev => new Set(prev).add(positionId));
-
-        try {
-          // Load BOQ items directly from API
-          const { data: boqItems } = await boqApi.getByClientPositionId(positionId);
-          const items = boqItems || [];
-
-          // Load work-material links
-          const { data: links } = await workMaterialLinksApi.getLinksByPosition(positionId);
-
-          // Process items with link information
-          const processedItems = items.map(item => {
-            if ((item.item_type === 'material' || item.item_type === 'sub_material') && links && links.length > 0) {
-              const materialLinks = links.filter(l =>
-                l.material_boq_item_id === item.id ||
-                l.sub_material_boq_item_id === item.id
-              );
-
-              if (materialLinks.length > 0) {
-                return {
-                  ...item,
-                  work_links: materialLinks,
-                  work_link: materialLinks[0]
-                };
-              }
-            } else if ((item.item_type === 'work' || item.item_type === 'sub_work') && links && links.length > 0) {
-              const workLinks = links.filter(l =>
-                l.work_boq_item_id === item.id ||
-                l.sub_work_boq_item_id === item.id
-              );
-
-              if (workLinks.length > 0) {
-                return {
-                  ...item,
-                  linked_materials: workLinks
-                };
-              }
-            }
-            return item;
-          });
-
-          // Sort items
-          const sortedItems = [];
-          const unlinkedMaterials = [];
-
-          processedItems.forEach(item => {
-            if (item.item_type === 'work' || item.item_type === 'sub_work') {
-              sortedItems.push(item);
-              processedItems.forEach(matItem => {
-                if ((matItem.item_type === 'material' || matItem.item_type === 'sub_material') && matItem.work_link) {
-                  const linkedToThisWork =
-                    (matItem.work_link.work_boq_item_id === item.id && item.item_type === 'work') ||
-                    (matItem.work_link.sub_work_boq_item_id === item.id && item.item_type === 'sub_work');
-                  if (linkedToThisWork && !sortedItems.includes(matItem)) {
-                    sortedItems.push(matItem);
-                  }
-                }
-              });
-            } else if ((item.item_type === 'material' || item.item_type === 'sub_material') && !item.work_link) {
-              unlinkedMaterials.push(item);
-            }
-          });
-
-          sortedItems.push(...unlinkedMaterials);
-          newItems = sortedItems;
-
-          console.log(`✅ Force reloaded ${sortedItems.length} items for position ${positionId}`);
-
-          // Update cache
-          setLoadedPositionItems(prev => new Map(prev).set(positionId, sortedItems));
-        } finally {
-          // Remove from loading
-          setLoadingPositions(prev => {
-            const next = new Set(prev);
-            next.delete(positionId);
-            return next;
-          });
-        }
-      }
-
-      // Then reload position header data to get updated totals
-      const { data: updatedPosition } = await clientPositionsApi.getById(positionId);
-
-      // If position no longer exists (was deleted), remove it from state and return
-      if (!updatedPosition) {
-        console.log('🗑️ Position no longer exists, removing from state:', positionId);
-        setPositions(prevPositions => {
-          // Filter out the deleted position from main positions
-          let newPositions = prevPositions.filter(pos => pos.id !== positionId);
-
-          // Also filter out from additional_works arrays
-          newPositions = newPositions.map(pos => {
-            if (pos.additional_works) {
-              const filteredAdditional = pos.additional_works.filter((add: any) => add.id !== positionId);
-              if (filteredAdditional.length !== pos.additional_works.length) {
-                return { ...pos, additional_works: filteredAdditional };
-              }
-            }
-            return pos;
-          });
-
-          return newPositions;
-        });
-
-        // Also remove from caches
-        setLoadedPositionItems(prev => {
-          const next = new Map(prev);
-          next.delete(positionId);
-          return next;
-        });
-        setExpandedPositions(prev => {
-          const next = new Set(prev);
-          next.delete(positionId);
-          return next;
-        });
-
+      if (error || !updatedPosition) {
+        console.error('❌ Failed to load updated position:', error);
         return;
       }
 
-      // Get fresh statistics for this position
+      // 2. Load statistics for this position only
       const statsResult = await clientPositionsApi.getPositionStatistics([positionId]);
-      const positionStats = statsResult.data?.[positionId] || { works_count: 0, materials_count: 0 };
+      const stats = statsResult.data?.[positionId] || { works_count: 0, materials_count: 0 };
 
-      // Also reload additional works for this position if it's not an additional work itself
-      let additionalWorks = [];
-      if (updatedPosition && !updatedPosition.is_additional) {
-        console.log('🔄 Loading additional works for position:', positionId);
-        // Get all positions for this tender and filter for additional works with this parent
-        const { data: allPositions } = await clientPositionsApi.getByTenderId(
-          updatedPosition.tender_id,
-          { parent_position_id: positionId, is_additional: true },
-          { limit: 100 }
+      // 3. Calculate position cost
+      const materialsCost = parseFloat(updatedPosition.total_materials_cost) || 0;
+      const worksCost = parseFloat(updatedPosition.total_works_cost) || 0;
+      updatedPosition.total_position_cost = materialsCost + worksCost;
+      updatedPosition.works_count = stats.works_count;
+      updatedPosition.materials_count = stats.materials_count;
+
+      // 4. Update position in state
+      setPositions(prev => {
+        const updated = prev.map(p =>
+          p.id === positionId ? { ...p, ...updatedPosition } : p
         );
 
-        if (allPositions && allPositions.length > 0) {
-          additionalWorks = allPositions;
-          console.log(`📊 Found ${additionalWorks.length} additional works for position ${positionId}`);
+        // Update cache as well
+        try {
+          const cacheData = {
+            positions: updated,
+            timestamp: Date.now(),
+            ttl: 5 * 60 * 1000 // 5 minutes
+          };
+          sessionStorage.setItem(`boq-positions-${tenderId}`, JSON.stringify(cacheData));
+        } catch (error) {
+          console.warn('⚠️ Failed to update cache:', error);
         }
-      }
 
-      if (updatedPosition) {
-        // Calculate total_position_cost from components
-        const updatedMaterialsCost = parseFloat(updatedPosition.total_materials_cost) || 0;
-        const updatedWorksCost = parseFloat(updatedPosition.total_works_cost) || 0;
-        const updatedTotalCost = updatedMaterialsCost + updatedWorksCost;
+        return updated;
+      });
 
-        console.log(`📊 Updated position costs: Materials=${updatedMaterialsCost}, Works=${updatedWorksCost}, Total=${updatedTotalCost}`);
-        console.log(`📊 Updated position stats: WorksCount=${positionStats.works_count}, MaterialsCount=${positionStats.materials_count}`);
-
-        setPositions(prevPositions =>
-          prevPositions.map(pos => {
-            if (pos.id === positionId) {
-              return {
-                ...pos,
-                total_position_cost: updatedTotalCost,
-                total_materials_cost: updatedMaterialsCost,
-                total_works_cost: updatedWorksCost,
-                materials_count: positionStats.materials_count,
-                works_count: positionStats.works_count,
-                boq_items: newItems !== undefined ? newItems : pos.boq_items,
-                additional_works: additionalWorks.length > 0 ? additionalWorks : pos.additional_works
-              };
-            }
-            // Also check additional works
-            if (pos.additional_works) {
-              const updatedAdditional = pos.additional_works.map((add: any) => {
-                if (add.id === positionId) {
-                  return {
-                    ...add,
-                    total_position_cost: updatedTotalCost,
-                    total_materials_cost: updatedMaterialsCost,
-                    total_works_cost: updatedWorksCost,
-                    materials_count: positionStats.materials_count,
-                    works_count: positionStats.works_count,
-                    boq_items: newItems !== undefined ? newItems : add.boq_items
-                  };
-                }
-                return add;
-              });
-              if (updatedAdditional !== pos.additional_works) {
-                return { ...pos, additional_works: updatedAdditional };
-              }
-            }
-            return pos;
-          })
-        );
-
-        // Recalculate total stats
-        let totalCost = 0;
-        let totalWorks = 0;
-        let totalMaterials = 0;
-
-        positions.forEach(pos => {
-          if (pos.id === positionId) {
-            totalCost += updatedTotalCost;
-            // Use fresh stats for updated position
-            totalWorks += positionStats.works_count;
-            totalMaterials += positionStats.materials_count;
-          } else {
-            const posMaterialsCost = parseFloat(pos.total_materials_cost) || 0;
-            const posWorksCost = parseFloat(pos.total_works_cost) || 0;
-            totalCost += posMaterialsCost + posWorksCost;
-
-            // Use cached counts if available, otherwise from position object
-            if (pos.works_count !== undefined && pos.materials_count !== undefined) {
-              totalWorks += pos.works_count;
-              totalMaterials += pos.materials_count;
-            } else {
-              // Fallback to counting from loaded items
-              const posItems = loadedPositionItems.get(pos.id) || [];
-              totalWorks += posItems.filter(item =>
-                item.item_type === 'work' || item.item_type === 'sub_work'
-              ).length;
-              totalMaterials += posItems.filter(item =>
-                item.item_type === 'material' || item.item_type === 'sub_material'
-              ).length;
-            }
-          }
-
-          if (pos.additional_works) {
-            pos.additional_works.forEach(add => {
-              if (add.id === positionId) {
-                totalCost += updatedTotalCost;
-                // Use fresh stats for updated position (don't double count)
-                // Stats already counted above for the main position check
-              } else {
-                const addMaterialsCost = parseFloat(add.total_materials_cost) || 0;
-                const addWorksCost = parseFloat(add.total_works_cost) || 0;
-                totalCost += addMaterialsCost + addWorksCost;
-
-                // Use cached counts if available
-                if (add.works_count !== undefined && add.materials_count !== undefined) {
-                  totalWorks += add.works_count;
-                  totalMaterials += add.materials_count;
-                } else {
-                  // Fallback to counting from loaded items
-                  const addItems = loadedPositionItems.get(add.id) || [];
-                  totalWorks += addItems.filter(item =>
-                    item.item_type === 'work' || item.item_type === 'sub_work'
-                  ).length;
-                  totalMaterials += addItems.filter(item =>
-                    item.item_type === 'material' || item.item_type === 'sub_material'
-                  ).length;
-                }
-              }
-            });
-          }
-        });
-
-        console.log('📊 Stats update:', { totalCost, totalWorks, totalMaterials });
-
-        // Update initial total cost when position data changes
-        setInitialTotalCost(totalCost);
-
-        onStatsUpdate?.({
-          positions: positions.length,
-          works: totalWorks,
-          materials: totalMaterials,
-          total: totalCost
-        });
-      }
-
-      console.log('✅ Position force refreshed successfully');
-      message.success('Позиция успешно обновлена');
-
+      console.log('✅ Position updated successfully:', positionId);
     } catch (error) {
-      console.error('❌ Error force refreshing position:', error);
-      message.error('Ошибка обновления позиции');
+      console.error('💥 Exception updating single position:', error);
     }
-  }, [expandedPositions, positions, loadedPositionItems, onStatsUpdate, clientPositionsApi, boqApi, workMaterialLinksApi]);
+  }, [tenderId]);
 
   // Position clipboard hook for copy/paste functionality
   const {
@@ -799,194 +338,14 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
     copiedItemsCount,
     copiedLinksCount,
     copiedFromPositionId,
-    loading: clipboardLoading,
+    isPositionLoading,
     handleCopy,
     handlePaste,
     clearClipboard
   } = usePositionClipboard({
     tenderId,
-    onUpdate: forceRefreshPosition
+    onUpdate: updateSinglePosition // Optimized: update only target position
   });
-
-  // Update single position after changes
-  const updateSinglePosition = useCallback(async (positionId: string) => {
-    console.log('🔄 Updating single position:', positionId);
-
-    try {
-      // Remove from cache to force reload
-      setLoadedPositionItems(prev => {
-        const next = new Map(prev);
-        next.delete(positionId);
-        return next;
-      });
-
-      // If position is expanded, reload its items first
-      let newItems = undefined;
-      if (expandedPositions.has(positionId)) {
-        console.log('🔄 Position is expanded, reloading items for:', positionId);
-        newItems = await loadPositionItems(positionId);
-        console.log('✅ Items reloaded:', newItems?.length || 0, 'items');
-      }
-
-      // Then reload position header data to get updated totals
-      const { data: updatedPosition } = await clientPositionsApi.getById(positionId);
-      if (updatedPosition) {
-        // Calculate total_position_cost from components (parse as float to ensure correct calculation)
-        const updatedMaterialsCost = parseFloat(updatedPosition.total_materials_cost) || 0;
-        const updatedWorksCost = parseFloat(updatedPosition.total_works_cost) || 0;
-        const updatedTotalCost = updatedMaterialsCost + updatedWorksCost;
-
-        // Calculate counts from loaded items if available
-        let worksCount = 0;
-        let materialsCount = 0;
-        if (newItems) {
-          worksCount = newItems.filter(item =>
-            item.item_type === 'work' || item.item_type === 'sub_work'
-          ).length;
-          materialsCount = newItems.filter(item =>
-            item.item_type === 'material' || item.item_type === 'sub_material'
-          ).length;
-          console.log(`📊 Calculated counts from ${newItems.length} loaded items: Works=${worksCount}, Materials=${materialsCount}`);
-        } else {
-          // Fall back to counts from position data
-          worksCount = updatedPosition.works_count || 0;
-          materialsCount = updatedPosition.materials_count || 0;
-          console.log(`📊 Using counts from position data: Works=${worksCount}, Materials=${materialsCount}`);
-        }
-
-        console.log(`📊 Updated position costs: Materials=${updatedMaterialsCost}, Works=${updatedWorksCost}, Total=${updatedTotalCost}`);
-        console.log(`📊 Setting position state with: Total=${updatedTotalCost}, Works=${worksCount}, Materials=${materialsCount}`);
-
-        setPositions(prevPositions =>
-          prevPositions.map(pos => {
-            if (pos.id === positionId) {
-              return {
-                ...pos,
-                total_position_cost: updatedTotalCost,
-                total_materials_cost: updatedMaterialsCost,
-                total_works_cost: updatedWorksCost,
-                materials_count: materialsCount,
-                works_count: worksCount,
-                // Use newly loaded items if available
-                boq_items: newItems !== undefined ? newItems : pos.boq_items
-              };
-            }
-            // Also check additional works
-            if (pos.additional_works) {
-              const updatedAdditional = pos.additional_works.map((add: any) => {
-                if (add.id === positionId) {
-                  return {
-                    ...add,
-                    total_position_cost: updatedTotalCost,
-                    total_materials_cost: updatedMaterialsCost,
-                    total_works_cost: updatedWorksCost,
-                    materials_count: materialsCount,
-                    works_count: worksCount,
-                    // Use newly loaded items if available
-                    boq_items: newItems !== undefined ? newItems : add.boq_items
-                  };
-                }
-                return add;
-              });
-              if (updatedAdditional !== pos.additional_works) {
-                return { ...pos, additional_works: updatedAdditional };
-              }
-            }
-            return pos;
-          })
-        );
-
-        // Recalculate total stats - use updated position data
-        let totalCost = 0;
-        let totalWorks = 0;
-        let totalMaterials = 0;
-
-        positions.forEach(pos => {
-          if (pos.id === positionId) {
-            totalCost += updatedTotalCost;
-            // Use the newly loaded items for the updated position
-            if (newItems) {
-              totalWorks += newItems.filter(item =>
-                item.item_type === 'work' || item.item_type === 'sub_work'
-              ).length;
-              totalMaterials += newItems.filter(item =>
-                item.item_type === 'material' || item.item_type === 'sub_material'
-              ).length;
-            } else {
-              // If no new items, use cached count from position
-              totalWorks += updatedPosition.works_count || 0;
-              totalMaterials += updatedPosition.materials_count || 0;
-            }
-          } else {
-            const posMaterialsCost = parseFloat(pos.total_materials_cost) || 0;
-            const posWorksCost = parseFloat(pos.total_works_cost) || 0;
-            totalCost += posMaterialsCost + posWorksCost;
-
-            // Use cached counts from position if available
-            if (pos.works_count !== undefined && pos.materials_count !== undefined) {
-              totalWorks += pos.works_count;
-              totalMaterials += pos.materials_count;
-            } else {
-              // Otherwise count from loaded items
-              const posItems = loadedPositionItems.get(pos.id) || [];
-              totalWorks += posItems.filter(item =>
-                item.item_type === 'work' || item.item_type === 'sub_work'
-              ).length;
-              totalMaterials += posItems.filter(item =>
-                item.item_type === 'material' || item.item_type === 'sub_material'
-              ).length;
-            }
-          }
-
-          // Include additional works
-          if (pos.additional_works) {
-            pos.additional_works.forEach(add => {
-              if (add.id === positionId) {
-                // Already counted in main check above, skip to avoid double counting
-              } else {
-                const addMaterialsCost = parseFloat(add.total_materials_cost) || 0;
-                const addWorksCost = parseFloat(add.total_works_cost) || 0;
-                totalCost += addMaterialsCost + addWorksCost;
-
-                // Use cached counts from additional work if available
-                if (add.works_count !== undefined && add.materials_count !== undefined) {
-                  totalWorks += add.works_count;
-                  totalMaterials += add.materials_count;
-                } else {
-                  // Otherwise count from loaded items
-                  const addItems = loadedPositionItems.get(add.id) || [];
-                  totalWorks += addItems.filter(item =>
-                    item.item_type === 'work' || item.item_type === 'sub_work'
-                  ).length;
-                  totalMaterials += addItems.filter(item =>
-                    item.item_type === 'material' || item.item_type === 'sub_material'
-                  ).length;
-                }
-              }
-            });
-          }
-        });
-
-        console.log('📊 Stats update:', { totalCost, totalWorks, totalMaterials });
-
-        // Update initial total cost when position data changes
-        setInitialTotalCost(totalCost);
-
-        onStatsUpdate?.({
-          positions: positions.length,
-          works: totalWorks,
-          materials: totalMaterials,
-          total: totalCost
-        });
-      }
-
-      console.log('✅ Position updated successfully');
-      message.success('Позиция успешно обновлена');
-    } catch (error) {
-      console.error('❌ Error updating position:', error);
-      message.error('Ошибка обновления позиции');
-    }
-  }, [loadPositionItems, positions, loadedPositionItems, onStatsUpdate, expandedPositions, clientPositionsApi]);
 
   // Export to Excel handler
   const handleExportToExcel = async () => {
@@ -1013,42 +372,33 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
     }
   };
 
-  // Get regular positions (for search and pagination)
+  // Get regular positions (for search and display)
   const regularPositions = useMemo(() => {
-    return sortPositionsByNumber(
-      positions.filter(p => !p.is_additional && !p.is_orphaned)
-    );
+    const filtered = positions.filter(p => !p.is_additional && !p.is_orphaned);
+    return sortPositionsByNumber(filtered);
   }, [positions, sortPositionsByNumber]);
 
   // Handle position search and scroll
   const handlePositionSearch = useCallback((value: string, option: any) => {
-    console.log('🔍 Position search selected:', value, option);
     const positionId = option.key;
 
-    // Find the position in the list to determine which page it's on
+    // Find the index of the selected position in regularPositions
     const positionIndex = regularPositions.findIndex(p => p.id === positionId);
 
-    console.log('📍 Position search debug:', {
-      positionId,
-      positionIndex,
-      totalRegularPositions: regularPositions.length,
-      pageSize,
-      currentPage
-    });
-
-    if (positionIndex !== -1) {
-      // Calculate which page this position is on
-      const targetPage = Math.floor(positionIndex / pageSize) + 1;
-
-      console.log('📄 Target page:', targetPage, 'Current page:', currentPage);
-
-      // Navigate to the correct page if not already there
-      if (targetPage !== currentPage) {
-        setCurrentPage(targetPage);
-      }
+    if (positionIndex === -1) {
+      return;
     }
 
-    // Wait for page to update, then scroll to the position
+    // If position is beyond displayCount, load enough positions to include it
+    if (positionIndex >= displayCount) {
+      const newDisplayCount = Math.min(
+        Math.ceil((positionIndex + 1) / 100) * 100, // Round up to nearest 100
+        regularPositions.length
+      );
+      setDisplayCount(newDisplayCount);
+    }
+
+    // Wait for render, then scroll
     setTimeout(() => {
       const cardElement = positionCardRefs.current.get(positionId);
       if (cardElement) {
@@ -1063,14 +413,12 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
           cardElement.style.boxShadow = '';
           cardElement.style.transform = '';
         }, 1500);
-      } else {
-        console.log('⚠️ Card element not found for position:', positionId);
       }
-    }, 100);
+    }, 100); // Small delay to allow render
 
     // Clear the search value after selection
     setSearchValue('');
-  }, [regularPositions, pageSize, currentPage]);
+  }, [regularPositions, displayCount]);
 
   // Get autocomplete options from positions
   const getPositionOptions = useCallback(() => {
@@ -1087,7 +435,6 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
       .slice(0, 10) // Limit to 10 results
       .map(pos => ({
         key: pos.id,
-        // Use unique identifier in value to distinguish positions with same name
         value: `${pos.item_no || pos.position_number} - ${pos.work_name}`,
         label: (
           <div>
@@ -1128,32 +475,190 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
     }
   };
 
-  // Initial load
+  // Storage keys for saving state and positions cache
+  const storageKey = `boq-scroll-${tenderId}`;
+  const positionsCacheKey = `boq-positions-${tenderId}`;
+
+  // Progressive loading: Reset displayCount only when tender changes
   useEffect(() => {
-    if (tenderId) {
-      loadPositions();
-    }
-  }, [tenderId]);
+    // Reset flag when tender changes
+    hasRestoredRef.current = false;
 
-  // Get paginated positions (regular positions only, excluding additional and orphaned)
-  const getPaginatedPositions = useCallback(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-
-    return regularPositions.slice(startIndex, endIndex);
-  }, [regularPositions, currentPage, pageSize]);
-
-  // Handle pagination change
-  const handlePageChange = (page: number, newPageSize?: number) => {
-    if (newPageSize && newPageSize !== pageSize) {
-      setPageSize(newPageSize);
-      setCurrentPage(1); // Reset to first page when page size changes
+    // Try to restore from sessionStorage
+    const savedState = sessionStorage.getItem(storageKey);
+    if (savedState) {
+      const { displayCount: saved } = JSON.parse(savedState);
+      setDisplayCount(saved || 100);
     } else {
-      setCurrentPage(page);
+      setDisplayCount(100); // Reset to 100 only when tender changes
     }
-    // Scroll to top of positions list
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+
+    // Mark as restored to allow saving
+    setTimeout(() => {
+      hasRestoredRef.current = true;
+    }, 100); // Small delay to ensure restoration is complete
+  }, [tenderId, storageKey]);
+
+  // Save displayCount to sessionStorage when it changes (but not during initial restore)
+  useEffect(() => {
+    // Don't save until we've restored at least once
+    if (!hasRestoredRef.current) return;
+
+    const currentScroll = window.scrollY;
+    sessionStorage.setItem(storageKey, JSON.stringify({
+      displayCount,
+      scrollY: currentScroll
+    }));
+  }, [displayCount, storageKey]);
+
+  // Restore scroll position after positions load
+  useEffect(() => {
+    if (positions.length > 0 && !initialLoading) {
+      const savedState = sessionStorage.getItem(storageKey);
+      if (savedState) {
+        const { scrollY } = JSON.parse(savedState);
+        if (scrollY > 0) {
+          // Wait for DOM to settle
+          requestAnimationFrame(() => {
+            setTimeout(() => {
+              window.scrollTo({
+                top: scrollY,
+                behavior: 'auto'
+              });
+            }, 100);
+          });
+        }
+      }
+    }
+  }, [positions.length, initialLoading, storageKey]);
+
+  // Ref to track total positions count without triggering re-creation
+  const totalPositionsRef = useRef(regularPositions.length);
+
+  // Update ref when positions change
+  useEffect(() => {
+    totalPositionsRef.current = regularPositions.length;
+  }, [regularPositions.length]);
+
+  // Callback ref for load more element - optimized to avoid re-creation
+  const loadMoreRef = useCallback((node: HTMLDivElement | null) => {
+    // Cleanup previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+
+    // Don't create observer if no element
+    if (!node) {
+      return;
+    }
+
+    // Create new observer
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setDisplayCount(prev => {
+            const total = totalPositionsRef.current; // Use ref instead of closure
+            const newCount = Math.min(prev + 100, total);
+            return newCount > prev ? newCount : prev;
+          });
+        }
+      },
+      {
+        threshold: 0,
+        rootMargin: '800px' // Load new batch 800px before reaching the load indicator
+      }
+    );
+
+    observerRef.current.observe(node);
+  }, []); // No dependencies - observer created once
+
+  // Cleanup observer on unmount and clear sessionStorage
+  useEffect(() => {
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+      // Clear storage on unmount to start fresh next time if navigating away
+      // But NOT if just unmounting temporarily
+      const handleBeforeUnload = () => {
+        sessionStorage.removeItem(storageKey);
+      };
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [storageKey]);
+
+  // Initial load with cache check
+  useEffect(() => {
+    if (!tenderId) return;
+
+    const loadWithCache = async () => {
+      console.log('🔄 [TenderBOQManagerLazy] Mount - checking cache for tender:', tenderId);
+
+      // Try to load from cache first
+      try {
+        const cachedData = sessionStorage.getItem(`boq-positions-${tenderId}`);
+        if (cachedData) {
+          const { positions: cachedPositions, timestamp, ttl } = JSON.parse(cachedData);
+          const age = Date.now() - timestamp;
+
+          // Use cache if fresh (< 5 minutes)
+          if (age < ttl) {
+            console.log(`✅ Using cached positions (age: ${Math.round(age / 1000)}s)`);
+            setPositions(cachedPositions);
+            setInitialLoading(false);
+
+            // Update stats from cached data
+            let totalCost = 0;
+            let totalWorks = 0;
+            let totalMaterials = 0;
+
+            cachedPositions.forEach((position: any) => {
+              totalCost += position.total_position_cost || 0;
+              totalWorks += position.works_count || 0;
+              totalMaterials += position.materials_count || 0;
+
+              // Include additional works
+              if (position.additional_works && Array.isArray(position.additional_works)) {
+                position.additional_works.forEach((add: any) => {
+                  totalCost += add.total_position_cost || 0;
+                  totalWorks += add.works_count || 0;
+                  totalMaterials += add.materials_count || 0;
+                });
+              }
+            });
+
+            onStatsUpdate?.({
+              positions: cachedPositions.length,
+              works: totalWorks,
+              materials: totalMaterials,
+              total: totalCost
+            });
+
+            // Still refresh in background to ensure data is fresh
+            setTimeout(() => {
+              console.log('🔄 Background refresh of positions');
+              loadPositions();
+            }, 500);
+
+            return;
+          } else {
+            console.log(`⏰ Cache expired (age: ${Math.round(age / 1000)}s)`);
+          }
+        } else {
+          console.log('📭 No cache found');
+        }
+      } catch (error) {
+        console.warn('⚠️ Cache read failed:', error);
+      }
+
+      // No valid cache - load from server
+      loadPositions();
+    };
+
+    loadWithCache();
+  }, [tenderId]); // Remove loadPositions from deps to avoid recreation
 
   return (
     <div className="space-y-4">
@@ -1166,9 +671,7 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
               Позиции Заказчика
             </Title>
             <Text type="secondary" style={{ fontSize: '13px' }}>
-              {positions.length} позиций •{' '}
-              {expandedPositions.size} развернуто •{' '}
-              {loadedPositionItems.size} загружено
+              {positions.length} позиций
             </Text>
           </div>
           <Space>
@@ -1233,102 +736,111 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
           </Empty>
         </Card>
       ) : (
-        <div className="space-y-2">
-          {getPaginatedPositions().map(position => (
-            <React.Fragment key={position.id}>
-              <div ref={(el) => el && positionCardRefs.current.set(position.id, el)}>
-                <ClientPositionCardStreamlined
-                  key={`${position.id}-loading-${loadingPositionsRef.current.has(position.id)}`}
-                  position={{
-                    ...position,
-                    boq_items: loadedPositionItems.get(position.id) || position.boq_items
-                  }}
-                  isExpanded={expandedPositions.has(position.id)}
-                  onToggle={() => togglePosition(position.id)}
-                  onUpdate={() => forceRefreshPosition(position.id)}
+        <>
+          {/* Regular positions list with progressive loading */}
+          <div className="space-y-2">
+            {regularPositions.slice(0, displayCount).map((position) => (
+              <div key={position.id} ref={(el) => el && positionCardRefs.current.set(position.id, el)}>
+                {/* Show additional work form if this position is selected */}
+                {showingAdditionalFormFor === position.id && (
+                  <div className="mb-2">
+                    <AdditionalWorkInlineForm
+                      parentPositionId={position.id}
+                      parentPositionName={position.work_name || 'Позиция'}
+                      tenderId={tenderId}
+                      onSuccess={() => {
+                        setShowingAdditionalFormFor(null);
+                        loadPositions();
+                      }}
+                      onCancel={() => setShowingAdditionalFormFor(null)}
+                    />
+                  </div>
+                )}
+
+                <ClientPositionListItem
+                  position={position}
                   tenderId={tenderId}
-                  tender={tender}
-                  isLoading={loadingPositionsRef.current.has(position.id)}
+                  onUpdate={updateSinglePosition}
                   onCopyPosition={handleCopy}
                   onPastePosition={handlePaste}
                   hasCopiedData={hasCopiedData}
                   copiedItemsCount={copiedItemsCount}
                   copiedFromPositionId={copiedFromPositionId}
-                  clipboardLoading={clipboardLoading}
+                  clipboardLoading={isPositionLoading(position.id)}
+                  onShowAdditionalWorkForm={setShowingAdditionalFormFor}
                 />
-              </div>
 
-              {/* Additional works for this position */}
-              {position.additional_works?.map(additionalWork => (
-                <div key={additionalWork.id} style={{ marginLeft: '32px', position: 'relative' }}>
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: '-20px',
-                      top: '0',
-                      bottom: '0',
-                      width: '2px',
-                      backgroundColor: '#faad14',
-                      opacity: 0.5
-                    }}
-                  />
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: '-20px',
-                      top: '50%',
-                      width: '20px',
-                      height: '2px',
-                      backgroundColor: '#faad14',
-                      opacity: 0.5
-                    }}
-                  />
-
-                  <div ref={(el) => el && positionCardRefs.current.set(additionalWork.id, el)}>
-                    <ClientPositionCardStreamlined
-                      key={`${additionalWork.id}-loading-${loadingPositionsRef.current.has(additionalWork.id)}`}
-                      position={{
-                        ...additionalWork,
-                        is_additional: true,
-                        boq_items: loadedPositionItems.get(additionalWork.id) || additionalWork.boq_items
+                {/* Render additional works inline (indented) */}
+                {position.additional_works && position.additional_works.length > 0 && (
+                  <div style={{ paddingLeft: '32px', position: 'relative' }} className="space-y-2">
+                    {/* Visual indicator line */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: '10px',
+                        top: '0',
+                        bottom: '0',
+                        width: '2px',
+                        backgroundColor: '#faad14',
+                        opacity: 0.5
                       }}
-                      isExpanded={expandedPositions.has(additionalWork.id)}
-                      onToggle={() => togglePosition(additionalWork.id)}
-                      onUpdate={() => forceRefreshPosition(additionalWork.id)}
-                      tenderId={tenderId}
-                      tender={tender}
-                      isLoading={loadingPositionsRef.current.has(additionalWork.id)}
-                      onCopyPosition={handleCopy}
-                    onPastePosition={handlePaste}
-                    hasCopiedData={hasCopiedData}
-                    copiedItemsCount={copiedItemsCount}
-                    copiedFromPositionId={copiedFromPositionId}
-                    clipboardLoading={clipboardLoading}
-                  />
+                    />
+
+                    {position.additional_works.map((additionalWork: any) => (
+                      <div
+                        key={additionalWork.id}
+                        style={{ position: 'relative' }}
+                        ref={(el) => el && positionCardRefs.current.set(additionalWork.id, el)}
+                      >
+                        {/* Horizontal connector line */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: '-22px',
+                            top: '50%',
+                            width: '22px',
+                            height: '2px',
+                            backgroundColor: '#faad14',
+                            opacity: 0.5
+                          }}
+                        />
+
+                        <ClientPositionListItem
+                          position={{
+                            ...additionalWork,
+                            is_additional: true
+                          }}
+                          tenderId={tenderId}
+                          onUpdate={updateSinglePosition}
+                        />
+                      </div>
+                    ))}
                   </div>
+                )}
+              </div>
+            ))}
+
+            {/* Load more indicator */}
+            {displayCount < regularPositions.length && (
+              <div
+                ref={loadMoreRef}
+                style={{
+                  padding: '20px',
+                  textAlign: 'center',
+                  color: '#8c8c8c'
+                }}
+              >
+                <Spin size="small" />
+                <div style={{ marginTop: '8px' }}>
+                  Загрузка позиций {displayCount} / {regularPositions.length}...
                 </div>
-              ))}
-            </React.Fragment>
-          ))}
+              </div>
+            )}
+          </div>
 
-          {/* Pagination */}
-          {positions.filter(p => !p.is_additional && !p.is_orphaned).length > 0 && (
-            <div className="flex justify-center mt-6 mb-4">
-              <Pagination
-                current={currentPage}
-                pageSize={pageSize}
-                total={positions.filter(p => !p.is_additional && !p.is_orphaned).length}
-                onChange={handlePageChange}
-                showSizeChanger={true}
-                pageSizeOptions={['50', '100', '200', '500', '1000']}
-                showTotal={(total, range) => `${range[0]}-${range[1]} из ${total} позиций`}
-              />
-            </div>
-          )}
-
-          {/* Orphaned Additional Works */}
+          {/* Orphaned Additional Works (outside virtualization) */}
           {positions.filter(p => p.is_orphaned).length > 0 && (
-            <>
+            <div className="space-y-2">
               <div style={{
                 marginTop: '24px',
                 marginBottom: '12px',
@@ -1344,26 +856,20 @@ const TenderBOQManagerLazy: React.FC<TenderBOQManagerLazyProps> = ({
 
               {sortPositionsByNumber(positions.filter(p => p.is_orphaned)).map(orphanedWork => (
                 <div key={orphanedWork.id} ref={(el) => el && positionCardRefs.current.set(orphanedWork.id, el)}>
-                  <ClientPositionCardStreamlined
-                    key={`${orphanedWork.id}-loading-${loadingPositionsRef.current.has(orphanedWork.id)}`}
+                  <ClientPositionListItem
                     position={{
                       ...orphanedWork,
                       is_additional: true,
-                      is_orphaned: true,
-                      boq_items: loadedPositionItems.get(orphanedWork.id) || orphanedWork.boq_items
+                      is_orphaned: true
                     }}
-                    isExpanded={expandedPositions.has(orphanedWork.id)}
-                    onToggle={() => togglePosition(orphanedWork.id)}
-                    onUpdate={() => forceRefreshPosition(orphanedWork.id)}
                     tenderId={tenderId}
-                    tender={tender}
-                    isLoading={loadingPositionsRef.current.has(orphanedWork.id)}
+                    onUpdate={updateSinglePosition}
                   />
                 </div>
               ))}
-            </>
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {/* Create Position Modal */}

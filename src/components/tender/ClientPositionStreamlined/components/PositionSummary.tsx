@@ -10,12 +10,18 @@ interface PositionSummaryProps {
 /**
  * Компонент отображения итоговой суммы и статистики позиции
  */
-export const PositionSummary: React.FC<PositionSummaryProps> = ({
+export const PositionSummary: React.FC<PositionSummaryProps> = React.memo(({
   totalCost,
   worksCount,
   materialsCount
 }) => {
   const { theme } = useTheme();
+
+  // Memoize formatted cost
+  const formattedCost = React.useMemo(() =>
+    Math.round(totalCost).toLocaleString('ru-RU'),
+    [totalCost]
+  );
 
   return (
     <div className="flex flex-col gap-1">
@@ -28,7 +34,7 @@ export const PositionSummary: React.FC<PositionSummaryProps> = ({
             color: theme === 'dark' ? '#73d13d' : '#389e0d'
           }}
         >
-          {Math.round(totalCost).toLocaleString('ru-RU')} ₽
+          {formattedCost} ₽
         </strong>
       </div>
 
@@ -71,4 +77,4 @@ export const PositionSummary: React.FC<PositionSummaryProps> = ({
       </div>
     </div>
   );
-};
+});

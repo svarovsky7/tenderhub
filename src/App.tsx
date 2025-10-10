@@ -12,6 +12,7 @@ import './App.css';
 const HomePage = React.lazy(() => import('./pages/HomePage'));
 const TendersPage = React.lazy(() => import('./pages/TendersPage'));
 const BOQPageSimplified = React.lazy(() => import('./pages/BOQPageSimplified'));
+const ClientPositionEditPage = React.lazy(() => import('./pages/ClientPositionEditPage'));
 const MaterialsPage = React.lazy(() => import('./pages/MaterialsPage'));
 const WorksPage = React.lazy(() => import('./pages/WorksPage'));
 const UsersPage = React.lazy(() => import('./pages/admin/UsersPage'));
@@ -104,6 +105,16 @@ const AppContent: React.FC = () => {
               element={
                 <React.Suspense fallback={<div>Загрузка...</div>}>
                   <BOQPageSimplified />
+                </React.Suspense>
+              }
+            />
+
+            {/* BOQ Position Edit Page */}
+            <Route
+              path="boq/position/:positionId"
+              element={
+                <React.Suspense fallback={<div>Загрузка...</div>}>
+                  <ClientPositionEditPage />
                 </React.Suspense>
               }
             />

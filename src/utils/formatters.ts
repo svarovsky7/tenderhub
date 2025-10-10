@@ -12,8 +12,6 @@ export const formatCurrency = (
   amount: number | string | null | undefined,
   showDecimals?: boolean
 ): string => {
-  console.log('💰 Formatting currency:', { amount, showDecimals });
-
   // Handle null/undefined/empty values
   if (amount === null || amount === undefined || amount === '') {
     return '0,00 ₽';
@@ -21,7 +19,7 @@ export const formatCurrency = (
 
   // Convert to number
   const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-  
+
   // Handle invalid numbers
   if (isNaN(numAmount)) {
     console.warn('⚠️ Invalid amount for formatting:', amount);
@@ -29,8 +27,8 @@ export const formatCurrency = (
   }
 
   // Always show 2 decimal places for currency
-  const shouldShowDecimals = showDecimals !== undefined 
-    ? showDecimals 
+  const shouldShowDecimals = showDecimals !== undefined
+    ? showDecimals
     : true; // Always show decimals for currency
 
   // Format with Russian locale
@@ -39,7 +37,6 @@ export const formatCurrency = (
     maximumFractionDigits: 2, // Always max 2 decimals
   });
 
-  console.log('✅ Formatted currency:', `${formatted} ₽`);
   return `${formatted} ₽`;
 };
 
@@ -53,8 +50,6 @@ export const formatQuantity = (
   quantity: number | string | null | undefined,
   maxDecimals: number = 2
 ): string => {
-  console.log('📊 Formatting quantity:', { quantity, maxDecimals });
-
   // Handle null/undefined/empty values
   if (quantity === null || quantity === undefined || quantity === '') {
     return '0';
@@ -62,7 +57,7 @@ export const formatQuantity = (
 
   // Convert to number
   const numQuantity = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
-  
+
   // Handle invalid numbers
   if (isNaN(numQuantity)) {
     console.warn('⚠️ Invalid quantity for formatting:', quantity);
@@ -75,7 +70,6 @@ export const formatQuantity = (
     maximumFractionDigits: maxDecimals,
   });
 
-  console.log('✅ Formatted quantity:', formatted);
   return formatted;
 };
 
@@ -98,8 +92,6 @@ export const formatUnitRate = (
 export const formatPercentage = (
   percentage: number | string | null | undefined
 ): string => {
-  console.log('📈 Formatting percentage:', percentage);
-
   // Handle null/undefined/empty values
   if (percentage === null || percentage === undefined || percentage === '') {
     return '0%';
@@ -107,7 +99,7 @@ export const formatPercentage = (
 
   // Convert to number
   const numPercentage = typeof percentage === 'string' ? parseFloat(percentage) : percentage;
-  
+
   // Handle invalid numbers
   if (isNaN(numPercentage)) {
     console.warn('⚠️ Invalid percentage for formatting:', percentage);
@@ -120,6 +112,5 @@ export const formatPercentage = (
     maximumFractionDigits: 1,
   });
 
-  console.log('✅ Formatted percentage:', `${formatted}%`);
   return `${formatted}%`;
 };

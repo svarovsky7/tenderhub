@@ -15,7 +15,7 @@ interface PositionClipboardData {
 
 interface UsePositionClipboardProps {
   tenderId: string;
-  onUpdate: (positionId: string) => Promise<void>;
+  onUpdate: (positionId: string) => Promise<void>; // Accepts position ID for optimized updates
 }
 
 /**
@@ -24,14 +24,14 @@ interface UsePositionClipboardProps {
  */
 export const usePositionClipboard = ({ tenderId, onUpdate }: UsePositionClipboardProps) => {
   const [clipboardData, setClipboardData] = useState<PositionClipboardData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingPositions, setLoadingPositions] = useState<Set<string>>(new Set());
 
   /**
    * Копировать содержимое позиции в буфер обмена
    */
   const handleCopy = useCallback(async (positionId: string) => {
     console.log('🚀 [usePositionClipboard] Starting copy for position:', positionId);
-    setLoading(true);
+    setLoadingPositions(prev => new Set(prev).add(positionId));
 
     try {
       // 1. Загрузить все BOQ items для позиции
@@ -89,7 +89,11 @@ export const usePositionClipboard = ({ tenderId, onUpdate }: UsePositionClipboar
       console.error('💥 Exception in handleCopy:', error);
       message.error('Ошибка при копировании содержимого позиции');
     } finally {
-      setLoading(false);
+      setLoadingPositions(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(positionId);
+        return newSet;
+      });
     }
   }, []); // Empty deps - doesn't depend on any props
 
@@ -112,7 +116,7 @@ export const usePositionClipboard = ({ tenderId, onUpdate }: UsePositionClipboar
       return;
     }
 
-    setLoading(true);
+    setLoadingPositions(prev => new Set(prev).add(targetPositionId));
 
     try {
       console.log('📦 Preparing items for paste:', {
@@ -214,75 +218,77 @@ export const usePositionClipboard = ({ tenderId, onUpdate }: UsePositionClipboar
 
       console.log('🗺️ Created oldId → newId mapping:', oldIdToNewId.size, 'entries');
 
-      // 6. Создать links с обновленными ID (без удаления существующих)
+      // 6. Создать links с обновленными ID (без удаления существующих) - ПАРАЛЛЕЛЬНО
       if (clipboardData.links.length > 0) {
-        console.log(`🔗 Creating ${clipboardData.links.length} work-material links...`);
+        console.log(`🔗 Creating ${clipboardData.links.length} work-material links in parallel...`);
 
-        let successfulLinksCount = 0;
-        let failedLinksCount = 0;
+        // Подготовить промисы для всех links
+        const linkPromises = clipboardData.links.map(async (link) => {
+          const {
+            id,
+            created_at,
+            updated_at,
+            work_boq_item_id,
+            material_boq_item_id,
+            sub_work_boq_item_id,
+            sub_material_boq_item_id,
+            ...linkData
+          } = link;
 
-        for (const link of clipboardData.links) {
+          // Обновляем ID работы и материала на новые
+          const newWorkId = work_boq_item_id ? oldIdToNewId.get(work_boq_item_id) : null;
+          const newMaterialId = material_boq_item_id ? oldIdToNewId.get(material_boq_item_id) : null;
+          const newSubWorkId = sub_work_boq_item_id ? oldIdToNewId.get(sub_work_boq_item_id) : null;
+          const newSubMaterialId = sub_material_boq_item_id ? oldIdToNewId.get(sub_material_boq_item_id) : null;
+
+          // Пропускаем если не нашли соответствующие ID
+          if (
+            (work_boq_item_id && !newWorkId) ||
+            (material_boq_item_id && !newMaterialId) ||
+            (sub_work_boq_item_id && !newSubWorkId) ||
+            (sub_material_boq_item_id && !newSubMaterialId)
+          ) {
+            console.warn('⚠️ Skipping link - could not find new ID for work or material:', {
+              oldWorkId: work_boq_item_id,
+              oldMaterialId: material_boq_item_id,
+              oldSubWorkId: sub_work_boq_item_id,
+              oldSubMaterialId: sub_material_boq_item_id,
+              newWorkId,
+              newMaterialId,
+              newSubWorkId,
+              newSubMaterialId
+            });
+            return { success: false, error: 'Missing ID mapping' };
+          }
+
+          const newLink: WorkMaterialLink = {
+            ...linkData,
+            client_position_id: targetPositionId,
+            work_boq_item_id: newWorkId || undefined,
+            material_boq_item_id: newMaterialId || undefined,
+            sub_work_boq_item_id: newSubWorkId || undefined,
+            sub_material_boq_item_id: newSubMaterialId || undefined,
+          };
+
           try {
-            const {
-              id,
-              created_at,
-              updated_at,
-              work_boq_item_id,
-              material_boq_item_id,
-              sub_work_boq_item_id,
-              sub_material_boq_item_id,
-              ...linkData
-            } = link;
-
-            // Обновляем ID работы и материала на новые
-            const newWorkId = work_boq_item_id ? oldIdToNewId.get(work_boq_item_id) : null;
-            const newMaterialId = material_boq_item_id ? oldIdToNewId.get(material_boq_item_id) : null;
-            const newSubWorkId = sub_work_boq_item_id ? oldIdToNewId.get(sub_work_boq_item_id) : null;
-            const newSubMaterialId = sub_material_boq_item_id ? oldIdToNewId.get(sub_material_boq_item_id) : null;
-
-            // Пропускаем если не нашли соответствующие ID
-            if (
-              (work_boq_item_id && !newWorkId) ||
-              (material_boq_item_id && !newMaterialId) ||
-              (sub_work_boq_item_id && !newSubWorkId) ||
-              (sub_material_boq_item_id && !newSubMaterialId)
-            ) {
-              console.warn('⚠️ Skipping link - could not find new ID for work or material:', {
-                oldWorkId: work_boq_item_id,
-                oldMaterialId: material_boq_item_id,
-                oldSubWorkId: sub_work_boq_item_id,
-                oldSubMaterialId: sub_material_boq_item_id,
-                newWorkId,
-                newMaterialId,
-                newSubWorkId,
-                newSubMaterialId
-              });
-              failedLinksCount++;
-              continue;
-            }
-
-            const newLink: WorkMaterialLink = {
-              ...linkData,
-              client_position_id: targetPositionId,
-              work_boq_item_id: newWorkId || undefined,
-              material_boq_item_id: newMaterialId || undefined,
-              sub_work_boq_item_id: newSubWorkId || undefined,
-              sub_material_boq_item_id: newSubMaterialId || undefined,
-            };
-
             const { error: linkError } = await workMaterialLinksApi.createLink(newLink);
-
             if (linkError) {
               console.error('❌ Failed to create link:', linkError, newLink);
-              failedLinksCount++;
-            } else {
-              successfulLinksCount++;
+              return { success: false, error: linkError };
             }
+            return { success: true };
           } catch (error) {
             console.error('💥 Exception creating link:', error);
-            failedLinksCount++;
+            return { success: false, error };
           }
-        }
+        });
+
+        // Выполнить все промисы параллельно
+        const results = await Promise.all(linkPromises);
+
+        // Подсчитать результаты
+        const successfulLinksCount = results.filter(r => r.success).length;
+        const failedLinksCount = results.filter(r => !r.success).length;
 
         console.log(`✅ Created ${successfulLinksCount} links, failed: ${failedLinksCount}`);
       }
@@ -293,7 +299,11 @@ export const usePositionClipboard = ({ tenderId, onUpdate }: UsePositionClipboar
       );
 
       // Сбросить loading ПЕРЕД обновлением позиции, чтобы избежать бесконечной загрузки
-      setLoading(false);
+      setLoadingPositions(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(targetPositionId);
+        return newSet;
+      });
 
       // 8. Обновить целевую позицию для отображения изменений
       console.log('🔄 Refreshing target position...');
@@ -301,7 +311,11 @@ export const usePositionClipboard = ({ tenderId, onUpdate }: UsePositionClipboar
     } catch (error) {
       console.error('💥 Exception in handlePaste:', error);
       message.error('Ошибка при вставке содержимого позиции');
-      setLoading(false);
+      setLoadingPositions(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(targetPositionId);
+        return newSet;
+      });
     }
   }, [clipboardData, tenderId, onUpdate]); // Include all dependencies
 
@@ -313,13 +327,18 @@ export const usePositionClipboard = ({ tenderId, onUpdate }: UsePositionClipboar
     setClipboardData(null);
   }, []);
 
+  // Helper function to check if a specific position is loading
+  const isPositionLoading = useCallback((positionId: string) => {
+    return loadingPositions.has(positionId);
+  }, [loadingPositions]);
+
   return {
     clipboardData,
     hasCopiedData: clipboardData !== null,
     copiedItemsCount: clipboardData?.itemsCount || 0,
     copiedLinksCount: clipboardData?.linksCount || 0,
     copiedFromPositionId: clipboardData?.sourcePositionId || null,
-    loading,
+    isPositionLoading,
     handleCopy,
     handlePaste,
     clearClipboard
