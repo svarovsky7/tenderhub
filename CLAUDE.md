@@ -8,7 +8,7 @@ TenderHub is a construction tender management portal built with React 18, TypeSc
 
 **Language**: Russian UI throughout
 **React Version**: React 18.3.1 (stable, compatible with Ant Design 5)
-**Authentication**: Currently disabled for development
+**Authentication**: Enabled with 5-role system (Administrator, moderator, engineer, manager, director)
 
 ## Development Commands
 

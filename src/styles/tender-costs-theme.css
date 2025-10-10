@@ -166,6 +166,76 @@
   --line-height-relaxed: 1.75;
 }
 
+/* === ТЕМНАЯ ТЕМА === */
+[data-theme='dark'] {
+  /* Нейтральные цвета - инвертированные для темной темы */
+  --color-neutral-50: #1a202c;
+  --color-neutral-100: #2d3748;
+  --color-neutral-200: #4a5568;
+  --color-neutral-300: #6b7684;
+  --color-neutral-400: #9ba9b4;
+  --color-neutral-500: #d1d9e0;
+  --color-neutral-600: #e8ecf0;
+  --color-neutral-700: #f4f6f8;
+  --color-neutral-800: #fafbfc;
+  --color-neutral-900: #ffffff;
+
+  /* Основной бренд - темная версия */
+  --color-primary-50: #1e3a5f;
+  --color-primary-100: #1e4976;
+  --color-primary-200: #1e5a8e;
+  --color-primary-300: #2563eb;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #60a5fa;
+  --color-primary-700: #93c5fd;
+  --color-primary-800: #bfdbfe;
+  --color-primary-900: #dbeafe;
+
+  /* Фоновые цвета для темной темы */
+  --bg-page: #0f1419;
+  --bg-card: #1f1f1f;
+  --bg-card-hover: #262626;
+  --bg-table-header: #262626;
+  --bg-table-row-hover: #2a2a2a;
+  --bg-selected: #1e3a5f;
+
+  /* Границы для темной темы - более темные */
+  --border-light: #2d2d2d;
+  --border-medium: #3a3a3a;
+  --border-strong: #525252;
+
+  /* Тени для темной темы (более мягкие) */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --shadow-card-hover: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+
+  /* Цвета для типов затрат - слегка приглушенные для темной темы */
+  --color-materials-50: #2d2419;
+  --color-materials-100: #3d2e1f;
+  --color-materials-200: #4d3626;
+  --color-materials-500: #c4854f;
+  --color-materials-600: #d69e89;
+
+  --color-works-50: #1a2e1f;
+  --color-works-100: #234d2f;
+  --color-works-200: #2d5f3a;
+  --color-works-500: #4ade80;
+  --color-works-600: #86efac;
+
+  --color-sub-materials-50: #28233d;
+  --color-sub-materials-100: #362d4d;
+  --color-sub-materials-200: #453960;
+  --color-sub-materials-500: #a78bfa;
+  --color-sub-materials-600: #c4b5fd;
+
+  --color-sub-works-50: #3d2d1f;
+  --color-sub-works-100: #4d3a28;
+  --color-sub-works-200: #5f4830;
+  --color-sub-works-500: #ffa85c;
+  --color-sub-works-600: #ffca9a;
+}
+
 /* === УТИЛИТАРНЫЕ КЛАССЫ === */
 
 /* Цвета для типов затрат */

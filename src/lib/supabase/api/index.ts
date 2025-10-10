@@ -12,7 +12,7 @@ export { worksApi } from './works';
 export { worksWithNamesApi } from './works-with-names';
 export { hierarchyApi } from './hierarchy';
 export { clientPositionsApi } from './client-positions';
-export { usersApi } from './users';
+export { getAllUsers, createUser, updateUserRole, getUserProfile, updateUserProfile, deleteUser, type UserProfile, type UpdateRoleResult } from './users';
 export { clientWorksApi } from './client-works';
 export { subscriptions } from './subscriptions';
 export { workMaterialLinksApi } from './work-material-links';

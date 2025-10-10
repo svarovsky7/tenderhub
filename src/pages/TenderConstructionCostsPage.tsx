@@ -1536,7 +1536,7 @@ const TenderConstructionCostsPage: React.FC = () => {
   ];
 
   return (
-    <div className="w-full min-h-full bg-gray-50">
+    <div className="w-full min-h-full" data-theme={theme} style={{ background: 'var(--bg-page)' }}>
       <div className="p-6">
       <style>
         {`

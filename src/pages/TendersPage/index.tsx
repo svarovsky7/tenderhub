@@ -2,6 +2,7 @@ import React from 'react';
 import { Typography, Button, message } from 'antd';
 import { PlusOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { exportTendersToExcel } from '../../utils/excel-templates';
+import { useTheme } from '../../contexts/ThemeContext';
 
 // Components
 import {
@@ -19,6 +20,7 @@ import { useTenderFilters, useTenders, useTenderActions } from './hooks';
 const { Title, Text } = Typography;
 
 const TendersPage: React.FC = () => {
+  const { theme } = useTheme();
   console.log('🚀 TendersPage component rendered');
 
   // State for version manager
@@ -158,6 +160,9 @@ const TendersPage: React.FC = () => {
             position: relative;
             overflow: hidden;
           }
+          .tenders-page-header.dark {
+            background: linear-gradient(135deg, #1e293b 0%, #064e3b 50%, #134e4a 100%);
+          }
           .tenders-page-header::before {
             content: '';
             position: absolute;
@@ -210,7 +215,7 @@ const TendersPage: React.FC = () => {
       <div className="w-full min-h-full bg-gray-50">
         <div className="p-6">
           {/* Beautiful Gradient Header */}
-          <div className="tenders-page-header">
+          <div className={`tenders-page-header ${theme === 'dark' ? 'dark' : ''}`}>
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-4">
                 <div

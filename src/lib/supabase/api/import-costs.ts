@@ -481,9 +481,10 @@ async function processDetail(
       name: detailName,
       unit: detailUnit,
       location_id: locationId,
-      unit_cost: null
+      unit_cost: null,
+      order_num: row.orderNum
     });
-    
+
     const insertResult = await supabase
       .from('detail_cost_categories')
       .insert({
@@ -491,7 +492,8 @@ async function processDetail(
         name: detailName,
         unit: detailUnit,
         location_id: locationId,
-        unit_cost: null
+        unit_cost: null,
+        order_num: row.orderNum
       });
     
     console.log(`📦 Detail insert result:`, insertResult);

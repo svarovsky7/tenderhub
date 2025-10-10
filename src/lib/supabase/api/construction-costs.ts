@@ -214,41 +214,35 @@ export async function deleteLocation(id: string) {
 
 // Очистить все данные
 export async function clearAllData() {
-  console.log('🚀 [clearAllData] Clearing all data');
-  
+  console.log('🚀 [clearAllData] Clearing all data using database function');
+
   try {
-    // Удаляем в правильном порядке из-за foreign keys
-    const { error: detailsError } = await supabase
-      .from('detail_cost_categories')
-      .delete()
-      .gte('created_at', '1900-01-01');
-      
-    if (detailsError) {
-      console.error('❌ Error deleting details:', detailsError);
-      return { error: detailsError };
+    // Используем RPC функцию для эффективного удаления всех данных
+    const { data, error } = await supabase
+      .rpc('clear_all_construction_costs');
+
+    if (error) {
+      console.error('❌ [clearAllData] RPC error:', error);
+      return { error };
     }
-    
-    const { error: categoriesError } = await supabase
-      .from('cost_categories')
-      .delete()
-      .gte('created_at', '1900-01-01');
-      
-    if (categoriesError) {
-      console.error('❌ Error deleting categories:', categoriesError);
-      return { error: categoriesError };
+
+    console.log('📊 [clearAllData] Result:', data);
+
+    if (data && !data.success) {
+      console.error('❌ [clearAllData] Function returned error:', data.error);
+      return { error: { message: data.error } };
     }
-    
-    const { error: locationsError } = await supabase
-      .from('location')
-      .delete()
-      .gte('created_at', '1900-01-01');
-      
-    if (locationsError) {
-      console.error('❌ Error deleting locations:', locationsError);
-      return { error: locationsError };
-    }
-    
-    console.log('✅ [clearAllData] All data cleared');
+
+    console.log(`✅ [clearAllData] Successfully deleted:
+      - ${data?.details_deleted || 0} detail categories
+      - ${data?.categories_deleted || 0} cost categories
+      - ${data?.locations_deleted || 0} locations
+
+      Updated (set to NULL):
+      - ${data?.boq_items_updated || 0} BOQ items (detail_cost_category_id)
+      - ${data?.tender_items_updated || 0} tender items (location_id)
+      - ${data?.cost_nodes_updated || 0} cost nodes (location_id)`);
+
     return { error: null };
   } catch (err: any) {
     console.error('❌ [clearAllData] Error:', err);
