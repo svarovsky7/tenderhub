@@ -12,7 +12,7 @@ import {
   Flex,
   Badge,
   Avatar,
-  Popconfirm,
+  Modal,
   Divider
 } from 'antd';
 import * as XLSX from 'xlsx-js-style';
@@ -58,6 +58,7 @@ const ConstructionCostsEditPage: React.FC = () => {
   const [importProgress, setImportProgress] = useState(0);
   const [importStatus, setImportStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
   const [importLog, setImportLog] = useState<string[]>([]);
+  const [isClearModalVisible, setIsClearModalVisible] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -109,110 +110,203 @@ const ConstructionCostsEditPage: React.FC = () => {
 
   const getCombinedData = () => {
     const result: any[] = [];
-    
+
+    // Собираем все детали с их категориями для сортировки
+    const allDetailsWithCategories: any[] = [];
     categories.forEach(category => {
       const categoryDetails = category.details || [];
-      
-      const categoryNode = {
-        key: `cat-${category.id}`,
-        id: category.id,
-        type: 'category',
-        level: 1,
-        name: category.name,
-        description: category.description || '',
-        unit: category.unit || '-',
-        location: '-',
-        categoryName: '-',
-        detailName: '-',
-        children: [] as any[]
-      };
-      
-      const detailGroups = new Map<string, any[]>();
       categoryDetails.forEach((detail: any) => {
-        const groupKey = `${detail.name}_${detail.unit || ''}`;
-        if (!detailGroups.has(groupKey)) {
-          detailGroups.set(groupKey, []);
-        }
-        detailGroups.get(groupKey)!.push(detail);
-      });
-      
-      detailGroups.forEach((detailGroup) => {
-        const firstDetail = detailGroup[0];
-        const detailNode = {
-          key: `detail-group-${firstDetail.id}`,
-          id: firstDetail.id,
-          type: 'detail',
-          level: 2,
-          name: firstDetail.name,
-          description: '',
-          unit: firstDetail.unit || '-',
-          location: '-',
+        allDetailsWithCategories.push({
+          ...detail,
+          categoryId: category.id,
           categoryName: category.name,
-          detailName: '-',
-          children: [] as any[]
-        };
-        
-        detailGroup.forEach((detail: any) => {
-          if (detail.location) {
-            const locationNode = {
-              key: `location-${detail.id}-${detail.location.id}`,
-              id: detail.location.id,
-              detailRecordId: detail.id,
-              type: 'location',
-              level: 3,
-              name: [detail.location.country, detail.location.region, detail.location.city]
-                .filter(Boolean).join(', '),
+          categoryDescription: category.description,
+          categoryUnit: category.unit
+        });
+      });
+    });
+
+    // Сортируем детали по order_num
+    allDetailsWithCategories.sort((a, b) => {
+      const orderA = a.order_num ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.order_num ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.id.localeCompare(b.id);
+    });
+
+    // Группируем отсортированные детали по категориям
+    const categoriesMap = new Map<string, any>();
+    categories.forEach(category => {
+      categoriesMap.set(category.id, {
+        ...category,
+        sortedDetails: []
+      });
+    });
+
+    allDetailsWithCategories.forEach(detail => {
+      const category = categoriesMap.get(detail.categoryId);
+      if (category) {
+        category.sortedDetails.push(detail);
+      }
+    });
+
+    // Формируем результат в том же порядке, что и отсортированные детали
+    const processedCategories = new Set<string>();
+
+    allDetailsWithCategories.forEach(detail => {
+      const categoryId = detail.categoryId;
+
+      // Если категория еще не обработана, добавляем ее узел
+      if (!processedCategories.has(categoryId)) {
+        processedCategories.add(categoryId);
+        const category = categoriesMap.get(categoryId);
+
+        if (category) {
+          // Берем номер из первой детали категории
+          const firstDetailOrderNum = category.sortedDetails.length > 0
+            ? category.sortedDetails[0].order_num
+            : null;
+
+          const categoryNode = {
+            key: `cat-${category.id}`,
+            id: category.id,
+            type: 'category',
+            level: 1,
+            name: category.name,
+            description: category.description || '',
+            unit: category.unit || '-',
+            location: '-',
+            categoryName: '-',
+            detailName: '-',
+            orderNum: firstDetailOrderNum,
+            children: [] as any[]
+          };
+
+          // Группируем детали по имени+единице
+          const detailGroups = new Map<string, any[]>();
+          category.sortedDetails.forEach((detail: any) => {
+            const groupKey = `${detail.name}_${detail.unit || ''}`;
+            if (!detailGroups.has(groupKey)) {
+              detailGroups.set(groupKey, []);
+            }
+            detailGroups.get(groupKey)!.push(detail);
+          });
+
+          detailGroups.forEach((detailGroup) => {
+            const firstDetail = detailGroup[0];
+            const detailNode = {
+              key: `detail-group-${firstDetail.id}`,
+              id: firstDetail.id,
+              type: 'detail',
+              level: 2,
+              name: firstDetail.name,
+              description: '',
+              unit: firstDetail.unit || '-',
+              location: '-',
+              categoryName: category.name,
+              detailName: '-',
+              orderNum: firstDetail.order_num,
+              children: [] as any[]
+            };
+
+            detailGroup.forEach((detail: any) => {
+              if (detail.location) {
+                const locationNode = {
+                  key: `location-${detail.id}-${detail.location.id}`,
+                  id: detail.location.id,
+                  detailRecordId: detail.id,
+                  type: 'location',
+                  level: 3,
+                  name: [detail.location.country, detail.location.region, detail.location.city]
+                    .filter(Boolean).join(', '),
+                  description: '',
+                  unit: '-',
+                  location: [detail.location.country, detail.location.region, detail.location.city]
+                    .filter(Boolean).join(', '),
+                  categoryName: category.name,
+                  detailName: firstDetail.name,
+                  country: detail.location.country,
+                  region: detail.location.region,
+                  city: detail.location.city,
+                  orderNum: null
+                };
+
+                detailNode.children.push(locationNode);
+              }
+            });
+
+            if (detailNode.children.length === 0) {
+              detailNode.children.push({
+                key: `no-location-${firstDetail.id}`,
+                id: `no-location-${firstDetail.id}`,
+                type: 'no-location',
+                level: 3,
+                name: 'Без локализации',
+                description: '',
+                unit: '-',
+                location: '-',
+                categoryName: category.name,
+                detailName: firstDetail.name,
+                orderNum: null
+              });
+            }
+
+            categoryNode.children.push(detailNode);
+          });
+
+          if (categoryNode.children.length === 0) {
+            categoryNode.children.push({
+              key: `no-details-${category.id}`,
+              id: `no-details-${category.id}`,
+              type: 'no-details',
+              level: 2,
+              name: 'Нет видов затрат',
               description: '',
               unit: '-',
-              location: [detail.location.country, detail.location.region, detail.location.city]
-                .filter(Boolean).join(', '),
+              location: '-',
               categoryName: category.name,
-              detailName: firstDetail.name,
-              country: detail.location.country,
-              region: detail.location.region,
-              city: detail.location.city
-            };
-            
-            detailNode.children.push(locationNode);
+              detailName: '-',
+              orderNum: null
+            });
           }
-        });
-        
-        if (detailNode.children.length === 0) {
-          detailNode.children.push({
-            key: `no-location-${firstDetail.id}`,
-            id: `no-location-${firstDetail.id}`,
-            type: 'no-location',
-            level: 3,
-            name: 'Без локализации',
+
+          result.push(categoryNode);
+        }
+      }
+    });
+
+    // Добавляем категории без деталей в конец
+    categories.forEach(category => {
+      if (!category.details || category.details.length === 0) {
+        result.push({
+          key: `cat-${category.id}`,
+          id: category.id,
+          type: 'category',
+          level: 1,
+          name: category.name,
+          description: category.description || '',
+          unit: category.unit || '-',
+          location: '-',
+          categoryName: '-',
+          detailName: '-',
+          orderNum: null,
+          children: [{
+            key: `no-details-${category.id}`,
+            id: `no-details-${category.id}`,
+            type: 'no-details',
+            level: 2,
+            name: 'Нет видов затрат',
             description: '',
             unit: '-',
             location: '-',
             categoryName: category.name,
-            detailName: firstDetail.name
-          });
-        }
-        
-        categoryNode.children.push(detailNode);
-      });
-      
-      if (categoryNode.children.length === 0) {
-        categoryNode.children.push({
-          key: `no-details-${category.id}`,
-          id: `no-details-${category.id}`,
-          type: 'no-details',
-          level: 2,
-          name: 'Нет видов затрат',
-          description: '',
-          unit: '-',
-          location: '-',
-          categoryName: category.name,
-          detailName: '-'
+            detailName: '-',
+            orderNum: null
+          }]
         });
       }
-      
-      result.push(categoryNode);
     });
-    
+
     return result;
   };
 
@@ -345,7 +439,7 @@ const ConstructionCostsEditPage: React.FC = () => {
       }
 
       setEditingKey('');
-      await loadData();
+      // Убрано автообновление - обновляйте данные вручную кнопкой "Обновить"
     } catch (errInfo) {
       console.error('❌ [save] Error:', errInfo);
       message.error('Ошибка сохранения');
@@ -359,18 +453,18 @@ const ConstructionCostsEditPage: React.FC = () => {
       if (record.type === 'category') {
         const { error } = await deleteCategory(record.id);
         if (error) throw error;
-        message.success('Категория удалена');
+        message.success('Категория удалена. Нажмите "Обновить" для обновления данных');
       } else if (record.type === 'detail') {
         const { error } = await deleteDetail(record.id);
         if (error) throw error;
-        message.success('Детальная категория удалена');
+        message.success('Детальная категория удалена. Нажмите "Обновить" для обновления данных');
       } else if (record.type === 'location') {
         const { error } = await deleteLocation(record.id);
         if (error) throw error;
-        message.success('Локализация удалена');
+        message.success('Локализация удалена. Нажмите "Обновить" для обновления данных');
       }
-      
-      await loadData();
+
+      // Убрано автообновление - обновляйте данные вручную кнопкой "Обновить"
     } catch (error) {
       console.error('❌ [handleDelete] Error:', error);
       message.error('Ошибка удаления');
@@ -380,63 +474,70 @@ const ConstructionCostsEditPage: React.FC = () => {
   // Экспорт в Excel
   const handleExportExcel = () => {
     console.log('🚀 [ConstructionCostsEditPage] Exporting to Excel');
-    
+
     const exportData: any[] = [];
-    let rowNumber = 1;
-    
+
+    // Собираем все детали со своими категориями
+    const allDetails: any[] = [];
     categories.forEach(category => {
-      // Группируем детали по названию
-      const detailsByName = new Map<string, any[]>();
       category.details?.forEach((detail: any) => {
-        const key = detail.name;
-        if (!detailsByName.has(key)) {
-          detailsByName.set(key, []);
-        }
-        detailsByName.get(key)!.push(detail);
-      });
-      
-      // Для каждой уникальной детали добавляем строку с категорией
-      let isFirstDetail = true;
-      detailsByName.forEach((detailGroup, detailName) => {
-        detailGroup.forEach((detail, index) => {
-          const detailNameClean = detailName.replace(/ \([^)]*\)$/, ''); // Убираем единицу измерения из названия
-          const detailUnit = detailName.match(/\(([^)]*)\)$/)?.[1] || ''; // Извлекаем единицу измерения
-          
-          exportData.push({
-            '№': index === 0 ? rowNumber++ : '',
-            'Категория': isFirstDetail ? category.name : '',
-            'Ед.изм. категории': isFirstDetail ? (category.description?.replace('Единица измерения: ', '') || '') : '',
-            'Вид затрат': index === 0 ? detailNameClean : '',
-            'Ед.изм. детали': index === 0 ? detailUnit : '',
-            'Локализация': detail.location ? 
-              [detail.location.city, detail.location.region, detail.location.country]
-                .filter(Boolean).join(', ') : ''
-          });
-          
-          if (isFirstDetail) {
-            isFirstDetail = false;
-          }
+        allDetails.push({
+          ...detail,
+          categoryName: category.name,
+          categoryUnit: category.unit || category.description?.replace('Единица измерения: ', '') || ''
         });
       });
-      
-      // Если у категории нет деталей, добавляем пустую строку с категорией
+    });
+
+    // Сортируем по order_num (если есть) или по ID
+    allDetails.sort((a, b) => {
+      const orderA = a.order_num ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.order_num ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.id.localeCompare(b.id);
+    });
+
+    // Группируем последовательные детали с одинаковой категорией
+    let currentCategoryName = '';
+
+    allDetails.forEach((detail) => {
+      const isNewCategory = detail.categoryName !== currentCategoryName;
+
+      exportData.push({
+        '№': detail.order_num || '',
+        'Категория': isNewCategory ? detail.categoryName : '',
+        'Ед.изм. категории': isNewCategory ? detail.categoryUnit : '',
+        'Вид затрат': detail.name || '',
+        'Ед.изм. детали': detail.unit || '',
+        'Локализация': detail.location ?
+          [detail.location.city, detail.location.region, detail.location.country]
+            .filter(Boolean).join(', ') : ''
+      });
+
+      if (isNewCategory) {
+        currentCategoryName = detail.categoryName;
+      }
+    });
+
+    // Добавляем категории без деталей
+    categories.forEach(category => {
       if (!category.details || category.details.length === 0) {
         exportData.push({
-          '№': rowNumber++,
+          '№': '',
           'Категория': category.name,
-          'Ед.изм. категории': category.description?.replace('Единица измерения: ', '') || '',
+          'Ед.изм. категории': category.unit || category.description?.replace('Единица измерения: ', '') || '',
           'Вид затрат': '',
           'Ед.изм. детали': '',
           'Локализация': ''
         });
       }
     });
-    
+
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Затраты на строительство');
     XLSX.writeFile(wb, 'construction_costs.xlsx');
-    
+
     message.success('Данные экспортированы');
     console.log('✅ [ConstructionCostsEditPage] Export complete');
   };
@@ -445,17 +546,18 @@ const ConstructionCostsEditPage: React.FC = () => {
   const handleClearAll = async () => {
     console.log('🚀 [ConstructionCostsEditPage] Clearing all data');
     setLoading(true);
-    
+
     const { error } = await clearAllData();
-    
+
     if (error) {
       message.error('Ошибка очистки данных: ' + error.message);
     } else {
-      message.success('Все данные успешно удалены');
-      await loadData();
+      message.success('Все данные успешно удалены. Нажмите "Обновить" для обновления таблицы');
+      // Убрано автообновление - обновляйте данные вручную кнопкой "Обновить"
     }
-    
+
     setLoading(false);
+    setIsClearModalVisible(false);
   };
 
   // Обработчик импорта Excel
@@ -537,10 +639,9 @@ const ConstructionCostsEditPage: React.FC = () => {
         }
         
         setImportStatus('completed');
-        message.success(`Импорт завершен! Обработано ${result.success} записей`);
-        
-        // Обновляем данные на странице
-        await loadData();
+        message.success(`Импорт завершен! Обработано ${result.success} записей. Нажмите "Обновить" для просмотра`);
+
+        // Убрано автообновление - обновляйте данные вручную кнопкой "Обновить"
         
       } catch (err: any) {
         console.error('❌ Import error:', err);
@@ -601,6 +702,16 @@ const ConstructionCostsEditPage: React.FC = () => {
           .action-btn:hover:not(:disabled) {
             transform: translateY(-2px);
           }
+          /* Refresh button dark theme - dark transparent background */
+          .action-buttons .action-btn.refresh-dark.ant-btn {
+            background: rgba(0, 0, 0, 0.6) !important;
+            background-color: rgba(0, 0, 0, 0.6) !important;
+            backdrop-filter: blur(10px) !important;
+          }
+          .action-buttons .action-btn.refresh-dark.ant-btn:not(:hover):not(:disabled) {
+            background: rgba(0, 0, 0, 0.6) !important;
+            background-color: rgba(0, 0, 0, 0.6) !important;
+          }
           /* Back to Structure button hover */
           .action-btn:nth-child(1):hover:not(:disabled) {
             background: ${theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.15)'} !important;
@@ -612,12 +723,16 @@ const ConstructionCostsEditPage: React.FC = () => {
           }
           /* Export button hover */
           .action-btn:nth-child(2):hover:not(:disabled) {
-            background: ${theme === 'dark' ? 'rgba(96, 165, 250, 0.85)' : 'rgba(251, 191, 36, 0.3)'} !important;
+            background: #fbbf24 !important;
             color: #ffffff !important;
-            border-color: ${theme === 'dark' ? '#fbbf24' : '#f59e0b'} !important;
+            border-color: #fbbf24 !important;
             border-width: 2px !important;
-            box-shadow: 0 0 0 3px ${theme === 'dark' ? 'rgba(251, 191, 36, 0.3)' : 'rgba(245, 158, 11, 0.25)'},
-                        0 4px 12px rgba(251, 191, 36, 0.5);
+            box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.5),
+                        0 4px 12px rgba(251, 191, 36, 0.6);
+          }
+          /* Export button hover - apply white color to icon */
+          .action-btn:nth-child(2):hover:not(:disabled) .anticon {
+            color: #ffffff !important;
           }
           /* Import button hover */
           .action-btn:nth-child(3):hover:not(:disabled) {
@@ -628,25 +743,46 @@ const ConstructionCostsEditPage: React.FC = () => {
             box-shadow: 0 0 0 3px ${theme === 'dark' ? 'rgba(96, 165, 250, 0.3)' : 'rgba(59, 130, 246, 0.25)'},
                         0 4px 16px rgba(59, 130, 246, 0.35);
           }
+          /* Import button hover - white icon */
+          .action-btn:nth-child(3):hover:not(:disabled) .anticon {
+            color: #ffffff !important;
+          }
           /* Refresh button hover */
           .action-btn:nth-child(4):hover:not(:disabled) {
-            background: ${theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.25)'} !important;
-            border-color: ${theme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.5)'} !important;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            background: #52c41a !important;
+            color: #ffffff !important;
+            border-color: #52c41a !important;
+            box-shadow: 0 0 0 3px rgba(82, 196, 26, 0.5), 0 4px 12px rgba(82, 196, 26, 0.6);
           }
-          /* Clear button (inside Popconfirm) hover */
-          .action-btn:nth-child(5) button:hover:not(:disabled) {
-            background: ${theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.15)'} !important;
+          /* Refresh button hover - white icon */
+          .action-btn:nth-child(4):hover:not(:disabled) .anticon {
+            color: #ffffff !important;
+          }
+          /* Clear button hover */
+          .action-btn:nth-child(5):hover:not(:disabled) {
+            background: #ef4444 !important;
             color: #ffffff !important;
             border-color: #ef4444 !important;
-            border-width: 2px !important;
-            box-shadow: 0 0 0 3px ${theme === 'dark' ? 'rgba(239, 68, 68, 0.5)' : 'rgba(239, 68, 68, 0.3)'},
-                        0 4px 12px ${theme === 'dark' ? 'rgba(239, 68, 68, 0.6)' : 'rgba(239, 68, 68, 0.4)'};
+            border-width: 3px !important;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.5),
+                        0 4px 12px rgba(239, 68, 68, 0.6);
+          }
+          /* Clear button hover - apply white color to icon */
+          .action-btn:nth-child(5):hover:not(:disabled) .anticon {
+            color: #ffffff !important;
           }
           .modern-card {
             background: ${theme === 'dark' ? '#1f1f1f' : 'white'};
             border-radius: 12px;
             border: ${theme === 'dark' ? '1px solid #424242' : '1px solid #f0f0f0'};
+          }
+          /* Ускоренная анимация модального окна */
+          .ant-modal-mask,
+          .ant-modal-wrap {
+            transition-duration: 0.15s !important;
+          }
+          .ant-modal {
+            transition-duration: 0.15s !important;
           }
         `}
       </style>
@@ -698,15 +834,15 @@ const ConstructionCostsEditPage: React.FC = () => {
                 className="action-btn"
                 style={{
                   background: theme === 'dark'
-                    ? 'rgba(96, 165, 250, 0.85)'
-                    : 'rgba(251, 191, 36, 0.15)',
+                    ? 'rgba(0, 0, 0, 0.6)'
+                    : 'rgba(255, 255, 255, 0.2)',
                   backdropFilter: 'blur(10px)',
                   color: '#ffffff',
                   borderColor: theme === 'dark' ? '#fbbf24' : '#f59e0b',
                   borderWidth: '2px',
                   fontWeight: 600
                 }}
-                icon={<DownloadOutlined style={{ color: '#ffffff' }} />}
+                icon={<DownloadOutlined style={{ color: '#fbbf24' }} />}
                 onClick={handleExportExcel}
                 disabled={categories.length === 0}
                 size="large"
@@ -719,15 +855,15 @@ const ConstructionCostsEditPage: React.FC = () => {
                 className="action-btn"
                 style={{
                   background: theme === 'dark'
-                    ? 'rgba(96, 165, 250, 0.85)'
-                    : 'rgba(59, 130, 246, 0.9)',
+                    ? 'rgba(0, 0, 0, 0.6)'
+                    : 'rgba(255, 255, 255, 0.2)',
                   backdropFilter: 'blur(10px)',
                   color: '#ffffff',
                   borderColor: theme === 'dark' ? '#60a5fa' : '#3b82f6',
                   borderWidth: '2px',
                   fontWeight: 600
                 }}
-                icon={<UploadOutlined style={{ color: '#ffffff' }} />}
+                icon={<UploadOutlined style={{ color: theme === 'dark' ? '#60a5fa' : '#3b82f6' }} />}
                 onClick={() => setIsImportModalVisible(true)}
                 size="large"
               >
@@ -736,19 +872,20 @@ const ConstructionCostsEditPage: React.FC = () => {
 
               {/* Обновить (Refresh) */}
               <Button
-                className="action-btn"
+                className={`action-btn ${theme === 'dark' ? 'refresh-dark' : ''}`}
                 style={{
                   background: theme === 'dark'
-                    ? 'rgba(255, 255, 255, 0.1)'
+                    ? 'rgba(0, 0, 0, 0.6)'
                     : 'rgba(255, 255, 255, 0.15)',
                   backdropFilter: 'blur(10px)',
                   color: '#ffffff',
                   borderColor: theme === 'dark'
                     ? 'rgba(255, 255, 255, 0.2)'
-                    : 'rgba(255, 255, 255, 0.3)',
+                    : '#52c41a',
+                  borderWidth: '2px',
                   fontWeight: 600
                 }}
-                icon={<ReloadOutlined style={{ color: '#ffffff' }} />}
+                icon={<ReloadOutlined style={{ color: '#52c41a' }} />}
                 onClick={loadData}
                 loading={loading}
                 size="large"
@@ -757,32 +894,25 @@ const ConstructionCostsEditPage: React.FC = () => {
               </Button>
 
               {/* Очистить (Clear All) - Destructive */}
-              <Popconfirm
-                title="Удалить все данные?"
-                description="Это действие необратимо. Все категории, детали и локализации будут удалены."
-                onConfirm={handleClearAll}
-                okText="Да, удалить"
-                cancelText="Отмена"
+              <Button
+                className="action-btn"
+                style={{
+                  background: theme === 'dark'
+                    ? 'rgba(255, 255, 255, 0.1)'
+                    : 'rgba(255, 255, 255, 0.25)',
+                  backdropFilter: 'blur(10px)',
+                  color: theme === 'dark' ? '#ef4444' : '#ffffff',
+                  borderColor: '#ef4444',
+                  borderWidth: '3px',
+                  fontWeight: 600
+                }}
+                icon={<ClearOutlined style={{ color: '#ef4444' }} />}
+                onClick={() => setIsClearModalVisible(true)}
+                disabled={categories.length === 0}
+                size="large"
               >
-                <Button
-                  className="action-btn"
-                  style={{
-                    background: theme === 'dark'
-                      ? 'rgba(255, 255, 255, 0.1)'
-                      : 'rgba(255, 255, 255, 0.15)',
-                    backdropFilter: 'blur(10px)',
-                    color: theme === 'dark' ? '#ef4444' : '#dc2626',
-                    borderColor: theme === 'dark' ? '#ef4444' : 'rgba(255, 255, 255, 0.3)',
-                    borderWidth: theme === 'dark' ? '2px' : '1px',
-                    fontWeight: 600
-                  }}
-                  icon={<ClearOutlined style={{ color: theme === 'dark' ? '#ef4444' : '#dc2626' }} />}
-                  disabled={categories.length === 0}
-                  size="large"
-                >
-                  Очистить
-                </Button>
-              </Popconfirm>
+                Очистить
+              </Button>
             </div>
           </Col>
         </Row>
@@ -851,8 +981,37 @@ const ConstructionCostsEditPage: React.FC = () => {
           setImportProgress(0);
           setImportLog([]);
         }}
-        onImport={handleImportExcel}
+        onUpload={handleImportExcel}
       />
+
+      {/* Модальное окно подтверждения очистки */}
+      <Modal
+        title="Удалить все данные?"
+        open={isClearModalVisible}
+        onOk={handleClearAll}
+        onCancel={() => setIsClearModalVisible(false)}
+        okText="Да, удалить"
+        cancelText="Отмена"
+        okButtonProps={{ danger: true, loading: loading }}
+        centered
+        width={480}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Text>Это действие необратимо. Будут удалены:</Text>
+          <ul style={{ margin: '0 0 0 20px', padding: 0 }}>
+            <li>Все категории затрат</li>
+            <li>Все детальные категории</li>
+            <li>Все локализации</li>
+          </ul>
+          <Alert
+            message="Связанные данные в BOQ будут сохранены, но ссылки на затраты будут очищены."
+            type="warning"
+            showIcon
+            style={{ marginTop: 8 }}
+          />
+        </Space>
+      </Modal>
     </>
   );
 };

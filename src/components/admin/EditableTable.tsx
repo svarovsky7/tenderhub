@@ -51,11 +51,7 @@ const EditableTable: React.FC<EditableTableProps> = ({
   const { theme } = useTheme();
 
   const isEditing = (record: any) => {
-    // Для локализаций используем составной ключ
-    if (record.type === 'location' && record.detailRecordId) {
-      return editingKey === `${record.detailRecordId}-${record.id || 'new'}`;
-    }
-    return editingKey === String(record.id);
+    return editingKey === record.key;
   };
 
   // Улучшенная редактируемая ячейка
