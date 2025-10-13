@@ -756,7 +756,7 @@ export const clientPositionsApi = {
     console.log('🚀 clientPositionsApi.getTenderTotals called with:', { tenderId });
 
     try {
-      const { data, error } = await supabase
+      const { data: rawData, error } = await supabase
         .rpc('get_tender_totals', { p_tender_id: tenderId })
         .single();
 
@@ -766,6 +766,12 @@ export const clientPositionsApi = {
           error: handleSupabaseError(error, 'Get tender totals'),
         };
       }
+
+      // Handle array response (in case .single() returns array)
+      const data = Array.isArray(rawData) ? rawData[0] : rawData;
+
+      console.log('🔍 [clientPositionsApi.getTenderTotals] Raw data type:', Array.isArray(rawData) ? 'array' : typeof rawData);
+      console.log('🔍 [clientPositionsApi.getTenderTotals] Processed data:', data);
 
       // Convert BigInt to numbers for JSON serialization
       const totals = {
